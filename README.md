@@ -1,14 +1,48 @@
-# Splashdown
+<p align="center">
+  <img src="app/src-tauri/icons/source/icon.svg" width="128" alt="Splashdown's logo: a space capsule splashing down under an orange-and-white parachute">
+</p>
+
+<h1 align="center">Splashdown</h1>
+
+<p align="center">
+  <strong>Hold a key. Say it. It's typed.</strong><br>
+  Free, open-source dictation for Mac and Windows. Works in every app. No subscription, no account.
+</p>
+
+<p align="center">
+  <a href="https://github.com/bhowerton/splashdown/releases/latest"><img src="https://img.shields.io/github/v/release/bhowerton/splashdown?label=version&color=F2551F" alt="Latest version"></a>
+  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-16337A" alt="macOS and Windows">
+  <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-16337A" alt="MIT or Apache-2.0"></a>
+  <a href="https://github.com/bhowerton/splashdown/releases"><img src="https://img.shields.io/github/downloads/bhowerton/splashdown/total?color=16337A" alt="Downloads"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-mac.dmg"><img src="https://img.shields.io/badge/Download_for_Mac-F2551F?style=for-the-badge&logo=apple&logoColor=white" alt="Download for Mac"></a>
+  <a href="https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-windows-x64-setup.exe"><img src="https://img.shields.io/badge/Download_for_Windows_(preview)-16337A?style=for-the-badge" alt="Download for Windows (preview)"></a>
+</p>
+
+<p align="center">
+  <img src="docs/assets/demo.svg" width="800" alt="Animation: holding Option and saying 'um, so can we meet Tuesday… actually Thursday at 3' types 'Can we meet Thursday at 3?' into an email; then tapping Shift and saying 'make it more formal' rewrites it to 'Would Thursday at 3 p.m. work for you?'">
+</p>
+
+## Why Splashdown
+
+- **Free and open source, for good.** No subscription, no account, no word limits. Your own API key costs cents a month, and you can set a spending limit.
+- **Works everywhere you type.** Email, Slack, Messages, docs, the browser, your terminal or code editor: any text field in any app.
+- **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
+- **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
+
+## What it does
 
 Hold a key, say it, and the text appears in whatever text field has focus, in any app or website. An optional AI pass tidies up "um"s and self-corrections, and formats on request ("…make it an email"). With text selected, the same key rewrites the selection by voice.
 
-Free and open source, with no account and no word limits. Use your own OpenAI, OpenRouter or Anthropic key, with an optional monthly spending limit, or run fully on your computer: Apple's built-in models on Apple Silicon Macs, or local Whisper plus Splashdown's built-in local model (a free download, nothing else to install). Ollama and LM Studio work too.
+Use your own OpenAI, OpenRouter or Anthropic key, with an optional monthly spending limit, or run fully on your computer: Apple's built-in models on Apple Silicon Macs, or local Whisper plus Splashdown's built-in local model (a free download, nothing else to install). Ollama and LM Studio work too.
 
-> **Status: beta, macOS first.** The Mac app is complete and in daily use. Windows support is in progress (the platform layer is the remaining piece; see [CONTRIBUTING.md](CONTRIBUTING.md)).
+> **Status: beta.** The Mac app is in daily use. Windows is a preview: it works, but has had less testing.
 
 ## Install
 
-**[Download for Mac](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-mac.dmg)** · **[Download for Windows (preview)](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-windows-x64-setup.exe)** · [all releases](https://github.com/bhowerton/splashdown/releases)
+Use the download buttons at the top, or pick a version from [all releases](https://github.com/bhowerton/splashdown/releases).
 
 **Mac:** open the `.dmg` and drag Splashdown to Applications. It runs on macOS 13 or later, on Apple Silicon and Intel. The first launch opens a short setup guide: choose how it should understand you, then allow Accessibility and Microphone.
 
