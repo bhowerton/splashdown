@@ -42,7 +42,13 @@ Use your own OpenAI, OpenRouter or Anthropic key, with an optional monthly spend
 
 ## Install
 
-Use the download buttons at the top, or pick a version from [all releases](https://github.com/bhowerton/splashdown/releases).
+Use the download buttons at the top, or pick a version from [all releases](https://github.com/bhowerton/splashdown/releases). On a Mac with [Homebrew](https://brew.sh):
+
+```sh
+brew tap bhowerton/tap
+brew trust --cask bhowerton/tap/splashdown
+brew install --cask splashdown
+```
 
 **Mac:** open the `.dmg` and drag Splashdown to Applications. It runs on macOS 13 or later, on Apple Silicon and Intel. The first launch opens a short setup guide: choose how it should understand you, then allow Accessibility and Microphone.
 
