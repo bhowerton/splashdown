@@ -90,6 +90,8 @@ Running the workflow by hand (Actions → Release → Run workflow) makes the sa
 | `TAURI_SIGNING_PRIVATE_KEY` | The contents of `~/.tauri/splashdown-updater.key` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password (leave empty if it has none) |
 
+Finally, add a repository **variable** (not a secret) `CI_RELEASES` = `true`. Until it's set, pushing a tag runs nothing, so releases can still be made by hand: `NOTARIZE=1 scripts/package-mac.sh`, then upload the files from `…/bundle/release/` to a GitHub release (that's how v0.1.0 was made).
+
 Whoever can run this workflow with these secrets can ship an update to every installed copy, which is why the environment needs a reviewer. Keep your own backup of the updater key: GitHub secrets can't be read back.
 
 **Windows code signing** isn't set up yet, so SmartScreen warns on first run. The options are the SignPath Foundation (free for open source, once the repository is public) or Azure Trusted Signing; either plugs into `bundle.windows.signCommand` in the Tauri config.

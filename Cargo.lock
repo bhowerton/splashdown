@@ -3980,7 +3980,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "chrono",
@@ -4006,7 +4006,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-apple-shim"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures-channel",
@@ -4017,7 +4017,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-audio"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-foundation 0.10.1",
  "cpal",
@@ -4030,7 +4030,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-cli"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -4048,7 +4048,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-config"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "directories",
  "keyring",
@@ -4060,7 +4060,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-control"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "libc",
  "serde",
@@ -4073,7 +4073,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-core"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "futures-executor",
@@ -4086,7 +4086,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-llm"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "llama-cpp-2",
  "serde_json",
@@ -4095,7 +4095,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-mcp"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "serde_json",
  "splashdown-control",
@@ -4103,7 +4103,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-platform"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "core-foundation 0.10.1",
  "core-graphics",
@@ -4120,7 +4120,7 @@ dependencies = [
 
 [[package]]
 name = "splashdown-providers"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "base64 0.22.1",

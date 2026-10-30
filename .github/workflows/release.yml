@@ -10,6 +10,9 @@ name: Release
 #
 # Secrets live in the "release" environment (Settings → Environments), which
 # should require a maintainer's approval for every run; see CONTRIBUTING.md.
+# Until they're in place, tag pushes do nothing here: set the repository
+# variable CI_RELEASES to "true" (Settings → Secrets and variables →
+# Actions → Variables) to turn releases from tags on.
 
 on:
   push:
@@ -26,7 +29,7 @@ jobs:
   version:
     # A tag that doesn't match the version in the code would publish an
     # update that installed copies keep offering.
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && vars.CI_RELEASES == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -40,8 +43,8 @@ jobs:
 
   mac:
     needs: version
-    # Runs for manual runs too, where `version` is skipped.
-    if: ${{ !failure() && !cancelled() }}
+    # Manual runs skip `version`; tag runs need it to have passed.
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.version.result == 'success') }}
     runs-on: macos-26
     environment: release
     steps:
@@ -98,7 +101,7 @@ jobs:
 
   windows:
     needs: version
-    if: ${{ !failure() && !cancelled() }}
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.version.result == 'success') }}
     runs-on: windows-latest
     environment: release
     steps:
@@ -121,7 +124,7 @@ jobs:
 
   publish:
     needs: [mac, windows]
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: startsWith(github.ref, 'refs/tags/v') && vars.CI_RELEASES == 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write

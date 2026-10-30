@@ -8,11 +8,11 @@ Free and open source, with no account and no word limits. Use your own OpenAI, O
 
 ## Install
 
-**[Download for Mac](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-mac.dmg)** · **[Download for Windows (preview)](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-windows-x64-setup.exe)** · [all releases](https://github.com/bhowerton/splashdown/releases)
+**[Download for Mac](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-mac.dmg)** · [all releases](https://github.com/bhowerton/splashdown/releases)
 
 **Mac:** open the `.dmg` and drag Splashdown to Applications. It runs on macOS 13 or later, on Apple Silicon and Intel. The first launch opens a short setup guide: choose how it should understand you, then allow Accessibility and Microphone.
 
-**Windows (preview):** run the installer; no administrator rights needed. Windows 10 or 11, x64 (ARM PCs run it through emulation). The installer isn't code-signed yet, so SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**.
+**Windows:** being tested now; a preview installer comes with the next release. To try it today, [build from source](#building-from-source).
 
 ## Using it
 
