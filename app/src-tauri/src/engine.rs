@@ -1,0 +1,373 @@
+//! Builds the processing engine from settings and keys. Used at startup and
+//! whenever Settings changes something.
+
+use std::collections::HashMap;
+use std::sync::Arc;
+
+use splashdown_config::{
+    AiProvider, Budget, Destination, Paths, Preset, PresetModel, Secrets, Settings, Situation,
+    SpeechChoice, SpeechProvider,
+};
+use splashdown_core::fallback::{FallbackModel, FallbackStt};
+use splashdown_core::{Pipeline, PromptContext, SpeechToText, SttHints, TextModel};
+use splashdown_providers::WhisperModel;
+
+use crate::session::Keys;
+
+/// Everything needed to process a recording.
+pub struct Engine {
+    pub pipeline: Pipeline,
+    /// Pipelines for presets with their own AI model, by preset id.
+    preset_pipelines: HashMap<String, Pipeline>,
+    /// The spending limits, checked after each dictation.
+    pub budget: Budget,
+    /// Built over the limit: on-device models only.
+    pub over_budget: bool,
+    pub context: PromptContext,
+    pub hints: SttHints,
+    /// Local model for the live preview, if one is available and enabled.
+    pub preview: Option<Arc<dyn SpeechToText>>,
+    /// Save results to the history file (otherwise only the latest is kept,
+    /// in memory).
+    pub keep_history: bool,
+    /// Also keep each recording with its history entry.
+    pub keep_audio: bool,
+    /// Place the overlay by the text cursor.
+    pub overlay_near_cursor: bool,
+    /// Raise quiet speech before transcribing it.
+    pub whisper_mode: bool,
+    /// Remove background noise before transcribing.
+    pub noise_reduction: bool,
+    /// Count words and speaking time for Insights.
+    pub keep_insights: bool,
+    /// Find-and-replace rules for the final text.
+    pub replacements: crate::replacements::Replacements,
+    /// Per-app presets, in the order shown in Settings (number keys pick
+    /// them while recording).
+    pub presets: Vec<Preset>,
+    /// Watch for corrections after inserting and suggest vocabulary.
+    pub learn_vocabulary: bool,
+    /// Tell the AI which app the text is going into.
+    pub share_app_name: bool,
+    /// Play sounds when recording starts and stops.
+    pub sounds: bool,
+    pub sound_volume: f32,
+    /// Preferred microphone (`None`: automatic).
+    pub microphone: Option<String>,
+}
+
+impl Engine {
+    /// The pipeline for a preset: its own AI model if it has one that's
+    /// usable, otherwise the main pipeline.
+    pub fn pipeline_for(&self, preset: &Preset) -> &Pipeline {
+        self.preset_pipelines
+            .get(&preset.id)
+            .unwrap_or(&self.pipeline)
+    }
+
+    /// Turns a recording into what speech-to-text gets (see
+    /// `splashdown_audio::prepare`): background noise removed if noise
+    /// reduction is on, then quiet speech raised in whisper mode.
+    pub fn prepare_audio(
+        &self,
+        clip: &splashdown_core::AudioClip,
+    ) -> Option<splashdown_core::AudioClip> {
+        splashdown_audio::prepare_with(clip, self.audio_cleanup())
+    }
+
+    /// The optional clean-up steps `prepare_audio` applies.
+    pub fn audio_cleanup(&self) -> splashdown_audio::Cleanup {
+        splashdown_audio::Cleanup {
+            denoise: self.noise_reduction,
+            quiet: self.whisper_mode,
+        }
+    }
+
+    /// Speech-to-text hints for a preset: its own spoken language, if set.
+    pub fn hints_for(&self, preset: &Preset) -> SttHints {
+        let mut hints = self.hints.clone();
+        if let Some(language) = preset.language.as_ref().filter(|l| !l.is_empty()) {
+            hints.language = Some(language.clone());
+        }
+        hints
+    }
+}
+
+pub fn paths() -> Result<Paths, String> {
+    Paths::resolve().ok_or_else(|| "couldn't find the home folder".to_string())
+}
+
+pub fn load_settings() -> Settings {
+    let Ok(paths) = paths() else {
+        return Settings::default();
+    };
+    Settings::load(&paths.config_file()).unwrap_or_else(|e| {
+        tracing::warn!("ignoring config: {e}");
+        Settings::default()
+    })
+}
+
+pub fn keys(settings: &Settings) -> Keys {
+    Keys {
+        dictation: settings.hotkeys.dictation_key(),
+        instruction: settings.hotkeys.instruction_key(),
+        hands_free: settings.hotkeys.hands_free_key(),
+        double_tap: settings.hotkeys.double_tap(),
+    }
+}
+
+/// Which of Apple's on-device models this Mac can use for `settings`.
+pub fn on_device(settings: &Settings) -> Situation {
+    let models_dir = paths().map(|p| p.models_dir).unwrap_or_default();
+    Situation {
+        over_budget: budget_reached(settings),
+        ..splashdown_providers::factory::on_device(
+            settings.general.language.as_deref(),
+            &models_dir,
+        )
+    }
+}
+
+/// Whether a spending limit is reached right now.
+pub fn budget_reached(settings: &Settings) -> bool {
+    crate::spend::shared().budget_state(&settings.general.budget, chrono::Local::now())
+        == crate::spend::BudgetState::Reached
+}
+
+/// Builds providers for `settings`. Loading a local Whisper model takes a
+/// second or two, so call this off the UI thread.
+pub fn build(settings: &Settings) -> Result<Engine, String> {
+    let paths = paths()?;
+    let secrets = Secrets::load();
+    let on_device = on_device(settings);
+
+    let speech = settings
+        .resolve_speech_with(&secrets, on_device)
+        .map_err(|e| e.to_string())?;
+    let stt = splashdown_providers::factory::speech(&speech, &secrets, &paths.models_dir)
+        .map_err(|e| e.to_string())?;
+    let preview = settings
+        .general
+        .live_preview()
+        .then(|| preview_model(&speech, &stt, &paths))
+        .flatten();
+    // A cloud provider that fails hands the request to one on this
+    // computer, if there is one, rather than losing the dictation.
+    let stt = match (
+        speech.destination(),
+        on_device_speech(
+            settings, &secrets, on_device, &paths, &speech, &stt, &preview,
+        ),
+    ) {
+        (Destination::Cloud, Some(backup)) => {
+            tracing::info!("speech falls back to {}", backup.name());
+            Arc::new(FallbackStt {
+                primary: stt,
+                backup,
+            }) as Arc<dyn SpeechToText>
+        }
+        _ => stt,
+    };
+    let local_llm = on_device_text_model(settings, &secrets, on_device);
+    match &local_llm {
+        Some(m) => tracing::info!("cloud AI falls back to {}", m.name()),
+        None => tracing::info!("no AI on this computer to fall back to"),
+    }
+    let ai_choice = settings
+        .resolve_ai_with(&secrets, on_device)
+        .map_err(|e| e.to_string())?;
+    let llm = ai_choice
+        .as_ref()
+        .map(|choice| {
+            splashdown_providers::factory::text_model(choice, &secrets)
+                .map(|llm| with_backup(llm, choice.destination(), &local_llm))
+        })
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    let instruction_llm = settings
+        .resolve_instruction_ai_with(&secrets, on_device)
+        .map(|choice| {
+            splashdown_providers::factory::text_model(&choice, &secrets)
+                // Instructions go to the cloud only when cleanup is local,
+                // so the main model is the stand-in.
+                .map(|llm| with_backup(llm, choice.destination(), &local_llm))
+        })
+        .transpose()
+        .map_err(|e| e.to_string())?;
+    tracing::info!(
+        "speech: {} · ai: {}{}",
+        stt.name(),
+        llm.as_ref().map_or("off".to_string(), |l| l.name()),
+        instruction_llm
+            .as_ref()
+            .map(|l| format!(" · instructions: {}", l.name()))
+            .unwrap_or_default()
+    );
+
+    let presets = settings.presets();
+    let mut preset_pipelines = HashMap::new();
+    for preset in presets.iter().filter(|p| p.ai) {
+        let Some(choice) = &preset.model else {
+            continue;
+        };
+        match preset_model(settings, &secrets, on_device, choice, &local_llm) {
+            Ok(Some(llm)) => {
+                tracing::info!("preset {}: ai: {}", preset.id, llm.name());
+                preset_pipelines.insert(preset.id.clone(), Pipeline::new(stt.clone(), Some(llm)));
+            }
+            // Off, or nothing usable: the main pipeline.
+            Ok(None) => {}
+            Err(e) => tracing::warn!("preset {} keeps the main AI model: {e}", preset.id),
+        }
+    }
+
+    let vocabulary = settings.general.vocabulary.clone();
+    Ok(Engine {
+        budget: settings.general.budget,
+        over_budget: on_device.over_budget,
+        preview,
+        keep_history: settings.general.keep_history(),
+        keep_audio: settings.general.keep_audio(),
+        overlay_near_cursor: settings.general.overlay_near_cursor(),
+        whisper_mode: settings.general.whisper_mode(),
+        noise_reduction: settings.general.noise_reduction(),
+        keep_insights: settings.general.keep_insights(),
+        replacements: crate::replacements::Replacements::new(&settings.replacements),
+        learn_vocabulary: settings.general.learn_vocabulary(),
+        share_app_name: settings.general.share_app_name(),
+        sounds: settings.general.sounds(),
+        sound_volume: settings.general.sound_volume(),
+        microphone: settings.general.microphone.clone(),
+        presets,
+        preset_pipelines,
+        pipeline: Pipeline::new(stt, llm).with_instruction_model(instruction_llm),
+        context: PromptContext {
+            user_name: settings.general.user_name.clone(),
+            vocabulary: vocabulary.clone(),
+            snippets: settings.snippets.clone(),
+            mixed_languages: SttHints {
+                language: settings.general.language.clone(),
+                languages: settings.general.languages.clone(),
+                ..SttHints::default()
+            }
+            .mixed_languages(),
+            ..PromptContext::default()
+        },
+        hints: SttHints {
+            vocabulary,
+            language: settings.general.language.clone(),
+            languages: settings.general.languages.clone(),
+        },
+    })
+}
+
+/// A preset's own AI model, resolved like the main one (keys, local-only
+/// mode and the spending limit all apply).
+fn preset_model(
+    settings: &Settings,
+    secrets: &Secrets,
+    on_device: Situation,
+    choice: &PresetModel,
+    local_llm: &Option<Arc<dyn TextModel>>,
+) -> Result<Option<Arc<dyn TextModel>>, String> {
+    let mut s = settings.clone();
+    s.ai.provider = choice.provider;
+    s.ai.model = choice.model.clone().filter(|m| !m.trim().is_empty());
+    s.resolve_ai_with(secrets, on_device)
+        .map_err(|e| e.to_string())?
+        .map(|c| {
+            splashdown_providers::factory::text_model(&c, secrets)
+                .map(|llm| with_backup(llm, c.destination(), local_llm))
+        })
+        .transpose()
+        .map_err(|e| e.to_string())
+}
+
+/// `llm`, falling back to the on-device model when it's a cloud one.
+fn with_backup(
+    llm: Arc<dyn TextModel>,
+    destination: Destination,
+    local: &Option<Arc<dyn TextModel>>,
+) -> Arc<dyn TextModel> {
+    match (destination, local) {
+        (Destination::Cloud, Some(backup)) => Arc::new(FallbackModel {
+            primary: llm,
+            backup: backup.clone(),
+        }),
+        _ => llm,
+    }
+}
+
+/// The AI model on this computer, if there is one: Apple's, else the
+/// built-in one (its helper only starts if it's ever used).
+fn on_device_text_model(
+    settings: &Settings,
+    secrets: &Secrets,
+    on_device: Situation,
+) -> Option<Arc<dyn TextModel>> {
+    let provider = if on_device.apple_language_model {
+        AiProvider::Apple
+    } else if on_device.local_model {
+        AiProvider::Local
+    } else {
+        return None;
+    };
+    let mut s = settings.clone();
+    s.ai.provider = provider;
+    s.ai.model = None;
+    let choice = s.resolve_ai_with(secrets, on_device).ok().flatten()?;
+    splashdown_providers::factory::text_model(&choice, secrets).ok()
+}
+
+/// Speech-to-text on this computer for when the cloud fails: Apple's, else
+/// the live preview's Whisper model, else any downloaded Whisper model.
+fn on_device_speech(
+    settings: &Settings,
+    secrets: &Secrets,
+    on_device: Situation,
+    paths: &Paths,
+    speech: &SpeechChoice,
+    stt: &Arc<dyn SpeechToText>,
+    preview: &Option<Arc<dyn SpeechToText>>,
+) -> Option<Arc<dyn SpeechToText>> {
+    if on_device.apple_speech {
+        let mut s = settings.clone();
+        s.speech.provider = SpeechProvider::Apple;
+        s.speech.model = None;
+        if let Some(apple) = s
+            .resolve_speech_with(secrets, on_device)
+            .ok()
+            .and_then(|c| {
+                splashdown_providers::factory::speech(&c, secrets, &paths.models_dir).ok()
+            })
+        {
+            return Some(apple);
+        }
+    }
+    preview
+        .clone()
+        .or_else(|| preview_model(speech, stt, paths))
+}
+
+/// The model for the live preview: the main one if it's already local,
+/// otherwise the smallest downloaded Whisper model. Cloud speech-to-text
+/// can't stream partial results, so the preview always runs locally.
+fn preview_model(
+    speech: &SpeechChoice,
+    stt: &Arc<dyn SpeechToText>,
+    paths: &Paths,
+) -> Option<Arc<dyn SpeechToText>> {
+    if speech.provider == SpeechProvider::WhisperLocal {
+        return Some(stt.clone());
+    }
+    let model = WhisperModel::ALL
+        .into_iter()
+        .find(|m| m.is_downloaded(&paths.models_dir))?;
+    match splashdown_providers::WhisperLocal::load(&model.path_in(&paths.models_dir)) {
+        Ok(w) => Some(Arc::new(w)),
+        Err(e) => {
+            tracing::warn!("live preview unavailable: {e}");
+            None
+        }
+    }
+}

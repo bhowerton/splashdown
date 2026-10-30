@@ -1,0 +1,145 @@
+# Splashdown — Roadmap to a polished 1.0
+
+**Updated:** 2026-10-29. Companion to [SPEC.md](SPEC.md) (what to build). This file is the order of work.
+
+**Status key:** ✅ done · 🟡 partly done · ⬜ not started
+
+## Where things stand
+
+| Milestone | Status | Notes |
+|---|---|---|
+| M0 Workspace + CI | 🟡 | CI workflow pinned to Xcode 26; it hasn't run yet because the repo isn't on GitHub |
+| M1 Core pipeline + evals | ✅ | OpenAI's own API and `gpt-4o-mini-transcribe` not measured yet (no key) |
+| M2 Mac platform layer | ✅ | In daily use. App compatibility pass still to do |
+| M3 Windows | 🟡 | Platform layer written and cross-compiled from a Mac, never run on Windows; waiting for a Windows machine |
+| M4 App shell | ✅ | Settings (all tabs), onboarding, presets, history, privacy, menu bar, overlay by the text cursor. Left: a VoiceOver walkthrough on a real build |
+| M4b Power features | ✅ | Learning vocabulary, snippets, spoken commands in any language, auto-send, other triggers, field context, languages and translation |
+| M5 Apple on-device | ✅ | Apple speech and cleanup in daily use (cleanup 80%, 0.40 s). Weak-link fallback on macOS 13–15 not tested on a real machine |
+| M5b Built-in local model | 🟡 | `splashdown-llm` helper with Qwen3 4B: 84% fully local, 0.13 s on a Mac GPU, 0.41 s CPU-only. Small model for ~8 GB machines: Qwen3 1.7B (55%, 0.06 s GPU). Windows (CPU/Vulkan) untested |
+| Open-source readiness | ✅ | Dual MIT/Apache-2.0 license, CONTRIBUTING, ARCHITECTURE, code of conduct, security policy, issue templates, `SAFETY` comments (lint-enforced), license checks (cargo-deny) and third-party notices (cargo-about) |
+| M6 Tester beta | ⬜ | Needs signed, notarized release builds |
+
+## Order of work
+
+### 1. Live verification of M2
+- ✅ First real dictations on Mac: overlay never takes focus; paste works; Esc cancels; hands-free; instruction key; transform.
+- ⬜ Compatibility pass over ~20 apps: TextEdit, Notes, Mail, Safari, Chrome, Firefox, Arc, Slack, Discord, Messages, Notion, Obsidian, VS Code, Cursor, Terminal, iTerm2, Word, Google Docs, Gmail, ChatGPT/Claude web. Record paste, selection and focus behavior per app.
+
+### 2. M2b — Speed and reliability (new)
+How fast and how reliably words land is the core of a dictation app; most of what users judge happens here.
+- 🟡 **Live text while speaking:** ✅ the overlay shows the words as you speak, using local Whisper, about once every 0.6 s, even when the final text comes from a cloud provider. ⬜ Still to do: streaming the *final* transcription from cloud providers (OpenAI realtime) to cut the time after release.
+- ✅ **Faster final text for long dictations:** after 8 s of recording, the audio up to each pause (≥ 0.4 s) is transcribed in the background; on release only the stretch after the last pause is left. The pieces are joined before the AI pass, and if any fails the whole recording is transcribed instead. Plain dictation only (not instructions or transforms). Not yet timed on real long dictations.
+- ⏸ **Compressed upload (Opus): deferred.** The 10-minute hands-free cap keeps WAV under OpenAI's 25 MB limit (about 19 MB at most), and a typical 10 s dictation is 320 KB, which uploads in well under a second. Revisit if slow connections show up in testing.
+- 🟡 **First-word safety:** ✅ mic open time is logged for every dictation (`mic … opened in N ms`). ⬜ Add a pre-roll buffer only if testing shows clipped first words.
+- ✅ **Microphone handling:**
+  - A device picker in Settings → General.
+  - "Automatic" uses the system default unless it's Bluetooth (detected via Core Audio's transport type), in which case it uses the built-in mic, so AirPods don't drop into call mode.
+  - The device is chosen afresh for each dictation, so plugging and unplugging between dictations just works, and an unplugged choice falls back to Automatic.
+  - ✅ **Mic unplugged mid-recording** (2026-10-30): the recording finishes at once with what was captured, and the result line starts "Microphone disconnected". Relies on cpal reporting `DeviceNotAvailable`; not yet tried with a real unplug.
+  - ✅ **Mic hears nothing** (2026-10-30): after 2.5 s of near digital silence (raw level below 0.0004, quieter than any real room) the pill says the microphone may be muted or the wrong one, and goes back to listening as soon as sound arrives. A recording that heard nothing ends with the same hint instead of "Didn't catch that".
+- ✅ **Layout-aware shortcuts:** the keys for Cmd+C/V/Z are looked up on the current layout with `UCKeyTranslate` (with Command held, so "Dvorak – QWERTY ⌘" works), on the main thread at startup and as each dictation starts.
+- ✅ **Actionable errors:** a rejected key, out of credits, rate-limited, provider down, offline or timed out, and model not downloaded each get one overlay line naming the provider and the fix. When the AI was skipped, the reason is shown next to "raw text".
+- ✅ **Hands-free silence auto-stop:** after 3 minutes without speech, as well as the 10-minute cap.
+- ✅ **On-device stand-in** (2026-10-30): when cloud speech-to-text or the cloud AI fails (offline, outage, rate limit, bad key), the same dictation is retried on this computer: Apple's speech or local Whisper, and Apple's model or the built-in local model, whichever is installed. The result line adds "done on this computer (cloud didn't answer)". Nothing is set up for this; without an on-device model the cloud error is shown as before.
+- ✅ **Local Whisper lets go of memory** (2026-10-30): the model (up to about 1.5 GB) is unloaded after 10 unused minutes and reloaded as the next recording starts, like the built-in local model's helper.
+
+### 3. M4 — Feels like a real app
+- ✅ **Onboarding window:** welcome → choose AI (free & private on this computer — Apple's models or local Whisper plus the built-in cleanup model; or an OpenRouter, OpenAI or Anthropic key, each verified; an existing key is detected) → permissions → practice (detects the first real dictation) → done, with a cheat sheet. Opens on first run; "Run the setup guide again" is in About.
+- ✅ **Hotkey capture:** one key picker per hotkey, showing the key as a keycap: click it and press the key (or a side mouse button, for dictation), or pick from its ▾ list (Fn, mouse buttons, reset to default). The global hotkey is paused while choosing, for at most 15 s. A legend under the pickers shows what the dictation key does (hold, double-tap, + Return, Esc), with inline tips about conflicts (Option and accented characters, AltGr on Windows, Shift, left-side keys, Fn setup).
+- ✅ **Launch at login:** offered at the end of setup (on by default) and switchable in General. Uses `tauri-plugin-autostart` (a Launch Agent on Mac).
+- ✅ **Presets and per-app rules** (spec §4): Default, Email, Texting, Work chat, Code & Terminal, Notes, plus your own (Texting was split out of Chat on 2026-10-30: personal messages and work chat want different styles). Matched by app (with `*` prefix wildcards), window title or **browser URL**, read through Accessibility from the page's web area. Each preset sets AI on/off, extra instructions and Paste or Type. Presets tab with "Add app or website" from recently used apps. *Gap #2.*
+- ✅ **Presets redesign:** apps by name and icon, Where / How it writes / Extras sections, tone choices with examples, Try it per preset, drag to reorder with conflict warnings, templates, a *By app* view; per preset: auto-send, spoken language, AI model and a global shortcut (spec §4.1). ⬜ App icons and names on Windows.
+- ✅ **Switch preset while recording:** hold the dictation key and press 1–9; the pill shows "Listening · Email".
+- ✅ **History** (spec §9): History tab with search, copy, copy what was said, **redo as another preset**, delete and clear; keep-history switch; "Paste last raw transcript" (⌃⌥V and menu bar) and "Copy last result". ✅ Optionally keep the audio (off by default, needs history on), with "Transcribe again" using the current speech settings. *Gap #3.*
+- ✅ **Privacy page** (spec §10): where speech and text go, recomputed from the actual settings; **local-only mode** (refuses cloud providers and non-local servers, enforced in config resolution); switch to stop sending the app name; what's kept on this computer.
+- ✅ **Sounds:** quiet system "Tink" on start and "Pop" on stop, on by default, switchable.
+- 🟡 **Overlay polish:**
+  - ✅ Fade in and out (opacity steps, canceled by newer state changes), and a spinner while working.
+  - ✅ Respects Reduce Motion; announces states to VoiceOver.
+  - ✅ It already appears on the screen with the focused window: `NSScreen.mainScreen` is that screen, not the primary display.
+  - ✅ Placed just below the text cursor (above it when there's no room), read with `AXBoundsForRange`; bottom center when the app doesn't report a caret. Switchable in General. Mac only for now.
+  - ⬜ Scale animation (needs AppKit's animator; opacity-only for now).
+- ✅ **Menu bar:**
+  - Icon states: red while recording; an attention dot while setup is incomplete.
+  - Preset submenu: "Automatic (by app)" or pin a preset for every dictation.
+  - "Paste last raw transcript" and "Copy last result". (A Recent submenu was dropped: with history off by default it only repeated "Copy last result"; the History tab covers the rest.)
+- 🟡 **Settings design pass:** ✅ visible keyboard focus, screen-reader labels for icon-only and generated controls, `aria-current` on the active tab, inline hotkey and duplicate-snippet warnings, empty states for history. ⬜ A full VoiceOver walkthrough on a real build (a static pass labeled the remaining fields and made progress and practice status live regions).
+
+### 3b. M4b — Power features
+Cheap features that close visible gaps.
+- ✅ **Dictionary that learns:** about 20 s after an insertion (or at the next dictation), the field is re-read. Retyped words that look like names or terms become suggestions in General → Vocabulary (+ Add / Not now). Only the word is kept; switchable.
+- ✅ **Snippets:** spoken trigger → saved text ("my address"), anywhere in a sentence. The AI sees a placeholder and never rewords the saved text; a trigger said on its own is inserted without an AI call. Fill-ins and replacements were added later (see "Second batch of gaps").
+- ✅ **Hands-free by hold + H (2026-10-30):** hold the dictation key and press a letter (H by default, changeable in General) to carry on hands-free. Double-tap is now off by default because Claude's Quick Entry (and others) can use a double-tap of Option; it can be turned back on, and mouse buttons always double-click.
+- ✅ **Spoken commands, in any language (2026-10-30):** tap the instruction key before saying anything, then say the command. The AI turns it into one of a few actions (replace "that", delete the last word or sentence, select, bold, italic, press Return, undo, write something new), returned as JSON (`splashdown_core::command`), and the app carries it out. Nothing matches words: an earlier version recognized fixed English phrases ("send it", "delete the last sentence"), which missed rewordings ("delete *that* last word") and every other language, so all phrase lists were removed: from commands, spoken formatting (now done by the AI pass, prompt rule 4), file mentions ("dot") and the sanity guard (whose checks are now length, emptiness, question marks in any script and snippets). Tested in English, Spanish, French and German on Gemini Flash Lite and the built-in Qwen3 4B: 13 of 13 each. Commands need an AI model (any provider, including on-device).
+- ✅ **Field context per preset:** the text around the cursor (up to 1,000 characters before and 200 after) goes to the AI as reference only, so names are spelled like the thread and instructions in it are ignored (spec §6.1; off by default, on per preset; shown on the Privacy tab). Mac only for now.
+- ✅ **Cleanup levels, undo and insights (2026-10-30):**
+  - **Cleanup levels** per preset: None, Light (fillers and punctuation only), Medium (as before) and High (tightens rambling, fixes grammar; a High-only example in the prompt makes small models actually do it).
+  - **Undo AI edit:** ⌃⌥Z or the menu bar, within 2 minutes and in the same app, undoes the paste and pastes what was said instead. Not offered after a send, for typed insertions or for transforms.
+  - **Coding agents:** "Tag files" per preset (on for Code & Terminal): file names said aloud become `@path` mentions of files in the project, found from Terminal's working folder or an editor's open file (`AXDocument`), plus recently changed file names as spelling hints. ⬜ Code identifiers (variables, functions) aren't recognized yet.
+  - **Insights:** words per day, speaking speed, time saved compared with typing at 40 wpm, a streak, a 30-day chart and words per app. Kept locally (`insights.json`), switchable.
+- ✅ **Second batch of gaps (2026-10-30):**
+  - **Clipboard context** per preset: the clipboard's text (up to 2,000 characters) goes to the AI in its own reference-only `<clipboard>` block, used for spelling and when an instruction mentions it ("summarize what I copied"). Shown on the Privacy tab.
+  - **Code names for coding agents:** with file tags on, the 40 most-used `snake_case`/`camelCase`/`PascalCase` names in the open file and the 8 most recently changed source files join the vocabulary, alongside recent file names.
+  - **Voice editing:** first built on fixed English phrases, then replaced by spoken commands interpreted by the AI (see "Spoken commands, in any language"). Selecting text uses `AXSelectedTextRange` (UI Automation's TextPattern on Windows, untested), so it needs an app that allows it.
+  - **Mixed languages:** "Languages you mix" (with auto-detect) tells the speech model and the AI that the speaker may switch mid-sentence, and to keep each part in its language. Gemini on OpenRouter already transcribed an English–Spanish sentence correctly; the hint matters most for Whisper. Apple's speech model takes one language at a time.
+  - **Smarter snippets:** fill-ins `{date}`, `{day}`, `{time}`, `{iso-date}`, `{clipboard}`; and find-and-replace rules on the final text (whole words, ignoring case, or a regex with `$1` groups), checked when saved.
+- ✅ **Languages:** auto-detect by default, a Language submenu in the menu bar, a note when the English-only Whisper model is chosen, and a per-preset "Translate into" option.
+- ✅ **Other triggers:** a `splashdown://` URL scheme and a CLI (for Raycast and Alfred), and mouse side buttons as hotkeys. Built on a local control socket (`splashdown-control`). Links and mouse buttons are macOS-only for now; the CLI and MCP server use a named pipe on Windows (untested).
+- ✅ **Mini bar:** an optional round button that stays on screen (Settings → General, or the menu bar). Click to start a hands-free dictation into the focused field, click again to finish; it never takes focus, shows recording and working, can be dragged anywhere and remembers where. Right-click for Settings or to hide it (macOS). ⬜ Windows build untested, and has no tooltip or right-click menu yet.
+- ✅ **Confirm before canceling a long recording:** Esc on a recording over 30 s asks "Press Esc again to discard"; otherwise recording carries on.
+- ✅ **Local-only mode:** one switch on the Privacy tab that refuses every cloud provider (enforced in config resolution).
+- ✅ **Auto-send:** Return while holding the dictation key, or right after letting go, presses Return once the text is typed; press again to undo. The overlay shows "↵ Send".
+- ✅ **Anthropic key (Claude Haiku 5.5) for cleanup**, with prompt caching. ⬜ Score it on the eval (needs a key).
+- ✅ **Spending and budgets:** per-request cost from every provider, a local per-day and per-month record, monthly and daily limits that switch to on-device models, and links to each provider's own limits (spec §9b).
+- ✅ **Send instructions to the cloud:** with a local cleanup model, instructions and transforms can go to a cloud model while plain dictation stays local (off by default).
+- ✅ **Scratchpad:** ⌃⌥N or the menu bar opens a small always-on-top notepad to dictate into when there's no text field. Autosaved locally (`scratchpad.json`, the current note plus the last 20), with Copy, New note and **Send to {app}**, which re-activates the app that was in front and pastes the note there (spec §9d). ⬜ Not yet tried in the running app; Windows untested.
+- ✅ **Background noise reduction:** an opt-in switch (General → While you speak) that runs RNNoise (`nnnoiseless`, pure Rust) on the recording before speech-to-text, then whisper mode's boost if that's on too. About 3 ms per second of 48 kHz audio. In a test with white noise or rumble mixed into `say` output at 0–5 dB, it brought back words the silence trimmer had cut and recordings it had rejected as "no speech". `splashdown-cli transcribe --denoise` compares it on any WAV.
+- ✅ **History retention and export:** "Delete after" (Forever, 30, 7 or 1 day) deletes old entries and their recordings; "Export…" saves the history to Downloads as Markdown or JSON (spec §9).
+- ✅ **Settings between computers:** About → Settings exports `config.toml` without API keys and imports one after a confirmation (spec §8.5).
+
+### 4. M3 — Windows
+- 🟡 A Windows 11 PC is available (2026-10-30). `scripts/run-win-app.ps1` builds and launches the app and checks for the build tools first.
+- ✅ **Filled in before the first run** (2026-10-30): cursor position and selecting a range through UI Automation's TextPattern (spoken commands, smart spacing and field context), checked against the expected text so a field that counts characters differently gets nothing selected rather than the wrong text; the Chromium paste check (by executable name); the Windows version in feedback reports; app names in Presets from the executable's description (via App Paths or a running copy). ⬜ App icons, and the pill following the caret.
+- 🟡 **Windows status:** `crates/splashdown-platform/src/win/` implements every platform function, but it has only been cross-compiled (`cargo clippy --target x86_64-pc-windows-msvc`), never run. Expect fixes on first contact:
+  - Hotkeys with `WH_KEYBOARD_LL` (held modifiers' auto-repeats are filtered; AltGr's fake Ctrl is ignored).
+  - Selection, focus, password fields and page URLs with UI Automation (URL: the enclosing document's value, best effort).
+  - Insertion with `SendInput` and the clipboard (memory formats only are snapshotted; GDI-handle formats such as metafiles are lost).
+  - The overlay as a `WS_EX_NOACTIVATE` layered window drawn with GDI (region-clipped pill without anti-aliasing or shadow; no screen-reader announcements yet).
+  - UIPI detection (admin windows): insertion fails and the text is copied instead.
+  - Terminal-safe copy fallback (console window classes).
+  - Microphone privacy check from the privacy settings' registry values (only an explicit "Deny" is reported).
+- ⬜ Local text model on Windows: llama.cpp's Vulkan backend (`llama-cpp-2` feature `vulkan`) needs the Vulkan SDK at build time, so it isn't enabled; CPU only for now.
+
+### 5. Identity, distribution and trust → M6 beta
+- ✅ **App icon:** a hand-drawn vector capsule under a parachute over a night ocean (`app/src-tauri/icons/source/`), with menu bar template glyphs at 1× and 2×.
+- 🟡 **Name and trademark:** renamed to Splashdown. A search found no live SPLASHDOWN mark for software (classes 9/42); the dead ones were video games. `splashdown.dev` is an unrelated developer CLI called `splash`, so ours was renamed from `splash` to `splashdown-cli`. ⬜ Register splashdown.app, and have counsel confirm before launch.
+- ✅ **Mac:** `scripts/package-mac.sh` builds a universal (Apple Silicon + Intel) DMG with the hardened runtime, the audio-input entitlement and the usage descriptions, signed with Point Dynamics' Developer ID. `NOTARIZE=1` notarizes and staples both the app and the DMG; the first notarized build passed Gatekeeper on 2026-10-29.
+- ⬜ **Windows:**
+  - Code signing (SignPath Foundation, free for open source, or Azure Trusted Signing).
+  - MSI/NSIS installers for x64 and ARM64.
+- ✅ **Auto-update** with signed manifests (Tauri updater, from GitHub Releases): a daily check (switchable), "Update to vX.Y.Z…" in the menu bar, and install only on request from About. Release steps are in CONTRIBUTING. ⬜ Not tried end to end until there's a release.
+- 🟡 **Feedback without telemetry:** ✅ "Send feedback…" (About and the menu bar) opens a pre-filled GitHub issue with versions and providers, no keys or text. ⬜ Local crash logs.
+- ⬜ **Public presence:** pick a license (MIT vs Apache-2.0), a landing page with a demo GIF, docs, and a privacy statement ("your text goes only to the provider you choose").
+- ⬜ **Package managers:** Homebrew cask, winget.
+- 🟡 **CI and release builds** (2026-10-30): `release.yml` builds the notarized DMG and the Windows installer on a version tag and drafts a GitHub release with one `latest.json` for both; CI leaves an unsigned Windows test installer on every push to `main`. README download links use fixed file names under `releases/latest/download/`. ⬜ Not run yet: needs the code on GitHub and the `release` environment's secrets (CONTRIBUTING). ⬜ Windows code signing.
+
+### 6. On-device AI
+- ✅ **M5 Apple:** SpeechAnalyzer and Foundation Models through the Swift shim. Free and private on Apple Silicon with macOS 26. Wired into Settings, onboarding and "Automatic"; a question guard and prompt changes made the on-device cleanup safer. Still to do: test the weak-link fallback on macOS 13–15.
+- 🟡 **M5b built-in local model:** the `splashdown-llm` helper (llama.cpp, prompt caching) and a two-model catalog (Qwen3 4B; Qwen3 1.7B for machines with about 8 GB of memory, chosen over Gemma 3 1B and LFM2 1.2B by the cleanup eval), with a Settings option, download and "Automatic" support (spec §5.6). Offered in onboarding (the 4B model). Still to do: test on Windows (CPU and Vulkan), and recommending the small model by installed RAM.
+
+### 7. Engineering quality (ongoing)
+- ⬜ Resource budgets: near-zero idle CPU, unload Whisper and local models after an idle period, measure battery impact.
+- ⬜ Security pass:
+  - No transcript text in logs by default.
+  - Clipboard-restore races.
+  - Prompt-injection defences re-run on the eval after every prompt change.
+- ⬜ Beta group, feedback form, known-issues list.
+
+### 8. Later, to stand out
+- ✅ **MCP voice input for coding agents:** Claude Code, Cursor or Codex can ask the user to answer by voice. `splashdown-mcp`, set up as in [AGENTS.md](AGENTS.md).
+- ✅ **Whisper mode** for quiet speech: an opt-in switch (General and the menu bar) that raises quiet recordings to a normal level before transcription (up to 25×, softly limited) and lowers hands-free's "still speaking" level. A recording at about −40 dB went from "no speech found" to a word-perfect transcript.
+- ⬜ **Linux** (the architecture allows it).
+- ⬜ Localize the app's own interface.
+
+### Not planned for 1.0
+Mobile apps, a meeting notetaker or file transcription, enterprise compliance (SOC 2/HIPAA/SSO), screen OCR context, our own speech model.

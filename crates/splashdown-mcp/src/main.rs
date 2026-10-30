@@ -1,0 +1,91 @@
+//! `splashdown-mcp` — voice input for coding agents. An MCP server over
+//! stdio with one tool, `ask_user_by_voice`: Splashdown shows the question,
+//! records the user's spoken answer hands-free, and the cleaned-up text
+//! goes back to the agent. It talks to the running app over its control
+//! socket (`splashdown-control`). Setup: docs/AGENTS.md.
+
+mod mcp;
+
+use std::io::{BufRead, Write};
+use std::sync::{Arc, Mutex};
+
+use serde_json::Value;
+use splashdown_control::{ClientError, Request};
+
+use crate::mcp::Step;
+
+fn main() {
+    let out = Arc::new(Mutex::new(std::io::stdout()));
+    // The `tools/call` waiting for the user, if any. The app records one
+    // answer at a time.
+    let waiting: Arc<Mutex<Option<Value>>> = Arc::default();
+
+    for line in std::io::stdin().lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        match mcp::handle(&line) {
+            Step::Send(msg) => write(&out, &msg),
+            Step::Ask { id, question } => {
+                {
+                    let mut w = lock(&waiting);
+                    if w.is_some() {
+                        let busy =
+                            Err("Already waiting for the user's answer to another question".into());
+                        write(&out, &mcp::response(id, mcp::tool_result(busy)));
+                        continue;
+                    }
+                    *w = Some(id.clone());
+                }
+                let (out, waiting) = (out.clone(), waiting.clone());
+                std::thread::spawn(move || {
+                    let answer = ask(question);
+                    let mut w = lock(&waiting);
+                    // Canceled meanwhile: the client expects no reply.
+                    if w.as_ref() == Some(&id) {
+                        *w = None;
+                        write(&out, &mcp::response(id, mcp::tool_result(answer)));
+                    }
+                });
+            }
+            Step::Canceled(id) => {
+                let mut w = lock(&waiting);
+                if w.as_ref() == Some(&id) {
+                    *w = None;
+                    // Stop the recording; the asking thread's reply is dropped.
+                    std::thread::spawn(|| {
+                        let _ = splashdown_control::send(&Request::Cancel);
+                    });
+                }
+            }
+            Step::Nothing => {}
+        }
+    }
+}
+
+/// Asks the running app to record an answer to `question`.
+fn ask(question: String) -> Result<String, String> {
+    match splashdown_control::send(&Request::Listen {
+        prompt: Some(question),
+    }) {
+        Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
+        Ok(_) => Err("The user didn't say anything. Ask in the chat instead.".into()),
+        Err(ClientError::NotRunning) => Err(
+            "Splashdown isn't running, so the user can't answer by voice. Ask in the chat instead."
+                .into(),
+        ),
+        Err(e) => Err(format!("No spoken answer ({e}). Ask in the chat instead.")),
+    }
+}
+
+fn write(out: &Mutex<std::io::Stdout>, msg: &Value) {
+    let mut out = out.lock().unwrap_or_else(|e| e.into_inner());
+    // `Value`'s compact form never contains a raw newline.
+    let _ = writeln!(out, "{msg}");
+    let _ = out.flush();
+}
+
+fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    m.lock().unwrap_or_else(|e| e.into_inner())
+}

@@ -1,0 +1,122 @@
+"use strict";
+
+// Sample backend for previewing the Settings window as a plain file:// page.
+// Only called when window.__TAURI__ is absent (see invoke in common.js).
+
+/** Sample data so the page can be designed in a normal browser. */
+async function mockInvoke(cmd, args) {
+  await new Promise((r) => setTimeout(r, 250));
+  const base = {
+    settings: {
+      speech: { provider: "auto", model: null },
+      ai: { provider: "auto", model: null, base_url: null, fallback_models: null },
+      general: { user_name: "Alex", language: null, vocabulary: ["Tauri", "OpenRouter"], live_preview: null, keep_history: null, check_for_updates: null },
+      hotkeys: { dictation: null, instruction: null },
+      presets: null,
+      snippets: [{ trigger: "my address", text: "1 Infinite Loop, Cupertino" }],
+    },
+    keys: [
+      { name: "openai", source: null, hint: null },
+      { name: "openrouter", source: "environment", hint: "9f2c" },
+      { name: "anthropic", source: null, hint: null },
+      { name: "custom", source: null, hint: null },
+    ],
+    permissions: { accessibility: false, microphone: "not-asked" },
+    whisper_models: [
+      { id: "base.en", mb: 148, downloaded: true },
+      { id: "small.en", mb: 488, downloaded: false },
+      { id: "large-v3-turbo-q5_0", mb: 574, downloaded: false },
+    ],
+    spending: {
+      month: { cost_usd: 0.42, requests: 1284, unpriced: 0, by_provider: { "openai/gpt-4o-mini-transcribe": 0.39, "openrouter/google/gemini-2.5-flash-lite": 0.03 } },
+      today: { cost_usd: 0.031, requests: 96, unpriced: 0, by_provider: {} },
+      state: "fine",
+      prices_as_of: "2026-10-29",
+    },
+    local_models: [
+      { id: "qwen3-4b", mb: 2500, ram_mb: 3000, downloaded: false, label: "Qwen3 4B · best quality" },
+      { id: "qwen3-1.7b", mb: 1100, ram_mb: 1700, downloaded: false, label: "Qwen3 1.7B · smaller, faster" },
+    ],
+    key_options: [
+      { value: "right-alt", label: "Right Option" },
+      { value: "right-meta", label: "Right Command" },
+      { value: "right-control", label: "Right Ctrl" },
+      { value: "right-shift", label: "Right Shift" },
+      { value: "left-alt", label: "Left Option" },
+      { value: "left-control", label: "Left Ctrl" },
+      { value: "fn", label: "Fn" },
+    ],
+    resolved_speech: { Ok: "OpenRouter · google/gemini-3.1-flash-lite" },
+    resolved_ai: { Ok: "OpenRouter · google/gemini-2.5-flash-lite" },
+    speech_destination: "cloud",
+    ai_destination: "cloud",
+    engine_error: null,
+    presets: [
+      { id: "default", name: "Default", instructions: "", ai: true, insert: "paste", rules: [] },
+      { id: "email", name: "Email", instructions: "Use short paragraphs. Only add a greeting or sign-off if I say one or ask for it.", ai: true, insert: "paste", rules: [{ app: "com.apple.mail", url: null, title: null }, { app: null, url: "mail.google.com", title: null }] },
+      { id: "chat", name: "Work chat", instructions: "No greeting or sign-off. Short paragraphs.", tone: "casual", auto_send: true, shortcut: "Ctrl+Alt+KeyC", ai: true, insert: "paste", rules: [{ app: "com.tinyspeck.slackmacgap", url: null, title: null }, { app: "slack.exe", url: null, title: null }, { app: "com.apple.MobileSMS", url: null, title: null }] },
+      { id: "code", name: "Code & Terminal", instructions: "", ai: false, insert: "paste", rules: [{ app: "com.apple.Terminal", url: null, title: null }] },
+    ],
+    preset_ai_options: [{ value: "apple", label: "Apple on-device" }, { value: "local", label: "Built-in local model" }, { value: "openrouter", label: "OpenRouter" }],
+    shortcut_errors: {},
+    defaults: {
+      openai_stt: "gpt-4o-mini-transcribe",
+      openrouter_stt: "google/gemini-3.1-flash-lite",
+      whisper_local: "base.en",
+      openai_ai: "gpt-4.1-mini",
+      openrouter_ai: "google/gemini-2.5-flash-lite",
+      anthropic_ai: "claude-haiku-5-5",
+      sound_volume: 0.12,
+    },
+    platform: "macos",
+    version: "0.0.1",
+    config_path: "~/Library/Application Support/Splashdown/config.toml",
+    update: { available: "0.2.0", notes: "Faster local Whisper.\nFixes pasting into Slack.", checking: false, installing: false, progress: null, last_checked: Date.now() - 3600000, error: null },
+  };
+  mockInvoke.state ??= base;
+  switch (cmd) {
+    case "get_state":
+      return mockInvoke.state;
+    case "save_settings":
+      mockInvoke.state = { ...mockInvoke.state, settings: args.settings, presets: args.settings.presets ?? mockInvoke.state.presets };
+      return { state: mockInvoke.state, engine_error: null };
+    case "list_microphones":
+      return { devices: [{ name: "MacBook Pro Microphone", bluetooth: false, built_in: true, is_default: true }, { name: "AirPods Pro", bluetooth: true, built_in: false, is_default: false }], automatic: "MacBook Pro Microphone" };
+    case "get_vocab_suggestions":
+      return ["Priya"];
+    case "get_recent_apps":
+      return [{ id: "com.google.Chrome", name: "Google Chrome", site: "docs.google.com" }, { id: "com.linear", name: "Linear", site: null }];
+    case "get_insights":
+      return {
+        today_words: 412, week_words: 3870, total_words: 52140, total_dictations: 1306, speaking_wpm: 146, minutes_saved: 951, streak_days: 12, typing_wpm: 40,
+        chart: Array.from({ length: 30 }, (_, i) => ({ date: new Date(Date.now() - (29 - i) * 864e5).toISOString().slice(0, 10), words: [0, 6].includes(new Date(Date.now() - (29 - i) * 864e5).getDay()) ? 80 + i * 3 : 600 + ((i * 137) % 900) })),
+        top_apps: [["Slack", 9120], ["Claude", 7400], ["Mail", 3150], ["Messages", 1980], ["Cursor", 1240]],
+      };
+    case "app_info":
+      return args.ids.map((id) => ({ id, name: { "com.apple.mail": "Mail", "com.tinyspeck.slackmacgap": "Slack", "com.apple.MobileSMS": "Messages", "com.apple.Terminal": "Terminal", "com.google.Chrome": "Google Chrome", "com.linear": "Linear" }[id] ?? null, icon: null }));
+    case "try_preset":
+      return "Hey, can we move the call to Thursday?";
+    case "redo_history":
+      return "Hi Sam — quick heads-up: the deploy moved to Thursday.";
+    case "get_history":
+      return [
+        { at: Date.now() - 60000, app: "Mail", mode: "dictate_instruct", raw: "hey sam um the deploy slipped to thursday", instruction: "make it a short email", text: "Hi Sam,\n\nQuick update: the deploy has slipped to Thursday.\n\nThanks,\nAlex", note: null, stt: "whisper-local/base.en", llm: "openrouter/google/gemini-2.5-flash-lite", millis: 1400 },
+        { at: Date.now() - 3600000, app: "Slack", mode: "dictate", raw: "sounds good I'll take a look after lunch", instruction: null, text: "Sounds good, I'll take a look after lunch.", note: null, stt: null, llm: null, millis: 900 },
+      ].filter((e) => !args.query || e.text.toLowerCase().includes(args.query.toLowerCase()));
+    case "export_history":
+    case "export_settings":
+      return "~/Downloads/Splashdown export.txt";
+    case "check_settings_file":
+      return { presets: null, snippets: 2, vocabulary: 4 };
+    case "check_for_updates":
+      return mockInvoke.state.update.available;
+    case "install_update":
+      throw "Updates can't be installed in the preview.";
+    case "send_feedback":
+      return null;
+    case "test_ai":
+      return { output: "I think we should ship it on Thursday.", millis: 512, model: "openrouter/google/gemini-2.5-flash-lite", note: null };
+    default:
+      return { state: mockInvoke.state, engine_error: null };
+  }
+}

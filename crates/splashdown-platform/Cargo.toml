@@ -1,0 +1,27 @@
+[package]
+name = "splashdown-platform"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+splashdown-core.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"
+core-graphics = "0.25"
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "libc", "objc2-core-foundation", "NSAccessibility", "NSAccessibilityConstants", "NSAccessibilityProtocols", "NSAppearance", "NSApplication", "NSBitmapImageRep", "NSBox", "NSCell", "NSColor", "NSFontDescriptor", "NSLayoutConstraint", "NSControl", "NSEvent", "NSFont", "NSGraphics", "NSGraphicsContext", "NSImage", "NSImageRep", "NSImageView", "NSMenu", "NSMenuItem", "NSPanel", "NSPasteboard", "NSPasteboardItem", "NSProgressIndicator", "NSResponder", "NSSound", "NSRunningApplication", "NSScreen", "NSText", "NSTextField", "NSView", "NSWindow", "NSWorkspace"] }
+objc2-av-foundation = { version = "0.3", default-features = false, features = ["std", "AVCaptureDevice", "AVMediaFormat"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFCGTypes"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSData", "NSDictionary", "NSEnumerator", "NSFileManager", "NSGeometry", "NSString", "NSObject", "NSProcessInfo", "NSURL"] }
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_Graphics_Gdi", "Win32_Media_Audio", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_Com", "Win32_System_DataExchange", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Registry", "Win32_System_Threading", "Win32_UI_Accessibility", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }

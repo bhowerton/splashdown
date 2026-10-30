@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Welcome to Splashdown</title>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="onboarding.css">
+</head>
+<body class="ob-body">
+<main class="ob">
+  <div class="steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+
+  <!-- 1 · Welcome -->
+  <section class="ob-step" data-step="1">
+    <div class="hero">
+      <div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+      <h1>Hold a key. Say it. It's typed.</h1>
+      <p class="sub">Splashdown types what you say into any app — email, chat, documents, the browser. It tidies up “um”s and self-corrections, and can reformat on request.</p>
+      <div class="big-key"><kbd class="dict-key">Right Option</kbd><span>hold · speak · release</span></div>
+    </div>
+  </section>
+
+  <!-- 2 · AI -->
+  <section class="ob-step" data-step="2" hidden>
+    <h1>How should it understand you?</h1>
+    <p class="sub">You can change this any time in Settings.</p>
+    <div class="cards" id="ai-cards">
+      <button class="card" data-choice="local">
+        <span class="ic">▣</span><b>Free &amp; private</b>
+        <p>Speech is recognized on this computer. Nothing leaves it. No AI cleanup until you add a key or a local model.</p>
+        <span class="badge ok">No account needed</span>
+      </button>
+      <button class="card" data-choice="openrouter">
+        <span class="ic">⇄</span><b>OpenRouter key</b>
+        <p>One key, many models. Best cleanup and formatting; a few cents a day even with heavy use.</p>
+        <span class="badge acc">Cloud</span>
+      </button>
+      <button class="card" data-choice="openai">
+        <span class="ic">◎</span><b>OpenAI key</b>
+        <p>Accurate speech recognition and cleanup with your OpenAI account.</p>
+        <span class="badge acc">Cloud</span>
+      </button>
+      <button class="card" data-choice="anthropic">
+        <span class="ic">✳</span><b>Anthropic key</b>
+        <p>Claude tidies and formats your words. Speech is recognized on this computer.</p>
+        <span class="badge acc">Cloud cleanup</span>
+      </button>
+    </div>
+    <div class="choice-detail" id="choice-detail"></div>
+  </section>
+
+  <!-- 3 · Permissions -->
+  <section class="ob-step" data-step="3" hidden>
+    <h1>Two quick permissions</h1>
+    <p class="sub">Each one ticks itself off as soon as you allow it.</p>
+    <div class="group">
+      <div class="row perm">
+        <span class="step-dot" id="ax-step">1</span>
+        <span class="lbl">Accessibility
+          <small>Lets Splashdown notice the hotkey, see which field you're in, and type into it.</small>
+          <small class="howto" id="ax-howto" hidden>In System Settings, switch on <b>Splashdown</b>.</small>
+        </span>
+        <span class="state" id="ax-state"></span>
+      </div>
+      <div class="row perm">
+        <span class="step-dot" id="mic-step">2</span>
+        <span class="lbl">Microphone
+          <small>Only used while you hold the hotkey.</small>
+          <small class="howto" id="mic-howto" hidden>Switch on <b>Splashdown</b> under Microphone in System Settings.</small>
+        </span>
+        <span class="state" id="mic-state"></span>
+      </div>
+    </div>
+  </section>
+
+  <!-- 4 · Practice -->
+  <section class="ob-step" data-step="4" hidden>
+    <h1>Try it</h1>
+    <p class="sub">Click in the box, hold <b class="dict-key">Right Option</b>, say <em>“Hello, this is my first dictation”</em>, and let go.</p>
+    <textarea id="practice" class="practice" rows="4" aria-label="Practice box" placeholder="Your words will appear here"></textarea>
+    <div class="practice-status" id="practice-status" role="status" aria-live="polite">Waiting for your first dictation…</div>
+    <div class="tips" id="tips" hidden>
+      <b>Nice!</b> Now try one more:
+      <ul>
+        <li>Select the text, hold the key and say <em>“make it more excited”</em>.</li>
+        <li>Or while holding, tap <b>Right Shift</b> and say an instruction, like <em>“…as a short email”</em>.</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 5 · Done -->
+  <section class="ob-step" data-step="5" hidden>
+    <h1>You're all set</h1>
+    <p class="sub">Splashdown lives in the menu bar. A few things worth knowing:</p>
+    <div class="group cheat">
+      <div class="row"><span class="lbl">Dictate</span><span><kbd class="dict-key">Right Option</kbd> hold</span></div>
+      <div class="row"><span class="lbl">Add an instruction (“make it an email”)</span><span>tap <kbd>Right Shift</kbd> while holding</span></div>
+      <div class="row"><span class="lbl">Rewrite selected text</span><span>select, then hold and speak</span></div>
+      <div class="row"><span class="lbl">Hands-free</span><span>while holding, press <kbd>H</kbd>, then let go; tap again to finish</span></div>
+      <div class="row"><span class="lbl">Press Return when it's typed (press again to undo)</span><span><kbd>Return</kbd> while holding, or right after</span></div>
+      <div class="row"><span class="lbl">Cancel</span><span><kbd>Esc</kbd></span></div>
+      <div class="row"><span class="lbl">Undo the AI: paste exactly what you said</span><span><kbd>⌃⌥V</kbd></span></div>
+      <div class="row"><span class="lbl">Give a command, in any language</span><span>tap <kbd>Right Shift</kbd> first, then say it: “delete that”, “make it formal”, “send it”</span></div>
+    </div>
+    <label class="row login"><span class="lbl">Start Splashdown when I log in</span><input type="checkbox" class="switch" id="login" checked></label>
+  </section>
+
+  <footer class="ob-foot">
+    <button class="btn" id="back">Back</button>
+    <span class="foot-note" id="foot-note"></span>
+    <button class="btn primary" id="next">Get started</button>
+  </footer>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="common.js"></script>
+<script src="onboarding.js"></script>
+</body>
+</html>

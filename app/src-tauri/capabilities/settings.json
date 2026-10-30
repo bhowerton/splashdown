@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "settings",
+  "description": "The Settings, setup and scratchpad windows: app commands plus core events (download progress).",
+  "windows": [
+    "settings",
+    "onboarding",
+    "scratchpad"
+  ],
+  "permissions": [
+    "core:default"
+  ]
+}

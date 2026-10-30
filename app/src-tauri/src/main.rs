@@ -1,0 +1,256 @@
+// No console window on Windows release builds.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
+mod actions;
+mod audio;
+mod chunks;
+mod commands;
+mod engine;
+mod errors;
+mod export;
+mod feedback;
+mod history;
+mod insights;
+mod minibar;
+mod preview;
+mod project;
+mod replacements;
+mod scratchpad;
+mod session;
+mod shortcuts;
+mod spend;
+mod tray;
+mod triggers;
+mod ui;
+mod updates;
+
+use std::sync::{Arc, Mutex};
+
+use splashdown_config::Paths;
+use tauri::{Listener, Manager, RunEvent};
+
+use crate::history::History;
+
+fn main() {
+    // Before logging starts, so the old logs folder can still move.
+    let moved = Paths::resolve()
+        .map(|p| p.migrate_legacy())
+        .unwrap_or_default();
+    init_logging();
+    for to in moved {
+        tracing::info!("moved files from the app's former name to {}", to.display());
+    }
+    let keys = splashdown_config::migrate_legacy_keys();
+    if keys > 0 {
+        tracing::info!("moved {keys} API key(s) from the app's former keychain entry");
+    }
+    load_dev_keys();
+
+    let app = tauri::Builder::default()
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .invoke_handler(tauri::generate_handler![
+            commands::get_state,
+            commands::save_settings,
+            commands::save_key,
+            commands::delete_key,
+            commands::test_ai,
+            commands::download_model,
+            commands::prepare_apple_speech,
+            commands::show_log_file,
+            commands::open_limits_page,
+            commands::open_permission,
+            commands::request_accessibility,
+            commands::request_microphone,
+            commands::get_history,
+            commands::delete_history,
+            commands::retranscribe_history,
+            commands::clear_history,
+            commands::try_preset,
+            commands::get_insights,
+            commands::clear_insights,
+            commands::app_info,
+            commands::copy_text,
+            commands::get_recent_apps,
+            commands::redo_history,
+            commands::last_result,
+            commands::get_launch_at_login,
+            commands::set_launch_at_login,
+            commands::finish_onboarding,
+            commands::open_onboarding,
+            commands::get_vocab_suggestions,
+            commands::dismiss_vocab_suggestion,
+            commands::pause_hotkeys,
+            commands::preview_sound,
+            commands::list_microphones,
+            commands::check_for_updates,
+            commands::install_update,
+            commands::send_feedback,
+            scratchpad::scratchpad_load,
+            scratchpad::scratchpad_save,
+            scratchpad::scratchpad_new,
+            scratchpad::scratchpad_open_note,
+            scratchpad::scratchpad_delete_note,
+            scratchpad::scratchpad_send,
+            scratchpad::open_scratchpad,
+            export::export_history,
+            export::export_settings,
+            export::check_settings_file,
+            export::import_settings,
+        ])
+        .setup(|app| {
+            // Menu bar app: no Dock icon, no app menu.
+            #[cfg(target_os = "macos")]
+            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            #[cfg(target_os = "macos")]
+            migrate_login_item(app.handle());
+
+            let history = Arc::new(History::open(
+                engine::paths()
+                    .map(|p| p.history_file())
+                    .unwrap_or_else(|_| std::env::temp_dir().join("splashdown-history.jsonl")),
+            ));
+            let tray_menu = tray::install(app.handle(), history.clone())?;
+            ui::init_overlay();
+            splashdown_platform::refresh_shortcut_keys();
+            shortcuts::install(app, history.clone());
+
+            let settings = engine::load_settings();
+            minibar::init(app.handle(), settings.general.mini_bar());
+            history.set_keep_days(settings.general.history_days());
+            let onboarded = settings.general.onboarded;
+            let built = engine::build(&settings);
+            let engine_error = built.as_ref().err().cloned();
+            if let Some(e) = &engine_error {
+                tracing::warn!("dictation isn't set up: {e}");
+            }
+            let updates = updates::Updates::new(tray_menu.clone());
+            let session = session::spawn(
+                ui::Ui::new(app.handle().clone(), tray_menu.clone()),
+                built,
+                engine::keys(&settings),
+                history.clone(),
+            );
+            triggers::serve(session.clone());
+            // The session asks for a rebuild when spending crosses a limit.
+            let handle = app.handle().clone();
+            app.listen_any(ui::REBUILD_ENGINE, move |_| {
+                let handle = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    let state = handle.state::<commands::AppState>();
+                    if let Some(e) = state.apply().await {
+                        tracing::warn!("rebuilding after a spending change: {e}");
+                    }
+                });
+            });
+            let presets = settings.presets();
+            app.manage(commands::AppState {
+                settings: Mutex::new(settings),
+                session,
+                engine_error: Mutex::new(engine_error),
+                history,
+                tray: tray_menu,
+                updates,
+            });
+            updates::start(app.handle());
+            shortcuts::sync(app.handle(), &presets);
+
+            // First run: the setup guide. Later, if a permission was
+            // revoked: Settings, which opens on the Permissions tab.
+            if !onboarded {
+                tray::open_onboarding(app.handle());
+            } else if !splashdown_platform::permissions().accessibility {
+                tray::open_settings(app.handle());
+            }
+            Ok(())
+        })
+        .build(tauri::generate_context!())
+        .expect("failed to build the Splashdown app");
+
+    app.run(|app, event| {
+        triggers::on_run_event(app, &event);
+        // Closing the last window (Settings) must not quit a tray app.
+        // An explicit exit (Quit menu item) carries an exit code.
+        if let RunEvent::ExitRequested { api, code, .. } = event
+            && code.is_none()
+        {
+            api.prevent_exit();
+        }
+    });
+}
+
+/// The login item from before the app was renamed to Splashdown points at
+/// the old app. If there is one, replace it with ours.
+#[cfg(target_os = "macos")]
+fn migrate_login_item(app: &tauri::AppHandle) {
+    use tauri_plugin_autostart::ManagerExt;
+
+    let Some(home) = std::env::home_dir() else {
+        return;
+    };
+    let legacy = home.join("Library/LaunchAgents/just-say-it.plist");
+    if legacy.exists() && std::fs::remove_file(&legacy).is_ok() {
+        match app.autolaunch().enable() {
+            Ok(()) => tracing::info!("moved the login item to Splashdown"),
+            Err(e) => tracing::warn!("couldn't re-create the login item: {e}"),
+        }
+    }
+}
+
+/// A log file larger than this is moved aside (to `.old.log`) at startup.
+const LOG_ROTATE_BYTES: u64 = 2 * 1024 * 1024;
+
+/// Logs to stdout and to `splashdown.log` in the platform's logs folder
+/// (`Paths::logs_dir`), which "Show log file" in Settings opens. Logs hold
+/// timings, provider names and errors, never what the user said or typed.
+fn init_logging() {
+    use tracing_subscriber::prelude::*;
+
+    let filter = tracing_subscriber::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| "info,splashdown=debug,splashdown_platform=debug".into());
+    let file = Paths::resolve().and_then(|p| open_log_file(&p.logs_dir).ok());
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(tracing_subscriber::fmt::layer())
+        .with(file.map(|f| {
+            tracing_subscriber::fmt::layer()
+                .with_ansi(false)
+                .with_writer(Mutex::new(f))
+        }))
+        .init();
+}
+
+fn open_log_file(dir: &std::path::Path) -> std::io::Result<std::fs::File> {
+    std::fs::create_dir_all(dir)?;
+    let path = dir.join(LOG_FILE);
+    if std::fs::metadata(&path).is_ok_and(|m| m.len() > LOG_ROTATE_BYTES) {
+        let _ = std::fs::rename(&path, dir.join("splashdown.old.log"));
+    }
+    std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+}
+
+/// The log file's name inside `Paths::logs_dir`.
+pub const LOG_FILE: &str = "splashdown.log";
+
+/// Keys normally live in the OS keychain (set in Settings). For development
+/// they can also come from the file named by `SPLASHDOWN_ENV_FILE` (set by
+/// `scripts/run-mac-app.sh`) and, in debug builds only, from `.env.local` in
+/// the working directory or `.env` in the app's config folder. Environment
+/// keys override the keychain.
+fn load_dev_keys() {
+    if let Ok(path) = std::env::var("SPLASHDOWN_ENV_FILE") {
+        let _ = dotenvy::from_path(path);
+    }
+    if cfg!(debug_assertions) {
+        let _ = dotenvy::from_filename(".env.local");
+        if let Some(paths) = Paths::resolve() {
+            let _ = dotenvy::from_path(paths.config_dir.join(".env"));
+        }
+    }
+}

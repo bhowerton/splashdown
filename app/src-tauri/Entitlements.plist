@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Hardened-runtime entitlements for release builds (required for
+     notarization). The app isn't sandboxed: it needs Accessibility to read
+     and type into other apps' fields, which the sandbox doesn't allow. -->
+<plist version="1.0">
+<dict>
+  <!-- Recording while the dictation key is held. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+</dict>
+</plist>

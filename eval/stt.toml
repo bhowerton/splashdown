@@ -1,0 +1,47 @@
+# Speech-to-text eval set. Generate audio with:  splashdown-cli eval make-audio
+# then score a provider with:                    splashdown-cli eval stt --stt <provider>
+#
+# These use synthesized speech, so they verify that a provider works and
+# measure latency more than they measure accuracy on real voices. Add your
+# own recordings (`splashdown-cli record --save eval/audio/<id>.wav`) with a matching
+# case below for a real-voice benchmark.
+
+[[case]]
+id = "short-greeting"
+text = "Hey, are you free for a quick call this afternoon?"
+
+[[case]]
+id = "fillers"
+text = "Um, so I think, uh, we should probably ship it on Friday."
+
+[[case]]
+id = "self-correction"
+text = "Let's meet at three, no wait, four o'clock in the main conference room."
+
+[[case]]
+id = "numbers"
+text = "The invoice total is four hundred and twenty dollars, due on March fifteenth."
+
+[[case]]
+id = "technical"
+text = "Restart the Kubernetes pods and check the logs in the staging cluster."
+
+[[case]]
+id = "long-email"
+text = "Thanks for sending over the proposal. I read through it last night and I think the timeline is realistic, but we should talk about the budget for the second phase before we commit to anything."
+
+[[case]]
+id = "question"
+text = "What time does the pharmacy close on Sundays?"
+
+[[case]]
+id = "names"
+text = "Please forward the contract to Priya and copy Marcus on the thread."
+
+[[case]]
+id = "instruction-phrase"
+text = "Format this as a short friendly email reply."
+
+[[case]]
+id = "punctuation-words"
+text = "First item comma second item period new paragraph thanks."

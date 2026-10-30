@@ -1,0 +1,21 @@
+[package]
+name = "splashdown-audio"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+splashdown-core.workspace = true
+cpal.workspace = true
+hound.workspace = true
+nnnoiseless.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-foundation = "0.10"

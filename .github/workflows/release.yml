@@ -1,0 +1,144 @@
+name: Release
+
+# Pushing a version tag (v0.2.0) builds the signed, notarized Mac DMG and the
+# Windows installer and makes a *draft* GitHub release with both, plus the
+# updater files. Publishing the draft is a person's job: installed copies
+# only see a published release, so nothing reaches them by accident.
+#
+# Run it by hand (Actions → Release → Run workflow) to get the same builds
+# as downloadable artifacts, without a release.
+#
+# Secrets live in the "release" environment (Settings → Environments), which
+# should require a maintainer's approval for every run; see CONTRIBUTING.md.
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  version:
+    # A tag that doesn't match the version in the code would publish an
+    # update that installed copies keep offering.
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag matches the version
+        run: |
+          cargo_version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          tauri_version=$(jq -r .version app/src-tauri/tauri.conf.json)
+          tag=${GITHUB_REF_NAME#v}
+          echo "tag $tag, Cargo.toml $cargo_version, tauri.conf.json $tauri_version"
+          [ "$tag" = "$cargo_version" ] && [ "$tag" = "$tauri_version" ]
+
+  mac:
+    needs: version
+    # Runs for manual runs too, where `version` is skipped.
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: macos-26
+    environment: release
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Import the Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/release.keychain-db"
+          password=$(uuidgen)
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+          security import "$RUNNER_TEMP/certificate.p12" -k "$keychain" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          rm "$RUNNER_TEMP/certificate.p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          security find-identity -v -p codesigning "$keychain" | grep -q "Developer ID Application"
+      - name: Build, sign and notarize
+        env:
+          NOTARIZE: "1"
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          export APPLE_API_KEY_PATH="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY_PATH"
+          scripts/package-mac.sh
+          rm "$APPLE_API_KEY_PATH"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mac
+          path: target/universal-apple-darwin/release/bundle/release/
+          if-no-files-found: error
+      - name: Remove the keychain
+        if: always()
+        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
+
+  windows:
+    needs: version
+    if: ${{ !failure() && !cancelled() }}
+    runs-on: windows-latest
+    environment: release
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Build the installer
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: scripts/package-win.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: target/release/bundle/release/
+          if-no-files-found: error
+
+  publish:
+    needs: [mac, windows]
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+      - name: One latest.json for both platforms
+        run: |
+          jq -s '.[0] * {platforms: (.[0].platforms + .[1].platforms)}' \
+            dist/mac/latest.json dist/windows/latest.json > latest.json
+          rm dist/mac/latest.json dist/windows/latest.json
+          jq -r '.platforms | keys[]' latest.json
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft \
+            --title "Splashdown ${GITHUB_REF_NAME#v}" --generate-notes \
+            latest.json dist/mac/* dist/windows/*

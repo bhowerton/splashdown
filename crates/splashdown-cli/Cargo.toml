@@ -1,0 +1,33 @@
+[package]
+name = "splashdown-cli"
+description = "Developer harness for the Splashdown pipeline: record, transcribe, clean up, eval."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "splashdown-cli"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+async-trait.workspace = true
+clap.workspace = true
+dotenvy.workspace = true
+splashdown-audio.workspace = true
+splashdown-config.workspace = true
+splashdown-control.workspace = true
+splashdown-core.workspace = true
+splashdown-providers.workspace = true
+serde.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread"] }
+toml.workspace = true
+
+[features]
+default = ["whisper-local"]
+whisper-local = ["splashdown-providers/whisper-local"]

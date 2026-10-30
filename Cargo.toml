@@ -1,0 +1,56 @@
+[workspace]
+resolver = "3"
+members = ["crates/*", "app/src-tauri"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+rust-version = "1.90"
+publish = false
+license = "MIT OR Apache-2.0"
+
+[workspace.dependencies]
+splashdown-core = { path = "crates/splashdown-core" }
+splashdown-audio = { path = "crates/splashdown-audio" }
+splashdown-providers = { path = "crates/splashdown-providers", default-features = false }
+splashdown-platform = { path = "crates/splashdown-platform" }
+splashdown-apple-shim = { path = "crates/splashdown-apple-shim" }
+splashdown-config = { path = "crates/splashdown-config" }
+splashdown-control = { path = "crates/splashdown-control" }
+
+anyhow = "1"
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+async-trait = "0.1"
+base64 = "0.22"
+clap = { version = "4", features = ["derive"] }
+cpal = "0.16"
+directories = "6"
+dotenvy = "0.15"
+futures-channel = "0.3"
+futures-executor = "0.3"
+futures-util = "0.3"
+hound = "3.5"
+keyring = { version = "3", features = ["apple-native", "windows-native"] }
+reqwest = { version = "0.13", default-features = false, features = ["native-tls", "json", "multipart", "http2", "charset"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+tokio = { version = "1", features = ["rt"] }
+toml = "0.9"
+tracing = "0.1"
+whisper-rs = "0.16"
+llama-cpp-2 = { version = "0.1.160", default-features = false }
+nnnoiseless = { version = "0.5", default-features = false }
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+# Every `unsafe` block and impl states why it is sound.
+undocumented_unsafe_blocks = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = true

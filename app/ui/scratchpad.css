@@ -1,0 +1,35 @@
+/* The scratchpad window (about 420 × 320). Colors, buttons and the toast
+   come from settings.css. */
+.sp-body { overflow: hidden; }
+.sp { height: 100vh; display: flex; flex-direction: column; }
+.sp-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.sp-grow { flex: 1; }
+.sp-muted { color: var(--muted); font-size: 12px; }
+
+/* The note fills the window; the bar sits below it. */
+#sp-note {
+  flex: 1; min-height: 0; resize: none; margin: 10px 10px 0; width: auto; padding: 10px 12px;
+  background: var(--surface); border-radius: 10px; font-size: 14px; line-height: 1.5;
+}
+/* It nearly always has focus, so a quieter ring than Settings' fields. */
+#sp-note:focus { box-shadow: none; }
+.sp-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px 10px; }
+.sp-bar .link { font-size: 12.5px; white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* Long app names shrink rather than push the other buttons out. */
+.sp-send { max-width: 160px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+
+.sp-head { border-bottom: 1px solid var(--border); padding-top: 10px; }
+.sp-list { list-style: none; margin: 0; padding: 0 10px; overflow-y: auto; flex: 1; }
+.sp-list li { padding: 8px 2px; border-top: 1px solid var(--border); }
+.sp-list li:first-child { border-top: 0; }
+.sp-list .sp-text {
+  white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  font-size: 13px; -webkit-user-select: text; user-select: text;
+}
+.sp-list .sp-meta { display: flex; align-items: center; gap: 12px; margin-top: 3px; font-size: 12px; }
+.sp-list .sp-meta time { color: var(--muted); flex: 1; }
+.sp-list .link.danger { color: var(--err); }
+.sp-empty { color: var(--muted); font-size: 12.5px; text-align: center; margin: 40px 24px; }
+
+/* No sidebar here, so center the toast in the window. */
+.toast { left: 50%; top: 10px; }

@@ -1,0 +1,6 @@
+{
+  "bundle": {
+    "externalBin": ["binaries/splashdown-llm"],
+    "createUpdaterArtifacts": true
+  }
+}

@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <!--
+    Splashdown app icon (master).
+    A capsule descending under an orange-and-white canopy, splashing down
+    into a night ocean: "your words land".
+    Canvas follows the macOS (Big Sur+) grid: 824px plate inset 100px,
+    continuous-corner rounded square, soft drop shadow.
+  -->
+  <defs>
+    <!-- Continuous-curvature rounded square, 824x824 at (100,100). -->
+    <path id="plate" d="M390 100 H634 C866 100 924 158 924 390 V634 C924 866 866 924 634 924 H390 C158 924 100 866 100 634 V390 C100 158 158 100 390 100 Z"/>
+    <clipPath id="plate-clip"><use href="#plate"/></clipPath>
+
+    <linearGradient id="sky" x1="0" y1="100" x2="0" y2="760" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0A1440"/>
+      <stop offset="0.6" stop-color="#16337A"/>
+      <stop offset="1" stop-color="#2F64B8"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="730" x2="0" y2="924" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0F6FA8"/>
+      <stop offset="1" stop-color="#06305C"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="0" y1="190" x2="0" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FF9A3D"/>
+      <stop offset="1" stop-color="#F2551F"/>
+    </linearGradient>
+    <linearGradient id="white" x1="0" y1="190" x2="0" y2="450" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#DCE6F5"/>
+    </linearGradient>
+    <linearGradient id="hull" x1="430" y1="0" x2="600" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#B9C6DA"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="512" cy="740" r="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#6FA8FF" stop-opacity="0.45"/>
+      <stop offset="1" stop-color="#6FA8FF" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- Canopy outline: dome over a scalloped hem. -->
+    <path id="canopy" d="M232 440 C232 250 360 186 512 186 C664 186 792 250 792 440
+      Q756 462 702 440 Q640 466 578 440 Q512 470 446 440 Q384 466 322 440 Q268 462 232 440 Z"/>
+    <clipPath id="canopy-clip"><use href="#canopy"/></clipPath>
+
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="125%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="14"/>
+      <feOffset dy="12"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.35"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <use href="#plate" fill="url(#sky)"/>
+  </g>
+
+  <g clip-path="url(#plate-clip)">
+    <rect x="100" y="100" width="824" height="824" fill="url(#glow)"/>
+
+    <!-- Stars -->
+    <g fill="#FFFFFF">
+      <circle cx="200" cy="230" r="9" opacity="0.9"/>
+      <circle cx="292" cy="160" r="6" opacity="0.6"/>
+      <circle cx="830" cy="210" r="8" opacity="0.85"/>
+      <circle cx="770" cy="560" r="6" opacity="0.5"/>
+      <circle cx="176" cy="470" r="6" opacity="0.55"/>
+      <circle cx="868" cy="390" r="5" opacity="0.5"/>
+    </g>
+
+    <!-- Suspension lines -->
+    <g stroke="#FFFFFF" stroke-opacity="0.8" stroke-width="11" stroke-linecap="round" fill="none">
+      <path d="M240 446 L480 578"/>
+      <path d="M384 452 L494 574"/>
+      <path d="M640 452 L530 574"/>
+      <path d="M784 446 L544 578"/>
+    </g>
+
+    <!-- Canopy: alternating orange and white gores -->
+    <g clip-path="url(#canopy-clip)">
+      <rect x="220" y="180" width="584" height="300" fill="url(#white)"/>
+      <path d="M512 186 Q232 186 232 470 L330 470 Q340 230 512 186 Z" fill="url(#orange)"/>
+      <path d="M512 186 Q452 230 446 470 L578 470 Q572 230 512 186 Z" fill="url(#orange)"/>
+      <path d="M512 186 Q792 186 792 470 L694 470 Q684 230 512 186 Z" fill="url(#orange)"/>
+      <!-- soft shading on the underside of the hem -->
+      <path d="M200 420 Q512 470 824 420 L824 480 L200 480 Z" fill="#7A1E00" opacity="0.18"/>
+    </g>
+
+    <!-- Capsule -->
+    <g transform="translate(512 742) scale(1.2) translate(-512 -742)">
+      <rect x="486" y="584" width="52" height="26" rx="8" fill="#9FB0C9"/>
+      <path d="M470 606 H554 Q564 606 568 616 L620 728 Q512 760 404 728 L456 616 Q460 606 470 606 Z" fill="url(#hull)"/>
+      <path d="M512 640 m-24 0 a24 24 0 1 0 48 0 a24 24 0 1 0 -48 0" fill="#16337A"/>
+      <path d="M404 728 Q512 760 620 728 L626 744 Q512 778 398 744 Z" fill="#8C5A3C"/>
+    </g>
+
+    <!-- Sea -->
+    <path d="M100 742 Q190 726 280 742 T460 742 T640 742 T820 742 T1000 742 V940 H100 Z" fill="url(#sea)"/>
+
+    <!-- Splash -->
+    <g stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" fill="none">
+      <path d="M370 738 Q334 690 296 680"/>
+      <path d="M654 738 Q690 690 728 680"/>
+      <path d="M394 722 Q378 670 356 646" stroke-width="14"/>
+      <path d="M630 722 Q646 670 668 646" stroke-width="14"/>
+    </g>
+    <g fill="#FFFFFF">
+      <circle cx="276" cy="650" r="11"/>
+      <circle cx="748" cy="650" r="11"/>
+      <circle cx="334" cy="612" r="9"/>
+      <circle cx="690" cy="612" r="9"/>
+    </g>
+
+    <!-- Foam and ripples -->
+    <path d="M366 748 Q512 782 658 748 Q646 766 512 776 Q378 766 366 748 Z" fill="#FFFFFF" opacity="0.9"/>
+    <g stroke="#FFFFFF" fill="none" stroke-linecap="round">
+      <path d="M318 790 Q512 836 706 790" stroke-width="14" opacity="0.6"/>
+      <path d="M236 840 Q512 904 788 840" stroke-width="12" opacity="0.35"/>
+    </g>
+
+    <!-- Top-edge highlight -->
+    <use href="#plate" fill="none" stroke="#FFFFFF" stroke-opacity="0.12" stroke-width="4"/>
+  </g>
+</svg>

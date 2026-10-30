@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36">
+  <!--
+    Splashdown menu bar glyph (macOS template image: black + alpha).
+    Canopy, two shroud lines, capsule, wave. Rendered to 18px (@1x) and
+    36px (@2x). tray-recording.svg and tray-attention.svg repeat this shape;
+    keep them in sync.
+  -->
+  <defs>
+    <mask id="gores" maskUnits="userSpaceOnUse" x="0" y="0" width="36" height="36">
+      <rect width="36" height="36" fill="#fff"/>
+      <g stroke="#000" stroke-width="1.4" stroke-linecap="round" fill="none">
+        <path d="M16 3.2 Q13.2 6 13 14"/>
+        <path d="M20 3.2 Q22.8 6 23 14"/>
+      </g>
+    </mask>
+  </defs>
+  <g fill="#000">
+    <path mask="url(#gores)" d="M3 12.5 C3 5.5 9.8 1.5 18 1.5 C26.2 1.5 33 5.5 33 12.5 Q28 15 23 12.5 Q18 15 13 12.5 Q8 15 3 12.5 Z"/>
+    <path d="M15.4 20.6 H20.6 L24.4 27.4 Q18 29 11.6 27.4 Z" stroke="#000" stroke-width="1.2" stroke-linejoin="round"/>
+  </g>
+  <g stroke="#000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <path d="M4 13.6 L15.2 20.8"/>
+    <path d="M32 13.6 L20.8 20.8"/>
+    <path d="M4 32.2 Q7.5 29.4 11 32.2 T18 32.2 T25 32.2 T32 32.2" stroke-width="2.2"/>
+  </g>
+</svg>

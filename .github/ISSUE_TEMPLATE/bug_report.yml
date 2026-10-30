@@ -1,0 +1,43 @@
+name: Bug report
+description: Something doesn't work as expected
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: input
+    id: app
+    attributes:
+      label: Where were you dictating?
+      placeholder: e.g. Slack desktop app, Gmail in Chrome, Notes
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options: [macOS, Windows]
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Versions
+      description: Splashdown version (Settings → About) and OS version.
+      placeholder: Splashdown 0.1.0, macOS 26.1
+    validations:
+      required: true
+  - type: input
+    id: providers
+    attributes:
+      label: Providers
+      description: Speech to text and Cleanup providers (Settings → AI Providers → "Using now").
+      placeholder: Apple on-device · OpenRouter gemini-2.5-flash-lite
+  - type: textarea
+    id: logs
+    attributes:
+      label: Log excerpt
+      description: Optional. Logs never contain what you dictated, but check before pasting.
+      render: text

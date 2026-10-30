@@ -1,0 +1,68 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Splashdown",
+  "version": "0.0.1",
+  "identifier": "app.splashdown",
+  "build": {
+    "frontendDist": "../ui"
+  },
+  "app": {
+    "windows": [],
+    "security": {
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+    },
+    "withGlobalTauri": true
+  },
+  "bundle": {
+    "active": true,
+    "targets": [
+      "app",
+      "dmg",
+      "nsis"
+    ],
+    "category": "Productivity",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "macOS": {
+      "minimumSystemVersion": "13.0",
+      "hardenedRuntime": true,
+      "entitlements": "Entitlements.plist",
+      "dmg": {
+        "appPosition": {
+          "x": 180,
+          "y": 170
+        },
+        "applicationFolderPosition": {
+          "x": 480,
+          "y": 170
+        },
+        "windowSize": {
+          "width": 660,
+          "height": 400
+        }
+      }
+    },
+    "resources": {
+      "../../THIRD-PARTY-LICENSES.html": "THIRD-PARTY-LICENSES.html",
+      "../../LICENSE-MIT": "LICENSE-MIT",
+      "../../LICENSE-APACHE": "LICENSE-APACHE"
+    },
+    "copyright": "Copyright © 2026 The Splashdown contributors. MIT OR Apache-2.0.",
+    "shortDescription": "Hold a key, say it, and it's typed.",
+    "longDescription": "Push-to-talk dictation into any text field, with optional AI cleanup and formatting. Free and open source."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDMwOTE0MzNERTIwMDMzRjgKUldUNE13RGlQVU9STUZDL0dSNG5kMTZJVTByQ2tzc3Z5K2pJNEtGNzJkaldBdUlWSHBHNGZmVXoK",
+      "endpoints": [
+        "https://github.com/bhowerton/splashdown/releases/latest/download/latest.json"
+      ],
+      "requireSignedVersion": true
+    }
+  }
+}

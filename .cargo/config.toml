@@ -1,0 +1,10 @@
+[env]
+# Matches the app's minimum (tauri.conf.json) and the Swift shim's target,
+# so linking doesn't warn about mismatched deployment targets.
+MACOSX_DEPLOYMENT_TARGET = "13.0"
+
+# FoundationModels exists only on macOS 26+. Link it weakly into every binary
+# (a build script's link args don't reach dependents) so the app still runs on
+# older systems; the Swift shim checks availability before using it.
+[target.'cfg(target_os = "macos")']
+rustflags = ["-C", "link-arg=-Wl,-weak_framework,FoundationModels"]

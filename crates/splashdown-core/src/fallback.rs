@@ -1,0 +1,144 @@
+//! Reliability: when a cloud provider fails (offline, an outage, a bad
+//! key), the same request goes to a model on this computer instead, so the
+//! dictation isn't lost. The result's `Usage::on_device_fallback` says so.
+
+use std::sync::Arc;
+
+use async_trait::async_trait;
+
+use crate::AudioClip;
+use crate::provider::{
+    Completion, ProviderResult, SpeechToText, SttHints, TextModel, TextRequest, Transcript,
+};
+
+/// Speech-to-text that falls back to `backup` when `primary` fails.
+pub struct FallbackStt {
+    pub primary: Arc<dyn SpeechToText>,
+    pub backup: Arc<dyn SpeechToText>,
+}
+
+#[async_trait]
+impl SpeechToText for FallbackStt {
+    fn name(&self) -> String {
+        self.primary.name()
+    }
+
+    async fn transcribe(&self, audio: &AudioClip, hints: &SttHints) -> ProviderResult<Transcript> {
+        let error = match self.primary.transcribe(audio, hints).await {
+            Ok(transcript) => return Ok(transcript),
+            Err(e) => e,
+        };
+        match self.backup.transcribe(audio, hints).await {
+            Ok(mut transcript) => {
+                transcript.usage.on_device_fallback = true;
+                Ok(transcript)
+            }
+            // The first error is the one worth showing.
+            Err(_) => Err(error),
+        }
+    }
+
+    fn warm_up(&self) {
+        self.primary.warm_up();
+    }
+}
+
+/// A text model that falls back to `backup` when `primary` fails.
+pub struct FallbackModel {
+    pub primary: Arc<dyn TextModel>,
+    pub backup: Arc<dyn TextModel>,
+}
+
+#[async_trait]
+impl TextModel for FallbackModel {
+    fn name(&self) -> String {
+        self.primary.name()
+    }
+
+    async fn complete(&self, req: &TextRequest) -> ProviderResult<Completion> {
+        let error = match self.primary.complete(req).await {
+            Ok(completion) => return Ok(completion),
+            Err(e) => e,
+        };
+        let mut req = req.clone();
+        if !self.backup.supports_json_schema() {
+            req.json_schema = None;
+        }
+        match self.backup.complete(&req).await {
+            Ok(mut completion) => {
+                completion.usage.on_device_fallback = true;
+                Ok(completion)
+            }
+            Err(_) => Err(error),
+        }
+    }
+
+    fn supports_json_schema(&self) -> bool {
+        self.primary.supports_json_schema()
+    }
+
+    fn context_window(&self) -> usize {
+        self.primary.context_window()
+    }
+
+    // Only the primary warms up: the backup loads if it's ever needed.
+    fn warm_up(&self) {
+        self.primary.warm_up();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::provider::{ProviderError, Usage};
+
+    struct Stt(Result<&'static str, ()>);
+
+    #[async_trait]
+    impl SpeechToText for Stt {
+        fn name(&self) -> String {
+            "stt".into()
+        }
+        async fn transcribe(&self, _: &AudioClip, _: &SttHints) -> ProviderResult<Transcript> {
+            self.0
+                .map(|text| Transcript {
+                    text: text.into(),
+                    usage: Usage::priced(0.01),
+                })
+                .map_err(|()| ProviderError::Network("offline".into()))
+        }
+    }
+
+    fn run(
+        primary: Result<&'static str, ()>,
+        backup: Result<&'static str, ()>,
+    ) -> ProviderResult<Transcript> {
+        let stt = FallbackStt {
+            primary: Arc::new(Stt(primary)),
+            backup: Arc::new(Stt(backup)),
+        };
+        futures_executor::block_on(
+            stt.transcribe(&AudioClip::new(vec![0.0], 16_000), &SttHints::default()),
+        )
+    }
+
+    #[test]
+    fn falls_back_only_when_the_cloud_fails() {
+        let t = run(Ok("cloud"), Ok("local")).unwrap();
+        assert_eq!(
+            (t.text.as_str(), t.usage.on_device_fallback),
+            ("cloud", false)
+        );
+        let t = run(Err(()), Ok("local")).unwrap();
+        assert_eq!(
+            (t.text.as_str(), t.usage.on_device_fallback),
+            ("local", true)
+        );
+        assert!(matches!(
+            run(Err(()), Err(())),
+            Err(ProviderError::Network(_))
+        ));
+        // The flag survives adding usages up.
+        assert!((Usage::priced(0.01) + t.usage).on_device_fallback);
+    }
+}

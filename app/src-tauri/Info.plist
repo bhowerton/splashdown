@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Merged into the app's Info.plist by `cargo tauri build`. Tauri fills in
+     the bundle name, identifier, version and minimum macOS from
+     tauri.conf.json. scripts/run-mac-app.sh merges it into dev builds too. -->
+<plist version="1.0">
+<dict>
+  <!-- Menu bar app: no Dock icon or app menu. -->
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Splashdown listens while you hold the dictation key, to turn your speech into text.</string>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Splashdown can use Apple's on-device speech recognition to transcribe what you say.</string>
+  <!-- splashdown://toggle, start, stop and cancel, for Raycast, Alfred and
+       Shortcuts. Handled in app/src-tauri/src/triggers.rs. -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>app.splashdown</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>splashdown</string>
+      </array>
+    </dict>
+  </array>
+</dict>
+</plist>

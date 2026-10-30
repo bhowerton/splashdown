@@ -1,0 +1,15 @@
+[package]
+name = "splashdown-mcp"
+description = "An MCP server that lets coding agents ask the user a question and hear the answer through Splashdown."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+license.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+serde_json.workspace = true
+splashdown-control.workspace = true

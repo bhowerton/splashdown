@@ -1,0 +1,86 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - run: cargo fmt --all --check
+
+  licenses:
+    # Every dependency's license must be compatible with MIT/Apache-2.0
+    # distribution (deny.toml).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          command: check licenses
+
+  build:
+    name: build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Apple shim needs the macOS 26 SDK (Xcode 26), so the Mac job
+        # runs on the macOS 26 image. The app itself supports macOS 13+.
+        os: [macos-26, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select Xcode 26
+        if: runner.os == 'macOS'
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+          xcrun --show-sdk-version
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --workspace --locked
+      - name: Build app
+        run: cargo build -p splashdown --locked
+
+  windows-installer:
+    # A test installer from every push to main, for trying the latest code
+    # on Windows without the build tools: open the run's summary page and
+    # download "windows-installer". Unsigned and without update files;
+    # releases come from release.yml.
+    if: github.event_name == 'push'
+    needs: build
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Install the Tauri CLI
+        run: cargo install tauri-cli --version "^2" --locked
+      - name: Build the installer
+        shell: pwsh
+        run: scripts/package-win.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: target/release/bundle/release/Splashdown-windows-x64-setup.exe
+          if-no-files-found: error
+          retention-days: 14
