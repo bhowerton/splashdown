@@ -11,7 +11,7 @@
 | M0 Workspace + CI | 🟡 | CI workflow pinned to Xcode 26; it hasn't run yet because the repo isn't on GitHub |
 | M1 Core pipeline + evals | ✅ | OpenAI's own API and `gpt-4o-mini-transcribe` not measured yet (no key) |
 | M2 Mac platform layer | ✅ | In daily use. App compatibility pass still to do |
-| M3 Windows | 🟡 | Platform layer written and cross-compiled from a Mac, never run on Windows; waiting for a Windows machine |
+| M3 Windows | 🟡 | First run on a real Windows PC on 2026-10-30: builds there and in CI, dictation works. Shipped as a preview in v0.1.0 (unsigned). Detailed per-app checks still to do |
 | M4 App shell | ✅ | Settings (all tabs), onboarding, presets, history, privacy, menu bar, overlay by the text cursor. Left: a VoiceOver walkthrough on a real build |
 | M4b Power features | ✅ | Learning vocabulary, snippets, spoken commands in any language, auto-send, other triggers, field context, languages and translation |
 | M5 Apple on-device | ✅ | Apple speech and cleanup in daily use (cleanup 80%, 0.40 s). Weak-link fallback on macOS 13–15 not tested on a real machine |
@@ -98,9 +98,9 @@ Cheap features that close visible gaps.
 - ✅ **Settings between computers:** About → Settings exports `config.toml` without API keys and imports one after a confirmation (spec §8.5).
 
 ### 4. M3 — Windows
-- 🟡 A Windows 11 PC is available (2026-10-30). `scripts/run-win-app.ps1` builds and launches the app and checks for the build tools first.
+- ✅ **First run** (2026-10-30): built and launched on a Windows PC with `scripts/run-win-app.ps1`, and dictation works. CI builds, tests and packages it on `windows-latest`. Shipped as a preview installer in v0.1.0 (unsigned; no update files, so 0.1.0 Windows installs update by hand once).
 - ✅ **Filled in before the first run** (2026-10-30): cursor position and selecting a range through UI Automation's TextPattern (spoken commands, smart spacing and field context), checked against the expected text so a field that counts characters differently gets nothing selected rather than the wrong text; the Chromium paste check (by executable name); the Windows version in feedback reports; app names in Presets from the executable's description (via App Paths or a running copy). ⬜ App icons, and the pill following the caret.
-- 🟡 **Windows status:** `crates/splashdown-platform/src/win/` implements every platform function, but it has only been cross-compiled (`cargo clippy --target x86_64-pc-windows-msvc`), never run. Expect fixes on first contact:
+- 🟡 **Still to check one by one on Windows** (each was written blind, before the first run):
   - Hotkeys with `WH_KEYBOARD_LL` (held modifiers' auto-repeats are filtered; AltGr's fake Ctrl is ignored).
   - Selection, focus, password fields and page URLs with UI Automation (URL: the enclosing document's value, best effort).
   - Insertion with `SendInput` and the clipboard (memory formats only are snapshotted; GDI-handle formats such as metafiles are lost).
