@@ -78,7 +78,13 @@ Releases are built by GitHub Actions (`.github/workflows/release.yml`), so they 
 
 Running the workflow by hand (Actions → Release → Run workflow) makes the same builds as downloadable artifacts, without a release. Every push to `main` also leaves an unsigned Windows test installer on its CI run (`windows-installer`). Locally, `NOTARIZE=1 scripts/package-mac.sh` and `scripts\package-win.ps1` make the same files in `…/bundle/release/`.
 
-**One-time setup.** In the repository's Settings → Environments, create an environment named `release`, add yourself under **Required reviewers**, limit it to tags matching `v*` (Deployment branches and tags), and add these secrets to it (never as repository secrets, so pull requests and other workflows can't read them):
+**One-time setup.** The repository has an environment named `release` (Settings → Environments) that needs a maintainer's approval for every run and only runs for tags matching `v*` and for `main` (manual runs). Its secrets are never repository secrets, so pull requests and other workflows can't read them. To fill them in, export your Developer ID certificate (Keychain Access → My Certificates → right-click "Developer ID Application: …" → Export, as a `.p12` with a password; that certificate only), then run:
+
+```sh
+scripts/set-release-secrets.sh ~/Desktop/developer-id.p12
+```
+
+It reads `.notarize.env` and the updater key, checks the `.p12`, uploads everything below with `gh` without printing it, and sets `CI_RELEASES`. Delete the `.p12` afterward.
 
 | Secret | What it is |
 |---|---|
@@ -90,9 +96,11 @@ Running the workflow by hand (Actions → Release → Run workflow) makes the sa
 | `TAURI_SIGNING_PRIVATE_KEY` | The contents of `~/.tauri/splashdown-updater.key` |
 | `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Its password (leave empty if it has none) |
 
-Finally, add a repository **variable** (not a secret) `CI_RELEASES` = `true`. Until it's set, pushing a tag runs nothing, so releases can still be made by hand: `NOTARIZE=1 scripts/package-mac.sh`, then upload the files from `…/bundle/release/` to a GitHub release (that's how v0.1.0 was made).
+The repository **variable** (not a secret) `CI_RELEASES` = `true` is what turns tag releases on. Without it, pushing a tag runs nothing, and releases are made by hand: `NOTARIZE=1 scripts/package-mac.sh`, then `gh release create` with the files from `…/bundle/release/` (that's how v0.1.0 was made). Before the first tag release, test with a manual run (Actions → Release → Run workflow), which builds and signs everything as downloadable artifacts without releasing.
 
 Whoever can run this workflow with these secrets can ship an update to every installed copy, which is why the environment needs a reviewer. Keep your own backup of the updater key: GitHub secrets can't be read back.
+
+**Homebrew.** The cask lives in [bhowerton/homebrew-tap](https://github.com/bhowerton/homebrew-tap) (`Casks/splashdown.rb`). After each release, update its `version` and `sha256` (`shasum -a 256 Splashdown-mac.dmg`); installed copies update themselves, so this only matters for new installs.
 
 **Windows code signing** isn't set up yet, so SmartScreen warns on first run. The options are the SignPath Foundation (free for open source, once the repository is public) or Azure Trusted Signing; either plugs into `bundle.windows.signCommand` in the Tauri config.
 
