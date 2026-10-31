@@ -1,10 +1,14 @@
-//! Offline windowed-sinc resampler. Recordings are short and resampled once
-//! on key-up, so a direct convolution is fast enough (~10 ms for 10 s).
+//! Offline windowed-sinc resampler: a direct convolution, with the filter
+//! read from a precomputed table (~1 ms per second of 48 kHz audio), fast
+//! enough for recordings on key-up and for hour-long files.
 
 use std::f64::consts::PI;
 
 /// Half-width of the filter in input samples at the output rate.
 const HALF_TAPS: f64 = 16.0;
+/// Filter table entries per input sample; values in between are
+/// interpolated.
+const TABLE_STEPS: f64 = 512.0;
 
 /// Resamples mono `samples` from `from` Hz to `to` Hz.
 pub fn resample(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
@@ -18,6 +22,20 @@ pub fn resample(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
     let cutoff = (1.0 / ratio).min(1.0) * 0.95;
     let half_width = HALF_TAPS / cutoff;
 
+    // The filter at |x| = i / TABLE_STEPS input samples from the center.
+    let table: Vec<f64> = (0..=(half_width * TABLE_STEPS).ceil() as usize + 1)
+        .map(|i| {
+            let x = i as f64 / TABLE_STEPS;
+            cutoff * sinc(cutoff * x) * blackman(x / half_width)
+        })
+        .collect();
+    let weight = |x: f64| {
+        let at = x.abs() * TABLE_STEPS;
+        let i = at as usize;
+        let frac = at - i as f64;
+        table[i] + (table[i + 1] - table[i]) * frac
+    };
+
     let out_len = ((samples.len() as f64) / ratio).floor() as usize;
     let mut out = Vec::with_capacity(out_len);
     for n in 0..out_len {
@@ -28,8 +46,7 @@ pub fn resample(samples: &[f32], from: u32, to: u32) -> Vec<f32> {
         let mut acc = 0.0f64;
         let mut norm = 0.0f64;
         for (k, &sample) in samples.iter().enumerate().take(end + 1).skip(start) {
-            let x = k as f64 - center;
-            let w = cutoff * sinc(cutoff * x) * blackman(x / half_width);
+            let w = weight(k as f64 - center);
             acc += f64::from(sample) * w;
             norm += w;
         }

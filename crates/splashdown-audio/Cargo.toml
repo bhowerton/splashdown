@@ -15,6 +15,7 @@ cpal.workspace = true
 earshot.workspace = true
 hound.workspace = true
 nnnoiseless.workspace = true
+symphonia.workspace = true
 thiserror.workspace = true
 tracing.workspace = true
 

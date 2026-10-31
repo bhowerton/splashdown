@@ -56,6 +56,23 @@
 }
 .nt-notice[hidden] { display: none; }
 
+/* ---------------------------------------------------------------- transcribing a file */
+.nt-job {
+  display: flex; align-items: center; gap: 10px; margin: 8px 10px 0; padding: 6px 10px;
+  border-radius: 8px; background: var(--accent-soft); font-size: 12.5px;
+}
+.nt-job[hidden] { display: none; }
+.nt-job-text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-job progress { flex: 1; min-width: 60px; height: 6px; accent-color: var(--accent); }
+.nt-job .link { font-size: 12.5px; flex-shrink: 0; }
+#nt-note[readonly] { color: var(--muted); }
+.nt-drop {
+  position: fixed; inset: 8px; z-index: 20; display: flex; align-items: center; justify-content: center;
+  border: 2px dashed var(--accent); border-radius: 12px; background: var(--bg);
+  font-size: 14px; font-weight: 500; text-align: center; padding: 16px; pointer-events: none;
+}
+.nt-drop[hidden] { display: none; }
+
 /* ---------------------------------------------------------------- menu */
 .nt-menu-wrap { position: relative; }
 .nt-menu {

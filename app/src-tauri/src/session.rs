@@ -122,6 +122,16 @@ enum Msg {
     Transform(TransformRequest),
     /// A transform's shortcut, in another app: run it on the selection.
     TransformShortcut(String),
+    /// The speech-to-text for transcribing a file.
+    FileSpeech(mpsc::Sender<Result<FileSpeech, String>>),
+}
+
+/// What a file transcription needs from the engine: dictation's
+/// speech-to-text, hints and audio clean-up.
+pub struct FileSpeech {
+    pub stt: Arc<dyn splashdown_core::SpeechToText>,
+    pub hints: splashdown_core::SttHints,
+    pub cleanup: splashdown_audio::Cleanup,
 }
 
 pub struct TransformRequest {
@@ -217,6 +227,17 @@ impl Handle {
         let (reply, rx) = mpsc::channel();
         self.tx
             .send(Msg::Transform(TransformRequest { id, text, reply }))
+            .map_err(|_| "dictation isn't running".to_string())?;
+        rx.recv()
+            .map_err(|_| "dictation isn't running".to_string())?
+    }
+
+    /// The engine's speech-to-text, for transcribing a file. Waits behind
+    /// any dictation in progress, so call it off the UI thread.
+    pub fn file_speech(&self) -> Result<FileSpeech, String> {
+        let (reply, rx) = mpsc::channel();
+        self.tx
+            .send(Msg::FileSpeech(reply))
             .map_err(|_| "dictation isn't running".to_string())?;
         rx.recv()
             .map_err(|_| "dictation isn't running".to_string())?
@@ -449,6 +470,18 @@ impl Controller {
                     let _ = t.reply.send(result);
                 }
                 Ok(Msg::TransformShortcut(id)) => self.transform_shortcut(&id),
+                Ok(Msg::FileSpeech(reply)) => {
+                    let speech =
+                        self.engine
+                            .as_ref()
+                            .map_err(Clone::clone)
+                            .map(|engine| FileSpeech {
+                                stt: engine.pipeline.stt(),
+                                hints: engine.hints.clone(),
+                                cleanup: engine.audio_cleanup(),
+                            });
+                    let _ = reply.send(speech);
+                }
                 Err(RecvTimeoutError::Timeout) => self.on_tick(),
                 Err(RecvTimeoutError::Disconnected) => break,
             }

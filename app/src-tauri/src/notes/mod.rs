@@ -3,6 +3,7 @@
 //! here. ⌃⌥N or the menu bar opens it and remembers the app that was in
 //! front, so "Send to {app}" can hand focus back and paste the note there.
 
+pub mod files;
 pub mod store;
 
 use std::path::{Path, PathBuf};
@@ -11,7 +12,10 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use splashdown_platform::InsertMethod;
-use tauri::{AppHandle, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{
+    AppHandle, DragDropEvent, Emitter, Manager, State, WebviewUrl, WebviewWindowBuilder,
+    WindowEvent,
+};
 use tauri_plugin_dialog::DialogExt;
 
 use crate::commands::AppState;
@@ -493,11 +497,25 @@ pub fn open(app: &AppHandle) {
             // Closing only hides it, so the page (and anything not yet
             // saved) stays.
             let handle = window.clone();
-            window.on_window_event(move |event| {
-                if let WindowEvent::CloseRequested { api, .. } = event {
+            let app = app.clone();
+            window.on_window_event(move |event| match event {
+                WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
                     let _ = handle.hide();
                 }
+                // Audio and video files dropped on the window are
+                // transcribed.
+                WindowEvent::DragDrop(DragDropEvent::Enter { .. }) => {
+                    let _ = app.emit_to(WINDOW, files::DRAGGING, true);
+                }
+                WindowEvent::DragDrop(DragDropEvent::Leave) => {
+                    let _ = app.emit_to(WINDOW, files::DRAGGING, false);
+                }
+                WindowEvent::DragDrop(DragDropEvent::Drop { paths, .. }) => {
+                    let _ = app.emit_to(WINDOW, files::DRAGGING, false);
+                    files::dropped(&app, paths.clone());
+                }
+                _ => {}
             });
         }
         Err(e) => tracing::error!("failed to open Notes: {e}"),
@@ -632,7 +650,7 @@ pub fn notes_save(
                     chrono::Local::now(),
                     &Origin {
                         app: app.as_deref(),
-                        source: None,
+                        ..Origin::default()
                     },
                 )
                 .map(|note| Saved {

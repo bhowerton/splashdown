@@ -37,6 +37,8 @@
       <div class="nt-menu-wrap">
         <button class="btn" id="nt-more" aria-haspopup="menu" aria-expanded="false" aria-label="More">⋯</button>
         <div id="nt-menu" class="nt-menu" role="menu" hidden>
+          <button role="menuitem" data-act="transcribe">Transcribe a file…</button>
+          <hr>
           <button role="menuitem" data-act="rename">Rename…</button>
           <button role="menuitem" data-act="history">History</button>
           <button role="menuitem" data-act="reveal" id="nt-reveal">Show in Finder</button>
@@ -47,6 +49,13 @@
     </header>
 
     <div id="nt-notice" class="nt-notice" role="status" hidden></div>
+
+    <div id="nt-job" class="nt-job" hidden>
+      <span id="nt-job-text" class="nt-job-text" role="status" aria-live="polite"></span>
+      <progress id="nt-job-bar" max="1" aria-label="Transcription progress"></progress>
+      <button class="link" id="nt-job-show">Show</button>
+      <button class="link" id="nt-job-stop">Stop</button>
+    </div>
 
     <section id="nt-editor" class="nt-view">
       <textarea id="nt-note" aria-label="Note" placeholder="Hold your dictation key and speak, or type."></textarea>
@@ -68,6 +77,9 @@
       <p id="nt-versions-empty" class="nt-empty" hidden>No earlier versions yet. One is kept each time you start changing a note.</p>
     </section>
   </section>
+  <div id="nt-drop" class="nt-drop" hidden>
+    <p>Drop audio or video to transcribe it into a note</p>
+  </div>
 </main>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

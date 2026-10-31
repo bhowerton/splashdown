@@ -104,6 +104,8 @@ pub struct Origin<'a> {
     pub app: Option<&'a str>,
     /// How it was made, when known: "scratchpad", "capture", "file".
     pub source: Option<&'a str>,
+    /// The audio or video file it was transcribed from (its name).
+    pub file: Option<&'a str>,
 }
 
 pub struct Store {
@@ -275,6 +277,9 @@ impl Store {
         }
         if let Some(app) = origin.app.filter(|a| !a.is_empty()) {
             front.push_str(&format!("app: {}\n", yaml_scalar(app)));
+        }
+        if let Some(file) = origin.file.filter(|f| !f.is_empty()) {
+            front.push_str(&format!("file: {}\n", yaml_scalar(file)));
         }
         front.push_str("---\n");
         self.write(&path, &format!("{front}{body}"))?;
@@ -610,6 +615,21 @@ impl Store {
         Ok(true)
     }
 
+    /// Adds `text` to the end of note `rel` as its own paragraph, as is
+    /// (a file transcript's next piece).
+    pub fn add_paragraph(&self, rel: &str, text: &str) -> io::Result<()> {
+        let path = self.resolve(rel)?;
+        let existing = std::fs::read_to_string(&path)?;
+        let separator = if existing.ends_with("\n\n") {
+            ""
+        } else if existing.ends_with('\n') {
+            "\n"
+        } else {
+            "\n\n"
+        };
+        self.write(&path, &format!("{existing}{separator}{}\n", text.trim()))
+    }
+
     /// Saves a recording in `Attachments/` and returns its path in the
     /// folder, for a link.
     pub fn save_attachment(&self, stem: &str, extension: &str, bytes: &[u8]) -> io::Result<String> {
@@ -886,6 +906,40 @@ mod tests {
         assert_eq!(file_name_part("con"), "con_");
         assert_eq!(file_name_part(&"x".repeat(100)).len(), NAME_CHARS);
         assert_eq!(file_name_part("tab\there"), "tab here");
+    }
+
+    #[test]
+    fn a_transcript_grows_a_paragraph_at_a_time() {
+        let store = temp_store("transcript");
+        let note = store
+            .create(
+                "# Interview\n\nTranscribed from **Interview.m4a**.\n",
+                at("2026-10-31T09:15:00-05:00"),
+                &Origin {
+                    source: Some("file"),
+                    file: Some("Interview.m4a"),
+                    ..Origin::default()
+                },
+            )
+            .unwrap();
+        store
+            .add_paragraph(&note.path, "**[0:00]** Hello.")
+            .unwrap();
+        store
+            .add_paragraph(&note.path, " **[0:31]** Again. ")
+            .unwrap();
+        let raw = std::fs::read_to_string(store.root().join(&note.path)).unwrap();
+        assert!(
+            raw.contains("\nsource: file\nfile: Interview.m4a\n"),
+            "{raw}"
+        );
+        assert!(
+            raw.ends_with(
+                "Transcribed from **Interview.m4a**.\n\n**[0:00]** Hello.\n\n**[0:31]** Again.\n"
+            ),
+            "{raw}"
+        );
+        let _ = std::fs::remove_dir_all(store.root());
     }
 
     #[test]

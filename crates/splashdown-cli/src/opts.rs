@@ -154,6 +154,16 @@ impl Setup {
         })
     }
 
+    /// For speech-only commands: no AI model is set up.
+    pub fn new_speech_only(opts: &ProviderOpts) -> Result<Self> {
+        let settings = settings(opts)?;
+        let secrets = Secrets::from_env();
+        Ok(Self {
+            pipeline: Pipeline::new(build_stt(&settings, &secrets)?, None),
+            settings,
+        })
+    }
+
     /// For text-only commands: no speech-to-text provider is loaded.
     pub fn new_text_only(opts: &ProviderOpts) -> Result<Self> {
         let settings = settings(opts)?;

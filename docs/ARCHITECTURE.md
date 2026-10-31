@@ -17,7 +17,7 @@ Hold the dictation key and the session starts the microphone and captures the fo
 | Crate | Owns | Depends on |
 |---|---|---|
 | `splashdown-core` | The platform-agnostic heart: provider traits (`SpeechToText`, `TextModel`), the `Pipeline`, prompts, the sanity guard, spoken commands (interpreted by the AI) and snippets, the hotkey `gesture` state machine, vocabulary learning | nothing internal |
-| `splashdown-audio` | Microphone capture (cpal), device choice, resampling to 16 kHz, silence trimming, WAV encoding | `splashdown-core` |
+| `splashdown-audio` | Microphone capture (cpal), device choice, resampling to 16 kHz, silence trimming, WAV encoding, and reading audio and video files in pieces for transcription (Symphonia) | `splashdown-core` |
 | `splashdown-config` | `config.toml` (`Settings`), resolving "Automatic" to concrete providers, presets, API keys in the OS keychain, on-disk paths | `splashdown-core` |
 | `splashdown-providers` | Implementations of the provider traits: OpenAI-compatible chat and transcription, OpenRouter audio, local speech-to-text with transcribe.cpp (feature `whisper-local`), Apple's models (via `splashdown-apple-shim`), and the `factory` that builds them from config | `splashdown-core`, `splashdown-audio`, `splashdown-config`, `splashdown-apple-shim` |
 | `splashdown-platform` | Everything OS-specific: the key hook, focus/selection/URL via accessibility, clipboard and synthetic keys, the overlay, permissions, sounds. One API in `lib.rs`; `mac/` and `win/` implement it | `splashdown-core` |

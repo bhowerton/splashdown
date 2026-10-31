@@ -77,6 +77,22 @@ enum Command {
         #[command(flatten)]
         context: ContextOpts,
     },
+    /// Transcribe an audio or video file of any length, a piece at a time,
+    /// and print it as Markdown, as Notes does (no AI pass).
+    #[command(name = "transcribe-file")]
+    TranscribeFile {
+        file: PathBuf,
+        /// Whisper mode: raise quiet speech before transcribing it.
+        #[arg(long)]
+        whisper: bool,
+        /// Remove background noise before transcribing (noise reduction).
+        #[arg(long)]
+        denoise: bool,
+        #[command(flatten)]
+        providers: ProviderOpts,
+        #[command(flatten)]
+        context: ContextOpts,
+    },
     /// Interpret a spoken command (as said after the instruction key) and
     /// print the action the app would take.
     #[command(name = "command")]
@@ -246,6 +262,26 @@ fn main() -> Result<()> {
             let outcome = rt.block_on(setup.pipeline.run(job))?;
             report::print(&outcome);
         }
+        Command::TranscribeFile {
+            file,
+            whisper,
+            denoise,
+            providers,
+            context,
+        } => {
+            let setup = Setup::new_speech_only(&providers)?;
+            let cleanup = splashdown_audio::Cleanup {
+                denoise,
+                quiet: whisper,
+            };
+            transcribe_file(
+                &rt,
+                &file,
+                setup.pipeline.stt().as_ref(),
+                &context.hints(&setup.settings),
+                cleanup,
+            )?;
+        }
         Command::Interpret {
             spoken,
             last,
@@ -376,6 +412,41 @@ fn main() -> Result<()> {
         | Command::Listen { .. }
         | Command::Note { .. } => unreachable!("handled above"),
     }
+    Ok(())
+}
+
+/// Prints the file's transcript as it goes: a title, then a paragraph per
+/// piece starting with its time. Timings go to stderr.
+fn transcribe_file(
+    rt: &tokio::runtime::Runtime,
+    path: &std::path::Path,
+    stt: &dyn splashdown_core::SpeechToText,
+    hints: &splashdown_core::SttHints,
+    cleanup: splashdown_audio::Cleanup,
+) -> Result<()> {
+    use splashdown_audio::file::{AudioFile, timestamp};
+
+    let mut file = AudioFile::open(path).with_context(|| format!("reading {}", path.display()))?;
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    println!("# {stem}");
+    let start = std::time::Instant::now();
+    let mut audio = std::time::Duration::ZERO;
+    while let Some(piece) = file.next_piece()? {
+        audio = piece.start + piece.clip.duration();
+        let Some(clip) = splashdown_audio::prepare_with(&piece.clip, cleanup) else {
+            continue;
+        };
+        let text = rt.block_on(stt.transcribe(&clip, hints))?.text;
+        if !text.trim().is_empty() {
+            println!("\n**[{}]** {}", timestamp(piece.start), text.trim());
+        }
+    }
+    eprintln!(
+        "transcribed {:.0} s of audio in {:.1} s with {}",
+        audio.as_secs_f64(),
+        start.elapsed().as_secs_f64(),
+        stt.name()
+    );
     Ok(())
 }
 

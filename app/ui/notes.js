@@ -218,6 +218,13 @@ function updateHeader() {
   }
   $("nt-status").textContent = current.path ?? "";
   $("nt-status").title = current.path ? `${folder?.path ?? ""}/${current.path}` : "";
+  // The note a file is being transcribed into can't be edited until it's
+  // done, so nothing typed is lost to the next paragraph.
+  const locked = !!job && job.note === current.path;
+  note.readOnly = locked;
+  $("nt-job-show").hidden = !job || locked;
+  $("nt-transform").disabled = locked;
+  if (locked) $("nt-status").textContent = "Being transcribed. You can edit it when it's done.";
   const empty = text.trim() === "";
   $("nt-copy").disabled = empty;
   const send = $("nt-send");
@@ -516,6 +523,73 @@ document.addEventListener("click", () => setTransformMenu(false));
 // A transform's shortcut pressed while Notes is in front.
 listen("notes-run-transform", (event) => runTransform(event.payload));
 
+// ---------------------------------------------------------------- transcribing a file
+
+/** The file being transcribed, or null. */
+let job = null;
+
+/** "12:30", or "1:02:30" past an hour. */
+function clock(secs) {
+  const s = Math.floor(secs);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s / 60) % 60;
+  const rest = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${rest}` : `${m}:${rest}`;
+}
+
+async function showJob(next) {
+  const before = job;
+  job = next;
+  $("nt-job").hidden = !job;
+  if (job) {
+    const progress = $("nt-job-bar");
+    let done;
+    if (job.total) {
+      progress.value = Math.min(job.done / job.total, 1);
+      done = `${Math.floor(progress.value * 100)}%`;
+    } else {
+      progress.removeAttribute("value");
+      done = `${clock(job.done)} so far`;
+    }
+    const waiting = job.waiting ? ` · ${job.waiting} more waiting` : "";
+    $("nt-job-text").textContent = `Transcribing ${job.file} ${job.place} · ${done}${waiting}`;
+  }
+  // A new transcript opens by itself, unless another note is being worked on.
+  const started = job && job.note !== before?.note;
+  if (started && (!before || current.path === before.note || (!current.path && !note.value.trim()))) {
+    await saveNow();
+    await refresh();
+    await openNote(job.note);
+  } else if (current.path && (current.path === job?.note || current.path === before?.note)) {
+    await reloadTranscript();
+  }
+  updateHeader();
+}
+
+/** The transcript grew: show it, keeping the end in view if it was. */
+async function reloadTranscript() {
+  let n;
+  try {
+    n = await invoke("notes_open", { path: current.path });
+  } catch {
+    return;
+  }
+  if (!n) return;
+  const atEnd = note.scrollTop + note.clientHeight >= note.scrollHeight - 24;
+  current.modified = n.modified;
+  note.value = n.body;
+  savedText = n.body;
+  if (atEnd) note.scrollTop = note.scrollHeight;
+  if (notes.some((x) => x.path === current.path)) updateListEntry(n.body);
+  else await refresh();
+}
+
+listen("notes-transcribing", (event) => showJob(event.payload ?? null));
+listen("notes-transcribe-message", (event) => toast(event.payload.text, event.payload.error));
+listen("notes-dragging", (event) => { $("nt-drop").hidden = !event.payload; });
+$("nt-job-stop").addEventListener("click", () => invoke("notes_transcribe_stop").catch((e) => toast(String(e), true)));
+$("nt-job-show").addEventListener("click", () => job && openNote(job.note));
+
 // ---------------------------------------------------------------- menu
 
 function setMenu(open) {
@@ -537,6 +611,7 @@ $("nt-menu").addEventListener("click", (e) => {
   ({
     rename: startRename,
     history: () => showHistory(true),
+    transcribe: () => invoke("notes_transcribe_pick").catch((err) => toast(String(err), true)),
     reveal: () => invoke("notes_reveal", { path: current.path }).catch((err) => toast(String(err), true)),
     folder: changeFolder,
     delete: deleteNote,
@@ -645,6 +720,12 @@ function applyView(view) {
     toast(String(e), true);
   }
   loadTransforms();
+  try {
+    const running = await invoke("notes_transcribing");
+    if (running) showJob(running);
+  } catch {
+    // Nothing running.
+  }
 })();
 
 // ---------------------------------------------------------------- preview
@@ -683,6 +764,8 @@ async function mockInvoke(cmd, args) {
         { id: "summary", name: "Summary", place: "below", shortcut: null },
         { id: "todos", name: "To-dos", place: "below", shortcut: "Ctrl+Alt+Digit1" },
       ];
+    case "notes_transcribing":
+      return { file: "Interview with Sam.m4a", note: list[0].path, done: 1240, total: 2533, waiting: 1, place: "on this computer" };
     default:
       return null;
   }

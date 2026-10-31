@@ -186,7 +186,7 @@ The working list of improvements after 0.1.1, in rough order. Mark items here as
 - ⬜ **Run cloud and local speech recognition together** when a local model is installed, and use the first good result, instead of waiting for the cloud to fail.
 - ⬜ **A complete CLI:** `status --json`, reading and changing settings, choosing and downloading models, searching history, and stable exit codes.
 - ⬜ **Import vocabulary and snippets** exported from other dictation apps.
-- ⬜ **File transcription:** drop an audio or video file onto Notes to get a transcript note.
+- ✅ **File transcription** (2026-10-31; ⬜ still to try in the running app and on Windows): drop audio or video files onto Notes, or pick them from its ⋯ menu, and each becomes a transcript note with a timestamp per paragraph, written as it goes, with progress and Stop. Reads WAV, AIFF, MP3, M4A, MP4/MOV, FLAC, OGG Vorbis and WebM/MKV with a pure-Rust decoder; `splashdown-cli transcribe-file`. ⬜ Opus, speaker labels, subtitle files.
 
 **Later:**
 - ⬜ **Multi-turn voice editing:** dictate a draft, keep speaking changes against a preview, and insert it when done (pairs with Notes transforms).

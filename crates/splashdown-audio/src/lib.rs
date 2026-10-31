@@ -1,9 +1,11 @@
 //! Microphone capture (cpal), resampling to 16 kHz mono, noise reduction,
-//! silence trimming and WAV encoding.
+//! silence trimming, WAV encoding, and reading audio and video files for
+//! transcription.
 
 mod capture;
 pub mod denoise;
 pub mod devices;
+pub mod file;
 pub mod gain;
 pub mod resample;
 pub mod vad;
