@@ -125,6 +125,7 @@ Cost estimates for OpenAI and Anthropic come from the list in `crates/splashdown
 - Keep OS code in `splashdown-platform` (or `splashdown-apple-shim`), and settings decisions in `splashdown-config`. `splashdown-core` stays free of OS calls so it can be unit-tested.
 - Every `unsafe` block gets a `// SAFETY:` comment stating why it's sound; clippy enforces this.
 - User-facing text is plain and short, and names the fix ("OpenRouter rejected the key — check it in Settings → AI Providers").
+- Use US spelling everywhere: UI text, code, comments and docs ("color", "center", "canceled", "recognize"). Names defined elsewhere keep their own spelling, such as MCP's `notifications/cancelled`.
 - The UI in `app/ui` has no build step: plain classic scripts sharing `common.js`. Keep it that way.
 - Never log what the user said or typed. Logs may contain timings, provider names and error messages only.
 
