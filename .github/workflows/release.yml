@@ -112,6 +112,28 @@ jobs:
         run: cargo install tauri-cli --version "^2" --locked
       - name: Install the Artifact Signing tool
         run: cargo install artifact-signing-cli --locked
+      - name: Fetch Microsoft's signing client
+        # artifact-signing-cli downloads this itself with no retry or check,
+        # and a bad download fails the build ("can't be unzipped"). It skips
+        # the download when the DLL is already in place, so fetch it here.
+        shell: pwsh
+        run: |
+          $dir = Join-Path $HOME ".artifact-signing-cli"
+          $lib = Join-Path $dir "lib"
+          $zip = Join-Path $dir "client.zip"
+          $dll = Join-Path $lib "bin\x64\Azure.CodeSigning.Dlib.dll"
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          foreach ($try in 1..5) {
+            try {
+              Invoke-WebRequest "https://www.nuget.org/api/v2/package/Microsoft.ArtifactSigning.Client/1.0.146" -OutFile $zip
+              Expand-Archive $zip $lib -Force
+              if (Test-Path $dll) { break }
+            } catch {
+              Write-Host "attempt $try failed: $_"
+            }
+            Start-Sleep -Seconds (10 * $try)
+          }
+          if (-not (Test-Path $dll)) { throw "couldn't fetch the signing client" }
       - name: Build, code-sign and package the installer
         shell: pwsh
         env:
