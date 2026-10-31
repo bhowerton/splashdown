@@ -2,11 +2,13 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.1.1 — 2026-10-31
 
-- Windows builds are code-signed by Point Dynamics, LLC (Azure Artifact Signing), so SmartScreen shows a named publisher instead of "Unknown".
-- Windows installs update themselves from this release on.
-- Install with Homebrew: `brew tap bhowerton/tap`, then `brew install --cask splashdown`.
+- **Windows builds are code-signed** by Point Dynamics, LLC, so Windows names the publisher instead of "Unknown". A new release can still get a SmartScreen notice until enough people have downloaded it.
+- **Windows updates itself** from this version on. If you installed 0.1.0 on Windows, download 0.1.1 by hand once.
+- **Install with Homebrew** on a Mac: `brew tap bhowerton/tap`, `brew trust --cask bhowerton/tap/splashdown`, then `brew install --cask splashdown`.
+- Releases are now built, signed and notarized by GitHub Actions.
+- New [privacy](docs/PRIVACY.md) and [troubleshooting](docs/TROUBLESHOOTING.md) guides.
 
 ## 0.1.0 — 2026-10-30
 

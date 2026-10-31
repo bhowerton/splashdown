@@ -70,7 +70,7 @@ async function mockInvoke(cmd, args) {
       sound_volume: 0.12,
     },
     platform: "macos",
-    version: "0.1.0",
+    version: "0.1.1",
     config_path: "~/Library/Application Support/Splashdown/config.toml",
     update: { available: "0.2.0", notes: "Faster local Whisper.\nFixes pasting into Slack.", checking: false, installing: false, progress: null, last_checked: Date.now() - 3600000, error: null },
   };
