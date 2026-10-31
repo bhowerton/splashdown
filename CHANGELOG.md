@@ -6,7 +6,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 - **Windows builds are code-signed** by Point Dynamics, LLC, so Windows names the publisher instead of "Unknown". A new release can still get a SmartScreen notice until enough people have downloaded it.
 - **Windows updates itself** from this version on. If you installed 0.1.0 on Windows, download 0.1.1 by hand once.
-- **Install with Homebrew** on a Mac: `brew tap bhowerton/tap`, `brew trust --cask bhowerton/tap/splashdown`, then `brew install --cask splashdown`.
+- **Install with Homebrew** on a Mac: `brew install --cask bhowerton/tap/splashdown`.
 - Releases are now built, signed and notarized by GitHub Actions.
 - New [privacy](docs/PRIVACY.md) and [troubleshooting](docs/TROUBLESHOOTING.md) guides.
 

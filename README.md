@@ -119,9 +119,7 @@ On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 **Mac:** [download the DMG](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-mac.dmg), open it and drag Splashdown to Applications. Or with [Homebrew](https://brew.sh):
 
 ```sh
-brew tap bhowerton/tap
-brew trust --cask bhowerton/tap/splashdown
-brew install --cask splashdown
+brew install --cask bhowerton/tap/splashdown
 ```
 
 Builds are universal (Apple Silicon and Intel), signed with Point Dynamics' Apple Developer ID and notarized, so macOS opens them without warnings. The first launch opens a short setup guide: choose how it should understand you, then allow Accessibility and Microphone.
