@@ -114,6 +114,25 @@ enum Msg {
     PresetShortcut(String),
     /// Replace the last AI-edited insertion with what was said.
     UndoAiEdit,
+    /// Run a transform on text from Notes, and answer.
+    Transform(TransformRequest),
+    /// A transform's shortcut, in another app: run it on the selection.
+    TransformShortcut(String),
+}
+
+pub struct TransformRequest {
+    pub id: String,
+    pub text: String,
+    pub reply: mpsc::Sender<Result<TransformOutcome, String>>,
+}
+
+/// A transform's result (spec §9e.5).
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct TransformOutcome {
+    /// The new text, or the original when nothing changed.
+    pub text: String,
+    /// Why the text is as it was, when it is.
+    pub unchanged: Option<String>,
 }
 
 pub struct Redo {
@@ -151,6 +170,22 @@ impl Handle {
     /// A preset's shortcut was pressed.
     pub fn preset_shortcut(&self, preset_id: String) {
         let _ = self.tx.send(Msg::PresetShortcut(preset_id));
+    }
+
+    /// A transform's shortcut was pressed outside Notes.
+    pub fn transform_shortcut(&self, id: String) {
+        let _ = self.tx.send(Msg::TransformShortcut(id));
+    }
+
+    /// Runs a transform on `text` and waits for it (behind any dictation in
+    /// progress), so call it from `spawn_blocking`.
+    pub fn transform(&self, id: String, text: String) -> Result<TransformOutcome, String> {
+        let (reply, rx) = mpsc::channel();
+        self.tx
+            .send(Msg::Transform(TransformRequest { id, text, reply }))
+            .map_err(|_| "dictation isn't running".to_string())?;
+        rx.recv()
+            .map_err(|_| "dictation isn't running".to_string())?
     }
 
     /// Ignore hotkeys (while Settings listens for a new key) or resume.
@@ -365,6 +400,11 @@ impl Controller {
                 Ok(Msg::Control(request, reply)) => self.control(request, reply),
                 Ok(Msg::PresetShortcut(id)) => self.preset_shortcut(&id),
                 Ok(Msg::UndoAiEdit) => self.undo_ai_edit(),
+                Ok(Msg::Transform(t)) => {
+                    let result = self.run_transform(&t.id, &t.text).map(|(_, out)| out);
+                    let _ = t.reply.send(result);
+                }
+                Ok(Msg::TransformShortcut(id)) => self.transform_shortcut(&id),
                 Err(RecvTimeoutError::Timeout) => self.on_tick(),
                 Err(RecvTimeoutError::Disconnected) => break,
             }
@@ -1264,6 +1304,116 @@ impl Controller {
         .map_err(|e| e.to_string())?;
         crate::spend::record_outcome(&outcome);
         Ok(engine.replacements.apply(&outcome.text))
+    }
+
+    /// Runs transform `id` on `text` with the AI (spec §9e.5). Returns its
+    /// name and the result.
+    fn run_transform(&self, id: &str, text: &str) -> Result<(String, TransformOutcome), String> {
+        let engine = self.engine.as_ref().map_err(Clone::clone)?;
+        let transform = engine
+            .transforms
+            .iter()
+            .find(|t| t.id == id)
+            .ok_or("That transform no longer exists.")?;
+        if text.trim().is_empty() {
+            return Err("There's no text to change.".into());
+        }
+        let pipeline = &engine.pipeline;
+        let outcome = tauri::async_runtime::block_on(pipeline.process_text(TextJob {
+            mode: Mode::Transform,
+            content: String::new(),
+            instruction: Some(transform.instruction.clone()),
+            selection: Some(text.to_string()),
+            context: engine.context.clone(),
+        }))
+        .map_err(|e| {
+            let llm = pipeline
+                .instruction_llm_name()
+                .or_else(|| pipeline.llm_name());
+            errors::pipeline(&e, None, llm.as_deref())
+        })?;
+        crate::spend::record_outcome(&outcome);
+        let unchanged = match &outcome.fallback {
+            Some(Fallback::Guard(splashdown_core::guard::GuardReason::Empty)) => {
+                Some("nothing came back, so nothing changed".to_string())
+            }
+            Some(Fallback::Guard(reason)) => {
+                Some(format!("left as it was ({})", reason.describe()))
+            }
+            Some(Fallback::ModelError(e)) => Some(format!("the AI didn't answer ({e})")),
+            None if outcome.text.trim() == splashdown_config::NOTHING_TO_DO => {
+                Some("found nothing to do".to_string())
+            }
+            None if outcome.text.trim() == text.trim() => Some("nothing to change".to_string()),
+            None => None,
+        };
+        let text = if unchanged.is_some() {
+            text.to_string()
+        } else {
+            outcome.text
+        };
+        Ok((transform.name.clone(), TransformOutcome { text, unchanged }))
+    }
+
+    /// A transform's shortcut in another app: the selection, or else the
+    /// last dictation just before the cursor, is replaced by the result.
+    fn transform_shortcut(&mut self, id: &str) {
+        if self.active.is_some() {
+            return;
+        }
+        let Some(focus) = Focus::capture() else {
+            return self.notice(Tone::Info, "Select some text first");
+        };
+        if focus.is_secure_field() {
+            return self.notice(Tone::Warning, "Can't change text in password fields");
+        }
+        let mut selected = match focus.selection() {
+            Selection::Text(s) => Some(s),
+            Selection::Unknown => splashdown_platform::copy_selection(),
+            Selection::Empty => None,
+        }
+        .filter(|s| !s.trim().is_empty());
+        if selected.is_none() {
+            let recent = self
+                .last_insert
+                .is_some_and(|(pid, at)| pid == focus.app.pid && at.elapsed() < UNDO_WINDOW);
+            if recent
+                && let Some((text, cursor)) = focus.text_and_cursor()
+                && let Some((start, end)) = last_dictation_range(&text, cursor, &self.last_text)
+                && focus.select(&text, start, end)
+            {
+                selected = Some(self.last_text.clone());
+            }
+        }
+        let Some(text) = selected else {
+            return self.notice(Tone::Info, "Select some text first");
+        };
+        let name = self
+            .engine
+            .as_ref()
+            .ok()
+            .and_then(|e| e.transforms.iter().find(|t| t.id == id))
+            .map_or_else(|| "Transform".to_string(), |t| t.name.clone());
+        self.ui.show(OverlayState::Working {
+            label: format!("{name}…"),
+        });
+        let out = match self.run_transform(id, &text) {
+            Ok((_, out)) => out,
+            Err(e) => return self.notice(Tone::Warning, &short(&e)),
+        };
+        if let Some(why) = out.unchanged {
+            return self.notice(Tone::Info, &format!("{name}: {why}"));
+        }
+        if !focus.is_current() {
+            let _ = splashdown_platform::copy_to_clipboard(&out.text);
+            return self.notice(Tone::Warning, "Focus changed — copied to clipboard");
+        }
+        let result = splashdown_platform::insert_text(&out.text, InsertMethod::Paste);
+        if result.is_ok() {
+            self.last_insert = Some((focus.app.pid, Instant::now()));
+            self.last_text = out.text;
+        }
+        self.finish_command(result, &name);
     }
 
     /// Number key while recording: switch to preset `n` (1-based).

@@ -630,7 +630,7 @@ function shortcutRow(p) {
   hint.textContent = "Click to record";
   main.append(cap, hint);
   main.setAttribute("aria-label", `Shortcut for this preset: ${p.shortcut ? shortcutLabel(p.shortcut) : "none"}. Click, then press the shortcut.`);
-  main.onclick = () => recordShortcut(p, wrap, main);
+  main.onclick = () => recordShortcut((s) => updatePreset(p.id, (x) => (x.shortcut = s)), renderPresets, wrap, main);
   wrap.append(main);
   if (p.shortcut) {
     const clear = document.createElement("button");
@@ -652,7 +652,9 @@ function shortcutRow(p) {
   return r;
 }
 
-function recordShortcut(p, wrap, main) {
+/** Listens for a shortcut on `wrap`'s picker and passes it to `set`;
+ *  `redraw` puts the picker back if the user gives up. */
+function recordShortcut(set, redraw, wrap, main) {
   stopShortcutCapture();
   invoke("pause_hotkeys", { paused: true }).catch(() => {});
   wrap.classList.add("recording");
@@ -674,19 +676,20 @@ function recordShortcut(p, wrap, main) {
       return;
     }
     stopShortcutCapture();
-    updatePreset(p.id, (x) => (x.shortcut = [...mods, e.code].join("+")));
+    set([...mods, e.code].join("+"));
   };
   window.addEventListener("keydown", onKey, true);
-  shortcutCapture = { onKey, timer: setTimeout(() => stopShortcutCapture(true), 14000) };
+  shortcutCapture = { onKey, redraw, timer: setTimeout(() => stopShortcutCapture(true), 14000) };
 }
 
 function stopShortcutCapture(redraw = false) {
   if (!shortcutCapture) return;
   window.removeEventListener("keydown", shortcutCapture.onKey, true);
   clearTimeout(shortcutCapture.timer);
+  const again = shortcutCapture.redraw;
   shortcutCapture = null;
   invoke("pause_hotkeys", { paused: false }).catch(() => {});
-  if (redraw) renderPresets();
+  if (redraw) again();
 }
 window.addEventListener("blur", () => stopShortcutCapture(true));
 

@@ -50,6 +50,7 @@ function render() {
   renderPrivacy();
   renderSnippets();
   renderReplacements();
+  renderTransforms();
   renderSpending();
   showDictationKey(state);
 

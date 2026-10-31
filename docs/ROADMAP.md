@@ -147,7 +147,12 @@ Notes as Markdown files in a folder the user picks, replacing the scratchpad. Sp
   - A fallback folder when macOS refuses Documents access.
   - A synced-folder notice on the Privacy tab.
   - 10 unit tests.
-- ⬜ **N2 Transforms:** saved instructions (Clean up, Summary, To-dos, Email, Prompt for an AI, plus your own) run over a note or a selection, saving a version first. A transform with a shortcut works on selected text in any app. To-dos get eval cases.
+- ✅ **N2 Transforms** (2026-10-31; ⬜ still to try in the running app):
+  - Clean up, Summary, To-dos, Email, Prompt for an AI, plus your own, edited on Settings → Words.
+  - In Notes they run on the note or a selection, keeping a version first, and ⌘Z undoes them.
+  - A transform with a shortcut works on selected text in any app, or else on the last dictation.
+  - 5 eval cases, all passing on the default and built-in local models.
+  - To-dos answers `NONE` when there are no tasks, rather than inventing some.
 - ⬜ **N3 Capture without a window:** hold the dictation key and press N to append to Inbox, today's daily note or the last note, with an Undo toast. Also "Save to notes" in History, `splashdown://note` and `splashdown-cli note`, and optionally keeping the audio in `Attachments/`.
 - ⬜ **N4 Notes for agents:** `search_notes`, `read_note` and `append_note` in `splashdown-mcp`. Off by default, with separate switches for reading and writing.
 - ⏸ **N5 Meeting notes: decide after N1.** Two-channel recording (You and Them), transcription in pieces, a summary transform. See SPEC §9e.10.

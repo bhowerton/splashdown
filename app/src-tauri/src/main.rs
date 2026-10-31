@@ -106,6 +106,9 @@ fn main() {
             notes::notes_pick_folder,
             notes::notes_set_folder,
             notes::notes_send,
+            notes::notes_transforms,
+            notes::notes_transform,
+            notes::notes_edit_transforms,
             notes::open_notes,
             export::export_history,
             export::export_settings,
@@ -158,6 +161,7 @@ fn main() {
                 });
             });
             let presets = settings.presets();
+            let transforms = settings.transforms();
             app.manage(commands::AppState {
                 settings: Mutex::new(settings),
                 session,
@@ -167,7 +171,7 @@ fn main() {
                 updates,
             });
             updates::start(app.handle());
-            shortcuts::sync(app.handle(), &presets);
+            shortcuts::sync(app.handle(), &presets, &transforms);
 
             // First run: the setup guide. Later, if a permission was
             // revoked: Settings, which opens on the Permissions tab.

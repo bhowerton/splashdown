@@ -45,6 +45,8 @@ pub struct Engine {
     /// Per-app presets, in the order shown in Settings (number keys pick
     /// them while recording).
     pub presets: Vec<Preset>,
+    /// Saved instructions for Notes and transform shortcuts.
+    pub transforms: Vec<splashdown_config::Transform>,
     /// Watch for corrections after inserting and suggest vocabulary.
     pub learn_vocabulary: bool,
     /// Tell the AI which app the text is going into.
@@ -254,6 +256,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         sound_volume: settings.general.sound_volume(),
         microphone: settings.general.microphone.clone(),
         presets,
+        transforms: settings.transforms(),
         preset_pipelines,
         pipeline: Pipeline::new(stt, llm).with_instruction_model(instruction_llm),
         context: PromptContext {

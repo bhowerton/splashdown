@@ -408,6 +408,14 @@ impl Store {
         Ok(())
     }
 
+    /// Keeps the note as it is now as a version, before something else
+    /// (a transform) changes it.
+    pub fn keep_current(&self, rel: &str) -> io::Result<()> {
+        let path = self.resolve(rel)?;
+        let text = std::fs::read_to_string(&path)?;
+        self.keep_version(&path, &text)
+    }
+
     /// A note's earlier versions, newest first.
     pub fn versions(&self, rel: &str) -> io::Result<Vec<Version>> {
         let path = self.resolve(rel)?;

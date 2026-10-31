@@ -97,6 +97,8 @@ struct CleanupCase {
     /// Earlier dictations into the same app, oldest first.
     #[serde(default)]
     earlier: Vec<String>,
+    /// A built-in transform's id: its instruction is used on `selection`.
+    transform: Option<String>,
     /// Case-insensitive substrings the output must contain.
     #[serde(default)]
     expect: Vec<String>,
@@ -109,7 +111,15 @@ struct CleanupCase {
 
 impl CleanupCase {
     fn job(&self) -> TextJob {
-        let mode = match (&self.selection, &self.instruction) {
+        let builtin = self.transform.as_deref().map(|id| {
+            splashdown_config::builtin_transforms()
+                .into_iter()
+                .find(|t| t.id == id)
+                .unwrap_or_else(|| panic!("no built-in transform {id:?}"))
+                .instruction
+        });
+        let instruction = builtin.or_else(|| self.instruction.clone());
+        let mode = match (&self.selection, &instruction) {
             (Some(_), _) => Mode::Transform,
             (None, Some(_)) => Mode::DictateInstruct,
             (None, None) => Mode::Dictate,
@@ -117,7 +127,7 @@ impl CleanupCase {
         TextJob {
             mode,
             content: self.transcript.clone(),
-            instruction: self.instruction.clone(),
+            instruction,
             selection: self.selection.clone(),
             context: PromptContext {
                 preset_instructions: self.preset.clone(),
@@ -521,6 +531,7 @@ mod tests {
             preset: None,
             context: None,
             earlier: Vec::new(),
+            transform: None,
             expect: vec!["friday".into()],
             reject: vec!["um".into(), "you know".into()],
             min_lines: None,

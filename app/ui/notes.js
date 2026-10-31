@@ -403,6 +403,119 @@ function versionRow(v) {
   return li;
 }
 
+// ---------------------------------------------------------------- transforms
+
+/** Saved instructions (spec §9e.5), from Settings → Words. */
+let transforms = [];
+
+/** "Ctrl+Alt+Digit1" → "⌃⌥1" on a Mac, "Ctrl+Alt+1" elsewhere. */
+function shortcutLabel(s) {
+  const parts = s.split("+");
+  const key = parts.pop().replace(/^Key/, "").replace(/^Digit/, "");
+  if (!isMac) return [...parts, key].join("+");
+  const symbol = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Cmd: "⌘" };
+  return parts.map((m) => symbol[m] ?? m).join("") + key;
+}
+
+async function loadTransforms() {
+  try {
+    transforms = await invoke("notes_transforms") ?? [];
+  } catch (e) {
+    toast(String(e), true);
+  }
+  const menu = $("nt-transform-menu");
+  const items = transforms.map((t) => {
+    const b = document.createElement("button");
+    b.setAttribute("role", "menuitem");
+    b.dataset.transform = t.id;
+    const name = document.createElement("span");
+    name.textContent = t.name;
+    b.append(name);
+    if (t.shortcut) {
+      const kbd = document.createElement("span");
+      kbd.className = "nt-kbd";
+      kbd.textContent = shortcutLabel(t.shortcut);
+      b.append(kbd);
+    }
+    return b;
+  });
+  const edit = document.createElement("button");
+  edit.setAttribute("role", "menuitem");
+  edit.dataset.transform = "";
+  edit.textContent = "Edit transforms…";
+  menu.replaceChildren(...items, document.createElement("hr"), edit);
+}
+
+function setTransformMenu(open) {
+  $("nt-transform-menu").hidden = !open;
+  $("nt-transform").setAttribute("aria-expanded", String(open));
+  if (open) $("nt-transform-menu").querySelector("button")?.focus();
+}
+
+/** Runs transform `id` on the selection, or on the whole note. The result
+ *  goes in through the editor, so ⌘Z undoes it; the note as it was is also
+ *  kept in History. */
+async function runTransform(id) {
+  const t = transforms.find((x) => x.id === id);
+  if (!t) return;
+  showHistory(false);
+  await saveNow();
+  const start = note.selectionStart;
+  const end = note.selectionEnd;
+  const whole = start === end;
+  const source = whole ? note.value : note.value.slice(start, end);
+  if (!source.trim()) return toast("There's no text to change.");
+  const button = $("nt-transform");
+  button.disabled = true;
+  $("nt-status").textContent = `${t.name}…`;
+  let out;
+  try {
+    out = await invoke("notes_transform", { path: current.path, id, text: source });
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  } finally {
+    button.disabled = false;
+    updateHeader();
+  }
+  if (!out) return;
+  if (out.unchanged) return toast(`${t.name}: ${out.unchanged}`);
+  note.focus();
+  let insert = out.text;
+  if (t.place === "below") {
+    const at = whole ? note.value.length : end;
+    const before = note.value.slice(0, at);
+    insert = `${before.endsWith("\n") ? "" : "\n"}\n---\n\n${out.text}`;
+    note.setSelectionRange(at, at);
+  } else if (whole) {
+    note.setSelectionRange(0, note.value.length);
+  } else {
+    note.setSelectionRange(start, end);
+  }
+  // insertText keeps the editor's undo; setRangeText is the fallback.
+  if (!document.execCommand("insertText", false, insert)) {
+    note.setRangeText(insert, note.selectionStart, note.selectionEnd, "end");
+    scheduleSave();
+  }
+  toast(`${t.name} done. ${isMac ? "⌘Z" : "Ctrl+Z"} undoes it; the note before is in History.`);
+}
+
+$("nt-transform").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setMenu(false);
+  setTransformMenu($("nt-transform-menu").hidden);
+});
+$("nt-transform-menu").addEventListener("click", (e) => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  setTransformMenu(false);
+  if (b.dataset.transform) runTransform(b.dataset.transform);
+  else invoke("notes_edit_transforms").catch((err) => toast(String(err), true));
+});
+document.addEventListener("click", () => setTransformMenu(false));
+// A transform's shortcut pressed while Notes is in front.
+listen("notes-run-transform", (event) => runTransform(event.payload));
+
 // ---------------------------------------------------------------- menu
 
 function setMenu(open) {
@@ -413,6 +526,7 @@ function setMenu(open) {
 
 $("nt-more").addEventListener("click", (e) => {
   e.stopPropagation();
+  setTransformMenu(false);
   setMenu($("nt-menu").hidden);
 });
 document.addEventListener("click", () => setMenu(false));
@@ -457,6 +571,7 @@ document.addEventListener("keydown", (e) => {
   const mod = isMac ? e.metaKey : e.ctrlKey;
   if (e.key === "Escape") {
     if (!$("nt-menu").hidden) return setMenu(false);
+    if (!$("nt-transform-menu").hidden) return setTransformMenu(false);
     if (!$("nt-rename").hidden) return endRename();
     if (!$("nt-history").hidden) return showHistory(false);
     if (document.activeElement === $("nt-search") && $("nt-search").value) {
@@ -498,6 +613,7 @@ $("nt-reveal").textContent = isMac ? "Show in Finder" : "Show in File Explorer";
 listen("notes-shown", (event) => {
   sendTarget = event.payload ?? null;
   refresh();
+  loadTransforms();
   focusNote();
 });
 
@@ -528,6 +644,7 @@ function applyView(view) {
   } catch (e) {
     toast(String(e), true);
   }
+  loadTransforms();
 })();
 
 // ---------------------------------------------------------------- preview
@@ -560,6 +677,12 @@ async function mockInvoke(cmd, args) {
       return open(args.path);
     case "notes_versions":
       return [{ at: Date.now() - hour, preview: "Launch post\n- lead with the demo" }];
+    case "notes_transforms":
+      return [
+        { id: "clean-up", name: "Clean up", place: "replace", shortcut: null },
+        { id: "summary", name: "Summary", place: "below", shortcut: null },
+        { id: "todos", name: "To-dos", place: "below", shortcut: "Ctrl+Alt+Digit1" },
+      ];
     default:
       return null;
   }

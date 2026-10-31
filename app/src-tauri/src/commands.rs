@@ -212,6 +212,8 @@ pub struct Snapshot {
     apple: Option<AppleStatus>,
     /// The presets in effect (built-ins until edited).
     presets: Vec<splashdown_config::Preset>,
+    /// The transforms in effect (built-ins until edited).
+    transforms: Vec<splashdown_config::Transform>,
     defaults: Defaults,
     platform: &'static str,
     version: &'static str,
@@ -220,7 +222,8 @@ pub struct Snapshot {
     update: crate::updates::Status,
     /// AI providers a preset can choose as its own model, usable now.
     preset_ai_options: Vec<AiOption>,
-    /// Presets whose shortcut couldn't be registered, and why.
+    /// Presets (by id) and transforms (`transform:` and id) whose shortcut
+    /// couldn't be registered, and why.
     shortcut_errors: std::collections::HashMap<String, String>,
 }
 
@@ -282,6 +285,7 @@ fn snapshot(
     update: crate::updates::Status,
 ) -> Snapshot {
     let presets = settings.presets();
+    let transforms = settings.transforms();
     let budget_state =
         crate::spend::shared().budget_state(&settings.general.budget, chrono::Local::now());
     let secrets = Secrets::load();
@@ -417,6 +421,7 @@ fn snapshot(
         },
         apple,
         presets,
+        transforms,
         defaults: DEFAULTS,
         platform: splashdown_platform::backend_name(),
         version: env!("CARGO_PKG_VERSION"),
@@ -499,7 +504,7 @@ pub async fn save_settings(
     state.tray.show_whisper(settings.general.whisper_mode());
     state.tray.show_mini_bar(settings.general.mini_bar());
     crate::minibar::set_visible(settings.general.mini_bar());
-    crate::shortcuts::sync(&app, &settings.presets());
+    crate::shortcuts::sync(&app, &settings.presets(), &settings.transforms());
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
     let engine_error = state.apply().await;
     Ok(Saved {

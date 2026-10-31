@@ -157,6 +157,14 @@
           <div><button class="btn" id="replacement-add">+ Add replacement</button></div>
         </div>
       </div>
+      <div class="group">
+        <div class="gh">Transforms</div>
+        <div class="row column">
+          <span class="lbl">Saved instructions you run without speaking<small>In Notes, from the Transform menu, on the note or the selected text. Give one a shortcut and it works on the selected text in any app (with nothing selected, on what you just dictated). The text is sent to your AI provider, the same as a spoken instruction.</small></span>
+          <div id="transforms" class="transforms"></div>
+          <div class="transform-acts"><button class="btn" id="transform-add">+ Add transform</button> <button class="link" id="transform-reset">Restore the built-in transforms</button></div>
+        </div>
+      </div>
     </section>
 
     <!-- ================= Providers ================= -->
@@ -374,7 +382,7 @@
           <input id="pv-appname" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">What you just dictated into the same app<small>The last few minutes, so “it” and “that” make sense. Never saved.</small></span>
           <input id="pv-recent" type="checkbox" class="switch" data-setting></label>
-        <div class="row"><span class="lbl">Selected text<small>Only when you select text and dictate an instruction for it.</small></span></div>
+        <div class="row"><span class="lbl">Selected text<small>Only when you select text and dictate an instruction for it, or run a transform on it.</small></span><button class="link" data-goto="words">Transforms</button></div>
         <div class="row"><span class="lbl">Text around the cursor<small id="pv-context"></small></span><button class="link" data-goto="presets">Change</button></div>
         <div class="row"><span class="lbl">Your clipboard<small id="pv-clipboard"></small></span><button class="link" data-goto="presets">Change</button></div>
       </div>
@@ -434,6 +442,7 @@
 <script src="settings/providers.js"></script>
 <script src="settings/permissions.js"></script>
 <script src="settings/presets.js"></script>
+<script src="settings/transforms.js"></script>
 <script src="settings/history.js"></script>
 <script src="settings/insights.js"></script>
 <script src="settings/privacy.js"></script>

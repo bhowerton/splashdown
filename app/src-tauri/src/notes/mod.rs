@@ -24,6 +24,9 @@ pub const ACCELERATOR: &str = "Ctrl+Alt+N";
 /// App event telling the page it was shown again, with the app "Send to"
 /// would paste into (or null).
 const SHOWN: &str = "notes-shown";
+/// App event asking the page to run a transform (its shortcut was pressed
+/// while Notes had focus), with the transform's id.
+pub const RUN_TRANSFORM: &str = "notes-run-transform";
 /// Reopened after this long, the window starts a new note rather than
 /// showing the last one.
 const FRESH_AFTER: Duration = Duration::from_secs(6 * 3600);
@@ -250,6 +253,12 @@ fn target_name() -> Option<String> {
         .as_ref()
         .map(|(_, name)| name.clone())
         .filter(|n| !n.is_empty())
+}
+
+/// Whether the Notes window is in front with focus.
+pub fn is_focused(app: &AppHandle) -> bool {
+    app.get_webview_window(WINDOW)
+        .is_some_and(|w| w.is_visible().unwrap_or(false) && w.is_focused().unwrap_or(false))
 }
 
 /// ⌃⌥N: hides Notes if it has focus, otherwise opens it.
@@ -565,12 +574,67 @@ pub fn notes_set_folder(
     view(&state)
 }
 
+/// A transform as the Notes menu shows it.
+#[derive(Serialize)]
+pub struct TransformItem {
+    id: String,
+    name: String,
+    place: splashdown_config::Place,
+    shortcut: Option<String>,
+}
+
+#[tauri::command]
+pub fn notes_transforms(state: State<'_, AppState>) -> Vec<TransformItem> {
+    state
+        .settings()
+        .transforms()
+        .into_iter()
+        .map(|t| TransformItem {
+            id: t.id,
+            name: t.name,
+            place: t.place,
+            shortcut: t.shortcut,
+        })
+        .collect()
+}
+
+/// Runs transform `id` on `text` (the note, or the selection in it). The
+/// note as it is on disk is kept as a version first, so the change can
+/// always be undone from History. The page puts the result in place.
+#[tauri::command]
+pub async fn notes_transform(
+    path: Option<String>,
+    id: String,
+    text: String,
+    state: State<'_, AppState>,
+) -> Result<crate::session::TransformOutcome, String> {
+    let session = state.session.clone();
+    let out = tauri::async_runtime::spawn_blocking(move || session.transform(id, text))
+        .await
+        .map_err(|e| e.to_string())??;
+    if out.unchanged.is_none()
+        && let Some(path) = path
+    {
+        let (store, _) = store(&state)?;
+        if let Err(e) = store.keep_current(&path) {
+            tracing::warn!("couldn't keep a version before the transform: {e}");
+        }
+    }
+    Ok(out)
+}
+
 /// Pastes can block for a few hundred ms, so this runs off the main thread.
 #[tauri::command]
 pub async fn notes_send(text: String, app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || send(&app, &text))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// "Edit transforms…": Settings, on the tab that lists them.
+#[tauri::command]
+pub fn notes_edit_transforms(app: AppHandle) {
+    crate::tray::open_settings_tab(&app, "words");
 }
 
 /// From Settings → Privacy.

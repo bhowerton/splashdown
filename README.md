@@ -81,7 +81,7 @@
 
 ### Everything else
 
-- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), **Notes** for when there's no text field: plain Markdown files in a folder you choose (Obsidian, iCloud Drive and Dropbox work), with search, pins and earlier versions, and an always-on-screen **mini bar** for clicking instead of holding a key.
+- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), **Notes** for when there's no text field: plain Markdown files in a folder you choose (Obsidian, iCloud Drive and Dropbox work), with search, pins, earlier versions and **transforms** (Clean up, Summary, To-dos, Email, Prompt for an AI, or your own; give one a shortcut to use it on selected text in any app), and an always-on-screen **mini bar** for clicking instead of holding a key.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
 
@@ -151,7 +151,7 @@ Settings → Privacy shows where your words go for your current settings. The fu
 
 ## How well it works
 
-Every default was chosen by measurement. The cleanup prompt is tested on 49 cases covering fillers, self-corrections, formatting, instructions, context and prompt injection: the default OpenRouter model scores 96%, the built-in local model (Qwen3 4B) 84%, Apple's on-device model 71%. Results and how to run them are in [eval/README.md](eval/README.md).
+Every default was chosen by measurement. The cleanup prompt is tested on 54 cases covering fillers, self-corrections, formatting, instructions, transforms, context and prompt injection: the default OpenRouter model scores 96%, the built-in local model (Qwen3 4B) 85%, Apple's on-device model 72%. Results and how to run them are in [eval/README.md](eval/README.md).
 
 ## When something misbehaves
 

@@ -410,3 +410,12 @@ dialog.confirm::backdrop { background: rgba(0,0,0,.3); }
 .money { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); }
 .money input { width: 90px; text-align: right; }
 .row.sub-row { padding-top: 2px; padding-bottom: 2px; padding-left: 28px; min-height: 0; }
+
+/* Transforms (Words tab): a card per saved instruction. */
+.transforms { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.transform { border: 1px solid var(--border); border-radius: 10px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.transform-top { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.transform-top input[type=text] { flex: 1; min-width: 120px; width: auto !important; font-weight: 600; }
+.transform textarea { width: 100%; resize: vertical; font-size: 12.5px; }
+.transform .warn-text { font-size: 12px; }
+.transform-acts { display: flex; gap: 12px; align-items: center; }

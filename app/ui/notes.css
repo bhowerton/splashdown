@@ -72,6 +72,10 @@
 .nt-menu button.danger { color: var(--err); }
 .nt-menu button.danger:hover { color: #fff; }
 .nt-menu button:disabled { opacity: .45; background: none; color: inherit; }
+.nt-menu button { display: flex; gap: 12px; }
+.nt-menu .nt-kbd { margin-left: auto; color: var(--muted); font-size: 12px; }
+.nt-menu button:hover .nt-kbd, .nt-menu button:focus-visible .nt-kbd { color: inherit; }
+.nt-menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 2px; }
 
 /* ---------------------------------------------------------------- history */
 .nt-versions { list-style: none; margin: 0; padding: 0 10px; overflow-y: auto; flex: 1; }

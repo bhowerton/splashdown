@@ -45,6 +45,9 @@ pub struct Settings {
     /// Find-and-replace rules applied to the final text.
     pub replacements: Vec<Replacement>,
     pub notes: NotesSettings,
+    /// Saved instructions run over a note or selected text (spec §9e.5).
+    /// Unset means the built-in ones; once edited, the full list is saved.
+    pub transforms: Option<Vec<crate::Transform>>,
 }
 
 /// Notes (spec §9e).
@@ -454,6 +457,12 @@ impl Settings {
     /// The presets in effect.
     pub fn presets(&self) -> Vec<Preset> {
         self.presets.clone().unwrap_or_else(builtin_presets)
+    }
+
+    pub fn transforms(&self) -> Vec<crate::Transform> {
+        self.transforms
+            .clone()
+            .unwrap_or_else(crate::builtin_transforms)
     }
 
     /// The settings as `config.toml` text, e.g. to move them to another

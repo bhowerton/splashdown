@@ -3,6 +3,7 @@
 mod presets;
 mod secrets;
 mod settings;
+mod transforms;
 
 pub use presets::{
     AppContext, AppRule, CleanupLevel, DEFAULT_PRESET_ID, InsertMode, Preset, PresetModel, Tone,
@@ -16,6 +17,7 @@ pub use settings::{
     HotkeySettings, LoadError, NotesSettings, OtherAudio, Replacement, ResolveError, Settings,
     Situation, SpeechChoice, SpeechProvider, SpeechSettings, defaults, is_local_url,
 };
+pub use transforms::{NOTHING_TO_DO, Place, Transform, builtin_transforms};
 
 use std::path::PathBuf;
 
