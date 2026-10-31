@@ -97,6 +97,9 @@ pub struct Keys {
     pub hands_free: PhysicalKey,
     /// A double-tap starts hands-free too.
     pub double_tap: bool,
+    /// Pressed while holding the dictation key: the dictation goes into a
+    /// note.
+    pub note: PhysicalKey,
 }
 
 enum Msg {
@@ -265,6 +268,8 @@ struct Active {
     loudest: f32,
     /// The "microphone hears nothing" warning was shown.
     mic_warned: bool,
+    /// The note key was pressed: the text goes into a note, not the field.
+    capture: bool,
     /// When to quiet other sounds (after the start sound has played).
     quiet_due: Option<Instant>,
     /// Other sounds, quieted while recording; dropping it restores them.
@@ -315,6 +320,9 @@ struct Controller {
     recent: crate::recent::Recent,
     /// The last insertion the AI changed, for "Undo AI edit".
     last_ai_edit: Option<AiEdit>,
+    /// The last dictation added to a note, which "Undo AI edit" (⌃⌥Z)
+    /// takes back too.
+    last_capture: Option<(crate::notes::Captured, Instant)>,
     /// A spoken command found while preparing a recording (see `prepare`).
     pending_command: Option<AudioClip>,
     history: Arc<History>,
@@ -339,7 +347,8 @@ impl Controller {
         Self {
             recognizer: Arc::new(Mutex::new(
                 Recognizer::new(keys.dictation, keys.instruction, Timing::default())
-                    .with_hands_free(keys.hands_free, keys.double_tap),
+                    .with_hands_free(keys.hands_free, keys.double_tap)
+                    .with_capture(keys.note),
             )),
             ui,
             engine,
@@ -357,6 +366,7 @@ impl Controller {
             last_text: String::new(),
             recent: crate::recent::Recent::default(),
             last_ai_edit: None,
+            last_capture: None,
             pending_command: None,
             history,
             correction_check: None,
@@ -492,7 +502,8 @@ impl Controller {
             self.ui.hide();
         }
         *self.lock() = Recognizer::new(keys.dictation, keys.instruction, Timing::default())
-            .with_hands_free(keys.hands_free, keys.double_tap);
+            .with_hands_free(keys.hands_free, keys.double_tap)
+            .with_capture(keys.note);
         self.preview = preview_worker(&engine, &self.tx);
         self.engine = engine;
         self.keys = keys;
@@ -616,6 +627,7 @@ impl Controller {
                     self.ui.show(OverlayState::Instruction);
                 }
             }
+            Action::Capture => self.start_capture(),
             Action::HandsFree => {
                 if let Some(active) = &mut self.active {
                     active.hands_free = true;
@@ -769,6 +781,7 @@ impl Controller {
             last_voice: now,
             loudest: 0.0,
             mic_warned: false,
+            capture: false,
             quiet_due: self
                 .engine
                 .as_ref()
@@ -844,10 +857,15 @@ impl Controller {
             self.run_command(&active, &command);
             return;
         }
-        // Kept for "Keep the audio" (the job itself is consumed).
+        // Kept for "Keep the audio" (the job itself is consumed), in History
+        // or with a note.
         let recording = job
             .as_ref()
-            .filter(|_| self.engine.as_ref().is_ok_and(|e| e.keep_audio))
+            .filter(|_| {
+                self.engine
+                    .as_ref()
+                    .is_ok_and(|e| e.keep_audio || (active.capture && e.notes.keep_audio))
+            })
             .map(|j| {
                 let speech = j.prefix.as_ref().map_or(&j.speech, |p| &p.whole);
                 (speech.clone(), j.instruction_speech.clone())
@@ -1068,8 +1086,18 @@ impl Controller {
             self.notice(Tone::Info, "Didn't catch that");
             return;
         }
+        // History takes the recording; a note may want it too.
+        let note_audio = self
+            .pending_audio
+            .as_ref()
+            .filter(|_| active.capture && self.engine.as_ref().is_ok_and(|e| e.notes.keep_audio))
+            .map(|(speech, _)| splashdown_audio::wav::encode(speech));
 
         self.record(&outcome, active.focus.as_ref(), &active.preset, took);
+        if active.capture {
+            self.deliver_capture(&active, &outcome.text, spoke, note_audio.as_deref());
+            return;
+        }
 
         let app_id = active.focus.as_ref().map_or("?", |f| f.app.id.as_str());
         if !still_focused {
@@ -1145,6 +1173,7 @@ impl Controller {
         );
         self.last_insert = target_pid.map(|pid| (pid, Instant::now()));
         self.last_text = outcome.text.clone();
+        self.last_capture = None;
         if outcome.mode != Mode::Transform && self.engine.as_ref().is_ok_and(|e| e.share_recent) {
             self.recent.push(app_id, &outcome.text, Instant::now());
         }
@@ -1304,6 +1333,71 @@ impl Controller {
         .map_err(|e| e.to_string())?;
         crate::spend::record_outcome(&outcome);
         Ok(engine.replacements.apply(&outcome.text))
+    }
+
+    /// The note key while recording: the dictation will go into a note.
+    fn start_capture(&mut self) {
+        let Ok(engine) = &self.engine else {
+            return;
+        };
+        let label = format!("Note · {}", crate::notes::capture_label(&engine.notes));
+        let Some(active) = &mut self.active else {
+            return;
+        };
+        active.capture = true;
+        match &mut active.shown {
+            OverlayState::Listening { preset } | OverlayState::HandsFree { preset } => {
+                *preset = Some(label);
+                self.ui.show(active.shown.clone());
+            }
+            _ => {}
+        }
+        // Nothing is typed, so there's nothing to send.
+        self.lock().set_send(false);
+        self.ui.set_send(false);
+    }
+
+    /// A captured dictation: added to the note instead of the field
+    /// (spec §9e.6). ⌃⌥Z takes it back while it's recent.
+    fn deliver_capture(
+        &mut self,
+        active: &Active,
+        text: &str,
+        spoke: Duration,
+        audio: Option<&[u8]>,
+    ) {
+        let Ok(engine) = &self.engine else {
+            return;
+        };
+        match crate::notes::capture(&engine.notes, None, text, audio) {
+            Ok(captured) => {
+                if engine.keep_insights {
+                    crate::insights::shared().record(
+                        text,
+                        spoke,
+                        active.focus.as_ref().map(|f| f.app.name.as_str()),
+                        chrono::Local::now(),
+                    );
+                }
+                let undo = if cfg!(target_os = "macos") {
+                    "⌃⌥Z"
+                } else {
+                    "Ctrl+Alt+Z"
+                };
+                let message = format!("Added to {} · {undo} undoes it", captured.label);
+                self.last_ai_edit = None;
+                self.last_capture = Some((captured, Instant::now()));
+                self.done(&message);
+            }
+            Err(e) => {
+                tracing::warn!("capture failed: {e}");
+                let _ = splashdown_platform::copy_to_clipboard(text);
+                self.notice(
+                    Tone::Warning,
+                    &format!("{} — copied to clipboard", short(&e)),
+                );
+            }
+        }
     }
 
     /// Runs transform `id` on `text` with the AI (spec §9e.5). Returns its
@@ -1515,6 +1609,18 @@ impl Controller {
     /// paste, then paste the transcript. Only right after it, in the same
     /// app, like other edits of "that".
     fn undo_ai_edit(&mut self) {
+        if let Some((captured, at)) = self.last_capture.take()
+            && at.elapsed() < UNDO_WINDOW
+        {
+            return match crate::notes::undo_capture(&captured) {
+                Ok(true) => self.done(&format!("Removed from {}", captured.label)),
+                Ok(false) => self.notice(
+                    Tone::Info,
+                    &format!("{} has changed since; nothing removed", captured.label),
+                ),
+                Err(e) => self.notice(Tone::Warning, &short(&e)),
+            };
+        }
         let Some(edit) = self.last_ai_edit.take() else {
             self.notice(Tone::Info, "No AI edit to undo");
             return;

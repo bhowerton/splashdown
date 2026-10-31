@@ -13,9 +13,10 @@ pub use secrets::{
     KeyName, KeySource, Secrets, delete_key, key_source, migrate_legacy_keys, store_key,
 };
 pub use settings::{
-    AiChoice, AiProvider, AiSettings, Budget, DEFAULT_SOUND_VOLUME, Destination, GeneralSettings,
-    HotkeySettings, LoadError, NotesSettings, OtherAudio, Replacement, ResolveError, Settings,
-    Situation, SpeechChoice, SpeechProvider, SpeechSettings, defaults, is_local_url,
+    AiChoice, AiProvider, AiSettings, Budget, CaptureTo, DEFAULT_SOUND_VOLUME, Destination,
+    GeneralSettings, HotkeySettings, LoadError, NotesSettings, OtherAudio, Replacement,
+    ResolveError, Settings, Situation, SpeechChoice, SpeechProvider, SpeechSettings, defaults,
+    is_local_url,
 };
 pub use transforms::{NOTHING_TO_DO, Place, Transform, builtin_transforms};
 

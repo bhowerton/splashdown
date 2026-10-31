@@ -60,6 +60,8 @@
           <span class="keypicker" id="hk-instruction" data-name="instruction key"></span></div>
         <div class="row"><span class="lbl"><label for="hk-hands-free">Hands-free</label><small>Hold the dictation key, press this letter, then let go: recording carries on until you tap the dictation key again</small></span>
           <input id="hk-hands-free" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" data-setting></div>
+        <div class="row"><span class="lbl"><label for="hk-note">Into a note</label><small>Hold the dictation key and press this letter: what you say is added to your notes (Notes, below) instead of typed</small></span>
+          <input id="hk-note" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" data-setting></div>
         <label class="row"><span class="lbl">Double-tap for hands-free too<small>Off by default: Claude and some other apps use a double-tap of Option. Mouse buttons always double-click into hands-free.</small></span>
           <input id="hk-double-tap" type="checkbox" class="switch" data-setting></label>
         <div class="row note-row" id="hk-tip-row" hidden><span class="lbl"><small id="hk-tip"></small></span></div>
@@ -76,6 +78,20 @@
         <div class="gh">Microphone</div>
         <div class="row"><span class="lbl"><label for="gen-mic">Microphone</label><small id="gen-mic-note">Automatic uses your system's microphone, but avoids Bluetooth headsets like AirPods (their mic switches them to low-quality call audio)</small></span>
           <select id="gen-mic" data-setting></select></div>
+      </div>
+      <div class="group">
+        <div class="gh">Notes</div>
+        <label class="row"><span class="lbl">Dictations into a note go to<small>When you hold the dictation key and press the note letter, or use <code>splashdown-cli note</code></small></span>
+          <select id="nt-capture-to" data-setting>
+            <option value="inbox">Inbox</option>
+            <option value="daily">Today's daily note</option>
+            <option value="last">The last note opened</option>
+          </select></label>
+        <div class="row" id="nt-daily-row"><span class="lbl">Daily notes<small>Folder and file name inside your notes folder. YYYY, MM and DD stand for the date; match Obsidian's Daily notes settings if you use it.</small></span>
+          <span class="nt-daily"><input id="nt-daily-folder" type="text" placeholder="Daily" aria-label="Daily notes folder" spellcheck="false" data-setting> / <input id="nt-daily-format" type="text" placeholder="YYYY-MM-DD" aria-label="Daily note file name" spellcheck="false" data-setting></span></div>
+        <label class="row"><span class="lbl">Keep the recording with the note<small>Saved in Attachments, next to your notes, and linked from what you said. About 2 MB per minute.</small></span>
+          <input id="nt-keep-audio" type="checkbox" class="switch" data-setting></label>
+        <div class="row"><span class="lbl">Notes window<small>⌃⌥N, or Notes in the menu bar. Transforms are on the Words tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
       </div>
       <div class="group">
         <div class="gh">While you speak</div>
@@ -385,6 +401,13 @@
         <div class="row"><span class="lbl">Selected text<small>Only when you select text and dictate an instruction for it, or run a transform on it.</small></span><button class="link" data-goto="words">Transforms</button></div>
         <div class="row"><span class="lbl">Text around the cursor<small id="pv-context"></small></span><button class="link" data-goto="presets">Change</button></div>
         <div class="row"><span class="lbl">Your clipboard<small id="pv-clipboard"></small></span><button class="link" data-goto="presets">Change</button></div>
+      </div>
+      <div class="group">
+        <div class="gh">Coding agents</div>
+        <label class="row"><span class="lbl">Let coding agents read notes<small>Claude Code, Cursor and others set up with <code>splashdown-mcp</code> can search and read your notes when you ask them to. What they read goes to their own AI provider.</small></span>
+          <input id="pv-agents-read" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">…and add to them<small>Agents can add a paragraph to the end of a note, e.g. “note that down”.</small></span>
+          <input id="pv-agents-write" type="checkbox" class="switch" data-setting></label>
       </div>
       <div class="group">
         <div class="gh">Kept on this computer</div>

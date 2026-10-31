@@ -99,6 +99,13 @@ function historyRow(e) {
   acts.append(
     button("Copy", () => copy(e.text)),
     ...(e.raw && e.raw !== e.text ? [button("Copy what I said", () => copy(e.raw))] : []),
+    button("Save to notes", async () => {
+      try {
+        toast(`Added to ${await invoke("notes_add", { text: e.text })}`);
+      } catch (err) {
+        toast(String(err), true);
+      }
+    }),
     button("Delete", async () => {
       await invoke("delete_history", { at: e.at }).catch((err) => toast(String(err), true));
       loadHistory();

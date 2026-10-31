@@ -109,6 +109,7 @@ fn main() {
             notes::notes_transforms,
             notes::notes_transform,
             notes::notes_edit_transforms,
+            notes::notes_add,
             notes::open_notes,
             export::export_history,
             export::export_settings,

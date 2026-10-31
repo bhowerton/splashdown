@@ -2,16 +2,21 @@
 //! incoming line, so they can be tested without stdio or the app.
 //!
 //! MCP over stdio is JSON-RPC 2.0, one message per line. We implement
-//! `initialize`, `ping`, `tools/list` and `tools/call` with a single tool,
-//! and honor `notifications/cancelled` (the protocol's spelling).
+//! `initialize`, `ping`, `tools/list` and `tools/call` (asking the user by
+//! voice, and the user's notes: spec §9e.7), and honor
+//! `notifications/cancelled` (the protocol's spelling).
 
 use serde_json::{Value, json};
+use splashdown_control::Request;
 
 /// Newest first. A client asking for one of these gets it; any other
 /// version gets the newest, as the spec's version negotiation says.
 pub const PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 pub const TOOL: &str = "ask_user_by_voice";
+pub const SEARCH_NOTES: &str = "search_notes";
+pub const READ_NOTE: &str = "read_note";
+pub const APPEND_NOTE: &str = "append_note";
 
 const PARSE_ERROR: i64 = -32700;
 const INVALID_REQUEST: i64 = -32600;
@@ -26,6 +31,9 @@ pub enum Step {
     /// Ask the user `question` (slow), then answer request `id` with
     /// [`tool_result`].
     Ask { id: Value, question: String },
+    /// Pass `request` to the app (quick), then answer request `id` with
+    /// [`tool_result`].
+    Control { id: Value, request: Request },
     /// The client gave up on request `id`.
     Canceled(Value),
     /// A notification or a response to us: nothing to send.
@@ -69,7 +77,7 @@ pub fn handle(line: &str) -> Step {
     match method {
         "initialize" => Step::Send(response(id, initialize(&params))),
         "ping" => Step::Send(response(id, json!({}))),
-        "tools/list" => Step::Send(response(id, json!({ "tools": [tool()] }))),
+        "tools/list" => Step::Send(response(id, json!({ "tools": tools() }))),
         "tools/call" => call(id, &params),
         _ => Step::Send(error(
             id,
@@ -92,11 +100,55 @@ fn initialize(params: &Value) -> Value {
             "title": "Splashdown",
             "version": env!("CARGO_PKG_VERSION"),
         },
-        "instructions": "Use ask_user_by_voice when you need the user's input and a spoken answer is quicker than typing: a decision, a preference, a clarification. The user must have the Splashdown app running.",
+        "instructions": "Use ask_user_by_voice when you need the user's input and a spoken answer is quicker than typing: a decision, a preference, a clarification. Use search_notes and read_note to look up what the user has written in their Splashdown notes, and append_note to add to them, when the user asks you to; these need the user to allow it in Splashdown's settings. The user must have the Splashdown app running.",
     })
 }
 
-fn tool() -> Value {
+fn tools() -> Value {
+    json!([
+        ask_tool(),
+        {
+            "name": SEARCH_NOTES,
+            "title": "Search the user's notes",
+            "description": "Search the user's Splashdown notes (Markdown files they dictated or typed) for a word or phrase, in titles and text. Returns up to `limit` notes, title matches first then newest, each with its path, title, last change and a short excerpt. Read one in full with read_note. Works only if the user allowed coding agents to read notes in Splashdown's settings.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "query": { "type": "string", "description": "Text to look for (any case). Empty lists the newest notes." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Most notes to return (default 10)." }
+                },
+                "required": ["query"]
+            }
+        },
+        {
+            "name": READ_NOTE,
+            "title": "Read a note",
+            "description": "Read one of the user's Splashdown notes in full, by the path search_notes gave.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "path": { "type": "string", "description": "The note's path, as search_notes returned it." }
+                },
+                "required": ["path"]
+            }
+        },
+        {
+            "name": APPEND_NOTE,
+            "title": "Add to the user's notes",
+            "description": "Add a paragraph to the end of one of the user's notes: their capture note (Inbox or today's note) unless `to` names one. It's marked with the time. Use only when the user asks you to note something down. Works only if the user allowed coding agents to add to notes.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "text": { "type": "string", "description": "What to add, as Markdown." },
+                    "to": { "type": "string", "description": "A note's path from search_notes. Leave out for the capture note." }
+                },
+                "required": ["text"]
+            }
+        }
+    ])
+}
+
+fn ask_tool() -> Value {
     json!({
         "name": TOOL,
         "title": "Ask the user by voice",
@@ -115,27 +167,62 @@ fn tool() -> Value {
 }
 
 fn call(id: Value, params: &Value) -> Step {
-    let name = params.get("name").and_then(Value::as_str);
-    if name != Some(TOOL) {
-        let name = name.unwrap_or("(none)");
-        return Step::Send(error(id, INVALID_PARAMS, &format!("unknown tool: {name}")));
-    }
-    let question = params
-        .get("arguments")
-        .and_then(|a| a.get("question"))
+    let name = params
+        .get("name")
         .and_then(Value::as_str)
-        .map(str::trim)
-        .unwrap_or_default();
-    if question.is_empty() {
-        // An input mistake goes back to the model as a tool error, so it
-        // can correct itself.
-        let result = tool_result(Err("`question` is required".into()));
-        return Step::Send(response(id, result));
-    }
-    Step::Ask {
-        id,
-        question: question.to_string(),
-    }
+        .unwrap_or("(none)");
+    let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+    let text = |key: &str| {
+        args.get(key)
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .unwrap_or_default()
+            .to_string()
+    };
+    // An input mistake goes back to the model as a tool error, so it can
+    // correct itself.
+    let missing = |key: &str| {
+        Step::Send(response(
+            id.clone(),
+            tool_result(Err(format!("`{key}` is required"))),
+        ))
+    };
+    let request = match name {
+        TOOL => {
+            let question = text("question");
+            if question.is_empty() {
+                return missing("question");
+            }
+            return Step::Ask { id, question };
+        }
+        SEARCH_NOTES => Request::SearchNotes {
+            query: text("query"),
+            limit: args
+                .get("limit")
+                .and_then(Value::as_u64)
+                .and_then(|n| usize::try_from(n).ok()),
+        },
+        READ_NOTE => {
+            let path = text("path");
+            if path.is_empty() {
+                return missing("path");
+            }
+            Request::ReadNote { path }
+        }
+        APPEND_NOTE => {
+            let note = text("text");
+            if note.is_empty() {
+                return missing("text");
+            }
+            let to = text("to");
+            Request::AppendNote {
+                text: note,
+                to: (!to.is_empty()).then_some(to),
+            }
+        }
+        _ => return Step::Send(error(id, INVALID_PARAMS, &format!("unknown tool: {name}"))),
+    };
+    Step::Control { id, request }
 }
 
 /// The `tools/call` result for an answer, or for why there isn't one.
@@ -187,12 +274,45 @@ mod tests {
     }
 
     #[test]
-    fn lists_the_tool() {
+    fn lists_the_tools() {
         let r = send(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
         let tools = r["result"]["tools"].as_array().unwrap();
-        assert_eq!(tools.len(), 1);
-        assert_eq!(tools[0]["name"], TOOL);
+        let names: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
+        assert_eq!(names, [TOOL, SEARCH_NOTES, READ_NOTE, APPEND_NOTE]);
         assert_eq!(tools[0]["inputSchema"]["required"], json!(["question"]));
+    }
+
+    #[test]
+    fn notes_tools_become_app_requests() {
+        assert_eq!(
+            handle(
+                r#"{"jsonrpc":"2.0","id":4,"method":"tools/call","params":{"name":"search_notes","arguments":{"query":"launch","limit":3}}}"#
+            ),
+            Step::Control {
+                id: json!(4),
+                request: Request::SearchNotes {
+                    query: "launch".into(),
+                    limit: Some(3)
+                }
+            }
+        );
+        assert_eq!(
+            handle(
+                r#"{"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"append_note","arguments":{"text":"ship it","to":""}}}"#
+            ),
+            Step::Control {
+                id: json!(5),
+                request: Request::AppendNote {
+                    text: "ship it".into(),
+                    to: None
+                }
+            }
+        );
+        // A missing path is the model's mistake: a tool error, not a crash.
+        let r = send(
+            r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"read_note","arguments":{}}}"#,
+        );
+        assert_eq!(r["result"]["isError"], true);
     }
 
     #[test]

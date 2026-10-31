@@ -5,6 +5,8 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 ## Unreleased
 
 - **Notes replace the scratchpad.** ⌃⌥N opens Notes. Each note is a plain Markdown file in `Documents/Splashdown Notes`, or any folder you choose, such as an Obsidian vault or iCloud Drive. Notes has search, pins, earlier versions you can restore, and Show in Finder. Deleted notes go to the Trash. Your scratchpad notes move in the first time you open it.
+- **Dictate straight into a note.** Hold the dictation key and press N: what you say is added to your Inbox (or today's daily note, or the last note opened) instead of typed. ⌃⌥Z takes it back. Also `splashdown-cli note`, `splashdown://note`, and **Save to notes** in History.
+- **Notes for coding agents.** If you allow it (Settings → Privacy, off by default), agents set up with `splashdown-mcp` can search and read your notes, and add to them.
 - **Transforms.** Saved instructions you run without speaking: Clean up, Summary, To-dos, Email and Prompt for an AI, or your own (Settings → Words). In Notes they work on the note or the selected text, and ⌘Z or History undoes them. Give one a shortcut and it works on the selected text in any app.
 - **Earlier dictations as context.** What you dictated into the same app in the last few minutes goes along with the next dictation, so "it" and "that" make sense and names are spelled the same way. Kept in memory only; switch it off in Settings → Privacy.
 - **Other sounds while you speak.** Settings → General can turn music and videos down or mute them while you hold the key, and put them back afterwards.

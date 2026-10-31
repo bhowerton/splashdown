@@ -1,8 +1,9 @@
-//! `splashdown-mcp` — voice input for coding agents. An MCP server over
-//! stdio with one tool, `ask_user_by_voice`: Splashdown shows the question,
+//! `splashdown-mcp` — voice input and notes for coding agents. An MCP
+//! server over stdio. `ask_user_by_voice`: Splashdown shows the question,
 //! records the user's spoken answer hands-free, and the cleaned-up text
-//! goes back to the agent. It talks to the running app over its control
-//! socket (`splashdown-control`). Setup: docs/AGENTS.md.
+//! goes back to the agent. `search_notes`, `read_note` and `append_note`
+//! reach the user's notes, if Settings allows it. It talks to the running
+//! app over its control socket (`splashdown-control`). Setup: docs/AGENTS.md.
 
 mod mcp;
 
@@ -47,6 +48,19 @@ fn main() {
                         *w = None;
                         write(&out, &mcp::response(id, mcp::tool_result(answer)));
                     }
+                });
+            }
+            Step::Control { id, request } => {
+                let out = out.clone();
+                std::thread::spawn(move || {
+                    let result = match splashdown_control::send(&request) {
+                        Ok(text) => Ok(text.unwrap_or_else(|| "Done".into())),
+                        Err(ClientError::NotRunning) => {
+                            Err("Splashdown isn't running, so its notes can't be reached.".into())
+                        }
+                        Err(e) => Err(e.to_string()),
+                    };
+                    write(&out, &mcp::response(id, mcp::tool_result(result)));
                 });
             }
             Step::Canceled(id) => {

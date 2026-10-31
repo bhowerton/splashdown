@@ -57,6 +57,50 @@ pub struct NotesSettings {
     /// Where notes are kept, one Markdown file each. Unset means
     /// `Documents/Splashdown Notes`.
     pub folder: Option<std::path::PathBuf>,
+    /// Where a captured dictation (dictation key + N) is added.
+    pub capture_to: CaptureTo,
+    /// Daily notes' folder inside the notes folder. Unset means "Daily".
+    pub daily_folder: Option<String>,
+    /// Daily notes' file name, with YYYY, MM and DD. Unset means
+    /// YYYY-MM-DD (Obsidian's default).
+    pub daily_format: Option<String>,
+    /// Keep a captured dictation's recording next to the note.
+    pub keep_audio: bool,
+    /// Let coding agents search and read notes (through `splashdown-mcp`).
+    pub agents_read: bool,
+    /// …and add to them.
+    pub agents_write: bool,
+}
+
+impl NotesSettings {
+    pub fn daily_folder(&self) -> &str {
+        self.daily_folder
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .unwrap_or("Daily")
+    }
+
+    pub fn daily_format(&self) -> &str {
+        self.daily_format
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .unwrap_or("YYYY-MM-DD")
+    }
+}
+
+/// Where a captured dictation goes (spec §9e.6).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CaptureTo {
+    /// `Inbox.md` at the top of the notes folder.
+    #[default]
+    Inbox,
+    /// Today's daily note.
+    Daily,
+    /// The note last opened in Notes.
+    Last,
 }
 
 /// A find-and-replace rule. Plain rules match whole words, ignoring case;
@@ -79,6 +123,9 @@ pub struct HotkeySettings {
     /// The letter that, pressed while holding the dictation key, carries
     /// on hands-free. Unset means H.
     pub hands_free: Option<char>,
+    /// The letter that, pressed while holding the dictation key, sends the
+    /// dictation into a note instead of the field. Unset means N.
+    pub note: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
     /// Claude and others use a double-tap of Option.
     pub double_tap: Option<bool>,
@@ -106,6 +153,15 @@ impl HotkeySettings {
 
     pub fn double_tap(&self) -> bool {
         self.double_tap.unwrap_or(false)
+    }
+
+    pub fn note_key(&self) -> PhysicalKey {
+        let letter = self
+            .note
+            .map(|c| c.to_ascii_lowercase())
+            .filter(char::is_ascii_lowercase)
+            .unwrap_or('n');
+        PhysicalKey::Letter(letter)
     }
 }
 

@@ -57,6 +57,7 @@
 - **Clean, not rewritten.** The AI pass removes fillers and false starts and fixes punctuation, at the level you choose per app: none, light, medium or high. Spoken formatting ("new paragraph", "comma") works in any language.
 - **Live text while you speak**, so you can see it's listening, even when the final text comes from a cloud model.
 - **Hands-free** for long dictations: hold the key and press **H**, then let go. Stops on its own after 3 minutes of silence.
+- **Straight into a note:** hold the key and press **N**, and what you say is added to your Inbox (or today's daily note) instead of typed. ⌃⌥Z takes it back.
 - **Whisper mode** for speaking quietly, and **mixed languages** in one sentence.
 
 ### Talk to it
@@ -87,7 +88,7 @@
 
 ### For developers
 
-- **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice ([docs/AGENTS.md](docs/AGENTS.md)).
+- **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice and, if you allow it, search and add to your notes ([docs/AGENTS.md](docs/AGENTS.md)).
 - **Scripting:** `splashdown://toggle` links for Raycast, Alfred or Shortcuts; `splashdown-cli toggle` and `splashdown-cli listen` from a terminal; mouse side buttons as the dictation key.
 
 <details>
@@ -101,6 +102,7 @@
 | Rewrite selected text | Select text, hold Right Option, say what to do with it |
 | Press Return when it's typed | Tap **Return** while holding, or right after letting go (again to undo) |
 | Go hands-free | While holding **Right Option**, press **H**, then let go; tap Right Option once more to finish (double-tap can be turned on in Settings) |
+| Add to your notes instead of typing | While holding, press **N**; ⌃⌥Z right after takes it back |
 | Use another preset | While holding, press **1–9** |
 | Change the spoken language | Menu bar → **Language** (detects it automatically by default) |
 | Cancel | **Esc** |
@@ -110,6 +112,7 @@
 | Dictate with the mouse | Choose **Mouse button 4** or **5** as the dictation key in Settings; hold it or double-click it like a key |
 | Start or finish from Raycast, Alfred or Shortcuts | Open `splashdown://toggle` (also `start`, `stop`, `cancel`) |
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
+| Add to your notes from a terminal or launcher | `splashdown-cli note buy oat milk`, or `splashdown-cli note` (and `splashdown://note`) to dictate one hands-free |
 
 On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 
@@ -187,7 +190,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 | `crates/splashdown-platform` | Hotkeys, text insertion, focus and selection, the overlay (`mac/`, `win/`) |
 | `crates/splashdown-apple-shim` | Swift bridge to Apple's on-device speech and language models |
 | `crates/splashdown-config` | Settings, provider resolution, presets, keychain, paths |
-| `crates/splashdown-cli` | The `splashdown-cli` developer tool and evals, and `splashdown-cli toggle`/`listen` for the running app |
+| `crates/splashdown-cli` | The `splashdown-cli` developer tool and evals, and `splashdown-cli toggle`/`listen`/`note` for the running app |
 | `crates/splashdown-control` | The running app's control socket: protocol, client, server |
 | `crates/splashdown-mcp` | `splashdown-mcp`, voice input for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
 | `app/` | The menu bar app (Tauri) and its Settings and onboarding windows |

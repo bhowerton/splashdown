@@ -73,6 +73,30 @@ struct State {
     last_at: u64,
 }
 
+/// Where a captured dictation is added (spec §9e.6).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Target {
+    /// `Inbox.md` at the top of the folder.
+    Inbox,
+    /// Today's daily note: `folder/<format>.md`, the format using YYYY, MM
+    /// and DD.
+    Daily { folder: String, format: String },
+    /// The note last opened, or the inbox if there's none.
+    Last,
+    /// A note by path.
+    Note(String),
+}
+
+/// Text added to the end of a note, so it can be taken back.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Appended {
+    pub path: String,
+    /// Exactly what was added, separator included.
+    pub added: String,
+    /// The file's time after adding, to tell whether it's changed since.
+    pub modified: u64,
+}
+
 /// Facts about a new note, for its front matter.
 #[derive(Debug, Default, Clone)]
 pub struct Origin<'a> {
@@ -503,6 +527,105 @@ impl Store {
         self.save_state(&state);
     }
 
+    // ------------------------------------------------------------ capture
+
+    /// The note a capture goes to.
+    pub fn target_path(&self, target: &Target, now: DateTime<Local>) -> String {
+        match target {
+            Target::Inbox => "Inbox.md".to_string(),
+            Target::Daily { folder, format } => {
+                let folder: Vec<String> = folder
+                    .split('/')
+                    .map(file_name_part)
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                let name = file_name_part(&daily_name(format, now));
+                let name = if name.is_empty() {
+                    now.format("%Y-%m-%d").to_string()
+                } else {
+                    name
+                };
+                folder
+                    .into_iter()
+                    .chain(std::iter::once(format!("{name}.md")))
+                    .collect::<Vec<_>>()
+                    .join("/")
+            }
+            Target::Last => self
+                .last()
+                .map(|(p, _)| p)
+                .filter(|p| self.resolve(p).is_ok_and(|f| f.exists()))
+                .unwrap_or_else(|| "Inbox.md".to_string()),
+            Target::Note(path) => path.clone(),
+        }
+    }
+
+    /// Adds `text` at the end of the target note as its own paragraph,
+    /// starting with the time (`**09:15** …`), creating the note if needed.
+    pub fn append(
+        &self,
+        target: &Target,
+        text: &str,
+        now: DateTime<Local>,
+    ) -> io::Result<Appended> {
+        self.ensure()?;
+        let rel = self.target_path(target, now);
+        let path = self.resolve(&rel)?;
+        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let existing = if existing.trim().is_empty() {
+            // A new note starts with a heading: its title in the list.
+            match target {
+                Target::Daily { .. } => format!("# {}\n", now.format("%Y-%m-%d")),
+                _ => "# Inbox\n".to_string(),
+            }
+        } else {
+            existing
+        };
+        let separator = if existing.ends_with("\n\n") {
+            ""
+        } else if existing.ends_with('\n') {
+            "\n"
+        } else {
+            "\n\n"
+        };
+        let added = format!("{separator}**{}** {}\n", now.format("%H:%M"), text.trim());
+        self.write(&path, &format!("{existing}{added}"))?;
+        Ok(Appended {
+            modified: mtime_ms(&std::fs::metadata(&path)?),
+            path: rel,
+            added,
+        })
+    }
+
+    /// Takes back what `append` added, if the note hasn't changed since.
+    /// Returns whether it did.
+    pub fn undo_append(&self, appended: &Appended) -> io::Result<bool> {
+        let path = self.resolve(&appended.path)?;
+        let text = std::fs::read_to_string(&path)?;
+        let unchanged = mtime_ms(&std::fs::metadata(&path)?) == appended.modified;
+        let Some(before) = text.strip_suffix(&appended.added).filter(|_| unchanged) else {
+            return Ok(false);
+        };
+        self.write(&path, before)?;
+        Ok(true)
+    }
+
+    /// Saves a recording in `Attachments/` and returns its path in the
+    /// folder, for a link.
+    pub fn save_attachment(&self, stem: &str, extension: &str, bytes: &[u8]) -> io::Result<String> {
+        let dir = self.root.join(ATTACHMENTS_DIR);
+        std::fs::create_dir_all(&dir)?;
+        let stem = file_name_part(stem);
+        let mut path = dir.join(format!("{stem}.{extension}"));
+        let mut n = 2;
+        while path.exists() {
+            path = dir.join(format!("{stem} {n}.{extension}"));
+            n += 1;
+        }
+        std::fs::write(&path, bytes)?;
+        Ok(self.relative(&path).expect("inside the folder"))
+    }
+
     // ------------------------------------------------------------ the old scratchpad
 
     /// Turns the scratchpad's notes (`scratchpad.json`: the current one
@@ -553,6 +676,15 @@ impl Store {
 }
 
 // ---------------------------------------------------------------- helpers
+
+/// A daily note's name from a format with YYYY, MM and DD (others are
+/// kept as they are).
+fn daily_name(format: &str, now: DateTime<Local>) -> String {
+    format
+        .replace("YYYY", &now.format("%Y").to_string())
+        .replace("MM", &now.format("%m").to_string())
+        .replace("DD", &now.format("%d").to_string())
+}
 
 /// `.md` files under `dir`, skipping dot folders and `Attachments/`.
 fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
@@ -907,6 +1039,40 @@ mod tests {
         let renamed = store.rename(&a.path, "Q4 plan").unwrap();
         assert_eq!(renamed, "Q4 plan.md");
         assert!(store.list().iter().any(|n| n.path == renamed && n.pinned));
+        let _ = std::fs::remove_dir_all(store.root());
+    }
+
+    #[test]
+    fn captures_append_with_the_time_and_can_be_taken_back() {
+        let store = temp_store("append");
+        let now = at("2026-10-31T09:15:00-05:00").with_timezone(&Local);
+        let first = store.append(&Target::Inbox, "Buy milk ", now).unwrap();
+        assert_eq!(first.path, "Inbox.md");
+        let time = now.format("%H:%M").to_string();
+        let inbox = || std::fs::read_to_string(store.root().join("Inbox.md")).unwrap();
+        assert_eq!(inbox(), format!("# Inbox\n\n**{time}** Buy milk\n"));
+        let second = store.append(&Target::Inbox, "Call Sam", now).unwrap();
+        assert_eq!(
+            inbox(),
+            format!("# Inbox\n\n**{time}** Buy milk\n\n**{time}** Call Sam\n")
+        );
+        assert!(store.undo_append(&second).unwrap());
+        assert_eq!(inbox(), format!("# Inbox\n\n**{time}** Buy milk\n"));
+        // Undoing again finds nothing to take back.
+        assert!(!store.undo_append(&second).unwrap());
+
+        let daily = Target::Daily {
+            folder: "Journal/Daily".into(),
+            format: "YYYY-MM-DD ddd".into(),
+        };
+        let d = store.append(&daily, "Ran 5k", now).unwrap();
+        assert_eq!(
+            d.path,
+            format!("Journal/Daily/{} ddd.md", now.format("%Y-%m-%d"))
+        );
+        // With nothing opened yet, "last" is the inbox.
+        assert_eq!(store.target_path(&Target::Last, now), "Inbox.md");
+        assert!(store.list().iter().any(|n| n.title == "Inbox"));
         let _ = std::fs::remove_dir_all(store.root());
     }
 

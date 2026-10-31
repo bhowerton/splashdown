@@ -119,6 +119,9 @@ pub enum Action {
     MarkInstruction,
     /// Double-tap: recording continues hands-free until the next tap.
     HandsFree,
+    /// The note key while holding the dictation key: this recording goes
+    /// into a note instead of the field (spec §9e.6).
+    Capture,
     /// Stop recording and process it.
     Finish,
     /// Stop recording and throw it away. `silent` cancels (accidental tap,
@@ -198,6 +201,11 @@ pub struct Recognizer {
     /// We swallowed the hands-free key's key-down, so swallow its repeats
     /// and key-up too.
     swallow_hands_free: bool,
+    /// Pressed while holding the dictation key: the recording goes into a
+    /// note.
+    capture: PhysicalKey,
+    /// We swallowed the note key's key-down: its repeats and key-up too.
+    swallow_capture: bool,
     timing: Timing,
     state: State,
     /// We swallowed an Esc key-down, so swallow its key-up too.
@@ -224,6 +232,8 @@ impl Recognizer {
             hands_free: PhysicalKey::Letter('h'),
             double_tap: true,
             swallow_hands_free: false,
+            capture: PhysicalKey::Letter('n'),
+            swallow_capture: false,
             timing,
             state: State::Idle,
             swallow_escape_up: false,
@@ -241,6 +251,13 @@ impl Recognizer {
     pub fn with_hands_free(mut self, key: PhysicalKey, double_tap: bool) -> Self {
         self.hands_free = key;
         self.double_tap = double_tap;
+        self
+    }
+
+    /// Sets the key that, pressed while holding the dictation key, sends the
+    /// recording into a note.
+    pub fn with_capture(mut self, key: PhysicalKey) -> Self {
+        self.capture = key;
         self
     }
 
@@ -391,6 +408,19 @@ impl Recognizer {
                 };
                 self.swallow_hands_free = true;
                 return (true, Some(Action::HandsFree));
+            }
+        }
+
+        // The note key while holding the dictation key: the recording goes
+        // into a note. Swallowed like the hands-free key.
+        if ev.key == self.capture && ev.key != self.hands_free && ev.key != PhysicalKey::Other {
+            if self.swallow_capture {
+                self.swallow_capture = ev.down;
+                return (true, None);
+            }
+            if let (State::Pressed { .. }, true) = (self.state, ev.down) {
+                self.swallow_capture = true;
+                return (true, Some(Action::Capture));
             }
         }
 
@@ -670,6 +700,32 @@ mod tests {
         c.at(6000).up(DICT);
         assert_eq!(
             c.r.on_event(KeyEvent::down(Letter('h')), c.now),
+            (false, None)
+        );
+    }
+
+    #[test]
+    fn note_key_while_holding_captures_and_is_swallowed() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default())
+            .with_hands_free(Letter('h'), false)
+            .with_capture(Letter('n'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('n')), c.now),
+            (true, Some(Action::Capture))
+        );
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('n')), c.now),
+            (true, None)
+        );
+        assert_eq!(c.r.on_event(KeyEvent::up(Letter('n')), c.now), (true, None));
+        // Still recording; letting go finishes as usual.
+        assert!(c.r.is_recording());
+        assert_eq!(c.at(2000).up(DICT), Some(Action::Finish));
+        // Typing N later is untouched.
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('n')), c.now),
             (false, None)
         );
     }

@@ -136,6 +136,13 @@ enum Command {
         #[arg(long)]
         prompt: Option<String>,
     },
+    /// Add text to the running app's capture note (Inbox, or today's note).
+    /// With no text, record a note hands-free: run it again, or tap the
+    /// dictation key, to finish.
+    Note {
+        /// The text to add, e.g. `splashdown-cli note buy oat milk`.
+        text: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -156,6 +163,9 @@ fn main() -> Result<()> {
         Command::Cancel => Some(Request::Cancel),
         Command::Listen { prompt } => Some(Request::Listen {
             prompt: prompt.clone(),
+        }),
+        Command::Note { text } => Some(Request::Note {
+            text: Some(text.join(" ")).filter(|t| !t.trim().is_empty()),
         }),
         _ => None,
     };
@@ -357,7 +367,8 @@ fn main() -> Result<()> {
         | Command::Start
         | Command::Stop
         | Command::Cancel
-        | Command::Listen { .. } => unreachable!("handled above"),
+        | Command::Listen { .. }
+        | Command::Note { .. } => unreachable!("handled above"),
     }
     Ok(())
 }

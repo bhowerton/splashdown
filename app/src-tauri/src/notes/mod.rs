@@ -16,7 +16,8 @@ use tauri_plugin_dialog::DialogExt;
 
 use crate::commands::AppState;
 use crate::engine;
-use store::{Note, Origin, Saved, Store, Summary, Version};
+use splashdown_config::{CaptureTo, NotesSettings};
+use store::{Appended, Note, Origin, Saved, Store, Summary, Target, Version};
 
 pub const WINDOW: &str = "notes";
 /// Shown in the menu; registered in `shortcuts.rs`.
@@ -73,7 +74,14 @@ fn current_slot() -> &'static Mutex<Option<Current>> {
 /// lazily (never at launch, so the Documents prompt only appears when
 /// Notes is used), with the old scratchpad's notes moved in.
 fn store(state: &AppState) -> Result<(Arc<Store>, Option<String>), String> {
-    let wanted = wanted_folder(state).ok_or("Couldn't find your Documents folder.")?;
+    store_for(state.settings().notes.folder)
+}
+
+/// The store for `folder` (unset: the default), as `store`.
+fn store_for(folder: Option<PathBuf>) -> Result<(Arc<Store>, Option<String>), String> {
+    let wanted = folder
+        .or_else(default_folder)
+        .ok_or("Couldn't find your Documents folder.")?;
     let mut slot = current_slot().lock().unwrap_or_else(|e| e.into_inner());
     if let Some(c) = slot
         .as_ref()
@@ -224,6 +232,187 @@ fn move_notes(from: &Store, to: &Path) -> Result<usize, String> {
         tracing::warn!("versions stayed in the old notes folder: {e}");
     }
     Ok(moved)
+}
+
+// ---------------------------------------------------------------- capture
+
+/// A dictation added to a note (dictation key + N), with what's needed to
+/// take it back.
+pub struct Captured {
+    folder: Option<PathBuf>,
+    appended: Appended,
+    /// "Inbox", "2026-10-31", or the note's title.
+    pub label: String,
+}
+
+fn capture_target(settings: &NotesSettings) -> Target {
+    match settings.capture_to {
+        CaptureTo::Inbox => Target::Inbox,
+        CaptureTo::Daily => Target::Daily {
+            folder: settings.daily_folder().to_string(),
+            format: settings.daily_format().to_string(),
+        },
+        CaptureTo::Last => Target::Last,
+    }
+}
+
+/// Where a capture would go now, for the overlay ("Inbox").
+pub fn capture_label(settings: &NotesSettings) -> String {
+    match settings.capture_to {
+        CaptureTo::Inbox => "Inbox".into(),
+        CaptureTo::Daily => "today's note".into(),
+        CaptureTo::Last => "the last note".into(),
+    }
+}
+
+/// Adds `text` to the capture note (or `to`, a note's path), with a link
+/// to `audio` (a WAV recording) when there is one.
+pub fn capture(
+    settings: &NotesSettings,
+    to: Option<&str>,
+    text: &str,
+    audio: Option<&[u8]>,
+) -> Result<Captured, String> {
+    let (store, _) = store_for(settings.folder.clone())?;
+    let now = chrono::Local::now();
+    let mut text = text.trim().to_string();
+    if let Some(bytes) = audio {
+        match store.save_attachment(&now.format("%Y-%m-%d %H%M").to_string(), "wav", bytes) {
+            // A plain Markdown link, so it works outside Obsidian too.
+            Ok(rel) => text.push_str(&format!(" [Recording]({})", rel.replace(' ', "%20"))),
+            Err(e) => tracing::warn!("couldn't keep the recording with the note: {e}"),
+        }
+    }
+    let target = to.map_or_else(|| capture_target(settings), |p| Target::Note(p.to_string()));
+    let appended = store
+        .append(&target, &text, now)
+        .map_err(|e| format!("Couldn't add it to your notes: {e}"))?;
+    let label = Path::new(&appended.path)
+        .file_stem()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+    Ok(Captured {
+        folder: settings.folder.clone(),
+        appended,
+        label,
+    })
+}
+
+/// Takes a capture back, if the note hasn't changed since.
+pub fn undo_capture(captured: &Captured) -> Result<bool, String> {
+    let (store, _) = store_for(captured.folder.clone())?;
+    store
+        .undo_append(&captured.appended)
+        .map_err(|e| e.to_string())
+}
+
+// ---------------------------------------------------------------- coding agents
+
+/// Asked for while Settings doesn't allow it (spec §9e.7).
+const AGENTS_OFF: &str = "Splashdown's notes are off for coding agents. To allow it, turn on “Let coding agents read notes” in Splashdown → Settings → Privacy.";
+const AGENTS_NO_WRITE: &str = "Coding agents may read Splashdown's notes but not add to them. To allow it, turn on “…and add to them” in Splashdown → Settings → Privacy.";
+/// Most notes one search returns.
+const SEARCH_LIMIT: usize = 50;
+
+/// `search_notes`: notes whose title or text contains `query` (any case),
+/// titles first, then newest, as JSON with a short excerpt each.
+pub fn agent_search(
+    settings: &NotesSettings,
+    query: &str,
+    limit: Option<usize>,
+) -> Result<String, String> {
+    if !settings.agents_read {
+        return Err(AGENTS_OFF.into());
+    }
+    let (store, _) = store_for(settings.folder.clone())?;
+    let needle = query.trim().to_lowercase();
+    let limit = limit.unwrap_or(10).clamp(1, SEARCH_LIMIT);
+    let mut hits: Vec<(bool, Summary)> = store
+        .list()
+        .into_iter()
+        .filter_map(|n| {
+            let in_title = n.title.to_lowercase().contains(&needle);
+            (needle.is_empty() || in_title || n.text.to_lowercase().contains(&needle))
+                .then_some((in_title, n))
+        })
+        .collect();
+    hits.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.modified.cmp(&a.1.modified)));
+    let results: Vec<serde_json::Value> = hits
+        .into_iter()
+        .take(limit)
+        .map(|(_, n)| {
+            serde_json::json!({
+                "path": n.path,
+                "title": n.title,
+                "modified": chrono::DateTime::from_timestamp_millis(n.modified as i64)
+                    .map(|t| t.with_timezone(&chrono::Local).to_rfc3339()),
+                "excerpt": excerpt(&n.text, &needle),
+            })
+        })
+        .collect();
+    serde_json::to_string(&results).map_err(|e| e.to_string())
+}
+
+/// About 240 characters of `text` around the first match.
+fn excerpt(text: &str, needle: &str) -> String {
+    let lower = text.to_lowercase();
+    let at = if needle.is_empty() {
+        None
+    } else {
+        lower.find(needle)
+    };
+    let chars: Vec<char> = text.chars().collect();
+    let start = at
+        .map(|byte| lower[..byte].chars().count().saturating_sub(80))
+        .unwrap_or(0)
+        .min(chars.len());
+    let end = (start + 240).min(chars.len());
+    let mut out: String = chars[start..end].iter().collect();
+    if start > 0 {
+        out.insert(0, '…');
+    }
+    if end < chars.len() {
+        out.push('…');
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// `read_note`: a note's text as JSON.
+pub fn agent_read(settings: &NotesSettings, path: &str) -> Result<String, String> {
+    if !settings.agents_read {
+        return Err(AGENTS_OFF.into());
+    }
+    let (store, _) = store_for(settings.folder.clone())?;
+    let note = store
+        .read(path)
+        .map_err(|e| format!("Couldn't read {path}: {e}"))?;
+    serde_json::to_string(&serde_json::json!({
+        "path": note.path,
+        "title": store::title_of(&note.body),
+        "text": note.body,
+    }))
+    .map_err(|e| e.to_string())
+}
+
+/// `append_note`: adds `text` to the capture note, or the note at `to`.
+pub fn agent_append(
+    settings: &NotesSettings,
+    text: &str,
+    to: Option<&str>,
+) -> Result<String, String> {
+    if !settings.agents_read {
+        return Err(AGENTS_OFF.into());
+    }
+    if !settings.agents_write {
+        return Err(AGENTS_NO_WRITE.into());
+    }
+    if text.trim().is_empty() {
+        return Err("There's no text to add.".into());
+    }
+    let captured = capture(settings, to, text, None)?;
+    Ok(format!(
+        "Added to {} ({})",
+        captured.label, captured.appended.path
+    ))
 }
 
 // ---------------------------------------------------------------- window
@@ -629,6 +818,13 @@ pub async fn notes_send(text: String, app: AppHandle) -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(move || send(&app, &text))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// History → "Save to notes": adds the text to the capture note. Returns
+/// the note's name.
+#[tauri::command]
+pub fn notes_add(text: String, state: State<'_, AppState>) -> Result<String, String> {
+    capture(&state.settings().notes, None, &text, None).map(|c| c.label)
 }
 
 /// "Edit transforms…": Settings, on the tab that lists them.

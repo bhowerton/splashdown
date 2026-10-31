@@ -43,6 +43,30 @@ impl Controller {
                     None => Err(NOT_RECORDING.into()),
                 }
             }
+            Request::Note { text: None } if recording => {
+                let finished = self.lock().finish();
+                if let Some(a) = finished {
+                    self.handle(a);
+                }
+                Ok(None)
+            }
+            Request::Note { text: None } => self.start_external().map(|()| {
+                self.handle(Action::Capture);
+                None
+            }),
+            Request::Note { text: Some(text) } => self.capture_text(&text),
+            Request::SearchNotes { query, limit } => self
+                .notes_settings()
+                .and_then(|n| crate::notes::agent_search(&n, &query, limit))
+                .map(Some),
+            Request::ReadNote { path } => self
+                .notes_settings()
+                .and_then(|n| crate::notes::agent_read(&n, &path))
+                .map(Some),
+            Request::AppendNote { text, to } => self
+                .notes_settings()
+                .and_then(|n| crate::notes::agent_append(&n, &text, to.as_deref()))
+                .map(Some),
             Request::Listen { .. } if recording => Err("Already recording".into()),
             Request::Listen { prompt } => match self.start_external() {
                 Ok(()) => {
@@ -55,6 +79,26 @@ impl Controller {
             },
         };
         let _ = reply.send(result);
+    }
+
+    fn notes_settings(&self) -> Result<splashdown_config::NotesSettings, String> {
+        self.engine
+            .as_ref()
+            .map(|e| e.notes.clone())
+            .map_err(Clone::clone)
+    }
+
+    /// `splashdown-cli note <text>`: straight into the capture note, with
+    /// no recording or AI. ⌃⌥Z takes it back like a spoken capture.
+    fn capture_text(&mut self, text: &str) -> Result<Option<String>, String> {
+        if text.trim().is_empty() {
+            return Err("There's no text to add.".into());
+        }
+        let captured = crate::notes::capture(&self.notes_settings()?, None, text, None)?;
+        let message = format!("Added to {}", captured.label);
+        self.last_capture = Some((captured, Instant::now()));
+        self.done(&message);
+        Ok(Some(message))
     }
 
     /// A preset's shortcut: finish the recording in progress, or start a

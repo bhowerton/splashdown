@@ -490,13 +490,16 @@ pub async fn save_settings(
     if settings.hotkeys.dictation_key() == settings.hotkeys.instruction_key() {
         return Err("The dictation and instruction keys must be different.".into());
     }
+    if settings.hotkeys.note_key() == settings.hotkeys.hands_free_key() {
+        return Err("The hands-free and note letters must be different.".into());
+    }
     if let Some(problem) = crate::replacements::check(&settings.replacements) {
         return Err(problem);
     }
     // The notes folder is changed from the Notes window, so a Settings
     // window opened earlier mustn't put the old one back.
     let mut settings = settings;
-    settings.notes = state.settings().notes;
+    settings.notes.folder = state.settings().notes.folder;
     settings.save(&engine::paths()?.config_file())?;
     state
         .tray

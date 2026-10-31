@@ -106,6 +106,16 @@ function collect() {
   const letter = $("hk-hands-free").value.trim().toLowerCase();
   s.hotkeys.hands_free = /^[a-z]$/.test(letter) && letter !== "h" ? letter : null;
   s.hotkeys.double_tap = $("hk-double-tap").checked ? true : null;
+  // A letter; N (the default) is saved as unset.
+  const note = $("hk-note").value.trim().toLowerCase();
+  s.hotkeys.note = /^[a-z]$/.test(note) && note !== "n" ? note : null;
+  s.notes = { ...(s.notes ?? {}) };
+  s.notes.capture_to = $("nt-capture-to").value;
+  s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;
+  s.notes.daily_format = $("nt-daily-format").value.trim() || null;
+  s.notes.keep_audio = $("nt-keep-audio").checked;
+  s.notes.agents_read = $("pv-agents-read").checked;
+  s.notes.agents_write = $("pv-agents-read").checked && $("pv-agents-write").checked;
   s.general.user_name = $("gen-name").value.trim() || null;
   s.general.language = $("gen-language").value || null;
   s.general.vocabulary = $("gen-vocab").value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);

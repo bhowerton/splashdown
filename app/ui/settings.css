@@ -419,3 +419,5 @@ dialog.confirm::backdrop { background: rgba(0,0,0,.3); }
 .transform textarea { width: 100%; resize: vertical; font-size: 12.5px; }
 .transform .warn-text { font-size: 12px; }
 .transform-acts { display: flex; gap: 12px; align-items: center; }
+.nt-daily { display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.nt-daily input { width: 110px !important; }

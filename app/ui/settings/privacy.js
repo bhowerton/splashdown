@@ -39,6 +39,9 @@ function renderPrivacy() {
   $("pv-local").checked = !!s.general.local_only;
   $("pv-appname").checked = s.general.share_app_name !== false;
   $("pv-recent").checked = s.general.share_recent !== false;
+  $("pv-agents-read").checked = !!s.notes?.agents_read;
+  $("pv-agents-write").checked = !!s.notes?.agents_write;
+  $("pv-agents-write").disabled = !s.notes?.agents_read;
   const days = s.general.history_days;
   const kept = days ? `, deleted after ${days === 1 ? "1 day" : `${days} days`}` : "";
   $("pv-history").textContent = s.general.keep_history === true
@@ -51,11 +54,13 @@ function renderPrivacy() {
 
 // "Manage" / "Change" links that jump to another tab.
 document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
+$("nt-open").addEventListener("click", () => invoke("open_notes").catch((e) => toast(String(e), true)));
 $("pv-notes-open").addEventListener("click", () => invoke("open_notes").catch((e) => toast(String(e), true)));
 
 /** Where notes are kept, and whether a sync service has a copy. Asking
  *  doesn't create the folder. */
 async function renderNotesFolder() {
+  const s = state.settings;
   let folder;
   try {
     folder = await invoke("notes_folder");
@@ -64,7 +69,7 @@ async function renderNotesFolder() {
   }
   if (!folder) return;
   const el = $("pv-notes");
-  el.textContent = `What you write in Notes (⌃⌥N), one Markdown file per note, in ${folder.label}. Never sent anywhere unless you send or copy it.`;
+  el.textContent = `What you write in Notes (⌃⌥N), one Markdown file per note, in ${folder.label}. Never sent anywhere unless you send or copy it${s.notes?.agents_read ? ", or a coding agent you've allowed reads it" : ""}.`;
   el.title = folder.path;
   if (folder.synced) {
     el.textContent += ` That folder is in ${folder.synced}, so ${folder.synced} keeps a copy.`;

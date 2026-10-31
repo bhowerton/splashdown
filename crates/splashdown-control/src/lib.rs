@@ -3,10 +3,11 @@
 //! `splashdown-mcp`).
 //!
 //! One JSON line per connection each way. The request is
-//! `{"cmd":"toggle"|"start"|"stop"|"cancel"}` or
-//! `{"cmd":"listen","prompt":"…"}`; the reply is `{"ok":true}`,
-//! `{"ok":true,"text":"…"}` (`listen`: the cleaned-up answer) or
-//! `{"ok":false,"error":"…"}`.
+//! `{"cmd":"toggle"|"start"|"stop"|"cancel"}`, `{"cmd":"listen","prompt":"…"}`,
+//! `{"cmd":"note","text":"…"}`, or one of the notes requests for coding
+//! agents (`search_notes`, `read_note`, `append_note`); the reply is
+//! `{"ok":true}`, `{"ok":true,"text":"…"}` (`listen`: the cleaned-up answer;
+//! notes requests: JSON) or `{"ok":false,"error":"…"}`.
 //!
 //! macOS listens on a Unix socket in the config folder
 //! (`Paths::control_socket`), mode 0600, and checks that every peer is the
@@ -48,6 +49,31 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prompt: Option<String>,
     },
+    /// With `text`, add it to the capture note. Without, start a
+    /// hands-free recording that goes into a note, or finish the one in
+    /// progress (spec §9e.6).
+    Note {
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
+    },
+    /// Notes for coding agents (spec §9e.7), when Settings allows it: the
+    /// notes matching `query`, as JSON.
+    #[serde(rename = "search_notes")]
+    SearchNotes {
+        query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<usize>,
+    },
+    /// A note's text, as JSON.
+    #[serde(rename = "read_note")]
+    ReadNote { path: String },
+    /// Add `text` to the capture note, or to the note at `to`.
+    #[serde(rename = "append_note")]
+    AppendNote {
+        text: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<String>,
+    },
 }
 
 impl Request {
@@ -58,6 +84,7 @@ impl Request {
             "start" => Self::Start,
             "stop" => Self::Stop,
             "cancel" => Self::Cancel,
+            "note" => Self::Note { text: None },
             _ => return None,
         })
     }
@@ -229,6 +256,34 @@ mod tests {
         assert!(Request::parse(r#"{"cmd":"format-disk"}"#).is_err());
         assert!(Request::parse(r#"{"command":"toggle"}"#).is_err());
         assert!(Request::parse("toggle").is_err());
+    }
+
+    #[test]
+    fn notes_requests_parse() {
+        assert_eq!(
+            Request::parse(r#"{"cmd":"note","text":"buy milk"}"#),
+            Ok(Request::Note {
+                text: Some("buy milk".into())
+            })
+        );
+        assert_eq!(
+            Request::from_name("note"),
+            Some(Request::Note { text: None })
+        );
+        assert_eq!(
+            Request::parse(r#"{"cmd":"search_notes","query":"launch"}"#),
+            Ok(Request::SearchNotes {
+                query: "launch".into(),
+                limit: None
+            })
+        );
+        assert_eq!(
+            to_line(&Request::AppendNote {
+                text: "hi".into(),
+                to: None
+            }),
+            "{\"cmd\":\"append_note\",\"text\":\"hi\"}\n"
+        );
     }
 
     #[test]

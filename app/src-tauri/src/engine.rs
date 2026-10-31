@@ -47,6 +47,8 @@ pub struct Engine {
     pub presets: Vec<Preset>,
     /// Saved instructions for Notes and transform shortcuts.
     pub transforms: Vec<splashdown_config::Transform>,
+    /// Notes settings: where captures go, and what agents may do.
+    pub notes: splashdown_config::NotesSettings,
     /// Watch for corrections after inserting and suggest vocabulary.
     pub learn_vocabulary: bool,
     /// Tell the AI which app the text is going into.
@@ -119,6 +121,7 @@ pub fn keys(settings: &Settings) -> Keys {
         instruction: settings.hotkeys.instruction_key(),
         hands_free: settings.hotkeys.hands_free_key(),
         double_tap: settings.hotkeys.double_tap(),
+        note: settings.hotkeys.note_key(),
     }
 }
 
@@ -257,6 +260,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         microphone: settings.general.microphone.clone(),
         presets,
         transforms: settings.transforms(),
+        notes: settings.notes.clone(),
         preset_pipelines,
         pipeline: Pipeline::new(stt, llm).with_instruction_model(instruction_llm),
         context: PromptContext {

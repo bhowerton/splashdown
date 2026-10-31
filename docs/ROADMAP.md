@@ -153,8 +153,13 @@ Notes as Markdown files in a folder the user picks, replacing the scratchpad. Sp
   - A transform with a shortcut works on selected text in any app, or else on the last dictation.
   - 5 eval cases, all passing on the default and built-in local models.
   - To-dos answers `NONE` when there are no tasks, rather than inventing some.
-- ⬜ **N3 Capture without a window:** hold the dictation key and press N to append to Inbox, today's daily note or the last note, with an Undo toast. Also "Save to notes" in History, `splashdown://note` and `splashdown-cli note`, and optionally keeping the audio in `Attachments/`.
-- ⬜ **N4 Notes for agents:** `search_notes`, `read_note` and `append_note` in `splashdown-mcp`. Off by default, with separate switches for reading and writing.
+- ✅ **N3 Capture without a window** (2026-10-31; ⬜ still to try in the running app):
+  - Hold the dictation key and press N to add to Inbox, today's daily note or the last note opened. ⌃⌥Z takes it back.
+  - `splashdown-cli note [text]` and `splashdown://note`.
+  - History's **Save to notes**.
+  - Optionally, the recording is kept in `Attachments/`.
+  - ⬜ The mini bar's "Dictate a note".
+- ✅ **N4 Notes for agents** (2026-10-31): `search_notes`, `read_note` and `append_note` in `splashdown-mcp`, through the control socket. Off by default, with separate switches for reading and writing on the Privacy tab.
 - ⏸ **N5 Meeting notes: decide after N1.** Two-channel recording (You and Them), transcription in pieces, a summary transform. See SPEC §9e.10.
 
 ### 7c. Other planned features

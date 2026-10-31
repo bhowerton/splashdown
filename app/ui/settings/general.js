@@ -16,6 +16,13 @@ function renderGeneral() {
   }
   renderHotkeyTip();
   setValue($("hk-hands-free"), (s.hotkeys.hands_free || "h").toUpperCase());
+  setValue($("hk-note"), (s.hotkeys.note || "n").toUpperCase());
+  const notes = s.notes ?? {};
+  setValue($("nt-capture-to"), notes.capture_to ?? "inbox");
+  $("nt-daily-row").hidden = (notes.capture_to ?? "inbox") !== "daily";
+  setValue($("nt-daily-folder"), notes.daily_folder ?? "");
+  setValue($("nt-daily-format"), notes.daily_format ?? "");
+  $("nt-keep-audio").checked = !!notes.keep_audio;
   $("hk-double-tap").checked = s.hotkeys.double_tap === true;
   setValue($("gen-name"), s.general.user_name);
   setValue($("gen-language"), s.general.language ?? "");
