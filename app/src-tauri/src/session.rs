@@ -24,7 +24,8 @@ use splashdown_audio::Level;
 use splashdown_core::command::Command;
 use splashdown_core::gesture::{Action, PhysicalKey, Recognizer, Timing};
 use splashdown_core::{
-    AudioClip, AudioJob, Fallback, Mode, Outcome, PipelineError, PromptContext, TextJob,
+    AudioClip, AudioJob, Fallback, Mode, Outcome, PipelineError, Prefix, PromptContext, TextJob,
+    Usage,
 };
 use splashdown_platform::{Focus, InsertMethod, KeyAction, OverlayState, Selection, Sound, Tone};
 
@@ -127,6 +128,39 @@ pub struct TransformRequest {
     pub id: String,
     pub text: String,
     pub reply: mpsc::Sender<Result<TransformOutcome, String>>,
+}
+
+/// Speech transcribed while it's recorded (spec §5.2): fed the new audio on
+/// each tick, finished on release.
+struct LiveStream {
+    stream: Box<dyn splashdown_core::SpeechStream>,
+    /// Samples of the recording already fed.
+    fed: usize,
+    /// The main speech model's stream: its text is the dictation's. If not,
+    /// it only feeds the live preview.
+    for_final: bool,
+    /// Show its partial text in the overlay (live preview is on).
+    show: bool,
+}
+
+impl LiveStream {
+    /// Feeds whatever of `clip` it hasn't had yet, as 16 kHz audio. `clip`
+    /// is the recording (since the last take) from sample `start` on.
+    fn feed(&mut self, clip: &AudioClip, start: usize) {
+        let new = clip
+            .samples
+            .get(self.fed.saturating_sub(start)..)
+            .unwrap_or_default();
+        if new.is_empty() {
+            return;
+        }
+        self.fed += new.len();
+        self.stream.feed(&splashdown_audio::resample::resample(
+            new,
+            clip.sample_rate,
+            splashdown_audio::TARGET_SAMPLE_RATE,
+        ));
+    }
 }
 
 /// A transform's result (spec §9e.5).
@@ -290,6 +324,9 @@ struct Active {
     /// Transcribes a long dictation ahead, up to each pause. Plain
     /// dictation only: dropped when the instruction key is tapped.
     chunker: Option<Chunker>,
+    /// Transcribes the recording as it's made, with a streaming model.
+    /// Dropped when the instruction key is tapped.
+    stream: Option<LiveStream>,
     /// The focused terminal's or editor's project, being listed in the
     /// background (presets with file tags on).
     project: Option<mpsc::Receiver<Option<Arc<Project>>>>,
@@ -540,6 +577,17 @@ impl Controller {
         if let Some(chunker) = self.active.as_mut().and_then(|a| a.chunker.as_mut()) {
             chunker.tick(&self.audio);
         }
+        if let Some(live) = self.active.as_mut().and_then(|a| a.stream.as_mut()) {
+            // In pieces of 100 ms or more, like the models expect.
+            let new = self.audio.since(live.fed);
+            if new.samples.len() >= new.sample_rate as usize / 10 {
+                live.feed(&new, live.fed);
+            }
+            let partial = live.stream.partial().filter(|_| live.show);
+            if let Some(text) = partial.filter(|t| !t.is_empty()) {
+                self.ui.live_text(Some(text));
+            }
+        }
         if let (Some(active), Ok(engine)) = (self.active.as_mut(), &self.engine)
             && active.quiet_due.is_some_and(|due| now >= due)
         {
@@ -621,6 +669,7 @@ impl Controller {
                 {
                     active.content = Some(self.audio.take());
                     active.chunker = None;
+                    active.stream = None;
                     // The preview now follows the instruction.
                     active.preview_due = Instant::now() + PREVIEW_START;
                     active.shown = OverlayState::Instruction;
@@ -760,11 +809,18 @@ impl Controller {
         // Transforms replace a selection, so they never press Return.
         let auto_send = preset.auto_send && !matches!(selection, Selection::Text(_));
 
+        let stream = self
+            .engine
+            .as_ref()
+            .ok()
+            .filter(|_| !matches!(selection, Selection::Text(_)))
+            .and_then(|e| live_stream(e, &preset));
         let chunker = self
             .engine
             .as_ref()
             .ok()
             .filter(|_| !matches!(selection, Selection::Text(_)))
+            .filter(|_| !stream.as_ref().is_some_and(|s| s.for_final))
             .map(|e| Chunker::new(e.pipeline.stt(), e.hints_for(&preset), e.audio_cleanup()));
 
         self.next_session += 1;
@@ -801,6 +857,7 @@ impl Controller {
             field_text,
             clipboard,
             chunker,
+            stream,
             reply_to: None,
             project,
         });
@@ -815,7 +872,7 @@ impl Controller {
         let (Some(worker), Some(active)) = (&self.preview, &mut self.active) else {
             return;
         };
-        if active.preview_busy || now < active.preview_due {
+        if active.preview_busy || now < active.preview_due || active.stream.is_some() {
             return;
         }
         active.preview_busy = true;
@@ -927,6 +984,12 @@ impl Controller {
     /// Stops recording and turns it into a pipeline job, or shows why not.
     fn prepare(&mut self, active: &mut Active) -> Option<AudioJob> {
         let rest = self.audio.finish();
+        // A stream of the whole dictation gets the rest of the audio now,
+        // and its text is ready a moment later (below).
+        let mut stream = active.stream.take().filter(|s| s.for_final);
+        if let Some(live) = &mut stream {
+            live.feed(&rest, 0);
+        }
         // Other sounds come back before the stop sound plays.
         active.quiet_due = None;
         active.quiet = None;
@@ -996,6 +1059,27 @@ impl Controller {
                 (tail, Some(prefix))
             }
             None => (whole, None),
+        };
+        // Streamed as it was recorded: that text is the transcript, and the
+        // recording is only transcribed if the stream failed.
+        let streamed = stream
+            .filter(|_| matches!(mode, Mode::Dictate | Mode::Raw))
+            .and_then(|live| match live.stream.finish() {
+                Ok(text) => Some(text),
+                Err(e) => {
+                    tracing::warn!("stream failed; transcribing the recording instead: {e}");
+                    None
+                }
+            });
+        let (speech, prefix) = match streamed {
+            Some(text) => (
+                AudioClip::new(Vec::new(), speech.sample_rate),
+                Some(Prefix {
+                    transcript: Box::pin(std::future::ready(Ok((text, Usage::FREE)))),
+                    whole: speech,
+                }),
+            ),
+            None => (speech, prefix),
         };
         let app_name = active
             .focus
@@ -1538,7 +1622,11 @@ impl Controller {
         if preset.clipboard_context && active.clipboard.is_none() {
             active.clipboard = read_clipboard();
         }
-        // Pieces already transcribed were in the old preset's language.
+        // A stream, and pieces already transcribed, were in the old preset's
+        // language.
+        if old.language != preset.language {
+            active.stream = None;
+        }
         if old.language != preset.language && active.chunker.is_some() {
             active.chunker = Some(Chunker::new(
                 engine.pipeline.stt(),
@@ -1872,6 +1960,33 @@ fn field_changed(focus: &Focus, before: &str) -> bool {
     }
 }
 
+/// The stream for a new recording, if there's a streaming model: the main
+/// speech model's (its text is the dictation's), or else the live
+/// preview's (partial text only). Not with noise reduction or whisper mode,
+/// which work on the whole recording.
+fn live_stream(engine: &Engine, preset: &Preset) -> Option<LiveStream> {
+    if engine.audio_cleanup() != splashdown_audio::Cleanup::default() {
+        return None;
+    }
+    let hints = engine.hints_for(preset);
+    let show = engine.preview.is_some();
+    if let Some(stream) = engine.pipeline_for(preset).stt().stream(&hints) {
+        return Some(LiveStream {
+            stream,
+            fed: 0,
+            for_final: true,
+            show,
+        });
+    }
+    let stream = engine.preview.as_ref()?.stream(&hints)?;
+    Some(LiveStream {
+        stream,
+        fed: 0,
+        for_final: false,
+        show: true,
+    })
+}
+
 /// Where the last dictation sits in a field's text: just before the cursor
 /// (spaces between them allowed). Byte offsets.
 fn last_dictation_range(text: &str, cursor: usize, last: &str) -> Option<(usize, usize)> {
@@ -2129,5 +2244,39 @@ mod tests {
             ),
             "Inserted · 1.2 s · raw text (offline?)"
         );
+    }
+
+    /// Records how much audio each `feed` got.
+    struct CountingStream(Arc<Mutex<Vec<usize>>>);
+
+    impl splashdown_core::SpeechStream for CountingStream {
+        fn feed(&mut self, samples: &[f32]) {
+            self.0.lock().unwrap().push(samples.len());
+        }
+        fn partial(&mut self) -> Option<String> {
+            None
+        }
+        fn finish(self: Box<Self>) -> splashdown_core::ProviderResult<String> {
+            Ok(String::new())
+        }
+    }
+
+    #[test]
+    fn a_stream_gets_each_sample_once() {
+        let fed = Arc::new(Mutex::new(Vec::new()));
+        let mut live = LiveStream {
+            stream: Box::new(CountingStream(fed.clone())),
+            fed: 0,
+            for_final: true,
+            show: false,
+        };
+        let clip = |n| AudioClip::new(vec![0.0; n], 16_000);
+        // While recording: what's new since the last feed.
+        live.feed(&clip(1600), 0);
+        live.feed(&clip(800), 1600);
+        // On release: the whole recording, of which only the end is new.
+        live.feed(&clip(3200), 0);
+        live.feed(&clip(3200), 0);
+        assert_eq!(*fed.lock().unwrap(), [1600, 800, 800]);
     }
 }

@@ -16,7 +16,7 @@ use anyhow::{Context, Result, bail};
 use clap::{Parser, Subcommand};
 use splashdown_control::Request;
 use splashdown_core::{AudioJob, Mode, TextJob};
-use splashdown_providers::{LocalModel, WhisperModel};
+use splashdown_providers::{LocalModel, SpeechModel};
 
 use crate::opts::{ContextOpts, ProviderOpts, Setup};
 
@@ -106,7 +106,7 @@ enum Command {
     },
     /// List microphones.
     Devices,
-    /// Manage downloadable models (local Whisper, the built-in text model).
+    /// Manage downloadable models (local speech-to-text, the built-in text model).
     Models {
         #[command(subcommand)]
         command: ModelsCommand,
@@ -149,7 +149,7 @@ enum Command {
 enum ModelsCommand {
     /// List models and whether they're downloaded.
     List,
-    /// Download a model, e.g. `base.en`.
+    /// Download a model, e.g. `nemotron-en`.
     Download { id: String },
 }
 
@@ -335,10 +335,16 @@ fn main() -> Result<()> {
                             "not downloaded"
                         }
                     };
-                    println!("Speech to text (local Whisper):");
-                    for m in WhisperModel::ALL {
+                    println!("Speech to text (local, `--stt local`):");
+                    for m in SpeechModel::ALL {
                         let s = state(m.is_downloaded(&models_dir));
-                        println!("  {:<22} ~{:>4} MB  {s}", m.id(), m.approx_mb());
+                        println!(
+                            "  {:<22} ~{:>4} MB  {s:<15} {} ({})",
+                            m.id(),
+                            m.approx_mb(),
+                            m.label(),
+                            m.license()
+                        );
                     }
                     println!("Cleanup (built-in local model, `--ai local`):");
                     for m in LocalModel::ALL {
@@ -348,7 +354,7 @@ fn main() -> Result<()> {
                     println!("\nModels folder: {}", models_dir.display());
                 }
                 ModelsCommand::Download { id } => {
-                    if WhisperModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
+                    if SpeechModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
                         bail!("unknown model \"{id}\" — see `splashdown-cli models list`");
                     }
                     let path = rt.block_on(splashdown_providers::models::download_by_id(

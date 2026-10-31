@@ -12,7 +12,7 @@ use splashdown_core::gesture::PhysicalKey;
 use splashdown_core::{Fallback, Mode, TextJob};
 use splashdown_platform::{Access, PermissionKind};
 use splashdown_providers::apple::AppleStatus;
-use splashdown_providers::{Endpoint, LocalModel, WhisperModel};
+use splashdown_providers::{Endpoint, LocalModel, SpeechModel};
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::engine;
@@ -123,7 +123,7 @@ impl AppState {
 pub struct Defaults {
     openai_stt: &'static str,
     openrouter_stt: &'static str,
-    whisper_local: &'static str,
+    local_speech: &'static str,
     openai_ai: &'static str,
     openrouter_ai: &'static str,
     anthropic_ai: &'static str,
@@ -133,7 +133,7 @@ pub struct Defaults {
 const DEFAULTS: Defaults = Defaults {
     openai_stt: splashdown_config::defaults::OPENAI_STT,
     openrouter_stt: splashdown_config::defaults::OPENROUTER_STT,
-    whisper_local: splashdown_config::defaults::WHISPER_LOCAL,
+    local_speech: splashdown_config::defaults::LOCAL_SPEECH,
     openai_ai: splashdown_config::defaults::OPENAI_AI,
     openrouter_ai: splashdown_config::defaults::OPENROUTER_AI,
     anthropic_ai: splashdown_config::defaults::ANTHROPIC_AI,
@@ -159,6 +159,11 @@ pub struct ModelStatus {
     /// Memory while loaded (built-in text models only).
     #[serde(skip_serializing_if = "Option::is_none")]
     ram_mb: Option<u32>,
+    /// Speech models: the license shown next to them.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    license: Option<&'static str>,
+    /// Speech models that only understand English.
+    english_only: bool,
 }
 
 #[derive(Serialize)]
@@ -188,7 +193,7 @@ pub struct Snapshot {
     settings: Settings,
     keys: Vec<KeyStatus>,
     permissions: Permissions,
-    whisper_models: Vec<ModelStatus>,
+    speech_models: Vec<ModelStatus>,
     /// Built-in local text models (`AiProvider::Local`).
     local_models: Vec<ModelStatus>,
     key_options: Vec<KeyOption>,
@@ -298,7 +303,7 @@ fn snapshot(
             .as_deref()
             .is_some_and(splashdown_providers::factory::local_model_available),
         local_speech: models_dir.as_deref().is_some_and(|d| {
-            WhisperModel::from_id(splashdown_config::defaults::WHISPER_LOCAL)
+            SpeechModel::from_id(splashdown_config::defaults::LOCAL_SPEECH)
                 .is_some_and(|m| m.is_downloaded(d))
         }),
         over_budget: engine::budget_reached(&settings),
@@ -320,14 +325,16 @@ fn snapshot(
         })
         .collect();
 
-    let whisper_models = WhisperModel::ALL
+    let speech_models = SpeechModel::ALL
         .into_iter()
         .map(|m| ModelStatus {
             id: m.id(),
             mb: m.approx_mb(),
             downloaded: models_dir.as_ref().is_some_and(|d| m.is_downloaded(d)),
-            label: None,
+            label: Some(m.label()),
             ram_mb: None,
+            license: Some(m.license()),
+            english_only: m.english_only(),
         })
         .collect();
     let local_models = LocalModel::ALL
@@ -338,6 +345,8 @@ fn snapshot(
             downloaded: models_dir.as_ref().is_some_and(|d| m.is_downloaded(d)),
             label: Some(m.label()),
             ram_mb: Some(m.approx_ram_mb()),
+            license: None,
+            english_only: false,
         })
         .collect();
 
@@ -403,7 +412,7 @@ fn snapshot(
                 Access::NotAsked => "not-asked",
             },
         },
-        whisper_models,
+        speech_models,
         local_models,
         key_options,
         resolved_speech,
@@ -461,7 +470,7 @@ fn speech_label(p: SpeechProvider) -> &'static str {
         SpeechProvider::Auto => "Auto",
         SpeechProvider::Openai => "OpenAI",
         SpeechProvider::Openrouter => "OpenRouter",
-        SpeechProvider::WhisperLocal => "Local Whisper",
+        SpeechProvider::WhisperLocal => "On this computer",
         SpeechProvider::Apple => "Apple on-device",
     }
 }
@@ -617,7 +626,7 @@ pub async fn download_model(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Saved, String> {
-    if WhisperModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
+    if SpeechModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
         return Err("Unknown model.".into());
     }
     let dir = engine::paths()?.models_dir;

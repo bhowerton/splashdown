@@ -10,7 +10,7 @@ use splashdown_core::{Pipeline, PromptContext, SpeechToText, SttHints, TextModel
 
 #[derive(Args, Clone, Default)]
 pub struct ProviderOpts {
-    /// Speech-to-text: auto, openai, openrouter, whisper-local, apple.
+    /// Speech-to-text: auto, openai, openrouter, local (or whisper-local), apple.
     #[arg(long)]
     pub stt: Option<SpeechProvider>,
     #[arg(long)]

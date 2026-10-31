@@ -1,6 +1,6 @@
 "use strict";
 
-// Providers tab: API keys, speech-to-text (cloud, local Whisper downloads,
+// Providers tab: API keys, speech-to-text (cloud, local model downloads,
 // Apple on-device), cleanup & formatting, and the "Try it" box.
 
 /** Suggestions shown in the model fields. Any model id can be typed. */
@@ -42,7 +42,7 @@ function renderProviders() {
   setValue($("stt-model"), local ? "" : s.speech.model);
   $("stt-model").placeholder = defaultModel("stt", s.speech.provider);
   fillList("stt-models", SUGGESTIONS.stt[s.speech.provider]);
-  renderWhisper(local);
+  renderLocalSpeech(local);
   renderAppleSpeech();
   $("resolved-speech").textContent = resolved(state.resolved_speech);
 
@@ -161,21 +161,29 @@ async function removeKey(name) {
   }
 }
 
-// ---------------------------------------------------------------- local Whisper
+// ---------------------------------------------------------------- local speech
 
-function renderWhisper(visible) {
-  const host = $("whisper-models");
+/** The speech models that run on this computer (Nemotron, Parakeet, Whisper),
+ *  downloaded when chosen. */
+function renderLocalSpeech(visible) {
+  const host = $("local-speech-models");
   host.hidden = !visible;
   if (!visible) return host.replaceChildren();
-  const selected = state.settings.speech.model ?? state.defaults.whisper_local;
+  const selected = state.settings.speech.model ?? state.defaults.local_speech;
   host.replaceChildren(
-    ...state.whisper_models.map((m) => {
+    ...state.speech_models.map((m) => {
       const row = document.createElement("div");
       row.className = "row";
       row.dataset.model = m.id;
-      const label = { "base.en": "Fast · English", "small.en": "Better · English", "large-v3-turbo-q5_0": "Best · all languages" }[m.id] ?? "";
-      row.innerHTML = `<span class="lbl"><span class="mono">${m.id}</span><small>${label} · ~${m.mb} MB</small></span><span class="state"></span>`;
-      const st = row.querySelector(".state");
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      lbl.textContent = m.label ?? m.id;
+      const small = document.createElement("small");
+      small.textContent = `~${m.mb} MB · ${m.license ?? ""}${m.id === state.defaults.local_speech ? " · recommended" : ""}`;
+      lbl.append(small);
+      const st = document.createElement("span");
+      st.className = "state";
+      row.append(lbl, st);
       if (m.id === selected) {
         const b = document.createElement("span");
         b.className = m.downloaded ? "badge ok" : "badge warn";
@@ -183,7 +191,7 @@ function renderWhisper(visible) {
         st.append(b);
       }
       if (m.downloaded) {
-        if (m.id !== selected) st.append(button("Use", () => chooseWhisper(m.id)));
+        if (m.id !== selected) st.append(button("Use", () => chooseLocalSpeech(m.id)));
       } else {
         st.append(button("Download", () => downloadModel(m.id, row, m.id !== selected)));
       }
@@ -192,7 +200,7 @@ function renderWhisper(visible) {
   );
 }
 
-function chooseWhisper(id) {
+function chooseLocalSpeech(id) {
   const s = collect();
   s.speech.model = id;
   save(s);

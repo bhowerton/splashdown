@@ -22,10 +22,10 @@ async function mockInvoke(cmd, args) {
       { name: "custom", source: null, hint: null },
     ],
     permissions: { accessibility: true, microphone: "granted" },
-    whisper_models: [
-      { id: "base.en", mb: 148, downloaded: true },
-      { id: "small.en", mb: 488, downloaded: false },
-      { id: "large-v3-turbo-q5_0", mb: 574, downloaded: false },
+    speech_models: [
+      { id: "nemotron-en", mb: 475, downloaded: true, label: "Nemotron · English · fastest, text as you speak", license: "NVIDIA Open Model License", english_only: true },
+      { id: "parakeet-v3", mb: 485, downloaded: false, label: "Parakeet v3 · 25 European languages", license: "CC-BY-4.0 (NVIDIA)", english_only: false },
+      { id: "large-v3-turbo", mb: 619, downloaded: false, label: "Whisper large-v3-turbo · about 100 languages", license: "MIT (OpenAI)", english_only: false },
     ],
     spending: {
       month: { cost_usd: 0.42, requests: 1284, unpriced: 0, by_provider: { "openai/gpt-4o-mini-transcribe": 0.39, "openrouter/google/gemini-2.5-flash-lite": 0.03 } },
@@ -63,7 +63,7 @@ async function mockInvoke(cmd, args) {
     defaults: {
       openai_stt: "gpt-4o-mini-transcribe",
       openrouter_stt: "google/gemini-3.1-flash-lite",
-      whisper_local: "base.en",
+      local_speech: "nemotron-en",
       openai_ai: "gpt-4.1-mini",
       openrouter_ai: "google/gemini-2.5-flash-lite",
       anthropic_ai: "claude-haiku-5-5",
@@ -72,7 +72,7 @@ async function mockInvoke(cmd, args) {
     platform: "macos",
     version: "0.1.1",
     config_path: "~/Library/Application Support/Splashdown/config.toml",
-    update: { available: "0.2.0", notes: "Faster local Whisper.\nFixes pasting into Slack.", checking: false, installing: false, progress: null, last_checked: Date.now() - 3600000, error: null },
+    update: { available: "0.2.0", notes: "Faster local speech-to-text.\nFixes pasting into Slack.", checking: false, installing: false, progress: null, last_checked: Date.now() - 3600000, error: null },
   };
   mockInvoke.state ??= base;
   switch (cmd) {
@@ -101,7 +101,7 @@ async function mockInvoke(cmd, args) {
       return "Hi Sam — quick heads-up: the deploy moved to Thursday.";
     case "get_history":
       return [
-        { at: Date.now() - 60000, app: "Mail", mode: "dictate_instruct", raw: "hey sam um the deploy slipped to thursday", instruction: "make it a short email", text: "Hi Sam,\n\nQuick update: the deploy has slipped to Thursday.\n\nThanks,\nAlex", note: null, stt: "whisper-local/base.en", llm: "openrouter/google/gemini-2.5-flash-lite", millis: 1400 },
+        { at: Date.now() - 60000, app: "Mail", mode: "dictate_instruct", raw: "hey sam um the deploy slipped to thursday", instruction: "make it a short email", text: "Hi Sam,\n\nQuick update: the deploy has slipped to Thursday.\n\nThanks,\nAlex", note: null, stt: "local/nemotron-speech-streaming-en-0.6b-Q4_K_M", llm: "openrouter/google/gemini-2.5-flash-lite", millis: 1400 },
         { at: Date.now() - 3600000, app: "Slack", mode: "dictate", raw: "sounds good I'll take a look after lunch", instruction: null, text: "Sounds good, I'll take a look after lunch.", note: null, stt: null, llm: null, millis: 900 },
       ].filter((e) => !args.query || e.text.toLowerCase().includes(args.query.toLowerCase()));
     case "export_history":

@@ -19,10 +19,10 @@ Hold the dictation key and the session starts the microphone and captures the fo
 | `splashdown-core` | The platform-agnostic heart: provider traits (`SpeechToText`, `TextModel`), the `Pipeline`, prompts, the sanity guard, spoken commands (interpreted by the AI) and snippets, the hotkey `gesture` state machine, vocabulary learning | nothing internal |
 | `splashdown-audio` | Microphone capture (cpal), device choice, resampling to 16 kHz, silence trimming, WAV encoding | `splashdown-core` |
 | `splashdown-config` | `config.toml` (`Settings`), resolving "Automatic" to concrete providers, presets, API keys in the OS keychain, on-disk paths | `splashdown-core` |
-| `splashdown-providers` | Implementations of the provider traits: OpenAI-compatible chat and transcription, OpenRouter audio, local Whisper (feature `whisper-local`), Apple's models (via `splashdown-apple-shim`), and the `factory` that builds them from config | `splashdown-core`, `splashdown-audio`, `splashdown-config`, `splashdown-apple-shim` |
+| `splashdown-providers` | Implementations of the provider traits: OpenAI-compatible chat and transcription, OpenRouter audio, local speech-to-text with transcribe.cpp (feature `whisper-local`), Apple's models (via `splashdown-apple-shim`), and the `factory` that builds them from config | `splashdown-core`, `splashdown-audio`, `splashdown-config`, `splashdown-apple-shim` |
 | `splashdown-platform` | Everything OS-specific: the key hook, focus/selection/URL via accessibility, clipboard and synthetic keys, the overlay, permissions, sounds. One API in `lib.rs`; `mac/` and `win/` implement it | `splashdown-core` |
 | `splashdown-apple-shim` | macOS only: a Swift static library (`swift/`) exposing SpeechAnalyzer and Foundation Models through a C ABI, and the Rust side of that bridge | `splashdown-core`, `splashdown-audio` |
-| `splashdown-llm` | The helper process that runs the built-in local text model with llama.cpp, so its copy of ggml never meets whisper.cpp's. JSON lines over stdin/stdout; keeps the processed prompt between requests | `splashdown-core` |
+| `splashdown-llm` | The helper process that runs the built-in local text model with llama.cpp, so its copy of ggml never meets transcribe.cpp's. JSON lines over stdin/stdout; keeps the processed prompt between requests | `splashdown-core` |
 | `splashdown-control` | The running app's control channel (see below): the JSON-line protocol, a client, and the socket/pipe server with its permission checks | `splashdown-config` |
 | `splashdown-cli` | The `splashdown-cli` developer tool: record, clean up, and the evals in `eval/`; `splashdown-cli toggle`/`listen` and friends talk to the running app | `splashdown-core`, `splashdown-audio`, `splashdown-config`, `splashdown-control`, `splashdown-providers` |
 | `splashdown-mcp` | An MCP server over stdio with one tool, `ask_user_by_voice`, for coding agents ([AGENTS.md](AGENTS.md)) | `splashdown-control` |
@@ -45,7 +45,7 @@ The app is a handful of long-lived threads that talk over channels. Only the ses
 | `splashdown-control` | `splashdown-control/src/server.rs` | Accepts control-socket connections, each handled on a short-lived thread that waits for the session's answer |
 | `splashdown-session` | `app/src-tauri/src/session.rs` | The controller: receives `Msg`s (gesture actions, new settings, redo requests), drives audio, runs the pipeline, inserts text, records history |
 | Audio | `app/src-tauri/src/audio.rs` | Owns the cpal stream (it can't move between threads) and serves start/take/stop |
-| Preview | `app/src-tauri/src/preview.rs` | Re-transcribes the recording so far with local Whisper for the live words in the overlay |
+| Preview | `app/src-tauri/src/preview.rs` | Re-transcribes the recording so far with a local model for the live words in the overlay; with a streaming model the session's `LiveStream` gives them instead |
 | `splashdown-llm` (separate process) | `crates/splashdown-llm` | Runs the built-in local text model when it's in use; started on demand by `splashdown-providers/src/local_llm.rs`, exits after 10 idle minutes |
 | `splashdown-updates` | `app/src-tauri/src/updates.rs` | Release builds only: checks for a new version (tauri-plugin-updater, GitHub releases) 30 s after launch and then daily, if allowed in Settings. Installing happens only from the user's click |
 | Tauri async runtime | `app/src-tauri/src/commands.rs` | Settings commands. Slow work (building providers, downloads) runs here or in `spawn_blocking`, never on the main thread |
@@ -75,7 +75,7 @@ Control requests go through the same `Recognizer` as the key: `start_hands_free`
 
 ## Providers and "Automatic"
 
-`splashdown-config::Settings::resolve_speech_with` / `resolve_ai_with` turn the saved settings plus available keys and on-device models into a concrete `SpeechChoice` / `AiChoice`. `splashdown-providers::factory` turns those into trait objects. The order for "Automatic" is: a saved key (the user chose that provider) → Apple's on-device models → local Whisper with no AI pass. Local-only mode is enforced here, in one place.
+`splashdown-config::Settings::resolve_speech_with` / `resolve_ai_with` turn the saved settings plus available keys and on-device models into a concrete `SpeechChoice` / `AiChoice`. `splashdown-providers::factory` turns those into trait objects. The order for "Automatic" is: a saved key (the user chose that provider) → Apple's on-device models → local speech-to-text with no AI pass. Local-only mode is enforced here, in one place.
 
 ## The Apple shim
 

@@ -186,6 +186,23 @@ pub trait SpeechToText: Send + Sync {
     /// started): a local model loads itself if it was let go. Returns at
     /// once.
     fn warm_up(&self) {}
+    /// A transcription that runs while the user speaks, for models that can
+    /// (spec §5.2). `None` means transcribe the recording when it ends.
+    fn stream(&self, _hints: &SttHints) -> Option<Box<dyn SpeechStream>> {
+        None
+    }
+}
+
+/// Transcribes as the audio arrives, so the text is ready moments after
+/// the user stops speaking, and partial text can be shown meanwhile.
+pub trait SpeechStream: Send {
+    /// Adds 16 kHz mono audio. Returns at once; the work happens elsewhere.
+    fn feed(&mut self, samples: &[f32]);
+    /// The text so far (it may still change), if it changed since the last
+    /// call.
+    fn partial(&mut self) -> Option<String>;
+    /// Waits for the last audio fed and returns the final text.
+    fn finish(self: Box<Self>) -> ProviderResult<String>;
 }
 
 #[async_trait]

@@ -91,10 +91,11 @@ function speechRow() {
       ? `<span class="lbl">Apple's speech model is ready<small>Built into macOS.</small></span><span class="badge ok">Ready</span>`
       : `<span class="lbl">Downloads Apple's speech model<small>From Apple, when you click Continue.</small></span><span class="state dl-state" aria-live="polite" data-dl="apple"></span>`;
   } else {
-    const model = state.whisper_models.find((m) => m.id === "base.en");
+    const id = state.defaults.local_speech;
+    const model = state.speech_models.find((m) => m.id === id);
     row.innerHTML = model?.downloaded
-      ? `<span class="lbl">Speech model ready<small>base.en is already on this computer.</small></span><span class="badge ok">Ready</span>`
-      : `<span class="lbl">Downloads a speech model (~${model?.mb ?? 148} MB)<small>Happens when you click Continue.</small></span><span class="state dl-state" aria-live="polite" data-dl="base.en"></span>`;
+      ? `<span class="lbl">Speech model ready<small>${model.label} is already on this computer.</small></span><span class="badge ok">Ready</span>`
+      : `<span class="lbl">Downloads a speech model (~${model?.mb ?? 475} MB)<small>Happens when you click Continue.</small></span><span class="state dl-state" aria-live="polite" data-dl="${id}"></span>`;
   }
   return row;
 }
@@ -211,9 +212,10 @@ async function prepareLocalSpeech() {
     if (state.apple.speech !== "ready" && !(await downloadStep("apple", "prepare_apple_speech", {}))) return null;
     return { provider: "apple", model: null };
   }
-  const model = state.whisper_models.find((m) => m.id === "base.en");
-  if (!model?.downloaded && !(await downloadStep("base.en", "download_model", { id: "base.en" }))) return null;
-  return { provider: "whisper-local", model: "base.en" };
+  const id = state.defaults.local_speech;
+  const model = state.speech_models.find((m) => m.id === id);
+  if (!model?.downloaded && !(await downloadStep(id, "download_model", { id }))) return null;
+  return { provider: "whisper-local", model: id };
 }
 
 /** Saves the chosen setup. Returns false to stay on the step. */
@@ -359,7 +361,8 @@ async function mockInvoke(cmd) {
     settings: { speech: { provider: "auto", model: null }, ai: { provider: "auto", model: null, base_url: null }, general: {}, hotkeys: { dictation: null } },
     keys: [{ name: "openai", source: null, hint: null }, { name: "openrouter", source: "environment", hint: "9f2c" }, { name: "anthropic", source: null, hint: null }, { name: "custom", source: null, hint: null }],
     permissions: { accessibility: false, microphone: "not-asked" },
-    whisper_models: [{ id: "base.en", mb: 148, downloaded: true }],
+    defaults: { local_speech: "nemotron-en" },
+    speech_models: [{ id: "nemotron-en", mb: 475, downloaded: true, label: "Nemotron · English" }],
     local_models: [{ id: "qwen3-4b", mb: 2500, downloaded: false, label: "Qwen3 4B · best quality" }],
     key_options: [{ value: "right-alt", label: "Right Option" }],
     platform: "macos",

@@ -1,16 +1,16 @@
-//! Links clang's runtime for local Whisper on macOS. whisper.cpp's Metal
-//! backend uses `@available` checks, which call into compiler-rt when it's
-//! built for an older macOS than the SDK (our minimum is 13). rustc links
-//! with -nodefaultlibs, so the runtime isn't included otherwise. (The
-//! splashdown-llm helper does the same for llama.cpp.)
+//! Links clang's runtime for local speech-to-text on macOS. transcribe.cpp's
+//! Metal backend (ggml's) uses `@available` checks, which call into
+//! compiler-rt when it's built for an older macOS than the SDK (our minimum
+//! is 13). rustc links with -nodefaultlibs, so the runtime isn't included
+//! otherwise. (The splashdown-llm helper does the same for llama.cpp.)
 
 use std::env;
 use std::process::Command;
 
 fn main() {
     let macos = env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos");
-    let whisper = env::var_os("CARGO_FEATURE_WHISPER_LOCAL").is_some();
-    if !(macos && whisper) {
+    let local_speech = env::var_os("CARGO_FEATURE_LOCAL_SPEECH").is_some();
+    if !(macos && local_speech) {
         return;
     }
     let clang = Command::new("xcrun")

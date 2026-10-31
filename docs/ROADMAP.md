@@ -174,7 +174,14 @@ The working list of improvements after 0.1.1, in rough order. Mark items here as
 
 **Next:**
 - ⬜ **Type the AI's output as it streams:** text starts appearing at the first word, and only what's missing is written at the end. If the sanity guard rejects the result, the streamed text is replaced with the raw transcript.
-- ⬜ **Parakeet as a local speech model:** faster than Whisper on CPU, and can transcribe while you speak, so text is ready about 0.1 s after release.
+- ✅ **Fast local speech models** (2026-10-31; ⬜ still to try in the running app and on Windows):
+  - Local speech-to-text now runs on `transcribe-cpp`, replacing `whisper-rs`.
+  - **Nemotron streaming (English)** is the default: it transcribes while you speak, so text is ready about 0.03 s after release (eval clips, M-series CPU). It also feeds the live preview.
+  - Also offered: Nemotron 3.5 (32 languages), Parakeet v2/v3, and Whisper base.en, small.en and large-v3-turbo as GGUF.
+  - Earlier Whisper downloads (`ggml-*.bin`) need downloading again in the new format.
+  - ⬜ Stream with noise reduction or whisper mode on.
+  - ⬜ Vulkan on Windows.
+  - ⬜ Real-voice eval clips.
 - ⬜ **"Ask" panel:** a spoken question, about a selection or on its own, is answered in a panel by the pill (Copy, Insert) instead of being typed. With nothing selected, "help me write" drafts new text.
 - ⬜ **Run cloud and local speech recognition together** when a local model is installed, and use the first good result, instead of waiting for the cloud to fail.
 - ⬜ **A complete CLI:** `status --json`, reading and changing settings, choosing and downloading models, searching history, and stable exit codes.

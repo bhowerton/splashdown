@@ -6,14 +6,14 @@ Thanks for helping. This file covers setting up, the checks a change has to pass
 
 **All platforms**
 - Rust stable (pinned by `rust-toolchain.toml`; `rustup` picks it up).
-- `cmake`, for local Whisper (whisper.cpp). Without it, build the CLI with `--no-default-features`.
+- `cmake`, for local speech-to-text (transcribe.cpp). Without it, build the CLI with `--no-default-features`.
 
 **macOS**
 - Xcode 26 or later (the macOS 26 SDK), for the Swift shim that talks to Apple's on-device models. The app itself runs on macOS 13 and later.
 - To package releases: `cargo install tauri-cli --locked` and `rustup target add x86_64-apple-darwin`.
 
 **Windows**
-- The MSVC build tools, LLVM (libclang, for the llama.cpp and whisper.cpp bindings) and WebView2 (preinstalled on Windows 11). With winget:
+- The MSVC build tools, LLVM (libclang, for the llama.cpp and transcribe.cpp bindings) and WebView2 (preinstalled on Windows 11). With winget:
   ```powershell
   winget install Rustlang.Rustup Kitware.CMake LLVM.LLVM Git.Git
   winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
@@ -46,7 +46,7 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 ```
 
-From a Mac you can also check that the shared crates still build for Windows (whisper.cpp can't be cross-compiled, hence the flags):
+From a Mac you can also check that the shared crates still build for Windows (transcribe.cpp can't be cross-compiled, hence the flags):
 
 ```sh
 cargo clippy --target x86_64-pc-windows-msvc --no-default-features \

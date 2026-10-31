@@ -9,7 +9,7 @@ pub fn provider_label(name: Option<&str>) -> &'static str {
         Some("openai") => "OpenAI",
         Some("openrouter") => "OpenRouter",
         Some("custom") => "Your local AI server",
-        Some("whisper-local") => "Local Whisper",
+        Some("local") => "Local speech-to-text",
         _ => "The provider",
     }
 }
@@ -123,9 +123,9 @@ mod tests {
         assert_eq!(
             pipeline(
                 &PipelineError::Stt(ProviderError::Unavailable(
-                    "whisper model base.en isn't downloaded".into()
+                    "speech model nemotron-en isn't downloaded".into()
                 )),
-                Some("whisper-local/base.en"),
+                Some("local/nemotron-en"),
                 None
             ),
             "The speech model isn't downloaded: see Settings › Providers"

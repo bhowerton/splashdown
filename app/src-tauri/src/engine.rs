@@ -10,7 +10,7 @@ use splashdown_config::{
 };
 use splashdown_core::fallback::{FallbackModel, FallbackStt};
 use splashdown_core::{Pipeline, PromptContext, SpeechToText, SttHints, TextModel};
-use splashdown_providers::WhisperModel;
+use splashdown_providers::SpeechModel;
 
 use crate::session::Keys;
 
@@ -342,7 +342,7 @@ fn on_device_text_model(
 }
 
 /// Speech-to-text on this computer for when the cloud fails: Apple's, else
-/// the live preview's Whisper model, else any downloaded Whisper model.
+/// the live preview's model, else any downloaded local speech model.
 fn on_device_speech(
     settings: &Settings,
     secrets: &Secrets,
@@ -372,8 +372,9 @@ fn on_device_speech(
 }
 
 /// The model for the live preview: the main one if it's already local,
-/// otherwise the smallest downloaded Whisper model. Cloud speech-to-text
-/// can't stream partial results, so the preview always runs locally.
+/// otherwise the first downloaded local model (streaming ones come first in
+/// the catalog). Cloud speech-to-text can't stream partial results, so the
+/// preview always runs locally.
 fn preview_model(
     speech: &SpeechChoice,
     stt: &Arc<dyn SpeechToText>,
@@ -382,11 +383,14 @@ fn preview_model(
     if speech.provider == SpeechProvider::WhisperLocal {
         return Some(stt.clone());
     }
-    let model = WhisperModel::ALL
+    let model = SpeechModel::ALL
         .into_iter()
         .find(|m| m.is_downloaded(&paths.models_dir))?;
-    match splashdown_providers::WhisperLocal::load(&model.path_in(&paths.models_dir)) {
-        Ok(w) => Some(Arc::new(w)),
+    match splashdown_providers::factory::load_local_speech(
+        &model.path_in(&paths.models_dir),
+        model.streams(),
+    ) {
+        Ok(stt) => Some(stt),
         Err(e) => {
             tracing::warn!("live preview unavailable: {e}");
             None

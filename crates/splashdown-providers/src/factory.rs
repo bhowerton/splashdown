@@ -6,7 +6,7 @@ use std::sync::Arc;
 use splashdown_config::{AiChoice, AiProvider, Secrets, Situation, SpeechChoice, SpeechProvider};
 use splashdown_core::{ProviderError, ProviderResult, SpeechToText, TextModel};
 
-use crate::{ChatAudioTranscriber, ChatModel, Endpoint, TranscriptionApi, WhisperModel};
+use crate::{ChatAudioTranscriber, ChatModel, Endpoint, SpeechModel, TranscriptionApi};
 
 /// Which on-device models "Automatic" may pick: Apple's (for `language`)
 /// and the built-in local text model, if it's downloaded and its helper is
@@ -14,7 +14,7 @@ use crate::{ChatAudioTranscriber, ChatModel, Endpoint, TranscriptionApi, Whisper
 pub fn on_device(language: Option<&str>, models_dir: &Path) -> Situation {
     Situation {
         local_model: local_model_available(models_dir),
-        local_speech: crate::WhisperModel::from_id(splashdown_config::defaults::WHISPER_LOCAL)
+        local_speech: SpeechModel::from_id(splashdown_config::defaults::LOCAL_SPEECH)
             .is_some_and(|m| m.is_downloaded(models_dir)),
         ..crate::apple::on_device(language)
     }
@@ -45,7 +45,7 @@ pub fn speech(
             Endpoint::openrouter(key(&secrets.openrouter, "OpenRouter")?),
             &choice.model,
         )),
-        SpeechProvider::WhisperLocal => whisper(&whisper_model_path(&choice.model, models_dir)?)?,
+        SpeechProvider::WhisperLocal => local_speech(&choice.model, models_dir)?,
         SpeechProvider::Apple => crate::apple::speech(None)?,
         SpeechProvider::Auto => {
             return Err(ProviderError::Unavailable(
@@ -82,21 +82,22 @@ pub fn text_model(choice: &AiChoice, secrets: &Secrets) -> ProviderResult<Arc<dy
     ))
 }
 
-/// A model id (`base.en`) resolves inside `models_dir`; anything else is
-/// treated as a path to a ggml file.
-fn whisper_model_path(model: &str, models_dir: &Path) -> ProviderResult<PathBuf> {
-    if let Some(m) = WhisperModel::from_id(model) {
-        if !m.is_downloaded(models_dir) {
+/// A catalog id (`nemotron-en`) resolves inside `models_dir`; anything
+/// else is a path to a GGUF file. Streaming models stay on the CPU.
+fn local_speech(model: &str, models_dir: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
+    let (path, cpu) = match SpeechModel::from_id(model) {
+        Some(m) if !m.is_downloaded(models_dir) => {
             return Err(ProviderError::Unavailable(format!(
-                "whisper model {} isn't downloaded (~{} MB) — run `splashdown-cli models download {}`",
+                "speech model {} isn't downloaded (~{} MB) — run `splashdown-cli models download {}`",
                 m.id(),
                 m.approx_mb(),
                 m.id()
             )));
         }
-        return Ok(m.path_in(models_dir));
-    }
-    Ok(PathBuf::from(model))
+        Some(m) => (m.path_in(models_dir), m.streams()),
+        None => (PathBuf::from(model), false),
+    };
+    load_local_speech(&path, cpu)
 }
 
 /// The built-in model: a catalog id (`qwen3-4b`) in the models folder, or a
@@ -116,15 +117,15 @@ fn local_model(model: &str) -> ProviderResult<Arc<dyn TextModel>> {
     Ok(Arc::new(crate::LocalLlm::new(&path, cpu_only)?))
 }
 
-#[cfg(feature = "whisper-local")]
-fn whisper(path: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
-    Ok(Arc::new(crate::WhisperLocal::load(path)?))
+#[cfg(feature = "local-speech")]
+pub fn load_local_speech(path: &Path, cpu: bool) -> ProviderResult<Arc<dyn SpeechToText>> {
+    Ok(Arc::new(crate::LocalSpeech::load(path, cpu)?))
 }
 
-#[cfg(not(feature = "whisper-local"))]
-fn whisper(_: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
+#[cfg(not(feature = "local-speech"))]
+pub fn load_local_speech(_: &Path, _: bool) -> ProviderResult<Arc<dyn SpeechToText>> {
     Err(ProviderError::Unavailable(
-        "this build doesn't include local Whisper".into(),
+        "this build doesn't include local speech-to-text".into(),
     ))
 }
 
@@ -173,7 +174,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_whisper_model_says_how_to_get_it() {
+    fn missing_speech_model_says_how_to_get_it() {
         let empty = std::env::temp_dir().join("splashdown-factory-test-no-models");
         let choice = speech_choice(SpeechProvider::WhisperLocal, "base.en");
         let err = speech(&choice, &Secrets::default(), &empty).err().unwrap();

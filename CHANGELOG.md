@@ -4,6 +4,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
+- **Much faster local speech-to-text.** A new engine runs NVIDIA's Nemotron and Parakeet models as well as Whisper. The new default, Nemotron (English), transcribes while you speak, so your text is ready almost the moment you let go of the key, and it shows the words as you speak. Nemotron 3.5 covers 32 languages. Models download when you choose them (Settings → Providers → Speech to text → On this computer). A Whisper model downloaded before needs downloading again in the new format.
 - **Notes replace the scratchpad.** ⌃⌥N opens Notes. Each note is a plain Markdown file in `Documents/Splashdown Notes`, or any folder you choose, such as an Obsidian vault or iCloud Drive. Notes has search, pins, earlier versions you can restore, and Show in Finder. Deleted notes go to the Trash. Your scratchpad notes move in the first time you open it.
 - **Dictate straight into a note.** Hold the dictation key and press N: what you say is added to your Inbox (or today's daily note, or the last note opened) instead of typed. ⌃⌥Z takes it back. Also `splashdown-cli note`, `splashdown://note`, and **Save to notes** in History.
 - **Notes for coding agents.** If you allow it (Settings → Privacy, off by default), agents set up with `splashdown-mcp` can search and read your notes, and add to them.

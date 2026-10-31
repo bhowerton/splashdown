@@ -20,17 +20,18 @@ serde.workspace = true
 serde_json.workspace = true
 tokio = { workspace = true, features = ["time"] }
 tracing.workspace = true
-whisper-rs = { workspace = true, optional = true }
+transcribe-cpp = { workspace = true, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 futures-executor.workspace = true
 splashdown-apple-shim.workspace = true
-whisper-rs = { workspace = true, optional = true, features = ["metal"] }
+transcribe-cpp = { workspace = true, optional = true, features = ["metal"] }
 
 [features]
-default = ["whisper-local"]
-# Local speech-to-text with whisper.cpp (needs cmake and a C++ compiler).
-whisper-local = ["dep:whisper-rs"]
+default = ["local-speech"]
+# Local speech-to-text with transcribe.cpp: Nemotron, Parakeet and Whisper
+# (needs cmake and a C++ compiler).
+local-speech = ["dep:transcribe-cpp"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

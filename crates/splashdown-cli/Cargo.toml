@@ -29,5 +29,5 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 toml.workspace = true
 
 [features]
-default = ["whisper-local"]
-whisper-local = ["splashdown-providers/whisper-local"]
+default = ["local-speech"]
+local-speech = ["splashdown-providers/local-speech"]

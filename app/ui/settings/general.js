@@ -26,12 +26,14 @@ function renderGeneral() {
   $("hk-double-tap").checked = s.hotkeys.double_tap === true;
   setValue($("gen-name"), s.general.user_name);
   setValue($("gen-language"), s.general.language ?? "");
-  // English-only Whisper models (*.en) can't hear other languages.
+  // English-only local models (Nemotron English, Parakeet v2, Whisper *.en)
+  // can't hear other languages.
   const speech = "Ok" in state.resolved_speech ? state.resolved_speech.Ok : "";
-  const englishOnly = /^Local Whisper · .*\.en$/.test(speech);
+  const localId = /^On this computer · (.+)$/.exec(speech)?.[1];
+  const englishOnly = !!state.speech_models.find((m) => m.id === localId)?.english_only;
   const other = s.general.language && s.general.language !== "en";
   $("gen-language-note").hidden = !(englishOnly && other);
-  $("gen-language-note").textContent = "Your local Whisper model only understands English. Choose “large-v3-turbo” under Providers → Speech to text.";
+  $("gen-language-note").textContent = "Your speech model only understands English. Choose Nemotron 3.5 or Whisper large-v3-turbo under Providers → Speech to text → On this computer.";
   setValue($("gen-vocab"), s.general.vocabulary.join(", "));
   $("hist-keep").checked = s.general.keep_history === true; // on the History tab; off unless turned on
   $("hist-audio").checked = s.general.keep_audio === true;
@@ -55,9 +57,9 @@ function renderGeneral() {
   $("gen-volume").disabled = !$("gen-sounds").checked;
   $("gen-live").checked = s.general.live_preview !== false;
   const note = $("gen-live-note");
-  const ready = state.whisper_models.some((m) => m.downloaded);
+  const ready = state.speech_models.some((m) => m.downloaded);
   note.textContent = !ready && $("gen-live").checked
-    ? "Needs a local Whisper model: download one under Providers → Speech to text → Local Whisper"
+    ? "Needs a speech model on this computer: download one under Providers → Speech to text → On this computer"
     : "Shown in the status pill; the final text still comes from your chosen provider";
   note.classList.toggle("warn-text", !ready && $("gen-live").checked);
 }

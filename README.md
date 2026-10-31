@@ -76,7 +76,7 @@
 ### On your computer or in the cloud
 
 - **Your own key:** OpenAI, OpenRouter or Anthropic, with a monthly spending limit. Typical use costs cents a month.
-- **Fully on your computer:** Apple's on-device speech and language models (Apple Silicon, macOS 26), or local Whisper plus Splashdown's built-in local model, a free download with nothing else to install. Ollama and LM Studio work too.
+- **Fully on your computer:** Apple's on-device speech and language models (Apple Silicon, macOS 26), or local speech-to-text (Nemotron, which writes as you speak, or Parakeet and Whisper) plus Splashdown's built-in local model, a free download with nothing else to install. Ollama and LM Studio work too.
 - **A stand-in when the cloud fails.** If your provider is offline or out of credit, the dictation is retried on your computer, and the result says so.
 - Smaller on-device models handle cleanup well but follow instructions less reliably than cloud models, so instructions can be sent to the cloud while plain dictation stays local.
 
@@ -156,6 +156,15 @@ Settings → Privacy shows where your words go for your current settings. The fu
 
 Every default was chosen by measurement. The cleanup prompt is tested on 54 cases covering fillers, self-corrections, formatting, instructions, transforms, context and prompt injection: the default OpenRouter model scores 96%, the built-in local model (Qwen3 4B) 85%, Apple's on-device model 72%. Results and how to run them are in [eval/README.md](eval/README.md).
 
+**Models you download keep their own licenses**, shown next to each one in Settings:
+- NVIDIA Nemotron Speech Streaming (English): NVIDIA Open Model License.
+- Nemotron 3.5 ASR Streaming: OpenMDW-1.1.
+- NVIDIA Parakeet TDT: CC-BY-4.0.
+- OpenAI Whisper: MIT.
+- Qwen3: Apache-2.0.
+
+The speech models are the GGUF conversions published by the transcribe.cpp project.
+
 ## When something misbehaves
 
 [Troubleshooting](docs/TROUBLESHOOTING.md) covers the common fixes: the key does nothing, the microphone hears nothing, text that didn't appear, and provider errors. For anything else, use **Send feedback** in the menu bar, which opens a GitHub issue with your versions filled in.
@@ -169,7 +178,7 @@ scripts/run-mac-app.sh        # macOS: build, sign and launch the menu bar app
 scripts\run-win-app.ps1       # Windows: build and launch the tray app
 ```
 
-You need stable Rust, `cmake` (for local Whisper), and on macOS Xcode 26 or later; on Windows, the MSVC build tools and LLVM. [CONTRIBUTING.md](CONTRIBUTING.md) has the details, including API keys for development, the checks a change must pass, and packaging releases.
+You need stable Rust, `cmake` (for local speech-to-text), and on macOS Xcode 26 or later; on Windows, the MSVC build tools and LLVM. [CONTRIBUTING.md](CONTRIBUTING.md) has the details, including API keys for development, the checks a change must pass, and packaging releases.
 
 The `splashdown-cli` command-line tool runs the same pipeline without the app, which is handy for testing providers and prompts:
 
@@ -186,7 +195,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 |---|---|
 | `crates/splashdown-core` | Pipeline, prompts, sanity guard, hotkey gestures (no OS code) |
 | `crates/splashdown-audio` | Microphone capture, resampling, silence trimming |
-| `crates/splashdown-providers` | Speech-to-text and AI providers: OpenAI-compatible, OpenRouter, local Whisper, Apple |
+| `crates/splashdown-providers` | Speech-to-text and AI providers: OpenAI-compatible, OpenRouter, local speech-to-text (transcribe.cpp), Apple |
 | `crates/splashdown-platform` | Hotkeys, text insertion, focus and selection, the overlay (`mac/`, `win/`) |
 | `crates/splashdown-apple-shim` | Swift bridge to Apple's on-device speech and language models |
 | `crates/splashdown-config` | Settings, provider resolution, presets, keychain, paths |

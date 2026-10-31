@@ -1,5 +1,8 @@
-//! Downloadable whisper.cpp models (spec §5.2). Downloading doesn't need the
-//! `whisper-local` feature, so the app can fetch a model before loading it.
+//! Downloadable local models (spec §5.2, §5.6): speech models run by
+//! transcribe.cpp, and the built-in text models run by llama.cpp. Both are
+//! GGUF files fetched from Hugging Face when the user asks, never bundled.
+//! Downloading doesn't need the `local-speech` feature, so the app can fetch
+//! a model before loading it.
 
 use std::fs::File;
 use std::io::{BufWriter, Write};
@@ -7,52 +10,140 @@ use std::path::{Path, PathBuf};
 
 use splashdown_core::ProviderError;
 
+/// Local speech-to-text models, run by transcribe.cpp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WhisperModel {
-    /// English-only, fast. ~148 MB.
-    BaseEn,
-    /// English-only, better accuracy. ~488 MB.
-    SmallEn,
-    /// Multilingual, best accuracy, quantized. ~574 MB.
-    LargeV3TurboQ5,
+pub enum SpeechModel {
+    /// NVIDIA Nemotron streaming, English: transcribes while you speak, so
+    /// the text is ready moments after you stop. The default.
+    NemotronEn,
+    /// NVIDIA Nemotron 3.5 streaming: the same, in 32 languages.
+    Nemotron,
+    /// NVIDIA Parakeet TDT v2, English, transcribed when you stop.
+    ParakeetV2,
+    /// NVIDIA Parakeet TDT v3, 25 European languages.
+    ParakeetV3,
+    /// OpenAI Whisper base.en: small and English-only.
+    WhisperBaseEn,
+    /// OpenAI Whisper small.en.
+    WhisperSmallEn,
+    /// OpenAI Whisper large-v3-turbo, 4-bit: about 100 languages.
+    WhisperTurbo,
 }
 
-impl WhisperModel {
-    pub const ALL: [WhisperModel; 3] = [
-        WhisperModel::BaseEn,
-        WhisperModel::SmallEn,
-        WhisperModel::LargeV3TurboQ5,
+impl SpeechModel {
+    pub const ALL: [SpeechModel; 7] = [
+        SpeechModel::NemotronEn,
+        SpeechModel::Nemotron,
+        SpeechModel::ParakeetV2,
+        SpeechModel::ParakeetV3,
+        SpeechModel::WhisperBaseEn,
+        SpeechModel::WhisperSmallEn,
+        SpeechModel::WhisperTurbo,
     ];
 
     pub fn id(self) -> &'static str {
         match self {
-            WhisperModel::BaseEn => "base.en",
-            WhisperModel::SmallEn => "small.en",
-            WhisperModel::LargeV3TurboQ5 => "large-v3-turbo-q5_0",
+            SpeechModel::NemotronEn => "nemotron-en",
+            SpeechModel::Nemotron => "nemotron",
+            SpeechModel::ParakeetV2 => "parakeet-v2",
+            SpeechModel::ParakeetV3 => "parakeet-v3",
+            SpeechModel::WhisperBaseEn => "base.en",
+            SpeechModel::WhisperSmallEn => "small.en",
+            SpeechModel::WhisperTurbo => "large-v3-turbo",
         }
     }
 
     pub fn from_id(id: &str) -> Option<Self> {
+        // The whisper.cpp-era id of the turbo model.
+        let id = if id == "large-v3-turbo-q5_0" {
+            "large-v3-turbo"
+        } else {
+            id
+        };
         Self::ALL.into_iter().find(|m| m.id() == id)
     }
 
-    pub fn file_name(self) -> String {
-        format!("ggml-{}.bin", self.id())
+    /// The model's Hugging Face repo and file.
+    fn source(self) -> (&'static str, &'static str) {
+        match self {
+            SpeechModel::NemotronEn => (
+                "nemotron-speech-streaming-en-0.6b",
+                "nemotron-speech-streaming-en-0.6b-Q4_K_M.gguf",
+            ),
+            SpeechModel::Nemotron => (
+                "nemotron-3.5-asr-streaming-0.6b",
+                "nemotron-3.5-asr-streaming-0.6b-Q4_K_M.gguf",
+            ),
+            SpeechModel::ParakeetV2 => ("parakeet-tdt-0.6b-v2", "parakeet-tdt-0.6b-v2-Q4_K_M.gguf"),
+            SpeechModel::ParakeetV3 => ("parakeet-tdt-0.6b-v3", "parakeet-tdt-0.6b-v3-Q4_K_M.gguf"),
+            SpeechModel::WhisperBaseEn => ("whisper-base.en", "whisper-base.en-Q8_0.gguf"),
+            SpeechModel::WhisperSmallEn => ("whisper-small.en", "whisper-small.en-Q8_0.gguf"),
+            SpeechModel::WhisperTurbo => (
+                "whisper-large-v3-turbo",
+                "whisper-large-v3-turbo-Q5_K_M.gguf",
+            ),
+        }
+    }
+
+    pub fn file_name(self) -> &'static str {
+        self.source().1
     }
 
     pub fn url(self) -> String {
-        format!(
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{}",
-            self.file_name()
-        )
+        let (repo, file) = self.source();
+        format!("https://huggingface.co/handy-computer/{repo}-gguf/resolve/main/{file}")
     }
 
     /// Approximate download size in MB, for UI.
     pub fn approx_mb(self) -> u32 {
         match self {
-            WhisperModel::BaseEn => 148,
-            WhisperModel::SmallEn => 488,
-            WhisperModel::LargeV3TurboQ5 => 574,
+            SpeechModel::NemotronEn | SpeechModel::ParakeetV2 => 475,
+            SpeechModel::Nemotron => 495,
+            SpeechModel::ParakeetV3 => 485,
+            SpeechModel::WhisperBaseEn => 84,
+            SpeechModel::WhisperSmallEn => 269,
+            SpeechModel::WhisperTurbo => 619,
+        }
+    }
+
+    /// Only understands English.
+    pub fn english_only(self) -> bool {
+        matches!(
+            self,
+            SpeechModel::NemotronEn
+                | SpeechModel::ParakeetV2
+                | SpeechModel::WhisperBaseEn
+                | SpeechModel::WhisperSmallEn
+        )
+    }
+
+    /// Transcribes while the user speaks.
+    pub fn streams(self) -> bool {
+        matches!(self, SpeechModel::NemotronEn | SpeechModel::Nemotron)
+    }
+
+    /// A short description, for UI.
+    pub fn label(self) -> &'static str {
+        match self {
+            SpeechModel::NemotronEn => "Nemotron · English · fastest, text as you speak",
+            SpeechModel::Nemotron => "Nemotron 3.5 · 32 languages · text as you speak",
+            SpeechModel::ParakeetV2 => "Parakeet v2 · English",
+            SpeechModel::ParakeetV3 => "Parakeet v3 · 25 European languages",
+            SpeechModel::WhisperBaseEn => "Whisper base · English · smallest",
+            SpeechModel::WhisperSmallEn => "Whisper small · English",
+            SpeechModel::WhisperTurbo => "Whisper large-v3-turbo · about 100 languages",
+        }
+    }
+
+    /// The model's license, which the app shows next to it.
+    pub fn license(self) -> &'static str {
+        match self {
+            SpeechModel::NemotronEn => "NVIDIA Open Model License",
+            SpeechModel::Nemotron => "OpenMDW-1.1",
+            SpeechModel::ParakeetV2 | SpeechModel::ParakeetV3 => "CC-BY-4.0 (NVIDIA)",
+            SpeechModel::WhisperBaseEn
+            | SpeechModel::WhisperSmallEn
+            | SpeechModel::WhisperTurbo => "MIT (OpenAI)",
         }
     }
 
@@ -207,13 +298,13 @@ async fn download_file(
     Ok(dest.to_path_buf())
 }
 
-/// Downloads a catalog model (Whisper or local text) by id.
+/// Downloads a catalog model (speech or local text) by id.
 pub async fn download_by_id(
     id: &str,
     models_dir: &Path,
     progress: impl FnMut(u64, Option<u64>),
 ) -> Result<PathBuf, ProviderError> {
-    if let Some(m) = WhisperModel::from_id(id) {
+    if let Some(m) = SpeechModel::from_id(id) {
         m.download(models_dir, progress).await
     } else if let Some(m) = LocalModel::from_id(id) {
         m.download(models_dir, progress).await
@@ -234,15 +325,19 @@ mod tests {
 
     #[test]
     fn ids_round_trip() {
-        for m in WhisperModel::ALL {
-            assert_eq!(WhisperModel::from_id(m.id()), Some(m));
+        for m in SpeechModel::ALL {
+            assert_eq!(SpeechModel::from_id(m.id()), Some(m));
         }
         for m in LocalModel::ALL {
             assert_eq!(LocalModel::from_id(m.id()), Some(m));
         }
         assert_eq!(
-            WhisperModel::BaseEn.url(),
-            "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.en.bin"
+            SpeechModel::from_id("large-v3-turbo-q5_0"),
+            Some(SpeechModel::WhisperTurbo)
+        );
+        assert_eq!(
+            SpeechModel::NemotronEn.url(),
+            "https://huggingface.co/handy-computer/nemotron-speech-streaming-en-0.6b-gguf/resolve/main/nemotron-speech-streaming-en-0.6b-Q4_K_M.gguf"
         );
     }
 }

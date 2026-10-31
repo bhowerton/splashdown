@@ -24,6 +24,6 @@ pub use pipeline::{
 };
 pub use prompt::{CleanupLevel, PromptContext};
 pub use provider::{
-    Completion, ProviderError, ProviderResult, SpeechToText, SttHints, TextModel, TextRequest,
-    Transcript, Usage,
+    Completion, ProviderError, ProviderResult, SpeechStream, SpeechToText, SttHints, TextModel,
+    TextRequest, Transcript, Usage,
 };

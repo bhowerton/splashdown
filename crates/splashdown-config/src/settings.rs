@@ -340,6 +340,9 @@ pub enum SpeechProvider {
     Auto,
     Openai,
     Openrouter,
+    /// On this computer, with transcribe.cpp: Nemotron, Parakeet or
+    /// Whisper. Named for Whisper, its first model, so existing settings
+    /// files keep working.
     WhisperLocal,
     Apple,
 }
@@ -405,7 +408,9 @@ pub mod defaults {
     /// Gemini 2.5 Flash Lite was rate-limited on most requests; Voxtral
     /// followed spoken instructions instead of transcribing them.
     pub const OPENROUTER_STT: &str = "google/gemini-3.1-flash-lite";
-    pub const WHISPER_LOCAL: &str = "base.en";
+    /// Streams as the user speaks: the text is ready about 0.03 s after
+    /// release, at Parakeet's accuracy (eval/README.md, 2026-10-31).
+    pub const LOCAL_SPEECH: &str = "nemotron-en";
     /// 95% on the cleanup eval (via OpenRouter); gpt-4.1-nano scored 84% and
     /// the GPT-5 reasoning models took 3–7 s per cleanup.
     pub const OPENAI_AI: &str = "gpt-4.1-mini";
@@ -599,7 +604,7 @@ impl Settings {
             match provider {
                 SpeechProvider::Openai => defaults::OPENAI_STT,
                 SpeechProvider::Openrouter => defaults::OPENROUTER_STT,
-                SpeechProvider::WhisperLocal => defaults::WHISPER_LOCAL,
+                SpeechProvider::WhisperLocal => defaults::LOCAL_SPEECH,
                 SpeechProvider::Apple | SpeechProvider::Auto => defaults::SYSTEM_MODEL,
             }
             .to_string()
@@ -850,7 +855,7 @@ mod tests {
             s.resolve_speech(&none).unwrap(),
             SpeechChoice {
                 provider: SpeechProvider::WhisperLocal,
-                model: "base.en".into()
+                model: "nemotron-en".into()
             }
         );
         assert_eq!(s.resolve_ai(&none).unwrap(), None);
