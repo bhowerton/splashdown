@@ -1,5 +1,5 @@
 //! Global shortcuts: ⌃⌥V (paste the last raw transcript), ⌃⌥Z (undo the
-//! AI's edit of the last dictation), ⌃⌥N (show or hide the scratchpad) and
+//! AI's edit of the last dictation), ⌃⌥N (show or hide Notes) and
 //! each preset's own shortcut, which
 //! starts a hands-free dictation with that preset (or finishes the one in
 //! progress).
@@ -40,8 +40,8 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
     let paste_id = paste_raw.id();
     let undo_ai = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyZ);
     let undo_id = undo_ai.id();
-    let scratchpad = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN);
-    let scratchpad_id = scratchpad.id();
+    let notes = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN);
+    let notes_id = notes.id();
     let plugin = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, shortcut, event| {
             if event.state() != ShortcutState::Pressed {
@@ -57,8 +57,8 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
                 }
                 return;
             }
-            if shortcut.id() == scratchpad_id {
-                crate::scratchpad::toggle(app);
+            if shortcut.id() == notes_id {
+                crate::notes::toggle(app);
                 return;
             }
             let preset = lock().presets.get(&shortcut.id()).cloned();
@@ -76,7 +76,7 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
     for (shortcut, name) in [
         (paste_raw, "Ctrl+Alt+V"),
         (undo_ai, "Ctrl+Alt+Z"),
-        (scratchpad, crate::scratchpad::ACCELERATOR),
+        (notes, crate::notes::ACCELERATOR),
     ] {
         if let Err(e) = app.global_shortcut().register(shortcut) {
             tracing::warn!("couldn't register {name}: {e}");

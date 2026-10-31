@@ -4,6 +4,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
+- **Notes replace the scratchpad.** ⌃⌥N opens Notes. Each note is a plain Markdown file in `Documents/Splashdown Notes`, or any folder you choose, such as an Obsidian vault or iCloud Drive. Notes has search, pins, earlier versions you can restore, and Show in Finder. Deleted notes go to the Trash. Your scratchpad notes move in the first time you open it.
 - **Earlier dictations as context.** What you dictated into the same app in the last few minutes goes along with the next dictation, so "it" and "that" make sense and names are spelled the same way. Kept in memory only; switch it off in Settings → Privacy.
 - **Other sounds while you speak.** Settings → General can turn music and videos down or mute them while you hold the key, and put them back afterwards.
 - **Fewer made-up words.** A small speech detector checks a recording has a voice in it before it's transcribed, so a fan or a click no longer comes back as "Thank you." Local Whisper output that only repeats its vocabulary hints is dropped.

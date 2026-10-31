@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Notes</title>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="notes.css">
+</head>
+<body class="nt-body">
+<main class="nt">
+  <aside id="nt-side" class="nt-side" aria-label="Notes list">
+    <input id="nt-search" type="search" placeholder="Search notes" aria-label="Search notes" autocomplete="off" spellcheck="false">
+    <ul id="nt-list" class="nt-list" aria-label="Notes"></ul>
+    <p id="nt-list-empty" class="nt-empty" hidden></p>
+    <footer class="nt-side-foot">
+      <button class="link" id="nt-folder" title="Show the notes folder"></button>
+    </footer>
+  </aside>
+
+  <section class="nt-main">
+    <header class="nt-bar nt-head">
+      <button class="nt-icon" id="nt-toggle" aria-label="Show or hide the list" aria-expanded="true">☰</button>
+      <span id="nt-title" class="nt-title"></span>
+      <form id="nt-rename" class="nt-rename" hidden>
+        <input id="nt-rename-input" aria-label="File name" spellcheck="false">
+        <button class="btn" type="submit">Rename</button>
+        <button class="link" type="button" id="nt-rename-cancel">Cancel</button>
+      </form>
+      <span class="nt-grow"></span>
+      <button class="btn" id="nt-new">New</button>
+      <button class="btn" id="nt-pin" aria-pressed="false">Pin</button>
+      <div class="nt-menu-wrap">
+        <button class="btn" id="nt-more" aria-haspopup="menu" aria-expanded="false" aria-label="More">⋯</button>
+        <div id="nt-menu" class="nt-menu" role="menu" hidden>
+          <button role="menuitem" data-act="rename">Rename…</button>
+          <button role="menuitem" data-act="history">History</button>
+          <button role="menuitem" data-act="reveal" id="nt-reveal">Show in Finder</button>
+          <button role="menuitem" data-act="folder">Change notes folder…</button>
+          <button role="menuitem" data-act="delete" class="danger">Move to Trash</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="nt-notice" class="nt-notice" role="status" hidden></div>
+
+    <section id="nt-editor" class="nt-view">
+      <textarea id="nt-note" aria-label="Note" placeholder="Hold your dictation key and speak, or type."></textarea>
+      <footer class="nt-bar">
+        <span id="nt-status" class="nt-muted" aria-live="polite"></span>
+        <span class="nt-grow"></span>
+        <button class="btn" id="nt-copy">Copy</button>
+        <button class="btn primary nt-send" id="nt-send">Send</button>
+      </footer>
+    </section>
+
+    <section id="nt-history" class="nt-view" hidden>
+      <header class="nt-bar">
+        <button class="link" id="nt-history-back">‹ Back to the note</button>
+        <span class="nt-grow"></span>
+        <small class="nt-muted">The last 50 versions, kept with your notes</small>
+      </header>
+      <ul id="nt-versions" class="nt-versions" aria-label="Earlier versions"></ul>
+      <p id="nt-versions-empty" class="nt-empty" hidden>No earlier versions yet. One is kept each time you start changing a note.</p>
+    </section>
+  </section>
+</main>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="common.js"></script>
+<script src="notes.js"></script>
+</body>
+</html>

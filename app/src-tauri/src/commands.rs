@@ -488,6 +488,10 @@ pub async fn save_settings(
     if let Some(problem) = crate::replacements::check(&settings.replacements) {
         return Err(problem);
     }
+    // The notes folder is changed from the Notes window, so a Settings
+    // window opened earlier mustn't put the old one back.
+    let mut settings = settings;
+    settings.notes = state.settings().notes;
     settings.save(&engine::paths()?.config_file())?;
     state
         .tray

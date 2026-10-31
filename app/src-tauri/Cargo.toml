@@ -33,3 +33,5 @@ tauri-plugin-global-shortcut = "2"
 tracing.workspace = true
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tauri-plugin-updater = { version = "2", default-features = false, features = ["native-tls", "system-proxy", "zip"] }
+tauri-plugin-dialog = "2"
+trash = "5"

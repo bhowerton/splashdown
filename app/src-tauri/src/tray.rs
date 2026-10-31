@@ -118,13 +118,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         Some(UNDO_AI_ACCELERATOR),
     )?;
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy last result", true, None::<&str>)?;
-    let scratchpad = MenuItem::with_id(
-        app,
-        "scratchpad",
-        "Scratchpad",
-        true,
-        Some(crate::scratchpad::ACCELERATOR),
-    )?;
+    let notes = MenuItem::with_id(app, "notes", "Notes", true, Some(crate::notes::ACCELERATOR))?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let update = MenuItem::with_id(app, "update", CHECK_FOR_UPDATES, true, None::<&str>)?;
     let feedback = MenuItem::with_id(app, "feedback", "Send feedback…", true, None::<&str>)?;
@@ -141,7 +135,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
             &undo_ai,
             &paste_raw,
             &copy_last,
-            &scratchpad,
+            &notes,
             &PredefinedMenuItem::separator(app)?,
             &settings,
             &update,
@@ -169,7 +163,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                         state.session.undo_ai_edit();
                     }
                 }
-                "scratchpad" => crate::scratchpad::open(app),
+                "notes" => crate::notes::open(app),
                 "settings" => open_settings(app),
                 "mini-bar" => toggle_mini_bar(app),
                 "update" => show_updates(app),

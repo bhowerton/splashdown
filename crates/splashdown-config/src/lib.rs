@@ -13,8 +13,8 @@ pub use secrets::{
 };
 pub use settings::{
     AiChoice, AiProvider, AiSettings, Budget, DEFAULT_SOUND_VOLUME, Destination, GeneralSettings,
-    HotkeySettings, LoadError, OtherAudio, Replacement, ResolveError, Settings, Situation,
-    SpeechChoice, SpeechProvider, SpeechSettings, defaults, is_local_url,
+    HotkeySettings, LoadError, NotesSettings, OtherAudio, Replacement, ResolveError, Settings,
+    Situation, SpeechChoice, SpeechProvider, SpeechSettings, defaults, is_local_url,
 };
 
 use std::path::PathBuf;

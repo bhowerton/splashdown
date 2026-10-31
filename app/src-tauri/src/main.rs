@@ -12,11 +12,11 @@ mod feedback;
 mod history;
 mod insights;
 mod minibar;
+mod notes;
 mod preview;
 mod project;
 mod recent;
 mod replacements;
-mod scratchpad;
 mod session;
 mod shortcuts;
 mod spend;
@@ -53,6 +53,7 @@ fn main() {
             None,
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::save_settings,
@@ -90,13 +91,22 @@ fn main() {
             commands::check_for_updates,
             commands::install_update,
             commands::send_feedback,
-            scratchpad::scratchpad_load,
-            scratchpad::scratchpad_save,
-            scratchpad::scratchpad_new,
-            scratchpad::scratchpad_open_note,
-            scratchpad::scratchpad_delete_note,
-            scratchpad::scratchpad_send,
-            scratchpad::open_scratchpad,
+            notes::notes_load,
+            notes::notes_list,
+            notes::notes_open,
+            notes::notes_save,
+            notes::notes_new,
+            notes::notes_delete,
+            notes::notes_pin,
+            notes::notes_rename,
+            notes::notes_versions,
+            notes::notes_restore,
+            notes::notes_reveal,
+            notes::notes_folder,
+            notes::notes_pick_folder,
+            notes::notes_set_folder,
+            notes::notes_send,
+            notes::open_notes,
             export::export_history,
             export::export_settings,
             export::check_settings_file,

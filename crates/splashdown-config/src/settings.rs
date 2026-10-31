@@ -44,6 +44,16 @@ pub struct Settings {
     pub snippets: Vec<Snippet>,
     /// Find-and-replace rules applied to the final text.
     pub replacements: Vec<Replacement>,
+    pub notes: NotesSettings,
+}
+
+/// Notes (spec §9e).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NotesSettings {
+    /// Where notes are kept, one Markdown file each. Unset means
+    /// `Documents/Splashdown Notes`.
+    pub folder: Option<std::path::PathBuf>,
 }
 
 /// A find-and-replace rule. Plain rules match whole words, ignoring case;

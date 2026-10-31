@@ -23,7 +23,7 @@ Each provider handles what it receives under its own privacy policy. Local-only 
 - **History:** off by default. When on, the last 300 dictations (and, optionally, their recordings), deleted after the period you choose.
 - **Insights:** counts only (words per day and per app), never what you said.
 - **Spending:** cost totals per month, for the spending limit.
-- **Scratchpad:** your notes.
+- **Notes:** one Markdown file per note in `Documents/Splashdown Notes` (or the folder you choose), with earlier versions in a hidden `.splashdown` folder beside them. Nothing is sent anywhere unless you send or copy a note. If that folder is in iCloud Drive, Dropbox or OneDrive (Windows often backs up Documents to OneDrive), that service keeps a copy; Settings → Privacy says so.
 - **Logs:** timings, provider names and error messages. Never what you said or typed.
 - **Models:** downloaded speech and AI models.
 
@@ -37,7 +37,8 @@ Each provider handles what it receives under its own privacy policy. Local-only 
 Uninstall the app, then remove these:
 
 **Mac**
-- `~/Library/Application Support/Splashdown` (settings, history, Insights, scratchpad)
+- `~/Library/Application Support/Splashdown` (settings, history, Insights)
+- Your notes folder (`~/Documents/Splashdown Notes` unless you chose another), if you want your notes gone too. Uninstalling never touches it.
 - `~/Library/Caches/Splashdown` (models) and `~/Library/Caches/app.splashdown`
 - `~/Library/Logs/Splashdown`
 - `~/Library/WebKit/app.splashdown`
@@ -46,6 +47,7 @@ Uninstall the app, then remove these:
 With Homebrew, `brew uninstall --zap --cask splashdown` removes the folders (not the keychain items).
 
 **Windows**
-- `%APPDATA%\Splashdown` (settings, history, Insights, scratchpad)
+- `%APPDATA%\Splashdown` (settings, history, Insights)
+- Your notes folder (`Documents\Splashdown Notes` unless you chose another), if you want your notes gone too. Uninstalling never touches it.
 - `%LOCALAPPDATA%\Splashdown` (models and logs)
 - Credential Manager → Windows Credentials: entries named "Splashdown"

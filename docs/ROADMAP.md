@@ -92,7 +92,7 @@ Cheap features that close visible gaps.
 - ✅ **Anthropic key (Claude Haiku 5.5) for cleanup**, with prompt caching. ⬜ Score it on the eval (needs a key).
 - ✅ **Spending and budgets:** per-request cost from every provider, a local per-day and per-month record, monthly and daily limits that switch to on-device models, and links to each provider's own limits (spec §9b).
 - ✅ **Send instructions to the cloud:** with a local cleanup model, instructions and transforms can go to a cloud model while plain dictation stays local (off by default).
-- ✅ **Scratchpad:** ⌃⌥N or the menu bar opens a small always-on-top notepad to dictate into when there's no text field. Autosaved locally (`scratchpad.json`, the current note plus the last 20), with Copy, New note and **Send to {app}**, which re-activates the app that was in front and pastes the note there (spec §9d). ⬜ Not yet tried in the running app; Windows untested.
+- ✅ **Scratchpad** (replaced by Notes, §7b): ⌃⌥N or the menu bar opens a small always-on-top notepad to dictate into when there's no text field. Autosaved locally (`scratchpad.json`, the current note plus the last 20), with Copy, New note and **Send to {app}**, which re-activates the app that was in front and pastes the note there (spec §9d). ⬜ Not yet tried in the running app; Windows untested.
 - ✅ **Background noise reduction:** an opt-in switch (General → While you speak) that runs RNNoise (`nnnoiseless`, pure Rust) on the recording before speech-to-text, then whisper mode's boost if that's on too. About 3 ms per second of 48 kHz audio. In a test with white noise or rumble mixed into `say` output at 0–5 dB, it brought back words the silence trimmer had cut and recordings it had rejected as "no speech". `splashdown-cli transcribe --denoise` compares it on any WAV.
 - ✅ **History retention and export:** "Delete after" (Forever, 30, 7 or 1 day) deletes old entries and their recordings; "Export…" saves the history to Downloads as Markdown or JSON (spec §9).
 - ✅ **Settings between computers:** About → Settings exports `config.toml` without API keys and imports one after a confirmation (spec §8.5).
@@ -137,15 +137,16 @@ Cheap features that close visible gaps.
 
 ### 7b. Notes you own
 Notes as Markdown files in a folder the user picks, replacing the scratchpad. Spec: [SPEC.md](SPEC.md) §9e. Storage: `~/Documents/Splashdown Notes/` (Windows: `Documents\Splashdown Notes\`) by default, or any folder, such as an Obsidian vault, iCloud Drive or Dropbox. Versions and pins sit in a `.splashdown/` folder inside it; nothing goes in a database or a cloud.
-- ⬜ **N1 Notes window and storage:**
+- ✅ **N1 Notes window and storage** (2026-10-31; ⬜ still to try in the running app):
   - One `.md` file per note, with short front matter.
-  - A list with search and pins, and versions (50 per note).
-  - Changes made in other apps picked up through a folder watcher.
-  - Delete moves notes to the Trash.
-  - The scratchpad is migrated, and Send to {app} is kept.
-  - A folder picker (`tauri-plugin-dialog`).
-  - Handling of the macOS Documents prompt.
+  - A list with search, pins and subfolder groups, and versions (50 per note) with Restore.
+  - Changes made in other apps picked up by re-reading the folder while the window has focus.
+  - Rename, Show in Finder, and Move to Trash.
+  - The scratchpad's notes are moved in, and Send to {app} is kept.
+  - A folder picker that offers to move the notes.
+  - A fallback folder when macOS refuses Documents access.
   - A synced-folder notice on the Privacy tab.
+  - 10 unit tests.
 - ⬜ **N2 Transforms:** saved instructions (Clean up, Summary, To-dos, Email, Prompt for an AI, plus your own) run over a note or a selection, saving a version first. A transform with a shortcut works on selected text in any app. To-dos get eval cases.
 - ⬜ **N3 Capture without a window:** hold the dictation key and press N to append to Inbox, today's daily note or the last note, with an Undo toast. Also "Save to notes" in History, `splashdown://note` and `splashdown-cli note`, and optionally keeping the audio in `Attachments/`.
 - ⬜ **N4 Notes for agents:** `search_notes`, `read_note` and `append_note` in `splashdown-mcp`. Off by default, with separate switches for reading and writing.

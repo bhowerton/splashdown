@@ -35,6 +35,7 @@ function renderPrivacy() {
   $("pv-clipboard").textContent = withClipboard.length
     ? `What you last copied is sent for reference with the ${withClipboard.join(", ")} preset${withClipboard.length === 1 ? "" : "s"} (up to 2,000 characters).`
     : "Never sent. Presets can turn it on, for names and code you've copied.";
+  renderNotesFolder();
   $("pv-local").checked = !!s.general.local_only;
   $("pv-appname").checked = s.general.share_app_name !== false;
   $("pv-recent").checked = s.general.share_recent !== false;
@@ -50,4 +51,24 @@ function renderPrivacy() {
 
 // "Manage" / "Change" links that jump to another tab.
 document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
-$("pv-scratchpad").addEventListener("click", () => invoke("open_scratchpad").catch((e) => toast(String(e), true)));
+$("pv-notes-open").addEventListener("click", () => invoke("open_notes").catch((e) => toast(String(e), true)));
+
+/** Where notes are kept, and whether a sync service has a copy. Asking
+ *  doesn't create the folder. */
+async function renderNotesFolder() {
+  let folder;
+  try {
+    folder = await invoke("notes_folder");
+  } catch {
+    return;
+  }
+  if (!folder) return;
+  const el = $("pv-notes");
+  el.textContent = `What you write in Notes (⌃⌥N), one Markdown file per note, in ${folder.label}. Never sent anywhere unless you send or copy it.`;
+  el.title = folder.path;
+  if (folder.synced) {
+    el.textContent += ` That folder is in ${folder.synced}, so ${folder.synced} keeps a copy.`;
+  }
+  // Synced notes stand out while local-only mode is on (spec §9e.8).
+  el.classList.toggle("warn-text", !!folder.synced && !!state.settings.general.local_only);
+}

@@ -1,0 +1,88 @@
+/* The Notes window (about 640 × 420): a list on the left, the note on the
+   right. Colors, buttons and the toast come from settings.css. */
+.nt-body { overflow: hidden; }
+.nt { height: 100vh; display: flex; }
+.nt-grow { flex: 1; }
+.nt-muted { color: var(--muted); font-size: 12px; }
+.nt-empty { color: var(--muted); font-size: 12.5px; text-align: center; margin: 32px 18px; }
+
+/* ---------------------------------------------------------------- list */
+.nt-side {
+  width: 220px; flex-shrink: 0; display: flex; flex-direction: column;
+  background: var(--sidebar); border-right: 1px solid var(--border);
+}
+.nt-side[hidden] { display: none; }
+#nt-search { margin: 10px 10px 6px; width: auto; font-size: 13px; }
+.nt-list { list-style: none; margin: 0; padding: 0 6px 6px; overflow-y: auto; flex: 1; }
+.nt-group { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; padding: 10px 8px 3px; }
+.nt-item {
+  display: block; width: 100%; text-align: left; border: 0; background: none; color: inherit;
+  padding: 6px 8px; border-radius: 7px; font: inherit; cursor: default;
+}
+.nt-item:hover { background: var(--surface-2, rgba(0,0,0,.04)); }
+.nt-item[aria-current="true"] { background: var(--accent-soft); }
+.nt-item .nt-item-title { display: block; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-item .nt-item-meta { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.nt-side-foot { padding: 6px 10px 9px; border-top: 1px solid var(--border); }
+.nt-side-foot .link { font-size: 11.5px; color: var(--muted); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ---------------------------------------------------------------- note */
+.nt-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.nt-view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.nt-view[hidden] { display: none; }
+.nt-bar { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
+.nt-head { border-bottom: 1px solid var(--border); }
+.nt-head .btn { padding: 3px 10px; font-size: 12.5px; }
+.nt-icon { border: 0; background: none; color: var(--muted); font-size: 15px; padding: 2px 6px; border-radius: 6px; }
+.nt-icon:hover { background: var(--surface-2, rgba(0,0,0,.05)); }
+.nt-title { font-weight: 600; font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-rename { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1; }
+.nt-rename[hidden] { display: none; }
+.nt-rename input { flex: 1; min-width: 80px; font-size: 13px; }
+
+#nt-note {
+  flex: 1; min-height: 0; resize: none; margin: 10px 10px 0; width: auto; padding: 10px 12px;
+  background: var(--surface); border-radius: 10px; font-size: 14px; line-height: 1.5;
+}
+/* It nearly always has focus, so a quieter ring than Settings' fields. */
+#nt-note:focus { box-shadow: none; }
+#nt-status { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Long app names shrink rather than push the other buttons out. */
+.nt-send { max-width: 180px; overflow: hidden; text-overflow: ellipsis; flex-shrink: 0; }
+
+.nt-notice {
+  margin: 8px 10px 0; padding: 7px 10px; border-radius: 8px; font-size: 12.5px;
+  background: var(--warn-soft); color: var(--text);
+}
+.nt-notice[hidden] { display: none; }
+
+/* ---------------------------------------------------------------- menu */
+.nt-menu-wrap { position: relative; }
+.nt-menu {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 10; min-width: 190px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.14); padding: 4px; display: flex; flex-direction: column;
+}
+.nt-menu[hidden] { display: none; }
+.nt-menu button {
+  border: 0; background: none; color: inherit; text-align: left; font: inherit; font-size: 13px;
+  padding: 6px 10px; border-radius: 6px; cursor: default;
+}
+.nt-menu button:hover, .nt-menu button:focus-visible { background: var(--accent); color: #fff; outline: none; }
+.nt-menu button.danger { color: var(--err); }
+.nt-menu button.danger:hover { color: #fff; }
+.nt-menu button:disabled { opacity: .45; background: none; color: inherit; }
+
+/* ---------------------------------------------------------------- history */
+.nt-versions { list-style: none; margin: 0; padding: 0 10px; overflow-y: auto; flex: 1; }
+.nt-versions li { padding: 8px 2px; border-top: 1px solid var(--border); }
+.nt-versions li:first-child { border-top: 0; }
+.nt-versions .nt-preview {
+  white-space: pre-wrap; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+  font-size: 13px; -webkit-user-select: text; user-select: text;
+}
+.nt-versions .nt-meta { display: flex; align-items: center; gap: 12px; margin-top: 3px; font-size: 12px; }
+.nt-versions .nt-meta time { color: var(--muted); flex: 1; }
+
+/* Centered over the note rather than offset for Settings' sidebar. */
+.toast { left: 50%; top: 10px; }

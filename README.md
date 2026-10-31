@@ -81,7 +81,7 @@
 
 ### Everything else
 
-- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), a **scratchpad** for when there's no text field, and an always-on-screen **mini bar** for clicking instead of holding a key.
+- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), **Notes** for when there's no text field: plain Markdown files in a folder you choose (Obsidian, iCloud Drive and Dropbox work), with search, pins and earlier versions, and an always-on-screen **mini bar** for clicking instead of holding a key.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
 
@@ -106,7 +106,7 @@
 | Cancel | **Esc** |
 | Paste exactly what you said, without the AI | **⌃⌥V** |
 | Swap the AI's version for exactly what you said | **⌃⌥Z** right after it's typed |
-| Dictate a note with no text field around | **⌃⌥N** opens the scratchpad; **Send to** pastes it into the app you were in |
+| Dictate a note with no text field around | **⌃⌥N** opens Notes; **Send to** pastes the note into the app you were in |
 | Dictate with the mouse | Choose **Mouse button 4** or **5** as the dictation key in Settings; hold it or double-click it like a key |
 | Start or finish from Raycast, Alfred or Shortcuts | Open `splashdown://toggle` (also `start`, `stop`, `cancel`) |
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
