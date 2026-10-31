@@ -10,10 +10,20 @@
 </p>
 
 <p align="center">
+  <a href="#install">Install</a> ·
+  <a href="#everything-it-does">Features</a> ·
+  <a href="#private-by-default">Privacy</a> ·
+  <a href="docs/TROUBLESHOOTING.md">Troubleshooting</a> ·
+  <a href="CHANGELOG.md">Changelog</a> ·
+  <a href="https://github.com/bhowerton/splashdown/issues">Issues</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/bhowerton/splashdown/releases/latest"><img src="https://img.shields.io/github/v/release/bhowerton/splashdown?label=version&color=F2551F" alt="Latest version"></a>
-  <img src="https://img.shields.io/badge/platform-macOS%20%7C%20Windows-16337A" alt="macOS and Windows">
+  <a href="#what-you-need"><img src="https://img.shields.io/badge/macOS%2013%2B%20%C2%B7%20Windows%2010%2B-16337A" alt="macOS 13 or later, Windows 10 or later"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-16337A" alt="MIT or Apache-2.0"></a>
   <a href="https://github.com/bhowerton/splashdown/releases"><img src="https://img.shields.io/github/downloads/bhowerton/splashdown/total?color=16337A" alt="Downloads"></a>
+  <a href="https://github.com/bhowerton/splashdown/actions/workflows/ci.yml"><img src="https://github.com/bhowerton/splashdown/actions/workflows/ci.yml/badge.svg?branch=main&event=push" alt="CI status"></a>
 </p>
 
 <p align="center">
@@ -32,29 +42,55 @@
 - **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
 - **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
-## What it does
+<p align="center">
+  <img src="docs/assets/readme/presets.png" width="266" alt="Settings, Presets: Default, Email, Texting, Work chat and Code presets, with cleanup level and tone choices">
+  <img src="docs/assets/readme/insights.png" width="266" alt="Settings, Insights: words this week, words per minute, time saved, a 30-day chart and words per app">
+  <img src="docs/assets/readme/privacy.png" width="266" alt="Settings, Privacy: where speech and text go for the current settings, local-only mode, and what the AI is told">
+</p>
 
-Hold a key, say it, and the text appears in whatever text field has focus, in any app or website. An optional AI pass tidies up "um"s and self-corrections, and formats on request ("…make it an email"). With text selected, the same key rewrites the selection by voice.
+## Everything it does
 
-Use your own OpenAI, OpenRouter or Anthropic key, with an optional monthly spending limit, or run fully on your computer: Apple's built-in models on Apple Silicon Macs, or local Whisper plus Splashdown's built-in local model (a free download, nothing else to install). Ollama and LM Studio work too.
+### Dictate anywhere
 
-> **Status: beta.** The Mac app is in daily use. Windows is a preview: it works, but has had less testing.
+- **Hold to talk.** Hold **Right Option** (Right Ctrl on Windows), speak, let go. The text lands in whatever field has focus, with a space before it when it needs one.
+- **Clean, not rewritten.** The AI pass removes fillers and false starts and fixes punctuation, at the level you choose per app: none, light, medium or high. Spoken formatting ("new paragraph", "comma") works in any language.
+- **Live text while you speak**, so you can see it's listening, even when the final text comes from a cloud model.
+- **Hands-free** for long dictations: hold the key and press **H**, then let go. Stops on its own after 3 minutes of silence.
+- **Whisper mode** for speaking quietly, and **mixed languages** in one sentence.
 
-## Install
+### Talk to it
 
-Use the download buttons at the top, or pick a version from [all releases](https://github.com/bhowerton/splashdown/releases). On a Mac with [Homebrew](https://brew.sh):
+- **Instructions while you dictate.** Tap **Right Shift** mid-dictation and say what to do: "make it a bulleted list", "make it an email".
+- **Spoken commands, in any language.** Tap Right Shift *before* speaking: "delete that last sentence", "make that more formal", "envíalo". The AI works out what you meant; nothing depends on exact phrases. Editing commands need an app that lets Splashdown read and select its text; when one doesn't, it says so rather than guess.
+- **Rewrite a selection.** Select text, hold the key, say what to change.
+- **Undo the AI.** **⌃⌥Z** right after it's typed swaps in exactly what you said; **⌃⌥V** pastes your last raw words.
 
-```sh
-brew tap bhowerton/tap
-brew trust --cask bhowerton/tap/splashdown
-brew install --cask splashdown
-```
+### A style for every app
 
-**Mac:** open the `.dmg` and drag Splashdown to Applications. It runs on macOS 13 or later, on Apple Silicon and Intel. The first launch opens a short setup guide: choose how it should understand you, then allow Accessibility and Microphone.
+- **Presets** switch on their own by app, window title or website: Default, Email, Texting, Work chat, Code & Terminal, Notes, and your own. Each sets the tone, cleanup level, spoken language, translation, its own AI model, and whether to press Return when done.
+- **Context, only if you want it.** A preset can read the text around the cursor or your clipboard so names are spelled like the thread. Both are off unless you turn them on.
+- **Words that stick.** A vocabulary list that learns from your corrections, snippets with fill-ins (`{date}`, `{clipboard}`), and find-and-replace rules.
 
-**Windows (preview):** run the installer; no administrator rights needed. Windows 10 or 11, x64. The installer isn't code-signed yet, so SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. Version 0.1.0 on Windows doesn't update itself; download the next version by hand once, and updates work from then on.
+### On your computer or in the cloud
 
-## Using it
+- **Your own key:** OpenAI, OpenRouter or Anthropic, with a monthly spending limit. Typical use costs cents a month.
+- **Fully on your computer:** Apple's on-device speech and language models (Apple Silicon, macOS 26), or local Whisper plus Splashdown's built-in local model, a free download with nothing else to install. Ollama and LM Studio work too.
+- **A stand-in when the cloud fails.** If your provider is offline or out of credit, the dictation is retried on your computer, and the result says so.
+- Smaller on-device models handle cleanup well but follow instructions less reliably than cloud models, so instructions can be sent to the cloud while plain dictation stays local.
+
+### Everything else
+
+- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), a **scratchpad** for when there's no text field, and an always-on-screen **mini bar** for clicking instead of holding a key.
+- **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
+- **Updates** are checked daily and installed only when you choose.
+
+### For developers
+
+- **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice ([docs/AGENTS.md](docs/AGENTS.md)).
+- **Scripting:** `splashdown://toggle` links for Raycast, Alfred or Shortcuts; `splashdown-cli toggle` and `splashdown-cli listen` from a terminal; mouse side buttons as the dictation key.
+
+<details>
+<summary><strong>All the keys</strong></summary>
 
 | To | Do |
 |---|---|
@@ -73,17 +109,54 @@ brew install --cask splashdown
 | Dictate with the mouse | Choose **Mouse button 4** or **5** as the dictation key in Settings; hold it or double-click it like a key |
 | Start or finish from Raycast, Alfred or Shortcuts | Open `splashdown://toggle` (also `start`, `stop`, `cancel`) |
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
-| Answer a coding agent by voice | Add `splashdown-mcp` to Claude Code or Cursor; see [docs/AGENTS.md](docs/AGENTS.md) |
 
-Spoken formatting ("new paragraph", "comma") works in any language when cleanup is on. For commands, tap the instruction key before saying anything, then say what you want, in any language and however you like to phrase it: "delete that last sentence", "make that more formal", "envíalo". The AI works out what you meant; nothing depends on exact words. Presets switch automatically by app or website (Email, Texting, Work chat, Code, Notes, and your own); a preset can also translate what you say, or read the text around the cursor so names are spelled like the thread. Settings has history (optionally with the recordings), snippets, a vocabulary list that learns from your corrections, spending limits for cloud providers, and a Privacy tab that shows where your words go. Each preset sets how much cleanup to do (none, light, medium or high), and a coding preset turns file names you say into `@file` mentions for Claude Code or Cursor. Whisper mode handles speaking quietly, and Insights shows how much you've dictated. Updates are checked daily and installed only when you choose.
+On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 
-## Privacy
+</details>
 
-Your audio and text go only to the providers you choose in Settings, directly from your computer. Splashdown has no servers and no telemetry; the only other connection is the daily update check against GitHub Releases, which can be turned off. With Apple's on-device models or local Whisper, nothing leaves your Mac, and local-only mode refuses every cloud provider. API keys are kept in the system keychain. See [SECURITY.md](SECURITY.md).
+## Install
+
+**Mac:** [download the DMG](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-mac.dmg), open it and drag Splashdown to Applications. Or with [Homebrew](https://brew.sh):
+
+```sh
+brew tap bhowerton/tap
+brew trust --cask bhowerton/tap/splashdown
+brew install --cask splashdown
+```
+
+Builds are universal (Apple Silicon and Intel), signed with Point Dynamics' Apple Developer ID and notarized, so macOS opens them without warnings. The first launch opens a short setup guide: choose how it should understand you, then allow Accessibility and Microphone.
+
+**Windows (preview):** [download the installer](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-windows-x64-setup.exe) and run it; no administrator rights needed. Version 0.1.0 isn't code-signed, so SmartScreen may say "Windows protected your PC": choose **More info → Run anyway**. It also doesn't update itself; download the next version by hand once, and updates work from then on.
+
+Every version is on the [releases page](https://github.com/bhowerton/splashdown/releases), and what changed is in the [changelog](CHANGELOG.md).
+
+## Uninstall
+
+**Mac:** quit Splashdown and move it to the Trash, or `brew uninstall --cask splashdown`. Add `--zap` to also remove its settings, history and downloaded models.
+
+**Windows:** Settings → Apps → Installed apps → Splashdown → Uninstall.
+
+To remove everything it stored, including API keys, see [Deleting everything](docs/PRIVACY.md#deleting-everything).
+
+## Private by default
+
+Splashdown has no servers, no account and no analytics. Your recording and text go only to the provider you chose, directly from your computer, or nowhere at all with on-device models. The only other connections are ones you can see: the daily update check (which can be turned off), model downloads you start, and feedback you choose to send. API keys live in the system keychain, history is off by default, and logs never contain what you said. Local-only mode refuses every cloud provider, even with a key saved.
+
+Settings → Privacy shows where your words go for your current settings. The full list is in [docs/PRIVACY.md](docs/PRIVACY.md).
+
+## What you need
+
+- **Mac:** macOS 13 or later, Apple Silicon or Intel. Apple's on-device models need Apple Silicon and macOS 26.
+- **Windows:** Windows 10 or 11, x64. ARM PCs run it through emulation.
+- **For the AI:** a key for OpenAI, OpenRouter or Anthropic, or nothing at all with the on-device models. The built-in local model uses about 3 GB of memory; a smaller one (about 1.7 GB) suits 8 GB machines.
 
 ## How well it works
 
 Every default was chosen by measurement. The cleanup prompt is tested on 44 cases covering fillers, self-corrections, formatting, instructions and prompt injection: the default OpenRouter model scores 98%, the built-in local model (Qwen3 4B) 84%, Apple's on-device model 80%. Results and how to run them are in [eval/README.md](eval/README.md).
+
+## When something misbehaves
+
+[Troubleshooting](docs/TROUBLESHOOTING.md) covers the common fixes: the key does nothing, the microphone hears nothing, text that didn't appear, and provider errors. For anything else, use **Send feedback** in the menu bar, which opens a GitHub issue with your versions filled in.
 
 ## Building from source
 
@@ -91,9 +164,10 @@ Every default was chosen by measurement. The cleanup prompt is tested on 44 case
 cargo build --workspace
 cargo test --workspace
 scripts/run-mac-app.sh        # macOS: build, sign and launch the menu bar app
+scripts\run-win-app.ps1       # Windows: build and launch the tray app
 ```
 
-You need stable Rust, `cmake` (for local Whisper), and on macOS Xcode 26 or later. [CONTRIBUTING.md](CONTRIBUTING.md) has the details, including API keys for development, the checks a change must pass, and packaging releases.
+You need stable Rust, `cmake` (for local Whisper), and on macOS Xcode 26 or later; on Windows, the MSVC build tools and LLVM. [CONTRIBUTING.md](CONTRIBUTING.md) has the details, including API keys for development, the checks a change must pass, and packaging releases.
 
 The `splashdown-cli` command-line tool runs the same pipeline without the app, which is handy for testing providers and prompts:
 
@@ -103,7 +177,8 @@ cargo run --release -p splashdown-cli -- record                    # speak, pres
 cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 ```
 
-## Project layout
+<details>
+<summary><strong>Project layout</strong></summary>
 
 | Path | What |
 |---|---|
@@ -119,8 +194,28 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 | `app/` | The menu bar app (Tauri) and its Settings and onboarding windows |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md), [spec](docs/SPEC.md), [roadmap](docs/ROADMAP.md) |
 
+</details>
+
+## Documentation
+
+- [Privacy](docs/PRIVACY.md): what leaves your computer, what stays, and how to delete it
+- [Troubleshooting](docs/TROUBLESHOOTING.md): the common fixes
+- [Changelog](CHANGELOG.md): what changed in each release
+- [Voice input for coding agents](docs/AGENTS.md): `splashdown-mcp` for Claude Code, Cursor and others
+- [Contributing](CONTRIBUTING.md): building, checks, releases and conventions
+- [Security](SECURITY.md): how to report a vulnerability
+- [Architecture](docs/ARCHITECTURE.md), [spec](docs/SPEC.md) and [roadmap](docs/ROADMAP.md)
+
+## Community
+
+Bug reports, ideas and pull requests are all welcome; [CONTRIBUTING.md](CONTRIBUTING.md) is the place to start, and the [code of conduct](CODE_OF_CONDUCT.md) applies everywhere. Splashdown is free and will stay that way. If it's earned its key on your keyboard, a ⭐ helps other people find it.
+
 ## License
 
-Made by [@bhowerton](https://github.com/bhowerton). Releases are signed and published by Point Dynamics, which is why macOS names it as the developer.
+Licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Contributions are accepted under the same terms; see [CONTRIBUTING.md](CONTRIBUTING.md). The license covers the code: if you publish a fork, please give it its own name and icon.
 
-Licensed under either of [Apache License 2.0](LICENSE-APACHE) or [MIT](LICENSE-MIT), at your option. Contributions are accepted under the same terms; see [CONTRIBUTING.md](CONTRIBUTING.md).
+Releases are signed and published by Point Dynamics, LLC, which is why macOS and Windows name it as the developer.
+
+<p align="center">
+  <sub>Made by <a href="https://github.com/bhowerton">@bhowerton</a></sub>
+</p>

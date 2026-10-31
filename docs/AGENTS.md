@@ -44,4 +44,4 @@ Any MCP client that runs stdio servers works the same way: the command is the pa
 - The tool waits until you answer, for up to 10 minutes (Splashdown stops a hands-free recording after 10 minutes, or 3 minutes of silence). Some clients give up on tools sooner; Claude Code's limit can be raised with the `MCP_TOOL_TIMEOUT` environment variable (milliseconds).
 - One question at a time. If you're already dictating, the agent is told to ask in the chat instead.
 - The answer uses your pinned preset, or the default one, not the preset for the app in front.
-- To try it without an agent, run `splash listen --prompt "Tabs or spaces?"`, which prints your answer.
+- To try it without an agent, run `splashdown-cli listen --prompt "Tabs or spaces?"`, which prints your answer.

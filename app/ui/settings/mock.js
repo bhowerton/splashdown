@@ -21,7 +21,7 @@ async function mockInvoke(cmd, args) {
       { name: "anthropic", source: null, hint: null },
       { name: "custom", source: null, hint: null },
     ],
-    permissions: { accessibility: false, microphone: "not-asked" },
+    permissions: { accessibility: true, microphone: "granted" },
     whisper_models: [
       { id: "base.en", mb: 148, downloaded: true },
       { id: "small.en", mb: 488, downloaded: false },
@@ -54,7 +54,8 @@ async function mockInvoke(cmd, args) {
     presets: [
       { id: "default", name: "Default", instructions: "", ai: true, insert: "paste", rules: [] },
       { id: "email", name: "Email", instructions: "Use short paragraphs. Only add a greeting or sign-off if I say one or ask for it.", ai: true, insert: "paste", rules: [{ app: "com.apple.mail", url: null, title: null }, { app: null, url: "mail.google.com", title: null }] },
-      { id: "chat", name: "Work chat", instructions: "No greeting or sign-off. Short paragraphs.", tone: "casual", auto_send: true, shortcut: "Ctrl+Alt+KeyC", ai: true, insert: "paste", rules: [{ app: "com.tinyspeck.slackmacgap", url: null, title: null }, { app: "slack.exe", url: null, title: null }, { app: "com.apple.MobileSMS", url: null, title: null }] },
+      { id: "texting", name: "Texting", instructions: "", tone: "casual", ai: true, insert: "paste", rules: [{ app: "com.apple.MobileSMS", url: null, title: null }, { app: null, url: "web.whatsapp.com", title: null }] },
+      { id: "chat", name: "Work chat", instructions: "No greeting or sign-off. Short paragraphs.", tone: "casual", auto_send: true, shortcut: "Ctrl+Alt+KeyC", ai: true, insert: "paste", rules: [{ app: "com.tinyspeck.slackmacgap", url: null, title: null }, { app: "slack.exe", url: null, title: null }] },
       { id: "code", name: "Code & Terminal", instructions: "", ai: false, insert: "paste", rules: [{ app: "com.apple.Terminal", url: null, title: null }] },
     ],
     preset_ai_options: [{ value: "apple", label: "Apple on-device" }, { value: "local", label: "Built-in local model" }, { value: "openrouter", label: "OpenRouter" }],
@@ -69,7 +70,7 @@ async function mockInvoke(cmd, args) {
       sound_volume: 0.12,
     },
     platform: "macos",
-    version: "0.0.1",
+    version: "0.1.0",
     config_path: "~/Library/Application Support/Splashdown/config.toml",
     update: { available: "0.2.0", notes: "Faster local Whisper.\nFixes pasting into Slack.", checking: false, installing: false, progress: null, last_checked: Date.now() - 3600000, error: null },
   };
