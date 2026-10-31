@@ -1,6 +1,6 @@
 # Contributing to Splashdown
 
-Thanks for helping. This file covers setting up, the checks a change has to pass, and where things live. For how the code fits together, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first; for what the app should do, [docs/SPEC.md](docs/SPEC.md).
+Thanks for helping. This file covers setting up, the checks a change has to pass, and where things live. For how the code fits together, read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) first.
 
 ## Setting up
 

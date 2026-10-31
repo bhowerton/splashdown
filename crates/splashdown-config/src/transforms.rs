@@ -1,4 +1,4 @@
-//! Transforms (spec §9e.5): saved instructions run over a note or selected
+//! Transforms: saved instructions run over a note or selected
 //! text with no speaking needed, from Notes or from a global shortcut in
 //! any app. They go through the same transform prompt as a spoken
 //! instruction on a selection.

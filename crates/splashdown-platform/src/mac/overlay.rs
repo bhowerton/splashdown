@@ -1,6 +1,6 @@
 //! The status pill: a borderless, non-activating NSPanel that floats above
 //! everything (including full-screen apps), ignores the mouse, and never
-//! becomes key, so the user's focused field keeps focus (spec §8.3).
+//! becomes key, so the user's focused field keeps focus.
 
 use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;

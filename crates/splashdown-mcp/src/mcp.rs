@@ -3,7 +3,7 @@
 //!
 //! MCP over stdio is JSON-RPC 2.0, one message per line. We implement
 //! `initialize`, `ping`, `tools/list` and `tools/call` (asking the user by
-//! voice, and the user's notes: spec §9e.7), and honor
+//! voice, and the user's notes), and honor
 //! `notifications/cancelled` (the protocol's spelling).
 
 use serde_json::{Value, json};

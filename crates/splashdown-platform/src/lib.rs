@@ -1,5 +1,5 @@
 //! OS integration: global hotkeys, text insertion, focus and selection
-//! context, the status overlay, and permission checks (spec §6–§8).
+//! context, the status overlay, and permission checks.
 //!
 //! The API is the same on every platform; `mac/` and `win/` implement it.
 //! Gesture rules (hold, double-tap, chords) live in `splashdown_core::gesture`, so
@@ -235,10 +235,10 @@ pub struct CaretRect {
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum InsertMethod {
-    /// Clipboard + paste: fast and a single undo step (spec §7.1).
+    /// Clipboard + paste: fast and a single undo step.
     #[default]
     Paste,
-    /// Simulated typing, for apps where paste misbehaves (spec §7.2). With
+    /// Simulated typing, for apps where paste misbehaves. With
     /// `soft_breaks`, line breaks are typed as Shift+Return, which chat apps
     /// take as a new line rather than "send"; terminals want plain Return.
     Type { soft_breaks: bool },
@@ -329,7 +329,7 @@ pub fn clipboard_text() -> Option<String> {
 }
 
 /// Fallback selection read: simulates Copy and reads the clipboard, then
-/// restores it (spec §6.2). Only call when no dictation key is held.
+/// restores it. Only call when no dictation key is held.
 pub fn copy_selection() -> Option<String> {
     imp::copy_selection()
 }
@@ -524,7 +524,7 @@ pub enum Tone {
     Warning,
 }
 
-/// What the status pill shows (mock-up §1).
+/// What the status pill shows.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OverlayState {
     /// `preset` names a non-default preset in use ("Listening · Email").

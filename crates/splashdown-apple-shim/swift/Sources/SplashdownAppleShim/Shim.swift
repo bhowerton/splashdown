@@ -1,4 +1,4 @@
-// C ABI over Apple's on-device models (spec §8.4).
+// C ABI over Apple's on-device models.
 //
 // Every async entry point reports back exactly once through `SplashdownCallback`
 // with a status code and a UTF-8 string (the result, or an error message).

@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-/// What a recording session does with the user's speech (spec §2.1, §3).
+/// What a recording session does with the user's speech.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Mode {

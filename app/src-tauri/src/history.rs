@@ -1,4 +1,4 @@
-//! Dictation history (spec §9): a JSON-lines file in the app's config
+//! Dictation history: a JSON-lines file in the app's config
 //! folder, newest last. Local only; never sent anywhere.
 
 use std::fs::{File, OpenOptions};

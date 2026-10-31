@@ -1,5 +1,5 @@
 //! The mini bar: a small round button that stays on screen, for starting
-//! and finishing dictation with the mouse (spec §2.4).
+//! and finishing dictation with the mouse.
 //!
 //! Unlike the overlay it takes clicks, but it must never take focus, or the
 //! text would have nowhere to go. Three things make sure of that:

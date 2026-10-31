@@ -1,7 +1,7 @@
 "use strict";
 
 // Transforms (on the Words tab): saved instructions run over a note or
-// selected text without speaking (spec §9e.5). The built-ins are used
+// selected text without speaking. The built-ins are used
 // until the list is edited; then the whole list is saved.
 
 function renderTransforms() {

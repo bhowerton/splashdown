@@ -1,4 +1,4 @@
-//! Prompt assembly for the AI pass (spec §3). User-supplied text always goes
+//! Prompt assembly for the AI pass. User-supplied text always goes
 //! inside tagged blocks; only the `<instruction>` block is ever obeyed.
 
 use crate::Mode;
@@ -6,7 +6,7 @@ use crate::Mode;
 /// Context that shapes the prompt but isn't part of what the user said.
 #[derive(Debug, Clone, Default)]
 pub struct PromptContext {
-    /// Extra instructions from the active preset (spec §4).
+    /// Extra instructions from the active preset.
     pub preset_instructions: Option<String>,
     /// Name of the app the text goes into, e.g. "Slack".
     pub app_name: Option<String>,

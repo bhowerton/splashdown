@@ -1,5 +1,5 @@
 //! Clipboard snapshot/restore, paste and typing via `SendInput`, and the
-//! copy-based selection fallback (spec §6.2, §7).
+//! copy-based selection fallback.
 
 use std::time::{Duration, Instant};
 
@@ -341,7 +341,7 @@ fn wait_for_modifiers_released() {
 /// Fails if the foreground app runs at a higher integrity level (as
 /// administrator) than we do. Windows (UIPI) would silently drop our key
 /// events, so we report it and the caller copies the text instead
-/// (spec §7.3).
+///.
 fn check_not_blocked() -> Result<()> {
     if process_elevated(None) == Some(true) {
         return Ok(());
@@ -505,7 +505,7 @@ pub(crate) fn copy_to_clipboard(text: &str) -> Result<()> {
 }
 
 /// Console windows: classic conhost and Windows Terminal. Ctrl+C there
-/// interrupts the running program instead of copying (spec §6.2).
+/// interrupts the running program instead of copying.
 const CONSOLE_CLASSES: &[&str] = &[
     "ConsoleWindowClass",
     "CASCADIA_HOSTING_WINDOW_CLASS",

@@ -1,5 +1,5 @@
 //! Microphone capture (cpal), resampling to 16 kHz mono, noise reduction,
-//! silence trimming and WAV encoding (spec §8.1).
+//! silence trimming and WAV encoding.
 
 mod capture;
 pub mod denoise;

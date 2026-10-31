@@ -1,5 +1,5 @@
 //! Presets: per-app formatting, chosen automatically from the focused app,
-//! window title or browser URL (spec §4).
+//! window title or browser URL.
 
 use serde::{Deserialize, Serialize};
 

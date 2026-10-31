@@ -1,5 +1,5 @@
 //! Turns a recording (or text) into the final text to insert:
-//! speech-to-text → AI pass → sanity guard (spec §2.3, §3).
+//! speech-to-text → AI pass → sanity guard.
 
 use std::future::Future;
 use std::pin::Pin;

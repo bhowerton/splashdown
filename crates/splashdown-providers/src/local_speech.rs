@@ -1,4 +1,4 @@
-//! Local speech-to-text with transcribe.cpp (spec §5.2): Nemotron, Parakeet
+//! Local speech-to-text with transcribe.cpp: Nemotron, Parakeet
 //! and Whisper GGUF models on this computer. Streaming models transcribe
 //! while the user speaks and run on the CPU, where each small piece is
 //! quickest; the others use Metal on macOS.

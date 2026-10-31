@@ -1,4 +1,4 @@
-//! The mini bar (spec §2.4): a small round, topmost tool window that stays
+//! The mini bar: a small round, topmost tool window that stays
 //! on screen, for starting and finishing dictation with the mouse.
 //!
 //! Unlike the overlay it takes clicks, but it never activates: it's created

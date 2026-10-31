@@ -1,5 +1,5 @@
 //! Pasteboard snapshot/restore, paste and typing via synthetic key events,
-//! and the copy-based selection fallback (spec §6.2, §7).
+//! and the copy-based selection fallback.
 
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};

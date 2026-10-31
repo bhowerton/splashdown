@@ -1,6 +1,6 @@
 "use strict";
 
-// The Notes window: Markdown files in the notes folder (spec §9e), listed
+// The Notes window: Markdown files in the notes folder, listed
 // on the left and edited on the right. A new note becomes a file once it
 // has text; after that it's saved as you type.
 
@@ -405,7 +405,7 @@ function versionRow(v) {
 
 // ---------------------------------------------------------------- transforms
 
-/** Saved instructions (spec §9e.5), from Settings → Words. */
+/** Saved instructions, from Settings → Words. */
 let transforms = [];
 
 /** "Ctrl+Alt+Digit1" → "⌃⌥1" on a Mac, "Ctrl+Alt+1" elsewhere. */

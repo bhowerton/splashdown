@@ -1,4 +1,4 @@
-//! Configuration file, secrets and on-disk locations (spec §8.5).
+//! Configuration file, secrets and on-disk locations.
 
 mod presets;
 mod secrets;

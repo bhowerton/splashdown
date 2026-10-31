@@ -1,4 +1,4 @@
-//! Interfaces for speech-to-text and text models (spec §5.1). Implementations
+//! Interfaces for speech-to-text and text models. Implementations
 //! live in `splashdown-providers`; the core only depends on these traits.
 
 use async_trait::async_trait;
@@ -21,7 +21,7 @@ pub enum ProviderError {
     Api(String),
     #[error("unexpected response: {0}")]
     InvalidResponse(String),
-    /// Input exceeds what the model can take (spec §5.5).
+    /// Input exceeds what the model can take.
     #[error("input too long for this model")]
     TooLong,
 }
@@ -169,11 +169,11 @@ impl std::ops::AddAssign for Usage {
 #[derive(Debug, Clone)]
 pub struct TextRequest {
     pub system: String,
-    /// User message, with transcript/selection/context in tagged blocks (spec §3.5).
+    /// User message, with transcript/selection/context in tagged blocks.
     pub user: String,
     pub temperature: f32,
     pub max_tokens: u32,
-    /// JSON schema for structured output (smart split, spec §3.4).
+    /// JSON schema for structured output (smart split).
     pub json_schema: Option<serde_json::Value>,
 }
 
@@ -191,7 +191,7 @@ pub trait SpeechToText: Send + Sync {
         true
     }
     /// A transcription that runs while the user speaks, for models that can
-    /// (spec §5.2). `None` means transcribe the recording when it ends.
+    ///. `None` means transcribe the recording when it ends.
     fn stream(&self, _hints: &SttHints) -> Option<Box<dyn SpeechStream>> {
         None
     }

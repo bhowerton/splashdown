@@ -1,5 +1,5 @@
 //! Sanity guard: decides whether the model's output is safe to insert, or
-//! whether to fall back to the raw transcript (spec §3.6).
+//! whether to fall back to the raw transcript.
 
 use crate::Mode;
 

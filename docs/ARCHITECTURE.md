@@ -1,6 +1,6 @@
 # Architecture
 
-How Splashdown fits together, for people changing it. [SPEC.md](SPEC.md) says what the app does; this file says where that lives in the code and why it's arranged that way.
+How Splashdown fits together, for people changing it: where each part of the app lives in the code and why it's arranged that way.
 
 ## The big picture
 

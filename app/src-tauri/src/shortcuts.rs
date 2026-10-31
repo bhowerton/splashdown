@@ -2,7 +2,7 @@
 //! AI's edit of the last dictation), ⌃⌥N (show or hide Notes), each
 //! preset's own shortcut, which starts a hands-free dictation with that
 //! preset (or finishes the one in progress), and each transform's, which
-//! runs it on the selected text (spec §9e.5).
+//! runs it on the selected text.
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};

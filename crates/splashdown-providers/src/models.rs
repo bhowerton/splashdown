@@ -1,4 +1,4 @@
-//! Downloadable local models (spec §5.2, §5.6): speech models run by
+//! Downloadable local models: speech models run by
 //! transcribe.cpp, and the built-in text models run by llama.cpp. Both are
 //! GGUF files fetched from Hugging Face when the user asks, never bundled.
 //! Downloading doesn't need the `local-speech` feature, so the app can fetch

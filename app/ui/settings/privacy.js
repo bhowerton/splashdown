@@ -74,6 +74,6 @@ async function renderNotesFolder() {
   if (folder.synced) {
     el.textContent += ` That folder is in ${folder.synced}, so ${folder.synced} keeps a copy.`;
   }
-  // Synced notes stand out while local-only mode is on (spec §9e.8).
+  // Synced notes stand out while local-only mode is on.
   el.classList.toggle("warn-text", !!folder.synced && !!state.settings.general.local_only);
 }

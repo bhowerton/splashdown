@@ -1,4 +1,4 @@
-//! The dictation session controller (spec §2.3). Turns hotkey gestures into
+//! The dictation session controller. Turns hotkey gestures into
 //! recording → speech-to-text → AI pass → insertion, and drives the overlay.
 //!
 //! Runs on its own thread. The key listener (another thread) feeds gestures
@@ -47,7 +47,7 @@ use crate::ui::Ui;
 const LEVEL_TICK: Duration = Duration::from_millis(50);
 /// How often to retry the key listener while permission is missing.
 const LISTENER_RETRY: Duration = Duration::from_secs(2);
-/// Hands-free recordings stop on their own after this long (spec §15).
+/// Hands-free recordings stop on their own after this long.
 const HANDS_FREE_MAX: Duration = Duration::from_secs(10 * 60);
 /// …or after this long without speech.
 const HANDS_FREE_SILENCE: Duration = Duration::from_secs(3 * 60);
@@ -130,7 +130,7 @@ pub struct TransformRequest {
     pub reply: mpsc::Sender<Result<TransformOutcome, String>>,
 }
 
-/// Speech transcribed while it's recorded (spec §5.2): fed the new audio on
+/// Speech transcribed while it's recorded: fed the new audio on
 /// each tick, finished on release.
 struct LiveStream {
     stream: Box<dyn splashdown_core::SpeechStream>,
@@ -160,7 +160,7 @@ impl LiveStream {
     }
 }
 
-/// A transform's result (spec §9e.5).
+/// A transform's result.
 #[derive(Debug, Clone, serde::Serialize)]
 pub struct TransformOutcome {
     /// The new text, or the original when nothing changed.
@@ -1456,7 +1456,7 @@ impl Controller {
     }
 
     /// A captured dictation: added to the note instead of the field
-    /// (spec §9e.6). ⌃⌥Z takes it back while it's recent.
+    ///. ⌃⌥Z takes it back while it's recent.
     fn deliver_capture(
         &mut self,
         active: &Active,
@@ -1498,7 +1498,7 @@ impl Controller {
         }
     }
 
-    /// Runs transform `id` on `text` with the AI (spec §9e.5). Returns its
+    /// Runs transform `id` on `text` with the AI. Returns its
     /// name and the result.
     fn run_transform(&self, id: &str, text: &str) -> Result<(String, TransformOutcome), String> {
         let engine = self.engine.as_ref().map_err(Clone::clone)?;

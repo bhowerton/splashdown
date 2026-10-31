@@ -1,4 +1,4 @@
-//! The Notes window (spec §9e), which replaced the scratchpad: notes are
+//! The Notes window, which replaced the scratchpad: notes are
 //! Markdown files in a folder the user picks (`store`), listed and edited
 //! here. ⌃⌥N or the menu bar opens it and remembers the app that was in
 //! front, so "Send to {app}" can hand focus back and paste the note there.
@@ -154,7 +154,7 @@ fn label(path: &Path) -> String {
     }
 }
 
-/// The sync service that has a copy of `path`, best effort (spec §9e.8).
+/// The sync service that has a copy of `path`, best effort.
 pub fn cloud_service(path: &Path) -> Option<&'static str> {
     let home = directories::BaseDirs::new()?.home_dir().to_path_buf();
     if cfg!(target_os = "macos") {
@@ -307,7 +307,7 @@ pub fn undo_capture(captured: &Captured) -> Result<bool, String> {
 
 // ---------------------------------------------------------------- coding agents
 
-/// Asked for while Settings doesn't allow it (spec §9e.7).
+/// Asked for while Settings doesn't allow it.
 const AGENTS_OFF: &str = "Splashdown's notes are off for coding agents. To allow it, turn on “Let coding agents read notes” in Splashdown → Settings → Privacy.";
 const AGENTS_NO_WRITE: &str = "Coding agents may read Splashdown's notes but not add to them. To allow it, turn on “…and add to them” in Splashdown → Settings → Privacy.";
 /// Most notes one search returns.

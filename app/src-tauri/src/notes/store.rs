@@ -1,4 +1,4 @@
-//! Notes as Markdown files in a folder the user picks (spec §9e): one `.md`
+//! Notes as Markdown files in a folder the user picks: one `.md`
 //! file per note, plus a `.splashdown/` folder beside them for earlier
 //! versions and pins. There's no database: the folder is the truth, and
 //! other apps (Obsidian, a sync service) may change it at any time.
@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 
 /// Inside the notes folder; hidden by Finder, Explorer and Obsidian.
 const META_DIR: &str = ".splashdown";
-/// Recordings kept with notes (spec §9e.6); never listed as notes.
+/// Recordings kept with notes; never listed as notes.
 const ATTACHMENTS_DIR: &str = "Attachments";
 /// Earlier versions kept per note.
 const KEEP_VERSIONS: usize = 50;
@@ -73,7 +73,7 @@ struct State {
     last_at: u64,
 }
 
-/// Where a captured dictation is added (spec §9e.6).
+/// Where a captured dictation is added.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Target {
     /// `Inbox.md` at the top of the folder.

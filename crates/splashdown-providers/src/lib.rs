@@ -1,4 +1,4 @@
-//! Speech-to-text and text-model providers (spec §5). The interfaces live in
+//! Speech-to-text and text-model providers. The interfaces live in
 //! `splashdown_core::provider`; this crate implements them.
 
 mod anthropic;

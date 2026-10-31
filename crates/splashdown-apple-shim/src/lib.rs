@@ -1,6 +1,6 @@
 //! Apple's on-device models — SpeechAnalyzer for speech-to-text and
 //! FoundationModels for text — through a small Swift static library with a
-//! C ABI (spec §8.4). Requires macOS 26 and Apple Silicon at run time; on
+//! C ABI. Requires macOS 26 and Apple Silicon at run time; on
 //! older systems everything reports `Unavailable`.
 //!
 //! The crate is empty on every OS except macOS.

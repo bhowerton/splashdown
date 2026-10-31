@@ -1,6 +1,6 @@
 //! The status pill: a borderless, topmost, layered tool window that never
 //! activates and lets the mouse through, so the user's focused field keeps
-//! focus (spec §8.3). Painted with GDI; the pill shape is a window region.
+//! focus. Painted with GDI; the pill shape is a window region.
 
 use std::cell::RefCell;
 use std::collections::VecDeque;

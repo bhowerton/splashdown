@@ -1,4 +1,4 @@
-//! Eval harness (spec §13): scores the AI pass and speech-to-text so model
+//! Eval harness: scores the AI pass and speech-to-text so model
 //! defaults are chosen from data, not guesses.
 
 use std::path::{Path, PathBuf};

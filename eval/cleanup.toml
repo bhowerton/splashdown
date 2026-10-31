@@ -1,4 +1,4 @@
-# AI-pass eval set (spec §13). Run with:  splashdown-cli eval cleanup --ai <provider> [--ai-model <model>]
+# AI-pass eval set. Run with:  splashdown-cli eval cleanup --ai <provider> [--ai-model <model>]
 #
 # Each case is a dictated transcript (plus an instruction or selection for
 # instruct / transform cases). Checks are deliberately loose so different

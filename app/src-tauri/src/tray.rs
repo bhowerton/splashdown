@@ -1,4 +1,4 @@
-//! Menu bar (macOS) / system tray (Windows) icon and menu (spec mock-up §2).
+//! Menu bar (macOS) / system tray (Windows) icon and menu.
 
 use std::sync::Arc;
 

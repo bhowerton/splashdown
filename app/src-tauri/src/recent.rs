@@ -1,6 +1,6 @@
 //! What the user dictated in the last few minutes, kept in memory only and
 //! sent with the next dictation into the same app, so the AI can tell what
-//! "it" or "that" refers to and carry on an unfinished sentence (spec §6.1).
+//! "it" or "that" refers to and carry on an unfinished sentence.
 
 use std::collections::VecDeque;
 use std::time::{Duration, Instant};

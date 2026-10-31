@@ -51,12 +51,12 @@ pub enum Request {
     },
     /// With `text`, add it to the capture note. Without, start a
     /// hands-free recording that goes into a note, or finish the one in
-    /// progress (spec §9e.6).
+    /// progress.
     Note {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         text: Option<String>,
     },
-    /// Notes for coding agents (spec §9e.7), when Settings allows it: the
+    /// Notes for coding agents, when Settings allows it: the
     /// notes matching `query`, as JSON.
     #[serde(rename = "search_notes")]
     SearchNotes {

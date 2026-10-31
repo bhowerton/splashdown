@@ -1,6 +1,6 @@
 # Splashdown — Roadmap to a polished 1.0
 
-**Updated:** 2026-10-29. Companion to [SPEC.md](SPEC.md) (what to build). This file is the order of work.
+**Updated:** 2026-10-29. This file is the order of work.
 
 **Status key:** ✅ done · 🟡 partly done · ⬜ not started
 
@@ -47,11 +47,11 @@ How fast and how reliably words land is the core of a dictation app; most of wha
 - ✅ **Onboarding window:** welcome → choose AI (free & private on this computer — Apple's models or local Whisper plus the built-in cleanup model; or an OpenRouter, OpenAI or Anthropic key, each verified; an existing key is detected) → permissions → practice (detects the first real dictation) → done, with a cheat sheet. Opens on first run; "Run the setup guide again" is in About.
 - ✅ **Hotkey capture:** one key picker per hotkey, showing the key as a keycap: click it and press the key (or a side mouse button, for dictation), or pick from its ▾ list (Fn, mouse buttons, reset to default). The global hotkey is paused while choosing, for at most 15 s. A legend under the pickers shows what the dictation key does (hold, double-tap, + Return, Esc), with inline tips about conflicts (Option and accented characters, AltGr on Windows, Shift, left-side keys, Fn setup).
 - ✅ **Launch at login:** offered at the end of setup (on by default) and switchable in General. Uses `tauri-plugin-autostart` (a Launch Agent on Mac).
-- ✅ **Presets and per-app rules** (spec §4): Default, Email, Texting, Work chat, Code & Terminal, Notes, plus your own (Texting was split out of Chat on 2026-10-30: personal messages and work chat want different styles). Matched by app (with `*` prefix wildcards), window title or **browser URL**, read through Accessibility from the page's web area. Each preset sets AI on/off, extra instructions and Paste or Type. Presets tab with "Add app or website" from recently used apps. *Gap #2.*
-- ✅ **Presets redesign:** apps by name and icon, Where / How it writes / Extras sections, tone choices with examples, Try it per preset, drag to reorder with conflict warnings, templates, a *By app* view; per preset: auto-send, spoken language, AI model and a global shortcut (spec §4.1). ⬜ App icons and names on Windows.
+- ✅ **Presets and per-app rules**: Default, Email, Texting, Work chat, Code & Terminal, Notes, plus your own (Texting was split out of Chat on 2026-10-30: personal messages and work chat want different styles). Matched by app (with `*` prefix wildcards), window title or **browser URL**, read through Accessibility from the page's web area. Each preset sets AI on/off, extra instructions and Paste or Type. Presets tab with "Add app or website" from recently used apps. *Gap #2.*
+- ✅ **Presets redesign:** apps by name and icon, Where / How it writes / Extras sections, tone choices with examples, Try it per preset, drag to reorder with conflict warnings, templates, a *By app* view; per preset: auto-send, spoken language, AI model and a global shortcut. ⬜ App icons and names on Windows.
 - ✅ **Switch preset while recording:** hold the dictation key and press 1–9; the pill shows "Listening · Email".
-- ✅ **History** (spec §9): History tab with search, copy, copy what was said, **redo as another preset**, delete and clear; keep-history switch; "Paste last raw transcript" (⌃⌥V and menu bar) and "Copy last result". ✅ Optionally keep the audio (off by default, needs history on), with "Transcribe again" using the current speech settings. *Gap #3.*
-- ✅ **Privacy page** (spec §10): where speech and text go, recomputed from the actual settings; **local-only mode** (refuses cloud providers and non-local servers, enforced in config resolution); switch to stop sending the app name; what's kept on this computer.
+- ✅ **History**: History tab with search, copy, copy what was said, **redo as another preset**, delete and clear; keep-history switch; "Paste last raw transcript" (⌃⌥V and menu bar) and "Copy last result". ✅ Optionally keep the audio (off by default, needs history on), with "Transcribe again" using the current speech settings. *Gap #3.*
+- ✅ **Privacy page**: where speech and text go, recomputed from the actual settings; **local-only mode** (refuses cloud providers and non-local servers, enforced in config resolution); switch to stop sending the app name; what's kept on this computer.
 - ✅ **Sounds:** quiet system "Tink" on start and "Pop" on stop, on by default, switchable.
 - 🟡 **Overlay polish:**
   - ✅ Fade in and out (opacity steps, canceled by newer state changes), and a spinner while working.
@@ -71,7 +71,7 @@ Cheap features that close visible gaps.
 - ✅ **Snippets:** spoken trigger → saved text ("my address"), anywhere in a sentence. The AI sees a placeholder and never rewords the saved text; a trigger said on its own is inserted without an AI call. Fill-ins and replacements were added later (see "Second batch of gaps").
 - ✅ **Hands-free by hold + H (2026-10-30):** hold the dictation key and press a letter (H by default, changeable in General) to carry on hands-free. Double-tap is now off by default because Claude's Quick Entry (and others) can use a double-tap of Option; it can be turned back on, and mouse buttons always double-click.
 - ✅ **Spoken commands, in any language (2026-10-30):** tap the instruction key before saying anything, then say the command. The AI turns it into one of a few actions (replace "that", delete the last word or sentence, select, bold, italic, press Return, undo, write something new), returned as JSON (`splashdown_core::command`), and the app carries it out. Nothing matches words: an earlier version recognized fixed English phrases ("send it", "delete the last sentence"), which missed rewordings ("delete *that* last word") and every other language, so all phrase lists were removed: from commands, spoken formatting (now done by the AI pass, prompt rule 4), file mentions ("dot") and the sanity guard (whose checks are now length, emptiness, question marks in any script and snippets). Tested in English, Spanish, French and German on Gemini Flash Lite and the built-in Qwen3 4B: 13 of 13 each. Commands need an AI model (any provider, including on-device).
-- ✅ **Field context per preset:** the text around the cursor (up to 1,000 characters before and 200 after) goes to the AI as reference only, so names are spelled like the thread and instructions in it are ignored (spec §6.1; off by default, on per preset; shown on the Privacy tab). Mac only for now.
+- ✅ **Field context per preset:** the text around the cursor (up to 1,000 characters before and 200 after) goes to the AI as reference only, so names are spelled like the thread and instructions in it are ignored. Mac only for now.
 - ✅ **Cleanup levels, undo and insights (2026-10-30):**
   - **Cleanup levels** per preset: None, Light (fillers and punctuation only), Medium (as before) and High (tightens rambling, fixes grammar; a High-only example in the prompt makes small models actually do it).
   - **Undo AI edit:** ⌃⌥Z or the menu bar, within 2 minutes and in the same app, undoes the paste and pastes what was said instead. Not offered after a send, for typed insertions or for transforms.
@@ -90,12 +90,12 @@ Cheap features that close visible gaps.
 - ✅ **Local-only mode:** one switch on the Privacy tab that refuses every cloud provider (enforced in config resolution).
 - ✅ **Auto-send:** Return while holding the dictation key, or right after letting go, presses Return once the text is typed; press again to undo. The overlay shows "↵ Send".
 - ✅ **Anthropic key (Claude Haiku 5.5) for cleanup**, with prompt caching. ⬜ Score it on the eval (needs a key).
-- ✅ **Spending and budgets:** per-request cost from every provider, a local per-day and per-month record, monthly and daily limits that switch to on-device models, and links to each provider's own limits (spec §9b).
+- ✅ **Spending and budgets:** per-request cost from every provider, a local per-day and per-month record, monthly and daily limits that switch to on-device models, and links to each provider's own limits.
 - ✅ **Send instructions to the cloud:** with a local cleanup model, instructions and transforms can go to a cloud model while plain dictation stays local (off by default).
-- ✅ **Scratchpad** (replaced by Notes, §7b): ⌃⌥N or the menu bar opens a small always-on-top notepad to dictate into when there's no text field. Autosaved locally (`scratchpad.json`, the current note plus the last 20), with Copy, New note and **Send to {app}**, which re-activates the app that was in front and pastes the note there (spec §9d). ⬜ Not yet tried in the running app; Windows untested.
+- ✅ **Scratchpad** (replaced by Notes, §7b): ⌃⌥N or the menu bar opens a small always-on-top notepad to dictate into when there's no text field. Autosaved locally (`scratchpad.json`, the current note plus the last 20), with Copy, New note and **Send to {app}**, which re-activates the app that was in front and pastes the note there. ⬜ Not yet tried in the running app; Windows untested.
 - ✅ **Background noise reduction:** an opt-in switch (General → While you speak) that runs RNNoise (`nnnoiseless`, pure Rust) on the recording before speech-to-text, then whisper mode's boost if that's on too. About 3 ms per second of 48 kHz audio. In a test with white noise or rumble mixed into `say` output at 0–5 dB, it brought back words the silence trimmer had cut and recordings it had rejected as "no speech". `splashdown-cli transcribe --denoise` compares it on any WAV.
-- ✅ **History retention and export:** "Delete after" (Forever, 30, 7 or 1 day) deletes old entries and their recordings; "Export…" saves the history to Downloads as Markdown or JSON (spec §9).
-- ✅ **Settings between computers:** About → Settings exports `config.toml` without API keys and imports one after a confirmation (spec §8.5).
+- ✅ **History retention and export:** "Delete after" (Forever, 30, 7 or 1 day) deletes old entries and their recordings; "Export…" saves the history to Downloads as Markdown or JSON.
+- ✅ **Settings between computers:** About → Settings exports `config.toml` without API keys and imports one after a confirmation.
 
 ### 4. M3 — Windows
 - ✅ **First run** (2026-10-30): built and launched on a Windows PC with `scripts/run-win-app.ps1`, and dictation works. CI builds, tests and packages it on `windows-latest`. Shipped as a preview installer in v0.1.0 (unsigned; no update files, so 0.1.0 Windows installs update by hand once).
@@ -125,7 +125,7 @@ Cheap features that close visible gaps.
 
 ### 6. On-device AI
 - ✅ **M5 Apple:** SpeechAnalyzer and Foundation Models through the Swift shim. Free and private on Apple Silicon with macOS 26. Wired into Settings, onboarding and "Automatic"; a question guard and prompt changes made the on-device cleanup safer. Still to do: test the weak-link fallback on macOS 13–15.
-- 🟡 **M5b built-in local model:** the `splashdown-llm` helper (llama.cpp, prompt caching) and a two-model catalog (Qwen3 4B; Qwen3 1.7B for machines with about 8 GB of memory, chosen over Gemma 3 1B and LFM2 1.2B by the cleanup eval), with a Settings option, download and "Automatic" support (spec §5.6). Offered in onboarding (the 4B model). Still to do: test on Windows (CPU and Vulkan), and recommending the small model by installed RAM.
+- 🟡 **M5b built-in local model:** the `splashdown-llm` helper (llama.cpp, prompt caching) and a two-model catalog (Qwen3 4B; Qwen3 1.7B for machines with about 8 GB of memory, chosen over Gemma 3 1B and LFM2 1.2B by the cleanup eval), with a Settings option, download and "Automatic" support. Offered in onboarding (the 4B model). Still to do: test on Windows (CPU and Vulkan), and recommending the small model by installed RAM.
 
 ### 7. Engineering quality (ongoing)
 - ⬜ Resource budgets: near-zero idle CPU, unload Whisper and local models after an idle period, measure battery impact.
@@ -136,7 +136,7 @@ Cheap features that close visible gaps.
 - ⬜ Beta group, feedback form, known-issues list.
 
 ### 7b. Notes you own
-Notes as Markdown files in a folder the user picks, replacing the scratchpad. Spec: [SPEC.md](SPEC.md) §9e. Storage: `~/Documents/Splashdown Notes/` (Windows: `Documents\Splashdown Notes\`) by default, or any folder, such as an Obsidian vault, iCloud Drive or Dropbox. Versions and pins sit in a `.splashdown/` folder inside it; nothing goes in a database or a cloud.
+Notes as Markdown files in a folder the user picks, replacing the scratchpad. Storage: `~/Documents/Splashdown Notes/` (Windows: `Documents\Splashdown Notes\`) by default, or any folder, such as an Obsidian vault, iCloud Drive or Dropbox. Versions and pins sit in a `.splashdown/` folder inside it; nothing goes in a database or a cloud.
 - ✅ **N1 Notes window and storage** (2026-10-31; ⬜ still to try in the running app):
   - One `.md` file per note, with short front matter.
   - A list with search, pins and subfolder groups, and versions (50 per note) with Restore.
@@ -160,7 +160,7 @@ Notes as Markdown files in a folder the user picks, replacing the scratchpad. Sp
   - Optionally, the recording is kept in `Attachments/`.
   - ⬜ The mini bar's "Dictate a note".
 - ✅ **N4 Notes for agents** (2026-10-31): `search_notes`, `read_note` and `append_note` in `splashdown-mcp`, through the control socket. Off by default, with separate switches for reading and writing on the Privacy tab.
-- ⏸ **N5 Meeting notes: decide after N1.** Two-channel recording (You and Them), transcription in pieces, a summary transform. See SPEC §9e.10.
+- ⏸ **N5 Meeting notes: decide after N1.** Two-channel recording (You and Them), transcription in pieces, a summary transform.
 
 ### 7c. Other planned features
 The working list of improvements after 0.1.1, in rough order. Mark items here as they land.
@@ -168,7 +168,7 @@ The working list of improvements after 0.1.1, in rough order. Mark items here as
 **Quick wins (2026-10-31; ⬜ still to try each in the running app):**
 - ✅ **Keep recording briefly after release** (2026-10-31): 200 ms more audio after the key is let go (not after Esc), before the stop sound, so the last word isn't cut off (`AudioWorker::finish`).
 - ✅ **New lines that don't send** (2026-10-31): when a preset types rather than pastes, line breaks are sent as Shift+Return, so chat apps don't send the message halfway through; terminals (a list in `splashdown-platform`) keep a plain Return. Pasted text was already safe.
-- ✅ **Recent dictations as context** (2026-10-31): up to 3 dictations from the last 5 minutes into the same app go to the AI in an `<earlier>` block (spec §6.1), held in memory only; a Privacy-tab switch, on by default. Skipped with field context on, and for Apple's on-device model, which repeats and obeys them. Eval: 3 new cases, all pass on the default model; the built-in local model never repeats or obeys them.
+- ✅ **Recent dictations as context** (2026-10-31): up to 3 dictations from the last 5 minutes into the same app go to the AI in an `<earlier>` block, held in memory only; a Privacy-tab switch, on by default. Skipped with field context on, and for Apple's on-device model, which repeats and obeys them. Eval: 3 new cases, all pass on the default model; the built-in local model never repeats or obeys them.
 - ✅ **Quieter computer while dictating** (2026-10-31): General → "Other sounds while you speak": leave (default), turn down to a quarter, or mute, from just after the start sound until the recording ends. The volume is put back only if the user didn't change it meanwhile. CoreAudio on macOS, `IAudioEndpointVolume` on Windows (builds; untested on a PC).
 - ✅ **Model-based silence detection** (2026-10-31): after the volume-based trim, a clip needs about 0.1 s that the `earshot` speech detector (pure Rust, 40 KB model, any language) takes for a voice, so fans, clicks and hums don't reach the speech model. The speech eval's clips all still pass (WER unchanged). Local Whisper output that only repeats its hints (3+ words) is treated as silence.
 

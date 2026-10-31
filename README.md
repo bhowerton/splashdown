@@ -203,7 +203,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 | `crates/splashdown-control` | The running app's control socket: protocol, client, server |
 | `crates/splashdown-mcp` | `splashdown-mcp`, voice input for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
 | `app/` | The menu bar app (Tauri) and its Settings and onboarding windows |
-| `docs/` | [Architecture](docs/ARCHITECTURE.md), [spec](docs/SPEC.md), [roadmap](docs/ROADMAP.md) |
+| `docs/` | [Architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md) |
 
 </details>
 
@@ -215,7 +215,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 - [Voice input for coding agents](docs/AGENTS.md): `splashdown-mcp` for Claude Code, Cursor and others
 - [Contributing](CONTRIBUTING.md): building, checks, releases and conventions
 - [Security](SECURITY.md): how to report a vulnerability
-- [Architecture](docs/ARCHITECTURE.md), [spec](docs/SPEC.md) and [roadmap](docs/ROADMAP.md)
+- [Architecture](docs/ARCHITECTURE.md) and [roadmap](docs/ROADMAP.md)
 
 ## Community
 

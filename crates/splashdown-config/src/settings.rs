@@ -1,4 +1,4 @@
-//! `config.toml`: which providers and models to use (spec §5.4, §8.5).
+//! `config.toml`: which providers and models to use.
 //!
 //! ```toml
 //! [speech]
@@ -45,12 +45,12 @@ pub struct Settings {
     /// Find-and-replace rules applied to the final text.
     pub replacements: Vec<Replacement>,
     pub notes: NotesSettings,
-    /// Saved instructions run over a note or selected text (spec §9e.5).
+    /// Saved instructions run over a note or selected text.
     /// Unset means the built-in ones; once edited, the full list is saved.
     pub transforms: Option<Vec<crate::Transform>>,
 }
 
-/// Notes (spec §9e).
+/// Notes.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct NotesSettings {
@@ -90,7 +90,7 @@ impl NotesSettings {
     }
 }
 
-/// Where a captured dictation goes (spec §9e.6).
+/// Where a captured dictation goes.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum CaptureTo {

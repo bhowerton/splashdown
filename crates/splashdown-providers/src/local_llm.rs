@@ -1,4 +1,4 @@
-//! The built-in local text model (spec §5.6): a GGUF model from Hugging
+//! The built-in local text model: a GGUF model from Hugging
 //! Face run by llama.cpp in `splashdown-llm`, a helper process shipped next
 //! to the app. Nothing else to install, unlike Ollama or LM Studio.
 //!

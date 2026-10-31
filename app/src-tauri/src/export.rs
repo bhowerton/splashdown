@@ -1,5 +1,5 @@
-//! Exporting the history, and moving settings between computers (spec §9,
-//! §8.5). There's no save dialog (no dialog plugin): files go to Downloads
+//! Exporting the history, and moving settings between computers. There's
+//! no save dialog (no dialog plugin): files go to Downloads
 //! and are shown in Finder / File Explorer. Imports are read by the
 //! Settings window (a file input) and arrive here as text, so the app needs
 //! no file access for them.

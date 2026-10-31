@@ -1,4 +1,4 @@
-//! Hotkey gesture recognition (spec §2.1–§2.2), independent of any OS.
+//! Hotkey gesture recognition, independent of any OS.
 //!
 //! The platform layer reports raw key presses; the recognizer turns them
 //! into session actions and decides which keys to swallow. Time is passed
@@ -120,7 +120,7 @@ pub enum Action {
     /// Double-tap: recording continues hands-free until the next tap.
     HandsFree,
     /// The note key while holding the dictation key: this recording goes
-    /// into a note instead of the field (spec §9e.6).
+    /// into a note instead of the field.
     Capture,
     /// Stop recording and process it.
     Finish,
