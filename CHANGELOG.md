@@ -2,6 +2,14 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Earlier dictations as context.** What you dictated into the same app in the last few minutes goes along with the next dictation, so "it" and "that" make sense and names are spelled the same way. Kept in memory only; switch it off in Settings → Privacy.
+- **Other sounds while you speak.** Settings → General can turn music and videos down or mute them while you hold the key, and put them back afterwards.
+- **Fewer made-up words.** A small speech detector checks a recording has a voice in it before it's transcribed, so a fan or a click no longer comes back as "Thank you." Local Whisper output that only repeats its vocabulary hints is dropped.
+- **The last word isn't cut off.** Recording carries on for a moment after you let go of the key.
+- **New lines don't send messages.** Presets that type instead of paste send line breaks as Shift+Return, which chat apps take as a new line. Terminals still get Return.
+
 ## 0.1.1 — 2026-10-31
 
 - **Windows builds are code-signed** by Point Dynamics, LLC, so Windows names the publisher instead of "Unknown". A new release can still get a SmartScreen notice until enough people have downloaded it.

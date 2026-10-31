@@ -76,6 +76,9 @@ const UNDO_WINDOW: Duration = Duration::from_secs(120);
 /// Time for the app to apply Undo before pasting over it.
 const UNDO_SETTLE: Duration = Duration::from_millis(120);
 const SHOW_NOTICE: Duration = Duration::from_millis(3000);
+/// Other sounds are quieted this long after the start sound begins, so it
+/// isn't cut off.
+const QUIET_AFTER_SOUND: Duration = Duration::from_millis(300);
 
 /// An insertion to re-check for corrections a little later.
 struct PendingCorrectionCheck {
@@ -227,6 +230,10 @@ struct Active {
     loudest: f32,
     /// The "microphone hears nothing" warning was shown.
     mic_warned: bool,
+    /// When to quiet other sounds (after the start sound has played).
+    quiet_due: Option<Instant>,
+    /// Other sounds, quieted while recording; dropping it restores them.
+    quiet: Option<splashdown_platform::QuietOutput>,
     hands_free: bool,
     /// What the overlay shows for this recording, to restore after a
     /// cancel confirmation.
@@ -269,6 +276,8 @@ struct Controller {
     last_insert: Option<(i32, Instant)>,
     /// The text of that insertion, for edits of "that".
     last_text: String,
+    /// Recent dictations, sent with the next one into the same app.
+    recent: crate::recent::Recent,
     /// The last insertion the AI changed, for "Undo AI edit".
     last_ai_edit: Option<AiEdit>,
     /// A spoken command found while preparing a recording (see `prepare`).
@@ -311,6 +320,7 @@ impl Controller {
             next_session: 0,
             last_insert: None,
             last_text: String::new(),
+            recent: crate::recent::Recent::default(),
             last_ai_edit: None,
             pending_command: None,
             history,
@@ -478,6 +488,14 @@ impl Controller {
         }
         if let Some(chunker) = self.active.as_mut().and_then(|a| a.chunker.as_mut()) {
             chunker.tick(&self.audio);
+        }
+        if let (Some(active), Ok(engine)) = (self.active.as_mut(), &self.engine)
+            && active.quiet_due.is_some_and(|due| now >= due)
+        {
+            active.quiet_due = None;
+            active.quiet = engine
+                .quiet_others
+                .and_then(splashdown_platform::quiet_output);
         }
         let quiet = self.engine.as_ref().is_ok_and(|e| e.whisper_mode);
         let mut mic_silent = false;
@@ -711,6 +729,19 @@ impl Controller {
             last_voice: now,
             loudest: 0.0,
             mic_warned: false,
+            quiet_due: self
+                .engine
+                .as_ref()
+                .ok()
+                .filter(|e| e.quiet_others.is_some())
+                .map(|e| {
+                    now + if e.sounds {
+                        QUIET_AFTER_SOUND
+                    } else {
+                        Duration::ZERO
+                    }
+                }),
+            quiet: None,
             hands_free: false,
             shown,
             preset,
@@ -837,7 +868,10 @@ impl Controller {
 
     /// Stops recording and turns it into a pipeline job, or shows why not.
     fn prepare(&mut self, active: &mut Active) -> Option<AudioJob> {
-        let rest = self.audio.stop();
+        let rest = self.audio.finish();
+        // Other sounds come back before the stop sound plays.
+        active.quiet_due = None;
+        active.quiet = None;
         let Ok(engine) = &self.engine else {
             self.ui.hide();
             return None;
@@ -910,6 +944,18 @@ impl Controller {
             .as_ref()
             .filter(|_| engine.share_app_name)
             .map(|f| f.app.name.clone());
+        // Earlier dictations into this app, unless the field's own text
+        // (which already shows them) goes along.
+        let earlier = match &active.focus {
+            Some(focus)
+                if engine.share_recent
+                    && matches!(mode, Mode::Dictate | Mode::DictateInstruct)
+                    && active.field_text.is_none() =>
+            {
+                self.recent.for_app(&focus.app.id, Instant::now())
+            }
+            _ => Vec::new(),
+        };
         Some(AudioJob {
             mode,
             speech,
@@ -920,6 +966,7 @@ impl Controller {
                     .clipboard
                     .clone()
                     .filter(|_| active.preset.clipboard_context),
+                earlier,
                 snippets: crate::replacements::fill_in(
                     &engine.context.snippets,
                     chrono::Local::now(),
@@ -997,7 +1044,9 @@ impl Controller {
         }
         let method = match active.preset.insert {
             InsertMode::Paste => InsertMethod::Paste,
-            InsertMode::Type => InsertMethod::Type,
+            InsertMode::Type => InsertMethod::Type {
+                soft_breaks: !splashdown_platform::is_terminal(app_id),
+            },
         };
         // Right after other text, a space first ("…now?" + "Does…"), judged
         // from the character before the cursor. Not for a transform, which
@@ -1056,6 +1105,9 @@ impl Controller {
         );
         self.last_insert = target_pid.map(|pid| (pid, Instant::now()));
         self.last_text = outcome.text.clone();
+        if outcome.mode != Mode::Transform && self.engine.as_ref().is_ok_and(|e| e.share_recent) {
+            self.recent.push(app_id, &outcome.text, Instant::now());
+        }
         if self.engine.as_ref().is_ok_and(|e| e.keep_insights) {
             crate::insights::shared().record(
                 &outcome.text,

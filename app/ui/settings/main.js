@@ -117,6 +117,7 @@ function collect() {
   s.general.mini_bar = $("gen-mini-bar").checked ? true : null;
   s.general.noise_reduction = $("gen-noise").checked ? true : null;
   s.general.history_days = Number($("hist-days").value) || null;
+  s.general.other_audio = $("gen-other-audio").value;
   s.general.insights = $("ins-keep").checked ? null : false;
   s.general.learn_vocabulary = $("gen-learn").checked ? null : false;
   s.general.check_for_updates = $("gen-updates").checked ? null : false;
@@ -126,6 +127,7 @@ function collect() {
   s.general.budget = collectBudget();
   s.general.local_only = $("pv-local").checked;
   s.general.share_app_name = $("pv-appname").checked ? null : false;
+  s.general.share_recent = $("pv-recent").checked ? null : false;
 
   const sttProvider = $("stt-provider").value;
   if (sttProvider !== s.speech.provider) {

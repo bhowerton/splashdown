@@ -5,8 +5,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use splashdown_config::{
-    AiProvider, Budget, Destination, Paths, Preset, PresetModel, Secrets, Settings, Situation,
-    SpeechChoice, SpeechProvider,
+    AiProvider, Budget, Destination, OtherAudio, Paths, Preset, PresetModel, Secrets, Settings,
+    Situation, SpeechChoice, SpeechProvider,
 };
 use splashdown_core::fallback::{FallbackModel, FallbackStt};
 use splashdown_core::{Pipeline, PromptContext, SpeechToText, SttHints, TextModel};
@@ -49,6 +49,10 @@ pub struct Engine {
     pub learn_vocabulary: bool,
     /// Tell the AI which app the text is going into.
     pub share_app_name: bool,
+    /// Send recent dictations into the same app along with the next one.
+    pub share_recent: bool,
+    /// Quiet other sounds while recording.
+    pub quiet_others: Option<splashdown_platform::Quieten>,
     /// Play sounds when recording starts and stops.
     pub sounds: bool,
     pub sound_volume: f32,
@@ -235,6 +239,17 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         replacements: crate::replacements::Replacements::new(&settings.replacements),
         learn_vocabulary: settings.general.learn_vocabulary(),
         share_app_name: settings.general.share_app_name(),
+        // Apple's on-device model repeats and even obeys earlier text
+        // (eval: earlier-*), so it never gets any.
+        quiet_others: match settings.general.other_audio {
+            OtherAudio::Leave => None,
+            OtherAudio::Lower => Some(splashdown_platform::Quieten::Lower),
+            OtherAudio::Mute => Some(splashdown_platform::Quieten::Mute),
+        },
+        share_recent: settings.general.share_recent()
+            && ai_choice
+                .as_ref()
+                .is_none_or(|c| c.provider != AiProvider::Apple),
         sounds: settings.general.sounds(),
         sound_volume: settings.general.sound_volume(),
         microphone: settings.general.microphone.clone(),

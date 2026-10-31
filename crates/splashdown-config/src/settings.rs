@@ -147,6 +147,9 @@ pub struct GeneralSettings {
     pub local_only: bool,
     /// Tell the AI which app the text is going into. Unset means on.
     pub share_app_name: Option<bool>,
+    /// Send what was dictated into the same app in the last few minutes
+    /// along with the next dictation, for reference. Unset means on.
+    pub share_recent: Option<bool>,
     /// Quiet sounds when recording starts and stops. Unset means on.
     pub sounds: Option<bool>,
     /// Sound volume, 0.0–1.0. Unset means the default (quiet).
@@ -177,6 +180,18 @@ pub struct GeneralSettings {
     /// Delete history entries (and their recordings) older than this many
     /// days. Unset means keep them (up to the last 300).
     pub history_days: Option<u32>,
+    /// What happens to other sounds (music, videos) while recording.
+    pub other_audio: OtherAudio,
+}
+
+/// Other sounds while recording.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum OtherAudio {
+    #[default]
+    Leave,
+    Lower,
+    Mute,
 }
 
 /// Quiet enough to sit under speech without being missed.
@@ -228,6 +243,10 @@ impl GeneralSettings {
 
     pub fn share_app_name(&self) -> bool {
         self.share_app_name.unwrap_or(true)
+    }
+
+    pub fn share_recent(&self) -> bool {
+        self.share_recent.unwrap_or(true)
     }
 
     pub fn sounds(&self) -> bool {
@@ -1122,6 +1141,14 @@ mod tests {
         assert_eq!(g.history_days(), None, "zero means keep");
         g.history_days = Some(30);
         assert_eq!(g.history_days(), Some(30));
+    }
+
+    #[test]
+    fn other_audio_is_left_alone_unless_chosen() {
+        assert_eq!(GeneralSettings::default().other_audio, OtherAudio::Leave);
+        assert!(GeneralSettings::default().share_recent());
+        let s: Settings = toml::from_str("[general]\nother_audio = \"mute\"").unwrap();
+        assert_eq!(s.general.other_audio, OtherAudio::Mute);
     }
 
     #[test]

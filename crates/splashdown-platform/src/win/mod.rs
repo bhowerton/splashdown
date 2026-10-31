@@ -12,6 +12,8 @@ mod keys;
 #[cfg(windows)]
 mod minibar;
 #[cfg(windows)]
+mod output;
+#[cfg(windows)]
 mod overlay;
 #[cfg(windows)]
 mod sound;
@@ -27,6 +29,8 @@ pub(crate) use clipboard::{
 pub(crate) use keys::KeyListener;
 #[cfg(windows)]
 pub(crate) use minibar::MiniBar;
+#[cfg(windows)]
+pub(crate) use output::{QuietOutput, quiet_output};
 #[cfg(windows)]
 pub(crate) use overlay::Overlay;
 #[cfg(windows)]

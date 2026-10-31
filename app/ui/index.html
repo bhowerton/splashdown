@@ -91,6 +91,12 @@
           <input id="gen-whisper" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Reduce background noise<small>Removes steady noise such as fans, traffic and café chatter before your speech is transcribed. Runs on this computer.</small></span>
           <input id="gen-noise" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">Other sounds while you speak<small>Music and videos are turned down or muted while you hold the key, and put back afterwards.</small></span>
+          <select id="gen-other-audio" data-setting>
+            <option value="leave">Leave as they are</option>
+            <option value="lower">Turn down</option>
+            <option value="mute">Mute</option>
+          </select></label>
         <label class="row"><span class="lbl">Show mini bar<small>A small button that stays on screen, if you'd rather click than hold a key: click it to start dictating into the field you're typing in, and again to finish. Drag it anywhere. Also in the menu bar.</small></span>
           <input id="gen-mini-bar" type="checkbox" class="switch" data-setting></label>
       </div>
@@ -366,6 +372,8 @@
         <div class="gh">What the AI is told</div>
         <label class="row"><span class="lbl">The name of the app you're typing in<small>Helps with formatting, e.g. “Slack”. Only the name.</small></span>
           <input id="pv-appname" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">What you just dictated into the same app<small>The last few minutes, so “it” and “that” make sense. Never saved.</small></span>
+          <input id="pv-recent" type="checkbox" class="switch" data-setting></label>
         <div class="row"><span class="lbl">Selected text<small>Only when you select text and dictate an instruction for it.</small></span></div>
         <div class="row"><span class="lbl">Text around the cursor<small id="pv-context"></small></span><button class="link" data-goto="presets">Change</button></div>
         <div class="row"><span class="lbl">Your clipboard<small id="pv-clipboard"></small></span><button class="link" data-goto="presets">Change</button></div>

@@ -37,6 +37,7 @@ function renderPrivacy() {
     : "Never sent. Presets can turn it on, for names and code you've copied.";
   $("pv-local").checked = !!s.general.local_only;
   $("pv-appname").checked = s.general.share_app_name !== false;
+  $("pv-recent").checked = s.general.share_recent !== false;
   const days = s.general.history_days;
   const kept = days ? `, deleted after ${days === 1 ? "1 day" : `${days} days`}` : "";
   $("pv-history").textContent = s.general.keep_history === true

@@ -2,9 +2,13 @@
 //! between threads) and serves start/take/stop requests.
 
 use std::sync::mpsc::{self, Sender};
+use std::time::Duration;
 
 use splashdown_audio::{Level, Recorder};
 use splashdown_core::AudioClip;
+
+/// How long a finished recording carries on after the key is released.
+const RELEASE_TAIL: Duration = Duration::from_millis(200);
 
 enum Command {
     /// Start recording from the preferred device (or the automatic choice).
@@ -103,6 +107,14 @@ impl AudioWorker {
 
     pub fn stop(&self) -> AudioClip {
         self.request(Command::Stop)
+    }
+
+    /// Stops a recording the user finished. People let go of the key as
+    /// they say the last syllable, so it keeps recording for `RELEASE_TAIL`
+    /// first; cancelling uses `stop`, which doesn't wait.
+    pub fn finish(&self) -> AudioClip {
+        std::thread::sleep(RELEASE_TAIL);
+        self.stop()
     }
 
     /// The recording from sample `from` on (since the last `take`).

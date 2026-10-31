@@ -14,6 +14,7 @@ mod insights;
 mod minibar;
 mod preview;
 mod project;
+mod recent;
 mod replacements;
 mod scratchpad;
 mod session;

@@ -238,8 +238,10 @@ pub enum InsertMethod {
     /// Clipboard + paste: fast and a single undo step (spec §7.1).
     #[default]
     Paste,
-    /// Simulated typing, for apps where paste misbehaves (spec §7.2).
-    Type,
+    /// Simulated typing, for apps where paste misbehaves (spec §7.2). With
+    /// `soft_breaks`, line breaks are typed as Shift+Return, which chat apps
+    /// take as a new line rather than "send"; terminals want plain Return.
+    Type { soft_breaks: bool },
 }
 
 /// Inserts `text` into the focused field. Blocks for a few hundred ms
@@ -247,8 +249,36 @@ pub enum InsertMethod {
 pub fn insert_text(text: &str, method: InsertMethod) -> Result<()> {
     match method {
         InsertMethod::Paste => imp::paste_text(text),
-        InsertMethod::Type => imp::type_text(text),
+        InsertMethod::Type { soft_breaks } => imp::type_text(text, soft_breaks),
     }
+}
+
+/// Terminal apps, by bundle ID (macOS) or executable name (Windows). There
+/// Shift+Return isn't a line break, so typed text uses plain Return.
+const TERMINALS: &[&str] = &[
+    "com.apple.Terminal",
+    "com.googlecode.iterm2",
+    "dev.warp.Warp-Stable",
+    "com.mitchellh.ghostty",
+    "net.kovidgoyal.kitty",
+    "io.alacritty",
+    "com.github.wez.wezterm",
+    "co.zeit.hyper",
+    "WindowsTerminal.exe",
+    "cmd.exe",
+    "powershell.exe",
+    "pwsh.exe",
+    "conhost.exe",
+    "OpenConsole.exe",
+    "mintty.exe",
+    "putty.exe",
+    "alacritty.exe",
+    "wezterm-gui.exe",
+];
+
+/// Whether `app_id` is a terminal emulator.
+pub fn is_terminal(app_id: &str) -> bool {
+    TERMINALS.iter().any(|t| t.eq_ignore_ascii_case(app_id))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -465,6 +495,26 @@ pub fn reduce_motion() -> bool {
     imp::reduce_motion()
 }
 
+// ---------------------------------------------------------------- output
+
+/// How other sounds (music, videos, calls) are quieted while recording.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Quieten {
+    /// Down to a quarter of their volume.
+    Lower,
+    Mute,
+}
+
+/// The computer's sound output, lowered or muted while recording. Dropping
+/// it puts the volume back, unless the user changed it meanwhile.
+pub struct QuietOutput(#[allow(dead_code)] imp::QuietOutput);
+
+/// Lowers or mutes the default output device. `None` when there's nothing
+/// to do: no device or volume control, or it's already silent or muted.
+pub fn quiet_output(how: Quieten) -> Option<QuietOutput> {
+    imp::quiet_output(how).map(QuietOutput)
+}
+
 // ---------------------------------------------------------------- overlay
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -674,5 +724,13 @@ mod tests {
         // Emoji count as two UTF-16 units.
         assert_eq!(window_around("👋 hi there", Some(5), 3, 0).unwrap(), "…hi…");
         assert_eq!(window_around("   ", None, 10, 10), None);
+    }
+
+    #[test]
+    fn terminals_by_bundle_id_or_executable() {
+        assert!(is_terminal("com.apple.Terminal"));
+        assert!(is_terminal("WINDOWSTERMINAL.EXE"));
+        assert!(!is_terminal("com.tinyspeck.slackmacgap"));
+        assert!(!is_terminal("Code.exe"));
     }
 }

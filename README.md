@@ -151,7 +151,7 @@ Settings → Privacy shows where your words go for your current settings. The fu
 
 ## How well it works
 
-Every default was chosen by measurement. The cleanup prompt is tested on 44 cases covering fillers, self-corrections, formatting, instructions and prompt injection: the default OpenRouter model scores 98%, the built-in local model (Qwen3 4B) 84%, Apple's on-device model 80%. Results and how to run them are in [eval/README.md](eval/README.md).
+Every default was chosen by measurement. The cleanup prompt is tested on 49 cases covering fillers, self-corrections, formatting, instructions, context and prompt injection: the default OpenRouter model scores 96%, the built-in local model (Qwen3 4B) 84%, Apple's on-device model 71%. Results and how to run them are in [eval/README.md](eval/README.md).
 
 ## When something misbehaves
 

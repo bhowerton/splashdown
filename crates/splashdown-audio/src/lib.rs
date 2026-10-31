@@ -17,13 +17,14 @@ use splashdown_core::AudioClip;
 pub const TARGET_SAMPLE_RATE: u32 = 16_000;
 
 /// Prepares a recording for speech-to-text: resample to 16 kHz and trim
-/// silence. Returns `None` if there's no speech in it.
+/// silence. Returns `None` if there's no speech in it: nothing louder than
+/// the room, or nothing the speech detector takes for a voice.
 pub fn prepare(clip: &AudioClip) -> Option<AudioClip> {
     let resampled = AudioClip::new(
         resample::resample(&clip.samples, clip.sample_rate, TARGET_SAMPLE_RATE),
         TARGET_SAMPLE_RATE,
     );
-    vad::trim_silence(&resampled)
+    vad::trim_silence(&resampled).filter(vad::has_voice)
 }
 
 /// Optional clean-up before speech-to-text, from the user's settings.

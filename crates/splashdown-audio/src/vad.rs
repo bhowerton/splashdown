@@ -94,6 +94,30 @@ pub fn find_pause(
     best.map(|i: usize| i.min(clip.samples.len()))
 }
 
+/// One frame for the speech detector: 16 ms at 16 kHz.
+const VOICE_FRAME: usize = 256;
+/// Frames scoring at least this are speech.
+const VOICE_SCORE: f32 = 0.5;
+/// A clip needs this many speech frames (about 0.1 s) to count.
+const MIN_VOICE_FRAMES: usize = 6;
+
+/// Whether a 16 kHz clip contains a voice, judged by a small neural speech
+/// detector (`earshot`, any language) rather than loudness. A fan, a click
+/// or a door that's louder than the room passes `trim_silence`, and speech
+/// models make up text for those ("Thank you.").
+pub fn has_voice(clip: &AudioClip) -> bool {
+    debug_assert_eq!(clip.sample_rate, crate::TARGET_SAMPLE_RATE);
+    let mut detector = earshot::Detector::default();
+    clip.samples
+        .as_chunks::<VOICE_FRAME>()
+        .0
+        .iter()
+        .filter(|frame| detector.predict_f32(frame.as_slice()) >= VOICE_SCORE)
+        .take(MIN_VOICE_FRAMES)
+        .count()
+        == MIN_VOICE_FRAMES
+}
+
 fn rms(samples: &[f32]) -> f32 {
     if samples.is_empty() {
         return 0.0;
@@ -153,6 +177,25 @@ mod tests {
         // Silence alone isn't split.
         let silent = AudioClip::new(vec![0.001; 5 * rate as usize], rate);
         assert!(find_pause(&silent, 0, 400, 300).is_none());
+    }
+
+    #[test]
+    fn noise_and_tones_have_no_voice() {
+        // White noise and a steady hum are louder than the room, but not a
+        // voice.
+        let mut seed = 1u32;
+        let noise: Vec<f32> = (0..32_000)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (seed >> 8) as f32 / (1u32 << 24) as f32 * 0.6 - 0.3
+            })
+            .collect();
+        assert!(!has_voice(&AudioClip::new(noise, 16_000)));
+        let hum: Vec<f32> = (0..32_000)
+            .map(|i| (i as f32 * std::f32::consts::TAU * 120.0 / 16_000.0).sin() * 0.3)
+            .collect();
+        assert!(!has_voice(&AudioClip::new(hum, 16_000)));
+        assert!(!has_voice(&AudioClip::new(vec![0.0; 100], 16_000)));
     }
 
     #[test]

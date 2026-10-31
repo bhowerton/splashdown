@@ -147,6 +147,7 @@ impl SpeechToText for WhisperLocal {
             (None, false) => None,
         };
         let prompt = hints.prompt();
+        let hint_text = prompt.clone();
 
         let text = tokio::task::spawn_blocking(move || -> ProviderResult<String> {
             let ctx = model.context()?;
@@ -182,11 +183,35 @@ impl SpeechToText for WhisperLocal {
         .await
         .map_err(|e| ProviderError::Unavailable(format!("whisper task failed: {e}")))??;
 
+        let mut text = clean_whisper_text(&text);
+        if hint_text
+            .as_deref()
+            .is_some_and(|hints| echoes_hints(&text, hints))
+        {
+            tracing::info!("whisper only repeated its hints; treating it as silence");
+            text.clear();
+        }
         Ok(Transcript {
-            text: clean_whisper_text(&text),
+            text,
             usage: Usage::FREE,
         })
     }
+}
+
+/// On near-silent audio Whisper sometimes "hears" its own prompt
+/// ("Vocabulary: Tauri, OpenRouter."). Output of three or more words that's
+/// only a stretch of the hints is that, not speech; a word or two from the
+/// vocabulary could really have been said.
+fn echoes_hints(text: &str, hints: &str) -> bool {
+    let words = |s: &str| -> Vec<String> {
+        s.split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect()
+    };
+    let said = words(text);
+    let hints = words(hints);
+    said.len() >= 3 && hints.windows(said.len()).any(|w| w == said.as_slice())
 }
 
 /// Whisper marks silence and noise with bracketed tags like `[BLANK_AUDIO]`
@@ -208,6 +233,17 @@ fn clean_whisper_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn repeated_hints_are_not_speech() {
+        let hints = "Vocabulary: Tauri, OpenRouter, Kubernetes.";
+        assert!(echoes_hints("Vocabulary: Tauri, OpenRouter.", hints));
+        assert!(echoes_hints("tauri openrouter kubernetes", hints));
+        // A word or two could really have been said.
+        assert!(!echoes_hints("Kubernetes.", hints));
+        assert!(!echoes_hints("Tauri, OpenRouter", hints));
+        assert!(!echoes_hints("Deploy Tauri to Kubernetes.", hints));
+    }
 
     #[test]
     fn strips_non_speech_tags() {

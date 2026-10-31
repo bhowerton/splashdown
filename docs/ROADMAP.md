@@ -152,10 +152,30 @@ Notes as Markdown files in a folder the user picks, replacing the scratchpad. Sp
 - ⏸ **N5 Meeting notes: decide after N1.** Two-channel recording (You and Them), transcription in pieces, a summary transform. See SPEC §9e.10.
 
 ### 7c. Other planned features
+The working list of improvements after 0.1.1, in rough order. Mark items here as they land.
+
+**Quick wins (2026-10-31; ⬜ still to try each in the running app):**
+- ✅ **Keep recording briefly after release** (2026-10-31): 200 ms more audio after the key is let go (not after Esc), before the stop sound, so the last word isn't cut off (`AudioWorker::finish`).
+- ✅ **New lines that don't send** (2026-10-31): when a preset types rather than pastes, line breaks are sent as Shift+Return, so chat apps don't send the message halfway through; terminals (a list in `splashdown-platform`) keep a plain Return. Pasted text was already safe.
+- ✅ **Recent dictations as context** (2026-10-31): up to 3 dictations from the last 5 minutes into the same app go to the AI in an `<earlier>` block (spec §6.1), held in memory only; a Privacy-tab switch, on by default. Skipped with field context on, and for Apple's on-device model, which repeats and obeys them. Eval: 3 new cases, all pass on the default model; the built-in local model never repeats or obeys them.
+- ✅ **Quieter computer while dictating** (2026-10-31): General → "Other sounds while you speak": leave (default), turn down to a quarter, or mute, from just after the start sound until the recording ends. The volume is put back only if the user didn't change it meanwhile. CoreAudio on macOS, `IAudioEndpointVolume` on Windows (builds; untested on a PC).
+- ✅ **Model-based silence detection** (2026-10-31): after the volume-based trim, a clip needs about 0.1 s that the `earshot` speech detector (pure Rust, 40 KB model, any language) takes for a voice, so fans, clicks and hums don't reach the speech model. The speech eval's clips all still pass (WER unchanged). Local Whisper output that only repeats its hints (3+ words) is treated as silence.
+
+**Next:**
+- ⬜ **Type the AI's output as it streams:** text starts appearing at the first word, and only what's missing is written at the end. If the sanity guard rejects the result, the streamed text is replaced with the raw transcript.
+- ⬜ **Parakeet as a local speech model:** faster than Whisper on CPU, and can transcribe while you speak, so text is ready about 0.1 s after release.
+- ⬜ **"Ask" panel:** a spoken question, about a selection or on its own, is answered in a panel by the pill (Copy, Insert) instead of being typed. With nothing selected, "help me write" drafts new text.
+- ⬜ **Run cloud and local speech recognition together** when a local model is installed, and use the first good result, instead of waiting for the cloud to fail.
+- ⬜ **A complete CLI:** `status --json`, reading and changing settings, choosing and downloading models, searching history, and stable exit codes.
 - ⬜ **Import vocabulary and snippets** exported from other dictation apps.
 - ⬜ **File transcription:** drop an audio or video file onto Notes to get a transcript note.
-- ⬜ **"Ask" panel:** a spoken question is answered in a panel by the pill (Copy, Insert) instead of being typed.
-- ⬜ **Parakeet** as a local speech model, faster than Whisper on CPU.
+
+**Later:**
+- ⬜ **Multi-turn voice editing:** dictate a draft, keep speaking changes against a preview, and insert it when done (pairs with Notes transforms).
+- ⬜ **Structured edits:** "change every Tuesday to Thursday" becomes find-and-replace operations applied exactly, rather than a rewrite.
+- ⬜ **Vocabulary that only suggests a word after confirming the user's edit replaced Splashdown's own insertion,** plus starter word lists by field.
+- ⬜ **Mic choice:** follow the system default live, never pick virtual or aggregate inputs automatically, and notice a closed laptop lid.
+- ⬜ **Phone as a microphone** over the local network.
 - ⬜ **Shareable presets** as files.
 - ⬜ **Keep the last failed recording** even with history off.
 - ⬜ **A shareable Insights card.**

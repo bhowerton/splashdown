@@ -458,12 +458,21 @@ pub(crate) fn press(action: crate::KeyAction) -> Result<()> {
     }
 }
 
-pub(crate) fn type_text(text: &str) -> Result<()> {
+pub(crate) fn type_text(text: &str, soft_breaks: bool) -> Result<()> {
     check_not_blocked()?;
     wait_for_modifiers_released();
     for (i, line) in text.split('\n').enumerate() {
         if i > 0 {
-            send(&[key_input(VK_RETURN, false), key_input(VK_RETURN, true)])?;
+            if soft_breaks {
+                send(&[
+                    key_input(VK_SHIFT, false),
+                    key_input(VK_RETURN, false),
+                    key_input(VK_RETURN, true),
+                    key_input(VK_SHIFT, true),
+                ])?;
+            } else {
+                send(&[key_input(VK_RETURN, false), key_input(VK_RETURN, true)])?;
+            }
         }
         let line = line.strip_suffix('\r').unwrap_or(line);
         let chars: Vec<char> = line.chars().collect();

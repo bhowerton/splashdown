@@ -7,6 +7,7 @@ mod clipboard;
 mod ffi;
 mod keys;
 mod minibar;
+mod output;
 mod overlay;
 
 pub(crate) use apps::{activate_app, app_display, frontmost_app};
@@ -21,6 +22,7 @@ pub(crate) use clipboard::{
 };
 pub(crate) use keys::KeyListener;
 pub(crate) use minibar::MiniBar;
+pub(crate) use output::{QuietOutput, quiet_output};
 pub(crate) use overlay::{Overlay, play_sound, reduce_motion};
 
 pub(crate) const NAME: &str = "macos";

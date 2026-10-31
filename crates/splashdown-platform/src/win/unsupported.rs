@@ -57,7 +57,7 @@ pub(crate) fn press(_action: crate::KeyAction) -> Result<()> {
     Err(PlatformError::Unsupported)
 }
 
-pub(crate) fn type_text(_text: &str) -> Result<()> {
+pub(crate) fn type_text(_text: &str, _soft_breaks: bool) -> Result<()> {
     Err(PlatformError::Unsupported)
 }
 
@@ -148,4 +148,10 @@ impl MiniBar {
     pub(crate) fn hide(&self) {}
     pub(crate) fn set_state(&self, _state: crate::MiniBarState) {}
     pub(crate) fn set_tooltip(&self, _text: &str) {}
+}
+
+pub(crate) struct QuietOutput;
+
+pub(crate) fn quiet_output(_how: crate::Quieten) -> Option<QuietOutput> {
+    None
 }

@@ -94,6 +94,9 @@ struct CleanupCase {
     preset: Option<String>,
     /// Text already in the field around the cursor (field context).
     context: Option<String>,
+    /// Earlier dictations into the same app, oldest first.
+    #[serde(default)]
+    earlier: Vec<String>,
     /// Case-insensitive substrings the output must contain.
     #[serde(default)]
     expect: Vec<String>,
@@ -120,6 +123,7 @@ impl CleanupCase {
                 preset_instructions: self.preset.clone(),
                 app_name: self.app.clone(),
                 field_text: self.context.clone(),
+                earlier: self.earlier.clone(),
                 user_name: Some("Alex".into()),
                 vocabulary: vec!["Tauri".into(), "OpenRouter".into(), "Kubernetes".into()],
                 ..PromptContext::default()
@@ -516,6 +520,7 @@ mod tests {
             app: None,
             preset: None,
             context: None,
+            earlier: Vec::new(),
             expect: vec!["friday".into()],
             reject: vec!["um".into(), "you know".into()],
             min_lines: None,

@@ -358,10 +358,15 @@ pub(crate) fn press(action: crate::KeyAction) -> Result<()> {
     }
 }
 
-pub(crate) fn type_text(text: &str) -> Result<()> {
+pub(crate) fn type_text(text: &str, soft_breaks: bool) -> Result<()> {
+    let line_break = if soft_breaks {
+        CGEventFlags::CGEventFlagShift
+    } else {
+        CGEventFlags::CGEventFlagNull
+    };
     for (i, line) in text.split('\n').enumerate() {
         if i > 0 {
-            post_key(KEY_RETURN, CGEventFlags::CGEventFlagNull)?;
+            post_key(KEY_RETURN, line_break)?;
         }
         let units: Vec<u16> = line.encode_utf16().collect();
         // CGEventKeyboardSetUnicodeString handles at most 20 UTF-16 units
