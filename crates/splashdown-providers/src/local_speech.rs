@@ -2,6 +2,10 @@
 //! and Whisper GGUF models on this computer. Streaming models transcribe
 //! while the user speaks and run on the CPU, where each small piece is
 //! quickest; the others use Metal on macOS.
+//!
+//! Models load in the background: the first load after an update compiles
+//! the GPU shaders, which takes about 10 s, and dictation mustn't wait for
+//! that to start.
 
 use std::path::{Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -29,6 +33,16 @@ pub struct LocalSpeech {
     model_name: String,
     english_only: bool,
     streams: bool,
+}
+
+/// What's known about a model before it's loaded (from the catalog).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Profile {
+    /// Keep it on the CPU (streaming models).
+    pub cpu: bool,
+    pub english_only: bool,
+    /// It can transcribe while the user speaks.
+    pub streams: bool,
 }
 
 /// The model file and, while it's in use, the loaded model.
@@ -110,19 +124,15 @@ fn watch_idle(model: Weak<Loaded>) {
 }
 
 impl LocalSpeech {
-    /// Loads a GGUF model file. `cpu` keeps it off the GPU, which suits
-    /// streaming models. Takes a moment; load once and reuse.
-    pub fn load(path: &Path, cpu: bool) -> ProviderResult<Self> {
+    /// A GGUF model file, loaded in the background from now on (and again
+    /// after it's been let go).
+    pub fn load(path: &Path, profile: Profile) -> ProviderResult<Self> {
         if !path.is_file() {
             return Err(ProviderError::Unavailable(format!(
                 "model not found at {} — download it first",
                 path.display()
             )));
         }
-        let model = open(path, cpu)?;
-        let caps = model
-            .capabilities()
-            .map_err(|e| ProviderError::Unavailable(e.to_string()))?;
         let model_name = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -130,36 +140,54 @@ impl LocalSpeech {
             .to_string();
         let loaded = Arc::new(Loaded {
             path: path.to_path_buf(),
-            cpu,
-            loaded: Mutex::new(Some(model)),
+            cpu: profile.cpu,
+            loaded: Mutex::new(None),
             last_used: Mutex::new(Instant::now()),
         });
         watch_idle(Arc::downgrade(&loaded));
+        preload(loaded.clone());
         Ok(Self {
-            english_only: caps.languages.iter().all(|l| l == "en"),
-            streams: caps.supports_streaming,
+            english_only: profile.english_only,
+            streams: profile.streams,
             model_name,
             model: loaded,
         })
     }
+}
 
-    fn options(&self, model: &Model, hints: &SttHints) -> RunOptions {
-        RunOptions {
-            language: if self.english_only {
-                None
-            } else {
-                hints.language.clone()
-            },
-            vocabulary: if model.supports(Feature::Vocabulary) {
-                hints.vocabulary.clone()
-            } else {
-                Vec::new()
-            },
-            prompt: hints
-                .prompt()
-                .filter(|_| model.supports(Feature::ContextPrompt)),
-            ..Default::default()
-        }
+/// Loads the model on another thread; whoever needs it first waits there.
+fn preload(loaded: Arc<Loaded>) {
+    let _ = std::thread::Builder::new()
+        .name("speech-load".into())
+        .spawn(move || {
+            let started = Instant::now();
+            match loaded.model() {
+                Ok(_) => tracing::info!(
+                    "loaded {} in {} ms",
+                    loaded.path.display(),
+                    started.elapsed().as_millis()
+                ),
+                Err(e) => tracing::warn!("{e}"),
+            }
+        });
+}
+
+fn run_options(model: &Model, english_only: bool, hints: &SttHints) -> RunOptions {
+    RunOptions {
+        language: if english_only {
+            None
+        } else {
+            hints.language.clone()
+        },
+        vocabulary: if model.supports(Feature::Vocabulary) {
+            hints.vocabulary.clone()
+        } else {
+            Vec::new()
+        },
+        prompt: hints
+            .prompt()
+            .filter(|_| model.supports(Feature::ContextPrompt)),
+        ..Default::default()
     }
 }
 
@@ -181,17 +209,18 @@ impl SpeechToText for LocalSpeech {
     async fn transcribe(&self, clip: &AudioClip, hints: &SttHints) -> ProviderResult<Transcript> {
         let samples = to_16k(clip);
         let loaded = self.model.clone();
-        let model = loaded.model()?;
-        let options = self.options(&model, hints);
-        let prompt = options.prompt.clone();
-        let text = tokio::task::spawn_blocking(move || -> ProviderResult<String> {
+        let (english_only, hints) = (self.english_only, hints.clone());
+        let (text, prompt) = tokio::task::spawn_blocking(move || {
+            // Waits here if it's still loading.
+            let model = loaded.model()?;
+            let options = run_options(&model, english_only, &hints);
             let mut session = model
                 .session()
                 .map_err(|e| ProviderError::Unavailable(e.to_string()))?;
             let result = session.run(&samples, &options).map_err(|e| {
                 ProviderError::InvalidResponse(format!("transcription failed: {e}"))
             })?;
-            Ok(result.text)
+            Ok::<_, ProviderError>((result.text, options.prompt))
         })
         .await
         .map_err(|e| ProviderError::Unavailable(format!("transcription task failed: {e}")))??;
@@ -211,18 +240,13 @@ impl SpeechToText for LocalSpeech {
     }
 
     fn stream(&self, hints: &SttHints) -> Option<Box<dyn SpeechStream>> {
-        if !self.streams {
-            return None;
-        }
-        let model = match self.model.model() {
-            Ok(m) => m,
-            Err(e) => {
-                tracing::warn!("no stream: {e}");
-                return None;
-            }
-        };
-        let options = self.options(&model, hints);
-        Some(Box::new(LocalStream::start(model, options)))
+        self.streams.then(|| {
+            Box::new(LocalStream::start(
+                self.model.clone(),
+                self.english_only,
+                hints.clone(),
+            )) as Box<dyn SpeechStream>
+        })
     }
 }
 
@@ -254,13 +278,21 @@ struct LocalStream {
 }
 
 impl LocalStream {
-    fn start(model: Model, options: RunOptions) -> Self {
+    /// Starts at once: audio fed before the model is loaded waits in the
+    /// channel.
+    fn start(loaded: Arc<Loaded>, english_only: bool, hints: SttHints) -> Self {
         let (tx, rx) = mpsc::channel();
         let partial = Arc::new(Mutex::new(None));
         let shared = partial.clone();
         let _ = std::thread::Builder::new()
             .name("speech-stream".into())
-            .spawn(move || run_stream(&model, &options, &rx, &shared));
+            .spawn(move || match loaded.model() {
+                Ok(model) => {
+                    let options = run_options(&model, english_only, &hints);
+                    run_stream(&model, &options, &rx, &shared);
+                }
+                Err(e) => fail(&rx, e),
+            });
         Self { tx, partial }
     }
 }
@@ -410,7 +442,7 @@ mod tests {
 
     #[test]
     fn missing_model_is_unavailable() {
-        let err = LocalSpeech::load(Path::new("/nonexistent/model.gguf"), false)
+        let err = LocalSpeech::load(Path::new("/nonexistent/model.gguf"), Profile::default())
             .err()
             .unwrap();
         assert!(matches!(err, ProviderError::Unavailable(_)));

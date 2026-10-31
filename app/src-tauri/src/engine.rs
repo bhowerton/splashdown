@@ -386,10 +386,7 @@ fn preview_model(
     let model = SpeechModel::ALL
         .into_iter()
         .find(|m| m.is_downloaded(&paths.models_dir))?;
-    match splashdown_providers::factory::load_local_speech(
-        &model.path_in(&paths.models_dir),
-        model.streams(),
-    ) {
+    match splashdown_providers::factory::load_local_speech(model, &paths.models_dir) {
         Ok(stt) => Some(stt),
         Err(e) => {
             tracing::warn!("live preview unavailable: {e}");

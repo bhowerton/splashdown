@@ -85,7 +85,7 @@ pub fn text_model(choice: &AiChoice, secrets: &Secrets) -> ProviderResult<Arc<dy
 /// A catalog id (`nemotron-en`) resolves inside `models_dir`; anything
 /// else is a path to a GGUF file. Streaming models stay on the CPU.
 fn local_speech(model: &str, models_dir: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
-    let (path, cpu) = match SpeechModel::from_id(model) {
+    let path = match SpeechModel::from_id(model) {
         Some(m) if !m.is_downloaded(models_dir) => {
             return Err(ProviderError::Unavailable(format!(
                 "speech model {} isn't downloaded (~{} MB) — run `splashdown-cli models download {}`",
@@ -94,10 +94,10 @@ fn local_speech(model: &str, models_dir: &Path) -> ProviderResult<Arc<dyn Speech
                 m.id()
             )));
         }
-        Some(m) => (m.path_in(models_dir), m.streams()),
-        None => (PathBuf::from(model), false),
+        Some(m) => return load_local_speech(m, models_dir),
+        None => PathBuf::from(model),
     };
-    load_local_speech(&path, cpu)
+    load_local_speech_file(&path)
 }
 
 /// The built-in model: a catalog id (`qwen3-4b`) in the models folder, or a
@@ -117,16 +117,41 @@ fn local_model(model: &str) -> ProviderResult<Arc<dyn TextModel>> {
     Ok(Arc::new(crate::LocalLlm::new(&path, cpu_only)?))
 }
 
+/// A downloaded catalog model. It loads in the background.
 #[cfg(feature = "local-speech")]
-pub fn load_local_speech(path: &Path, cpu: bool) -> ProviderResult<Arc<dyn SpeechToText>> {
-    Ok(Arc::new(crate::LocalSpeech::load(path, cpu)?))
+pub fn load_local_speech(
+    model: SpeechModel,
+    models_dir: &Path,
+) -> ProviderResult<Arc<dyn SpeechToText>> {
+    Ok(Arc::new(crate::LocalSpeech::load(
+        &model.path_in(models_dir),
+        model.profile(),
+    )?))
+}
+
+/// Any GGUF file (`--stt-model <path>`): treated as a multilingual model
+/// that transcribes when the recording ends.
+#[cfg(feature = "local-speech")]
+fn load_local_speech_file(path: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
+    Ok(Arc::new(crate::LocalSpeech::load(
+        path,
+        crate::SpeechProfile::default(),
+    )?))
 }
 
 #[cfg(not(feature = "local-speech"))]
-pub fn load_local_speech(_: &Path, _: bool) -> ProviderResult<Arc<dyn SpeechToText>> {
-    Err(ProviderError::Unavailable(
-        "this build doesn't include local speech-to-text".into(),
-    ))
+pub fn load_local_speech(_: SpeechModel, _: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
+    Err(unavailable())
+}
+
+#[cfg(not(feature = "local-speech"))]
+fn load_local_speech_file(_: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
+    Err(unavailable())
+}
+
+#[cfg(not(feature = "local-speech"))]
+fn unavailable() -> ProviderError {
+    ProviderError::Unavailable("this build doesn't include local speech-to-text".into())
 }
 
 #[cfg(test)]

@@ -18,6 +18,6 @@ pub use chat::ChatModel;
 pub use endpoint::{Endpoint, Flavor, OPENAI_BASE_URL, OPENROUTER_BASE_URL};
 pub use local_llm::LocalLlm;
 #[cfg(feature = "local-speech")]
-pub use local_speech::LocalSpeech;
+pub use local_speech::{LocalSpeech, Profile as SpeechProfile};
 pub use models::{LocalModel, SpeechModel};
 pub use transcribe::{ChatAudioTranscriber, TranscriptionApi};

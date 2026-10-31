@@ -122,6 +122,17 @@ impl SpeechModel {
         matches!(self, SpeechModel::NemotronEn | SpeechModel::Nemotron)
     }
 
+    /// What loading needs to know before the file is read: streaming
+    /// models stay on the CPU, where each small piece is quickest.
+    #[cfg(feature = "local-speech")]
+    pub fn profile(self) -> crate::SpeechProfile {
+        crate::SpeechProfile {
+            cpu: self.streams(),
+            english_only: self.english_only(),
+            streams: self.streams(),
+        }
+    }
+
     /// A short description, for UI.
     pub fn label(self) -> &'static str {
         match self {
