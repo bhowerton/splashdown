@@ -102,7 +102,7 @@ Whoever can run this workflow with these secrets can ship an update to every ins
 
 **Homebrew.** The cask lives in [bhowerton/homebrew-tap](https://github.com/bhowerton/homebrew-tap) (`Casks/splashdown.rb`). After each release, update its `version` and `sha256` (`shasum -a 256 Splashdown-mac.dmg`); installed copies update themselves, so this only matters for new installs.
 
-**Windows code signing** isn't set up yet, so SmartScreen warns on first run. The options are the SignPath Foundation (free for open source, once the repository is public) or Azure Trusted Signing; either plugs into `bundle.windows.signCommand` in the Tauri config.
+**Windows code signing** uses Azure Artifact Signing (formerly Trusted Signing), with a certificate issued to Point Dynamics, LLC: account `pointdynamics` (East US), certificate profile `PointDynamicsPublic`, in Point Dynamics' Azure directory. GitHub Actions signs as the app registration `github-actions-code-signing`, which holds only the "Artifact Signing Certificate Profile Signer" role on that account; its client ID, tenant ID and client secret are the `AZURE_CLIENT_ID`, `AZURE_TENANT_ID` and `AZURE_CLIENT_SECRET` secrets in the `release` environment. `scripts/package-win.ps1` passes Tauri a `signCommand` (`artifact-signing-cli`) when those are set, so the app, the helper and the installer are signed before the update signature is made, and fails if the installer's signature isn't valid and from Point Dynamics. **The client secret expires on 2028-10-30:** before then, create a new one under the app registration's Certificates & secrets and replace `AZURE_CLIENT_SECRET`. The identity validation is valid until 2029-02-01 and is renewed in the portal.
 
 ## Changing the AI prompts
 

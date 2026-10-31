@@ -110,11 +110,17 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: Install the Tauri CLI
         run: cargo install tauri-cli --version "^2" --locked
-      - name: Build the installer
+      - name: Install the Artifact Signing tool
+        run: cargo install artifact-signing-cli --locked
+      - name: Build, code-sign and package the installer
         shell: pwsh
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Azure Artifact Signing (the Point Dynamics certificate).
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         run: scripts/package-win.ps1
       - uses: actions/upload-artifact@v4
         with:

@@ -6,7 +6,11 @@
 # Needs the build tools listed at the top of scripts\run-win-app.ps1, plus
 # `cargo install tauri-cli --locked`.
 #
-# Code signing: not set up yet, so Windows SmartScreen warns on first run.
+# Code signing (Authenticode): with Azure Artifact Signing credentials in
+# AZURE_CLIENT_ID, AZURE_CLIENT_SECRET and AZURE_TENANT_ID (release builds in
+# CI), the app, the local-model helper and the installer are signed as
+# Point Dynamics, LLC. Needs `cargo install artifact-signing-cli`. Without
+# them the build is unsigned and SmartScreen warns on first run.
 #
 # Updates: with the updater signing key (TAURI_SIGNING_PRIVATE_KEY, or the
 # file named by UPDATER_KEY; see CONTRIBUTING.md), Tauri signs the installer
@@ -49,12 +53,36 @@ if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
 $configs = @("--config", "app/src-tauri/tauri.release.conf.json")
 if (-not $updater) { $configs += @("--config", '{"bundle":{"createUpdaterArtifacts":false}}') }
 
+# Tauri runs signCommand on every binary it bundles and on the installer,
+# before it makes the update signature, so the two always agree.
+$signed = [bool]$env:AZURE_CLIENT_SECRET
+if ($signed) {
+    $signCommand = "artifact-signing-cli -e https://eus.codesigning.azure.net -a pointdynamics -c PointDynamicsPublic -d Splashdown %1"
+    $signConfig = Join-Path (Get-Location) "target\tauri.sign.conf.json"
+    New-Item -ItemType Directory -Force target | Out-Null
+    $json = @{ bundle = @{ windows = @{ signCommand = $signCommand } } } | ConvertTo-Json -Depth 4
+    [IO.File]::WriteAllText($signConfig, $json)
+    $configs += @("--config", $signConfig)
+} else {
+    Write-Host "warning: no Azure signing credentials; the installer won't be code-signed" -ForegroundColor Yellow
+}
+
 cargo tauri build --bundles nsis @configs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 $bundle = "target\release\bundle"
 $setup = Get-ChildItem "$bundle\nsis\*-setup.exe" | Sort-Object LastWriteTime | Select-Object -Last 1
 $version = (Get-Content -Raw app\src-tauri\tauri.conf.json | ConvertFrom-Json).version
+
+if ($signed) {
+    # Fail rather than publish an installer that only looks signed.
+    $signature = Get-AuthenticodeSignature $setup.FullName
+    if ($signature.Status -ne "Valid" -or $signature.SignerCertificate.Subject -notmatch "Point Dynamics") {
+        Write-Host "error: the installer's signature is $($signature.Status) ($($signature.SignerCertificate.Subject))" -ForegroundColor Red
+        exit 1
+    }
+    Write-Host "Signed by: $($signature.SignerCertificate.Subject)"
+}
 
 # Release files: the installer under a name without the version, so the
 # website's link (releases/latest/download/Splashdown-windows-x64-setup.exe)
