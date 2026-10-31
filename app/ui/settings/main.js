@@ -106,9 +106,10 @@ function collect() {
   const letter = $("hk-hands-free").value.trim().toLowerCase();
   s.hotkeys.hands_free = /^[a-z]$/.test(letter) && letter !== "h" ? letter : null;
   s.hotkeys.double_tap = $("hk-double-tap").checked ? true : null;
-  // A letter; N (the default) is saved as unset.
+  // A letter; the default (N, or M when hands-free is N) is saved as unset.
   const note = $("hk-note").value.trim().toLowerCase();
-  s.hotkeys.note = /^[a-z]$/.test(note) && note !== "n" ? note : null;
+  const noteDefault = letter === "n" ? "m" : "n";
+  s.hotkeys.note = /^[a-z]$/.test(note) && note !== noteDefault ? note : null;
   s.notes = { ...(s.notes ?? {}) };
   s.notes.capture_to = $("nt-capture-to").value;
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;

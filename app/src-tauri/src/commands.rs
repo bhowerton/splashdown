@@ -287,10 +287,20 @@ fn preset_ai_options(
 }
 
 fn snapshot(
-    settings: Settings,
+    mut settings: Settings,
     engine_error: Option<String>,
     update: crate::updates::Status,
 ) -> Snapshot {
+    // An older id for a local speech model shows (and is saved) as today's.
+    if settings.speech.provider == SpeechProvider::WhisperLocal
+        && let Some(model) = settings
+            .speech
+            .model
+            .as_deref()
+            .and_then(splashdown_providers::SpeechModel::from_id)
+    {
+        settings.speech.model = Some(model.id().to_string());
+    }
     let presets = settings.presets();
     let transforms = settings.transforms();
     let budget_state =
@@ -632,6 +642,25 @@ pub async fn download_model(
     if SpeechModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
         return Err("Unknown model.".into());
     }
+    // Two downloads of one model would write the same partial file.
+    static DOWNLOADING: Mutex<Vec<String>> = Mutex::new(Vec::new());
+    struct Downloading(String);
+    impl Drop for Downloading {
+        fn drop(&mut self) {
+            DOWNLOADING
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .retain(|d| *d != self.0);
+        }
+    }
+    {
+        let mut downloading = DOWNLOADING.lock().unwrap_or_else(|e| e.into_inner());
+        if downloading.contains(&id) {
+            return Err("That model is already downloading.".into());
+        }
+        downloading.push(id.clone());
+    }
+    let _downloading = Downloading(id.clone());
     let dir = engine::paths()?.models_dir;
     let mut last_emit = Instant::now();
     splashdown_providers::models::download_by_id(&id, &dir, |done, total| {

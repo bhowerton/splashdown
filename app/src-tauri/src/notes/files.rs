@@ -161,7 +161,16 @@ fn work(app: AppHandle) {
             (path, queue.stop.clone())
         };
         let name = file_name(&path);
-        match transcribe(&app, &path, &stop) {
+        // A panic (a decoder on a damaged file) mustn't leave the queue
+        // marked running with the note locked until a restart.
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            transcribe(&app, &path, &stop)
+        }))
+        .unwrap_or_else(|_| {
+            tracing::error!("transcribing a file panicked");
+            Err("something went wrong reading it".into())
+        });
+        match result {
             Ok(None) => {}
             Ok(Some(stopped)) => tell(
                 &app,
@@ -195,6 +204,9 @@ fn transcribe(app: &AppHandle, path: &Path, stop: &AtomicBool) -> Result<Option<
         "# {stem}\n\nTranscribed from **{}**{length} {place}.\n",
         name.replace('*', "\\*")
     );
+    // The transcript isn't the note the user was working on, so captures
+    // set to "the last note" don't go into it.
+    let last = store.last().map(|(path, _)| path);
     let note = store
         .create(
             &header,
@@ -206,6 +218,7 @@ fn transcribe(app: &AppHandle, path: &Path, stop: &AtomicBool) -> Result<Option<
             },
         )
         .map_err(|e| e.to_string())?;
+    store.set_last(last.as_deref());
     let mut status = Status {
         file: name,
         note: note.path.clone(),

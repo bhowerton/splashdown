@@ -239,6 +239,7 @@ pub(crate) const INJECTED_TAG: i64 = 0x5350_4C44;
 const KEY_GAP: Duration = Duration::from_millis(12);
 const KEY_COMMAND: CGKeyCode = 0x37;
 const KEY_OPTION: CGKeyCode = 0x3A;
+const KEY_SHIFT: CGKeyCode = 0x38;
 
 /// Presses `key` with `flags` the way a person does: modifiers down, the
 /// key down and up, modifiers up, with short gaps.
@@ -247,6 +248,9 @@ fn post_key(key: CGKeyCode, flags: CGEventFlags) -> Result<()> {
     let modifiers: Vec<(CGKeyCode, CGEventFlags)> = [
         (KEY_COMMAND, CGEventFlags::CGEventFlagCommand),
         (KEY_OPTION, CGEventFlags::CGEventFlagAlternate),
+        // Shift+Return for a new line: apps that check which keys are down,
+        // not the event's flags, would otherwise see a plain Return and send.
+        (KEY_SHIFT, CGEventFlags::CGEventFlagShift),
     ]
     .into_iter()
     .filter(|(_, f)| flags.contains(*f))

@@ -192,10 +192,13 @@ function renderLocalSpeech(visible) {
         st.append(b);
         if (loading) recheckLoading();
       }
-      if (m.downloaded) {
+      if (speechDownloads.has(m.id)) {
+        st.replaceChildren();
+        showProgress(st, speechDownloads.get(m.id));
+      } else if (m.downloaded) {
         if (m.id !== selected) st.append(button("Use", () => chooseLocalSpeech(m.id)));
       } else {
-        st.append(button("Download", () => downloadModel(m.id, row, m.id !== selected)));
+        st.append(button("Download", () => downloadModel(m.id, m.id !== selected)));
       }
       return row;
     })
@@ -203,19 +206,28 @@ function renderLocalSpeech(visible) {
 }
 
 /** While the chosen model loads, look again every second, so "Loading…"
- *  turns into "In use" when it's ready. */
+ *  turns into "In use" when it's ready. Only this list is redrawn, so
+ *  nothing being typed elsewhere in Settings is lost. */
 let loadingCheck = null;
 function recheckLoading() {
   if (loadingCheck) return;
   loadingCheck = setTimeout(async () => {
     loadingCheck = null;
     try {
-      state = await invoke("get_state");
-      render();
+      const fresh = await invoke("get_state");
+      state.speech_loading = fresh.speech_loading;
+      renderLocalSpeech(!$("local-speech-models").hidden);
     } catch {
       // Tried again on the next render.
     }
   }, 1000);
+}
+
+/** Speech models downloading now, with their progress (0–100). */
+const speechDownloads = new Map();
+
+function showProgress(st, pct) {
+  st.innerHTML = `<span class="progress"><i style="width:${pct}%"></i></span><span class="mono pct">${pct}%</span>`;
 }
 
 function chooseLocalSpeech(id) {
@@ -224,21 +236,25 @@ function chooseLocalSpeech(id) {
   save(s);
 }
 
-async function downloadModel(id, row, select) {
-  const st = row.querySelector(".state");
-  st.innerHTML = `<span class="progress"><i></i></span><span class="mono pct">0%</span>`;
+/** Downloads a speech model. The model in use stays in use until this one
+ *  is ready; then, if `select`, this one takes over. */
+async function downloadModel(id, select) {
+  if (speechDownloads.has(id)) return;
+  speechDownloads.set(id, 0);
+  renderLocalSpeech(true);
   try {
+    let r = await invoke("download_model", { id });
+    speechDownloads.delete(id);
     if (select) {
-      // Choose it first so it's used as soon as it's downloaded.
-      const s = collect();
+      const s = r.state.settings;
       s.speech.model = id;
-      await invoke("save_settings", { settings: s });
+      r = await invoke("save_settings", { settings: s });
     }
-    const r = await invoke("download_model", { id });
     state = r.state;
     render();
     toast(r.engine_error ? `Downloaded — but: ${r.engine_error}` : `${id} downloaded`);
   } catch (e) {
+    speechDownloads.delete(id);
     toast(String(e), true);
     refresh();
   }
@@ -247,8 +263,10 @@ async function downloadModel(id, row, select) {
 listen("model-download", (event) => {
   const { id, done, total } = event.payload;
   const row = document.querySelector(`[data-model="${id}"]`);
-  if (!row || !total) return;
+  if (!total) return;
   const pct = Math.floor((done / total) * 100);
+  if (speechDownloads.has(id)) speechDownloads.set(id, pct);
+  if (!row) return;
   const bar = row.querySelector(".progress > i");
   if (bar) bar.style.width = `${pct}%`;
   const label = row.querySelector(".pct");

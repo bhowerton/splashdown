@@ -81,11 +81,13 @@ impl Controller {
         let _ = reply.send(result);
     }
 
-    fn notes_settings(&self) -> Result<splashdown_config::NotesSettings, String> {
-        self.engine
-            .as_ref()
-            .map(|e| e.notes.clone())
-            .map_err(Clone::clone)
+    /// Notes settings as last saved. Not the engine's copy: notes work
+    /// without a usable engine, and a folder picked in Notes applies at once.
+    pub(super) fn notes_settings(&self) -> Result<splashdown_config::NotesSettings, String> {
+        self.ui
+            .settings()
+            .map(|s| s.notes)
+            .ok_or_else(|| "Splashdown is still starting.".to_string())
     }
 
     /// `splashdown-cli note <text>`: straight into the capture note, with

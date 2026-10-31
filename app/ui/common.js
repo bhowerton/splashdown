@@ -143,3 +143,11 @@ function renderPermissionRows(p, prefix, dotClass) {
     );
   }
 }
+
+/** Whether the user is typing in a field inside `host`. Lists don't redraw
+ *  then, but a focused button (Chromium focuses one on click) doesn't count:
+ *  after a × the list must redraw, or its rows keep their old positions. */
+function typingIn(host) {
+  const el = document.activeElement;
+  return !!el && host.contains(el) && el.matches("input, textarea, select, [contenteditable]");
+}

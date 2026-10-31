@@ -340,8 +340,7 @@ fn wait_for_modifiers_released() {
 
 /// Fails if the foreground app runs at a higher integrity level (as
 /// administrator) than we do. Windows (UIPI) would silently drop our key
-/// events, so we report it and the caller copies the text instead
-///.
+/// events, so we report it and the caller copies the text instead.
 fn check_not_blocked() -> Result<()> {
     if process_elevated(None) == Some(true) {
         return Ok(());

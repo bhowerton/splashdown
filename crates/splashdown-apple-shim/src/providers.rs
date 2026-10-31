@@ -39,6 +39,9 @@ impl TextModel for AppleLanguageModel {
     }
 
     async fn complete(&self, req: &TextRequest) -> ProviderResult<Completion> {
+        // Apple's model repeats or obeys earlier dictations rather than
+        // using them as reference, so it never gets them.
+        let req = &splashdown_core::prompt::without_earlier(req);
         let system = CString::new(req.system.as_str()).map_err(invalid)?;
         let user = CString::new(req.user.as_str()).map_err(invalid)?;
         // SAFETY: `system` and `user` are NUL-terminated strings that outlive

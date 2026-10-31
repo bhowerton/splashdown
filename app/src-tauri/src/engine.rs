@@ -47,8 +47,6 @@ pub struct Engine {
     pub presets: Vec<Preset>,
     /// Saved instructions for Notes and transform shortcuts.
     pub transforms: Vec<splashdown_config::Transform>,
-    /// Notes settings: where captures go, and what agents may do.
-    pub notes: splashdown_config::NotesSettings,
     /// Watch for corrections after inserting and suggest vocabulary.
     pub learn_vocabulary: bool,
     /// Tell the AI which app the text is going into.
@@ -258,7 +256,6 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         microphone: settings.general.microphone.clone(),
         presets,
         transforms: settings.transforms(),
-        notes: settings.notes.clone(),
         preset_pipelines,
         pipeline: Pipeline::new(stt, llm).with_instruction_model(instruction_llm),
         context: PromptContext {
@@ -361,8 +358,20 @@ fn on_device_speech(
             return Some(apple);
         }
     }
-    let model = SpeechModel::ALL
-        .into_iter()
-        .find(|m| m.is_downloaded(&paths.models_dir))?;
+    // For a language other than English, an English-only model would turn
+    // the speech into English-sounding words: prefer one that knows it.
+    let other_language = settings
+        .general
+        .language
+        .as_deref()
+        .is_some_and(|l| !l.eq_ignore_ascii_case("en"));
+    let downloaded = || {
+        SpeechModel::ALL
+            .into_iter()
+            .filter(|m| m.is_downloaded(&paths.models_dir))
+    };
+    let model = downloaded()
+        .find(|m| !(other_language && m.english_only()))
+        .or_else(|| downloaded().next().filter(|_| !other_language))?;
     splashdown_providers::factory::local_speech_on_demand(model, &paths.models_dir).ok()
 }

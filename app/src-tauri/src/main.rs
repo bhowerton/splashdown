@@ -191,6 +191,10 @@ fn main() {
 
     app.run(|app, event| {
         triggers::on_run_event(app, &event);
+        // Quitting mid-recording mustn't leave other sounds turned down.
+        if let RunEvent::Exit = event {
+            splashdown_platform::restore_output();
+        }
         // Closing the last window (Settings) must not quit a tray app.
         // An explicit exit (Quit menu item) carries an exit code.
         if let RunEvent::ExitRequested { api, code, .. } = event

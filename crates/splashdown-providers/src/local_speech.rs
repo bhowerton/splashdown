@@ -7,11 +7,16 @@
 //! background: the first load after an update compiles the GPU shaders,
 //! which takes about 10 s, and dictation mustn't wait for that to start.
 //! A stand-in for a failed cloud provider loads only when it's needed.
+//!
+//! One model does one thing at a time: while a stream runs, the library
+//! turns other transcriptions away as busy. They wait their turn here (a
+//! file being transcribed waits for a dictation), and a stream that's
+//! dropped or too slow stops at once to let them in.
 
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
-use std::sync::{Arc, Mutex, Once, Weak};
+use std::sync::{Arc, Mutex, Once, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
@@ -29,6 +34,10 @@ use transcribe_cpp::{
 const UNLOAD_AFTER: Duration = Duration::from_secs(10 * 60);
 /// The most a stream's final text may take once the last audio is in.
 const FINISH_TIMEOUT: Duration = Duration::from_secs(10);
+/// How long a transcription waits for a stream on the same model to end
+/// (a long hands-free dictation), checking this often.
+const BUSY_WAIT: Duration = Duration::from_secs(15 * 60);
+const BUSY_POLL: Duration = Duration::from_millis(50);
 
 pub struct LocalSpeech {
     model: Arc<Loaded>,
@@ -77,6 +86,14 @@ impl Loaded {
         let model = model?;
         *loaded = Some(model.clone());
         Ok(model)
+    }
+
+    fn is_loaded(&self) -> bool {
+        match self.loaded.try_lock() {
+            Ok(loaded) => loaded.is_some(),
+            Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner().is_some(),
+            Err(std::sync::TryLockError::WouldBlock) => false,
+        }
     }
 
     fn unload_if_idle(&self) {
@@ -159,20 +176,42 @@ impl LocalSpeech {
             .and_then(|s| s.to_str())
             .unwrap_or("local")
             .to_string();
-        let loaded = Arc::new(Loaded {
-            path: path.to_path_buf(),
-            cpu: profile.cpu,
-            loaded: Mutex::new(None),
-            last_used: Mutex::new(Instant::now()),
-        });
-        watch_idle(Arc::downgrade(&loaded));
         Ok(Self {
             english_only: profile.english_only,
             streams: profile.streams,
             model_name,
-            model: loaded,
+            model: shared(path, profile.cpu),
         })
     }
+}
+
+/// The model for `path`, shared by every provider that uses it. Settings
+/// rebuild the providers on every change; a new copy each time would load
+/// the model again (seconds, and another copy in memory meanwhile).
+fn shared(path: &Path, cpu: bool) -> Arc<Loaded> {
+    type Models = Mutex<Vec<(PathBuf, bool, Weak<Loaded>)>>;
+    static MODELS: OnceLock<Models> = OnceLock::new();
+    let mut models = MODELS
+        .get_or_init(Models::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    models.retain(|(_, _, m)| m.strong_count() > 0);
+    if let Some(loaded) = models
+        .iter()
+        .find(|(p, c, _)| p == path && *c == cpu)
+        .and_then(|(_, _, m)| m.upgrade())
+    {
+        return loaded;
+    }
+    let loaded = Arc::new(Loaded {
+        path: path.to_path_buf(),
+        cpu,
+        loaded: Mutex::new(None),
+        last_used: Mutex::new(Instant::now()),
+    });
+    watch_idle(Arc::downgrade(&loaded));
+    models.push((path.to_path_buf(), cpu, Arc::downgrade(&loaded)));
+    loaded
 }
 
 /// Loads the model on another thread; whoever needs it first waits there.
@@ -181,6 +220,9 @@ fn preload(loaded: Arc<Loaded>) {
         .name("speech-load".into())
         .spawn(move || {
             let started = Instant::now();
+            if loaded.is_loaded() {
+                return;
+            }
             match loaded.model() {
                 Ok(_) => tracing::info!(
                     "loaded {} in {} ms",
@@ -193,12 +235,18 @@ fn preload(loaded: Arc<Loaded>) {
 }
 
 fn run_options(model: &Model, english_only: bool, hints: &SttHints) -> RunOptions {
+    // A language the model doesn't list would fail every run: let it
+    // detect the language instead.
+    let listed = |code: &str| {
+        model.capabilities().map_or(true, |c| {
+            c.languages.is_empty() || c.languages.iter().any(|l| l.eq_ignore_ascii_case(code))
+        })
+    };
     RunOptions {
-        language: if english_only {
-            None
-        } else {
-            hints.language.clone()
-        },
+        language: hints
+            .language
+            .clone()
+            .filter(|code| !english_only && listed(code)),
         vocabulary: if model.supports(Feature::Vocabulary) {
             hints.vocabulary.clone()
         } else {
@@ -218,11 +266,9 @@ impl SpeechToText for LocalSpeech {
     }
 
     fn ready(&self) -> bool {
-        self.model
-            .loaded
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .is_some()
+        // Without waiting: the lock is held for the whole load, and waiting
+        // here would freeze the start of a dictation.
+        self.model.is_loaded()
     }
 
     fn warm_up(&self) {
@@ -245,9 +291,20 @@ impl SpeechToText for LocalSpeech {
             let mut session = model
                 .session()
                 .map_err(|e| ProviderError::Unavailable(e.to_string()))?;
-            let result = session.run(&samples, &options).map_err(|e| {
-                ProviderError::InvalidResponse(format!("transcription failed: {e}"))
-            })?;
+            let waiting = Instant::now();
+            let result = loop {
+                match session.run(&samples, &options) {
+                    // A stream has the model: wait for it to end.
+                    Err(transcribe_cpp::Error::Busy(_)) if waiting.elapsed() < BUSY_WAIT => {
+                        std::thread::sleep(BUSY_POLL);
+                    }
+                    result => {
+                        break result.map_err(|e| {
+                            ProviderError::InvalidResponse(format!("transcription failed: {e}"))
+                        })?;
+                    }
+                }
+            };
             Ok::<_, ProviderError>((result.text, options.prompt))
         })
         .await
@@ -303,6 +360,10 @@ enum Feed {
 struct LocalStream {
     tx: Sender<Feed>,
     partial: Arc<Mutex<Option<String>>>,
+    /// Set when nobody wants the result any more (dropped, or `finish`
+    /// gave up), so the thread stops and frees the model instead of
+    /// working through audio still queued.
+    abandoned: Arc<AtomicBool>,
 }
 
 impl LocalStream {
@@ -311,17 +372,22 @@ impl LocalStream {
     fn start(loaded: Arc<Loaded>, english_only: bool, hints: SttHints) -> Self {
         let (tx, rx) = mpsc::channel();
         let partial = Arc::new(Mutex::new(None));
-        let shared = partial.clone();
+        let abandoned = Arc::new(AtomicBool::new(false));
+        let (shared, stop) = (partial.clone(), abandoned.clone());
         let _ = std::thread::Builder::new()
             .name("speech-stream".into())
             .spawn(move || match loaded.model() {
                 Ok(model) => {
                     let options = run_options(&model, english_only, &hints);
-                    run_stream(&model, &options, &rx, &shared);
+                    run_stream(&model, &options, &rx, &shared, &stop);
                 }
                 Err(e) => fail(&rx, e),
             });
-        Self { tx, partial }
+        Self {
+            tx,
+            partial,
+            abandoned,
+        }
     }
 }
 
@@ -330,6 +396,7 @@ fn run_stream(
     options: &RunOptions,
     rx: &Receiver<Feed>,
     partial: &Mutex<Option<String>>,
+    abandoned: &AtomicBool,
 ) {
     let error =
         |e: transcribe_cpp::Error| ProviderError::InvalidResponse(format!("stream failed: {e}"));
@@ -347,6 +414,10 @@ fn run_stream(
     };
     let mut failed = None;
     while let Ok(msg) = rx.recv() {
+        if abandoned.load(Ordering::Relaxed) {
+            // Dropping the stream frees the model for others.
+            return;
+        }
         match msg {
             Feed::Audio(samples) if failed.is_none() => match stream.feed(&samples) {
                 Ok(update) if update.result_changed => {
@@ -380,6 +451,12 @@ fn fail(rx: &Receiver<Feed>, e: ProviderError) {
             let _ = reply.send(Err(e));
             return;
         }
+    }
+}
+
+impl Drop for LocalStream {
+    fn drop(&mut self) {
+        self.abandoned.store(true, Ordering::Relaxed);
     }
 }
 
@@ -447,6 +524,46 @@ fn clean_whisper_text(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A transcription while a stream has the same model waits its turn,
+    /// and the two models share one load. Needs the Nemotron (English)
+    /// model downloaded and the eval audio:
+    /// `cargo test -p splashdown-providers --release -- --ignored stream_and_run`.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "needs a downloaded model and eval audio"]
+    async fn stream_and_run_share_one_model() {
+        let model = crate::SpeechModel::NemotronEn;
+        let dir = splashdown_config::Paths::resolve().unwrap().models_dir;
+        let path = dir.join(model.file_name());
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../eval/audio");
+        let clip = splashdown_audio::wav::read(&root.join("technical.wav")).unwrap();
+        let samples = to_16k(&clip);
+
+        let a = LocalSpeech::load(&path, model.profile()).unwrap();
+        // A second provider for the same file (Settings rebuilt the engine)
+        // gets the same model, not a second load.
+        let b = LocalSpeech::on_demand(&path, model.profile()).unwrap();
+        assert!(Arc::ptr_eq(&a.model, &b.model));
+
+        let mut stream = a.stream(&SttHints::default()).unwrap();
+        stream.feed(&samples);
+        let busy = tokio::spawn(async move {
+            let clip = AudioClip::new(samples, splashdown_audio::TARGET_SAMPLE_RATE);
+            b.transcribe(&clip, &SttHints::default()).await
+        });
+        tokio::time::sleep(Duration::from_millis(500)).await;
+        let streamed = tokio::task::spawn_blocking(move || stream.finish())
+            .await
+            .unwrap()
+            .unwrap();
+        let run = busy.await.unwrap().unwrap();
+        assert!(streamed.to_lowercase().contains("kubernetes"), "{streamed}");
+        assert!(
+            run.text.to_lowercase().contains("kubernetes"),
+            "{}",
+            run.text
+        );
+    }
 
     #[test]
     fn repeated_hints_are_not_speech() {

@@ -190,8 +190,8 @@ pub trait SpeechToText: Send + Sync {
     fn ready(&self) -> bool {
         true
     }
-    /// A transcription that runs while the user speaks, for models that can
-    ///. `None` means transcribe the recording when it ends.
+    /// A transcription that runs while the user speaks, for models that
+    /// can. `None` means transcribe the recording when it ends.
     fn stream(&self, _hints: &SttHints) -> Option<Box<dyn SpeechStream>> {
         None
     }

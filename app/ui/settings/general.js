@@ -16,7 +16,8 @@ function renderGeneral() {
   }
   renderHotkeyTip();
   setValue($("hk-hands-free"), (s.hotkeys.hands_free || "h").toUpperCase());
-  setValue($("hk-note"), (s.hotkeys.note || "n").toUpperCase());
+  const noteDefault = (s.hotkeys.hands_free || "h").toLowerCase() === "n" ? "m" : "n";
+  setValue($("hk-note"), (s.hotkeys.note || noteDefault).toUpperCase());
   const notes = s.notes ?? {};
   setValue($("nt-capture-to"), notes.capture_to ?? "inbox");
   $("nt-daily-row").hidden = (notes.capture_to ?? "inbox") !== "daily";

@@ -19,6 +19,8 @@ let current = { path: null, modified: null };
 /** The text last saved, so unchanged notes aren't re-saved. */
 let savedText = "";
 let saveTimer = null;
+/** A transform is running: the note can't be edited until its result is in. */
+let transforming = false;
 /** Saves run one at a time, so a new note's file is only created once. */
 let saving = Promise.resolve();
 let notes = [];
@@ -91,7 +93,9 @@ function renderList() {
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(n);
   }
-  const keys = [...groups.keys()].sort((a, b) => (a === "" ? -1 : b === "" ? 1 : a.localeCompare(b)));
+  // Pinned, then the top of the folder, then subfolders A–Z.
+  const rank = (k) => (k.startsWith("\u0000") ? 0 : k === "" ? 1 : 2);
+  const keys = [...groups.keys()].sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
   const items = [];
   const titled = keys.length > 1;
   for (const key of keys) {
@@ -148,10 +152,16 @@ async function refresh() {
     return;
   }
   const entry = notes.find((n) => n.path === current.path);
-  // Changed in another app, and nothing typed here since: show theirs.
+  // Changed in another app, and nothing typed here since: show theirs,
+  // without moving focus or leaving History.
   if (entry && current.modified && entry.modified > current.modified && note.value === savedText) {
     try {
-      showNote(await invoke("notes_open", { path: current.path }), { keepFocus: true });
+      const n = await invoke("notes_open", { path: current.path });
+      if (n && n.path === current.path && note.value === savedText) {
+        current.modified = n.modified;
+        note.value = n.body;
+        savedText = n.body;
+      }
     } catch (e) {
       toast(String(e), true);
     }
@@ -171,6 +181,8 @@ function titleOf(text) {
 }
 
 function showNote(n, { keepFocus = false } = {}) {
+  // A rename in progress was for the note being left.
+  endRename();
   current = { path: n.path, modified: n.modified };
   note.value = n.body;
   savedText = n.body;
@@ -221,9 +233,15 @@ function updateHeader() {
   // The note a file is being transcribed into can't be edited until it's
   // done, so nothing typed is lost to the next paragraph.
   const locked = !!job && job.note === current.path;
-  note.readOnly = locked;
+  note.readOnly = locked || transforming;
   $("nt-job-show").hidden = !job || locked;
-  $("nt-transform").disabled = locked;
+  $("nt-transform").disabled = locked || transforming;
+  // Renaming, deleting or restoring the transcript would pull it from
+  // under the job; a new folder would split it from the job's.
+  for (const act of ["rename", "history", "delete"]) {
+    if (locked) document.querySelector(`[data-act="${act}"]`).disabled = true;
+  }
+  document.querySelector('[data-act="folder"]').disabled = !!job;
   if (locked) $("nt-status").textContent = "Being transcribed. You can edit it when it's done.";
   const empty = text.trim() === "";
   $("nt-copy").disabled = empty;
@@ -464,7 +482,7 @@ function setTransformMenu(open) {
  *  kept in History. */
 async function runTransform(id) {
   const t = transforms.find((x) => x.id === id);
-  if (!t) return;
+  if (!t || transforming || note.readOnly) return;
   showHistory(false);
   await saveNow();
   const start = note.selectionStart;
@@ -472,21 +490,30 @@ async function runTransform(id) {
   const whole = start === end;
   const source = whole ? note.value : note.value.slice(start, end);
   if (!source.trim()) return toast("There's no text to change.");
-  const button = $("nt-transform");
-  button.disabled = true;
+  // The note stays as it is until the result is in, so it goes where it
+  // was asked for.
+  const path = current.path;
+  const before = note.value;
+  transforming = true;
+  updateHeader();
   $("nt-status").textContent = `${t.name}…`;
   let out;
   try {
-    out = await invoke("notes_transform", { path: current.path, id, text: source });
+    out = await invoke("notes_transform", { path, id, text: source });
   } catch (e) {
     toast(String(e), true);
     return;
   } finally {
-    button.disabled = false;
+    transforming = false;
     updateHeader();
   }
   if (!out) return;
   if (out.unchanged) return toast(`${t.name}: ${out.unchanged}`);
+  if (current.path !== path || note.value !== before) {
+    // Another note was opened meanwhile: don't put the result in it.
+    await invoke("copy_text", { text: out.text }).catch(() => {});
+    return toast(`${t.name}: the note changed meanwhile, so the result was copied instead.`);
+  }
   note.focus();
   let insert = out.text;
   if (t.place === "below") {

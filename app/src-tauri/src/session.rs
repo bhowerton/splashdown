@@ -574,6 +574,9 @@ impl Controller {
         self.preview = preview_worker(&engine, &self.tx);
         self.engine = engine;
         self.keys = keys;
+        // Dictated under the old settings, which may not have allowed it to
+        // go where the new ones send it.
+        self.recent.clear();
         if let Ok(e) = &self.engine
             && self
                 .pinned_preset
@@ -961,9 +964,8 @@ impl Controller {
         let recording = job
             .as_ref()
             .filter(|_| {
-                self.engine
-                    .as_ref()
-                    .is_ok_and(|e| e.keep_audio || (active.capture && e.notes.keep_audio))
+                self.engine.as_ref().is_ok_and(|e| e.keep_audio)
+                    || (active.capture && self.notes_settings().is_ok_and(|n| n.keep_audio))
             })
             .map(|j| {
                 let speech = j.prefix.as_ref().map_or(&j.speech, |p| &p.whole);
@@ -1051,14 +1053,17 @@ impl Controller {
             label: label.into(),
         });
 
+        // A note capture is what was said: text selected in the app isn't
+        // something to change.
         let mut selection = match &active.selection {
-            Selection::Text(s) => Some(s.clone()),
+            Selection::Text(s) if !active.capture => Some(s.clone()),
             _ => None,
         };
         // The app didn't report its selection: try copying it. Only after a
         // hold (the dictation key is up again), so our Cmd+C isn't combined
         // with a held modifier.
         if active.selection == Selection::Unknown
+            && !active.capture
             && !active.hands_free
             && active.focus.as_ref().is_some_and(Focus::is_current)
         {
@@ -1138,6 +1143,7 @@ impl Controller {
         let earlier = match &active.focus {
             Some(focus)
                 if engine.share_recent
+                    && !active.capture
                     && matches!(mode, Mode::Dictate | Mode::DictateInstruct)
                     && active.field_text.is_none() =>
             {
@@ -1221,7 +1227,7 @@ impl Controller {
         let note_audio = self
             .pending_audio
             .as_ref()
-            .filter(|_| active.capture && self.engine.as_ref().is_ok_and(|e| e.notes.keep_audio))
+            .filter(|_| active.capture && self.notes_settings().is_ok_and(|n| n.keep_audio))
             .map(|(speech, _)| splashdown_audio::wav::encode(speech));
 
         self.record(&outcome, active.focus.as_ref(), &active.preset, took);
@@ -1393,7 +1399,10 @@ impl Controller {
             preset: Some(preset.name.clone()),
         };
         if engine.keep_history {
-            if let Some((speech, instruction)) = self.pending_audio.take() {
+            // Kept only for a note, the recording stays out of History.
+            if let Some((speech, instruction)) =
+                self.pending_audio.take().filter(|_| engine.keep_audio)
+            {
                 entry.audio = self
                     .history
                     .save_audio(entry.at, &speech, instruction.as_ref())
@@ -1468,10 +1477,10 @@ impl Controller {
 
     /// The note key while recording: the dictation will go into a note.
     fn start_capture(&mut self) {
-        let Ok(engine) = &self.engine else {
+        let Ok(notes) = self.notes_settings() else {
             return;
         };
-        let label = format!("Note · {}", crate::notes::capture_label(&engine.notes));
+        let label = format!("Note · {}", crate::notes::capture_label(&notes));
         let Some(active) = &mut self.active else {
             return;
         };
@@ -1481,6 +1490,19 @@ impl Controller {
                 *preset = Some(label);
                 self.ui.show(active.shown.clone());
             }
+            // Selected text is left alone: this is a note.
+            OverlayState::Transform { .. } => {
+                active.shown = if active.hands_free {
+                    OverlayState::HandsFree {
+                        preset: Some(label),
+                    }
+                } else {
+                    OverlayState::Listening {
+                        preset: Some(label),
+                    }
+                };
+                self.ui.show(active.shown.clone());
+            }
             _ => {}
         }
         // Nothing is typed, so there's nothing to send.
@@ -1488,8 +1510,8 @@ impl Controller {
         self.ui.set_send(false);
     }
 
-    /// A captured dictation: added to the note instead of the field
-    ///. ⌃⌥Z takes it back while it's recent.
+    /// A captured dictation: added to the note instead of the field.
+    /// ⌃⌥Z takes it back while it's recent.
     fn deliver_capture(
         &mut self,
         active: &Active,
@@ -1497,12 +1519,12 @@ impl Controller {
         spoke: Duration,
         audio: Option<&[u8]>,
     ) {
-        let Ok(engine) = &self.engine else {
+        let Ok(notes) = self.notes_settings() else {
             return;
         };
-        match crate::notes::capture(&engine.notes, None, text, audio) {
+        match crate::notes::capture(&notes, None, text, audio) {
             Ok(captured) => {
-                if engine.keep_insights {
+                if self.engine.as_ref().is_ok_and(|e| e.keep_insights) {
                     crate::insights::shared().record(
                         text,
                         spoke,
@@ -1566,7 +1588,7 @@ impl Controller {
                 Some(format!("left as it was ({})", reason.describe()))
             }
             Some(Fallback::ModelError(e)) => Some(format!("the AI didn't answer ({e})")),
-            None if outcome.text.trim() == splashdown_config::NOTHING_TO_DO => {
+            None if splashdown_config::is_nothing_to_do(&outcome.text) => {
                 Some("found nothing to do".to_string())
             }
             None if outcome.text.trim() == text.trim() => Some("nothing to change".to_string()),
@@ -1586,6 +1608,8 @@ impl Controller {
         if self.active.is_some() {
             return;
         }
+        // ⌃⌥Z is about this now, not an earlier capture.
+        self.last_capture = None;
         let Some(focus) = Focus::capture() else {
             return self.notice(Tone::Info, "Select some text first");
         };
@@ -1782,6 +1806,7 @@ impl Controller {
     /// A spoken command (the instruction key with nothing said before
     /// it): transcribe it, let the AI say what it means, and do that.
     fn run_command(&mut self, active: &Active, clip: &AudioClip) {
+        self.last_capture = None;
         let Ok(engine) = &self.engine else {
             return;
         };

@@ -38,6 +38,12 @@ impl Recent {
         self.prune(now);
     }
 
+    /// Forgets everything: the settings that allowed sending it may have
+    /// changed (local-only mode, the switch itself).
+    pub fn clear(&mut self) {
+        self.items.clear();
+    }
+
     /// Recent dictations into `app_id`, oldest first.
     pub fn for_app(&mut self, app_id: &str, now: Instant) -> Vec<String> {
         self.prune(now);

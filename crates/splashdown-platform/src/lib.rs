@@ -261,6 +261,7 @@ const TERMINALS: &[&str] = &[
     "dev.warp.Warp-Stable",
     "com.mitchellh.ghostty",
     "net.kovidgoyal.kitty",
+    "org.alacritty",
     "io.alacritty",
     "com.github.wez.wezterm",
     "co.zeit.hyper",
@@ -428,11 +429,19 @@ pub fn open_url(url: &str) -> Result<()> {
 
 /// Shows `path` selected in Finder or File Explorer.
 pub fn reveal_in_file_manager(path: &std::path::Path) -> Result<()> {
-    let mut cmd = if cfg!(target_os = "windows") {
+    #[cfg(target_os = "windows")]
+    let mut cmd = {
+        use std::os::windows::process::CommandExt;
+        // Explorer wants `/select,"C:\a b\c.md"` as written: Rust's usual
+        // quoting of the whole argument confuses it, and so do the forward
+        // slashes of a note in a subfolder.
+        let path = path.to_string_lossy().replace('/', "\\");
         let mut c = std::process::Command::new("explorer");
-        c.arg(format!("/select,{}", path.display()));
+        c.raw_arg(format!("/select,\"{path}\""));
         c
-    } else {
+    };
+    #[cfg(not(target_os = "windows"))]
+    let mut cmd = {
         let mut c = std::process::Command::new("open");
         c.arg("-R").arg(path);
         c
@@ -507,12 +516,45 @@ pub enum Quieten {
 
 /// The computer's sound output, lowered or muted while recording. Dropping
 /// it puts the volume back, unless the user changed it meanwhile.
-pub struct QuietOutput(#[allow(dead_code)] imp::QuietOutput);
+pub struct QuietOutput(u64);
+
+/// What was lowered or muted, kept here rather than in `QuietOutput` so
+/// `restore_output` can put it back when the app quits mid-recording. The
+/// number says which `QuietOutput` it belongs to.
+static QUIETED: std::sync::Mutex<Option<(u64, imp::QuietOutput)>> = std::sync::Mutex::new(None);
+static QUIET_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn quieted() -> std::sync::MutexGuard<'static, Option<(u64, imp::QuietOutput)>> {
+    QUIETED.lock().unwrap_or_else(|e| e.into_inner())
+}
 
 /// Lowers or mutes the default output device. `None` when there's nothing
 /// to do: no device or volume control, or it's already silent or muted.
 pub fn quiet_output(how: Quieten) -> Option<QuietOutput> {
-    imp::quiet_output(how).map(QuietOutput)
+    // Put back anything still quieted first, so it isn't taken as the
+    // level to return to.
+    drop(quieted().take());
+    let quiet = imp::quiet_output(how)?;
+    let n = QUIET_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    *quieted() = Some((n, quiet));
+    Some(QuietOutput(n))
+}
+
+impl Drop for QuietOutput {
+    fn drop(&mut self) {
+        let mut slot = quieted();
+        if slot.as_ref().is_some_and(|(n, _)| *n == self.0) {
+            let quiet = slot.take();
+            drop(slot);
+            drop(quiet);
+        }
+    }
+}
+
+/// Puts back sound lowered or muted for a recording: for quitting or
+/// restarting while one is in progress.
+pub fn restore_output() {
+    drop(quieted().take());
 }
 
 // ---------------------------------------------------------------- overlay

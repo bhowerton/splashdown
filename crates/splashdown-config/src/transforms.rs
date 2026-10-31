@@ -35,6 +35,15 @@ pub enum Place {
 /// without tasks). The text is then left as it was.
 pub const NOTHING_TO_DO: &str = "NONE";
 
+/// Whether a transform's answer means there's nothing to do. Models dress
+/// it up: "None.", `NONE`, "**NONE**".
+pub fn is_nothing_to_do(answer: &str) -> bool {
+    answer
+        .trim()
+        .trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace())
+        .eq_ignore_ascii_case(NOTHING_TO_DO)
+}
+
 /// The transforms a new install has. Each can be edited or removed.
 pub fn builtin_transforms() -> Vec<Transform> {
     let t = |id: &str, name: &str, place: Place, instruction: &str| Transform {
@@ -81,6 +90,16 @@ pub fn builtin_transforms() -> Vec<Transform> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn nothing_to_do_however_it_is_written() {
+        for answer in ["NONE", " None. ", "`NONE`", "**NONE**", "none!"] {
+            assert!(is_nothing_to_do(answer), "{answer}");
+        }
+        for answer in ["- [ ] Call none of them", "NONE of these", ""] {
+            assert!(!is_nothing_to_do(answer), "{answer}");
+        }
+    }
 
     #[test]
     fn builtins_have_unique_ids_and_no_shortcuts() {

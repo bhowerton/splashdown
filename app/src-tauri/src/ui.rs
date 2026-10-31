@@ -54,6 +54,15 @@ impl Ui {
         }
     }
 
+    /// The settings as last saved, for things that don't depend on the
+    /// engine being usable (notes).
+    pub fn settings(&self) -> Option<splashdown_config::Settings> {
+        use tauri::Manager;
+        self.app
+            .try_state::<crate::commands::AppState>()
+            .map(|state| state.settings())
+    }
+
     pub fn show(&self, state: OverlayState) {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let appearing = !self.shown.swap(true, Ordering::SeqCst);

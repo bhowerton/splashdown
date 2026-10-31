@@ -427,6 +427,7 @@ fn transcribe_file(
     use splashdown_audio::file::{AudioFile, timestamp};
 
     let mut file = AudioFile::open(path).with_context(|| format!("reading {}", path.display()))?;
+    let length = file.duration();
     let stem = path.file_stem().unwrap_or_default().to_string_lossy();
     println!("# {stem}");
     let start = std::time::Instant::now();
@@ -442,8 +443,9 @@ fn transcribe_file(
         }
     }
     eprintln!(
-        "transcribed {:.0} s of audio in {:.1} s with {}",
+        "transcribed {:.0} s of audio (the file says {}) in {:.1} s with {}",
         audio.as_secs_f64(),
+        length.map_or("nothing".into(), |d| format!("{:.0} s", d.as_secs_f64())),
         start.elapsed().as_secs_f64(),
         stt.name()
     );

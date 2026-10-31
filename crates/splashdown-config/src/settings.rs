@@ -124,7 +124,8 @@ pub struct HotkeySettings {
     /// on hands-free. Unset means H.
     pub hands_free: Option<char>,
     /// The letter that, pressed while holding the dictation key, sends the
-    /// dictation into a note instead of the field. Unset means N.
+    /// dictation into a note instead of the field. Unset means N, or M if
+    /// hands-free already uses N (settings from before notes).
     pub note: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
     /// Claude and others use a double-tap of Option.
@@ -156,11 +157,16 @@ impl HotkeySettings {
     }
 
     pub fn note_key(&self) -> PhysicalKey {
+        let fallback = if self.hands_free_key() == PhysicalKey::Letter('n') {
+            'm'
+        } else {
+            'n'
+        };
         let letter = self
             .note
             .map(|c| c.to_ascii_lowercase())
             .filter(char::is_ascii_lowercase)
-            .unwrap_or('n');
+            .unwrap_or(fallback);
         PhysicalKey::Letter(letter)
     }
 }

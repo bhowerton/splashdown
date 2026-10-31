@@ -67,7 +67,13 @@ struct Current {
     store: Arc<Store>,
     /// Why notes are in the fallback folder instead.
     problem: Option<String>,
+    /// When the folder asked for was last tried.
+    tried: Instant,
 }
+
+/// While the fallback folder is in use, how often the chosen folder is
+/// tried again (the user may have allowed access meanwhile).
+const RETRY_FOLDER: Duration = Duration::from_secs(30);
 
 fn current_slot() -> &'static Mutex<Option<Current>> {
     static CURRENT: OnceLock<Mutex<Option<Current>>> = OnceLock::new();
@@ -87,22 +93,43 @@ fn store_for(folder: Option<PathBuf>) -> Result<(Arc<Store>, Option<String>), St
         .or_else(default_folder)
         .ok_or("Couldn't find your Documents folder.")?;
     let mut slot = current_slot().lock().unwrap_or_else(|e| e.into_inner());
+    // The same store each time (it remembers which notes need a version
+    // kept), trying the chosen folder again now and then while it can't
+    // be used.
     if let Some(c) = slot
         .as_ref()
-        .filter(|c| c.wanted == wanted && c.problem.is_none())
+        .filter(|c| c.wanted == wanted && (c.problem.is_none() || c.tried.elapsed() < RETRY_FOLDER))
     {
-        return Ok((c.store.clone(), None));
+        return Ok((c.store.clone(), c.problem.clone()));
     }
     let chosen = Store::new(wanted.clone());
     let (store, problem) = match chosen.ensure() {
-        Ok(()) => (chosen, None),
+        Ok(()) => {
+            // Usable again: notes written to the fallback meanwhile join
+            // the others.
+            if let Some(old) = slot
+                .as_ref()
+                .filter(|c| c.wanted == wanted && c.problem.is_some())
+            {
+                match move_notes(&old.store, &wanted) {
+                    Ok(n) => tracing::info!("moved {n} notes in from the fallback folder"),
+                    Err(e) => tracing::warn!("notes stayed in the fallback folder: {e}"),
+                }
+            }
+            (chosen, None)
+        }
         Err(e) => {
             tracing::warn!("notes folder {} unusable: {e}", wanted.display());
             let fallback = Store::new(fallback_folder()?);
             fallback.ensure().map_err(|e| e.to_string())?;
+            let allow = if cfg!(target_os = "macos") {
+                "System Settings → Privacy & Security → Files and Folders"
+            } else {
+                "Windows Security → Ransomware protection → Allow an app through Controlled folder access"
+            };
             let why = if e.kind() == std::io::ErrorKind::PermissionDenied {
                 format!(
-                    "Splashdown isn't allowed to use {}. Notes are kept in its own folder until you choose another one or allow it in System Settings → Privacy & Security → Files and Folders.",
+                    "Splashdown isn't allowed to use {}. Notes are kept in its own folder until you choose another one or allow it in {allow}.",
                     label(&wanted)
                 )
             } else {
@@ -120,6 +147,7 @@ fn store_for(folder: Option<PathBuf>) -> Result<(Arc<Store>, Option<String>), St
         wanted,
         store: store.clone(),
         problem: problem.clone(),
+        tried: Instant::now(),
     });
     Ok((store, problem))
 }
@@ -200,9 +228,9 @@ pub fn cloud_service(path: &Path) -> Option<&'static str> {
     None
 }
 
-/// Moves every note (and `.splashdown/`) from one folder to another,
-/// never overwriting: a name that's taken gets a number. Returns how many
-/// moved.
+/// Moves every note, with `.splashdown/` (versions and pins) and
+/// `Attachments/`, from one folder to another, never overwriting: a note
+/// name that's taken gets a number. Returns how many notes moved.
 fn move_notes(from: &Store, to: &Path) -> Result<usize, String> {
     std::fs::create_dir_all(to).map_err(|e| e.to_string())?;
     let mut moved = 0;
@@ -228,14 +256,36 @@ fn move_notes(from: &Store, to: &Path) -> Result<usize, String> {
         }
         moved += 1;
     }
-    let meta = from.root().join(".splashdown");
-    if meta.is_dir()
-        && !to.join(".splashdown").exists()
-        && let Err(e) = std::fs::rename(&meta, to.join(".splashdown"))
-    {
-        tracing::warn!("versions stayed in the old notes folder: {e}");
+    for dir in [".splashdown", store::ATTACHMENTS_DIR] {
+        let source = from.root().join(dir);
+        if source.is_dir()
+            && let Err(e) = merge_into(&source, &to.join(dir))
+        {
+            tracing::warn!("some of {dir} stayed in the old notes folder: {e}");
+        }
     }
     Ok(moved)
+}
+
+/// Moves `from` to `to`, merging into a folder that's already there. A
+/// file that exists on both sides keeps the one at `to`.
+fn merge_into(from: &Path, to: &Path) -> std::io::Result<()> {
+    if !to.exists() && std::fs::rename(from, to).is_ok() {
+        return Ok(());
+    }
+    if from.is_dir() {
+        std::fs::create_dir_all(to)?;
+        for entry in std::fs::read_dir(from)?.flatten() {
+            merge_into(&entry.path(), &to.join(entry.file_name()))?;
+        }
+        // Left behind only if something in it was kept at `to`.
+        let _ = std::fs::remove_dir(from);
+    } else if !to.exists() {
+        // Another volume: copy, then remove the original.
+        std::fs::copy(from, to)?;
+        std::fs::remove_file(from)?;
+    }
+    Ok(())
 }
 
 // ---------------------------------------------------------------- capture
@@ -287,7 +337,21 @@ pub fn capture(
             Err(e) => tracing::warn!("couldn't keep the recording with the note: {e}"),
         }
     }
-    let target = to.map_or_else(|| capture_target(settings), |p| Target::Note(p.to_string()));
+    let target = to.map_or_else(
+        || capture_target(settings),
+        |p| {
+            // "Ideas" means the note Ideas.md.
+            let p = p.trim();
+            if Path::new(p)
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("md"))
+            {
+                Target::Note(p.to_string())
+            } else {
+                Target::Note(format!("{p}.md"))
+            }
+        },
+    );
     let appended = store
         .append(&target, &text, now)
         .map_err(|e| format!("Couldn't add it to your notes: {e}"))?;
@@ -389,13 +453,22 @@ pub fn agent_read(settings: &NotesSettings, path: &str) -> Result<String, String
     let note = store
         .read(path)
         .map_err(|e| format!("Couldn't read {path}: {e}"))?;
+    // The reply is escaped twice on its way to the agent and must fit the
+    // control channel's line limit, so a long note (an hour's transcript)
+    // is cut short, and says so.
+    let text: String = note.body.chars().take(AGENT_READ_CHARS).collect();
+    let truncated = text.len() < note.body.len();
     serde_json::to_string(&serde_json::json!({
         "path": note.path,
         "title": store::title_of(&note.body),
-        "text": note.body,
+        "text": text,
+        "truncated": truncated,
     }))
     .map_err(|e| e.to_string())
 }
+
+/// The most of a note `read_note` returns, in characters.
+const AGENT_READ_CHARS: usize = 50_000;
 
 /// `append_note`: adds `text` to the capture note, or the note at `to`.
 pub fn agent_append(
@@ -619,9 +692,14 @@ pub fn notes_load(state: State<'_, AppState>) -> Result<View, String> {
     view(&state)
 }
 
+/// Polled every few seconds; a big folder (or files a sync service has to
+/// download first) takes a while to read, so not on the main thread.
 #[tauri::command]
-pub fn notes_list(state: State<'_, AppState>) -> Result<Vec<Summary>, String> {
-    Ok(store(&state)?.0.list())
+pub async fn notes_list(state: State<'_, AppState>) -> Result<Vec<Summary>, String> {
+    let folder = state.settings().notes.folder;
+    tauri::async_runtime::spawn_blocking(move || Ok(store_for(folder)?.0.list()))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
@@ -871,10 +949,19 @@ mod tests {
         std::fs::create_dir_all(base.join("from/Work")).unwrap();
         std::fs::write(base.join("from/Plan.md"), "Plan").unwrap();
         std::fs::write(base.join("from/Work/Standup.md"), "Standup").unwrap();
-        std::fs::create_dir_all(base.join("to")).unwrap();
+        std::fs::create_dir_all(base.join("from/.splashdown/versions/1-ab")).unwrap();
+        std::fs::write(base.join("from/.splashdown/versions/1-ab/5.md"), "old").unwrap();
+        std::fs::write(base.join("from/.splashdown/state.json"), "{}").unwrap();
+        std::fs::create_dir_all(base.join("from/Attachments")).unwrap();
+        std::fs::write(base.join("from/Attachments/a.wav"), "RIFF").unwrap();
+        // The new folder is set up before the move, as Notes does.
+        Store::new(base.join("to")).ensure().unwrap();
         std::fs::write(base.join("to/Plan.md"), "Theirs").unwrap();
 
         assert_eq!(move_notes(&from, &base.join("to")).unwrap(), 2);
+        assert!(base.join("to/.splashdown/versions/1-ab/5.md").exists());
+        assert!(base.join("to/.splashdown/state.json").exists());
+        assert!(base.join("to/Attachments/a.wav").exists());
         assert_eq!(
             std::fs::read_to_string(base.join("to/Plan.md")).unwrap(),
             "Theirs"

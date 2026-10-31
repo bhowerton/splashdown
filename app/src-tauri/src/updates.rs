@@ -230,6 +230,8 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
     match result {
         Ok(()) => {
             tracing::info!("update installed; relaunching");
+            // Restarting skips the exit event.
+            splashdown_platform::restore_output();
             app.restart();
         }
         Err(e) => {

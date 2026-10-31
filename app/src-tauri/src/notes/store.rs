@@ -15,7 +15,7 @@ use serde::{Deserialize, Serialize};
 /// Inside the notes folder; hidden by Finder, Explorer and Obsidian.
 const META_DIR: &str = ".splashdown";
 /// Recordings kept with notes; never listed as notes.
-const ATTACHMENTS_DIR: &str = "Attachments";
+pub const ATTACHMENTS_DIR: &str = "Attachments";
 /// Earlier versions kept per note.
 const KEEP_VERSIONS: usize = 50;
 /// Characters of a title used in a file name.
@@ -115,6 +115,9 @@ pub struct Store {
     /// Notes opened since their last version was taken: the next save
     /// keeps what was on disk first.
     needs_version: Mutex<HashSet<String>>,
+    /// Held while text is added to the end of a note, so a capture and a
+    /// file transcript's next paragraph never write over each other.
+    appending: Mutex<()>,
 }
 
 impl Store {
@@ -123,6 +126,7 @@ impl Store {
             root,
             cache: Mutex::default(),
             needs_version: Mutex::default(),
+            appending: Mutex::default(),
         }
     }
 
@@ -212,17 +216,29 @@ impl Store {
     /// absolute paths, `..`, and the `.splashdown/` folder.
     fn resolve(&self, rel: &str) -> io::Result<PathBuf> {
         let path = Path::new(rel);
+        // Only notes: never another file that happens to be in the folder
+        // (an attachment, a vault's images), which reading as a note could
+        // overwrite.
         let ok = !rel.is_empty()
+            && path
+                .extension()
+                .is_some_and(|e| e.eq_ignore_ascii_case("md"))
             && path.components().all(|c| match c {
                 Component::Normal(name) => !name.to_string_lossy().starts_with('.'),
                 _ => false,
-            });
+            })
+            && path
+                .components()
+                .next()
+                .is_none_or(|c| c.as_os_str() != ATTACHMENTS_DIR);
         if !ok {
             return Err(io::Error::new(io::ErrorKind::InvalidInput, "not a note"));
         }
         let full = self.root.join(path);
-        // A symlink inside the folder mustn't lead out of it.
-        if let (Ok(real), Ok(root)) = (full.canonicalize(), self.root.canonicalize())
+        // A symlink inside the folder mustn't lead out of it, including
+        // through a folder on the way to a note that doesn't exist yet.
+        let existing = full.ancestors().find(|p| p.exists()).unwrap_or(&self.root);
+        if let (Ok(real), Ok(root)) = (existing.canonicalize(), self.root.canonicalize())
             && !real.starts_with(&root)
         {
             return Err(io::Error::new(
@@ -293,7 +309,13 @@ impl Store {
     /// before ours is written.
     pub fn save(&self, rel: &str, body: &str, base: Option<u64>) -> io::Result<Saved> {
         let path = self.resolve(rel)?;
-        let on_disk = std::fs::read_to_string(&path).ok();
+        // Missing is fine (it's put back); unreadable isn't: writing over it
+        // would lose it.
+        let on_disk = match std::fs::read_to_string(&path) {
+            Ok(text) => Some(text),
+            Err(e) if e.kind() == io::ErrorKind::NotFound => None,
+            Err(e) => return Err(e),
+        };
         let changed_elsewhere = match (&on_disk, base) {
             (Some(_), Some(base)) => {
                 std::fs::metadata(&path).map(|m| mtime_ms(&m)).ok() != Some(base)
@@ -375,13 +397,20 @@ impl Store {
             ));
         }
         let dir = path.parent().unwrap_or(&self.root);
-        if path
+        let current = path
             .file_stem()
-            .is_some_and(|s| s.to_string_lossy() == stem)
-        {
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if current == stem {
             return Ok(rel.to_string());
         }
-        let target = unique(dir, &stem);
+        // Only the case changes ("plan" → "Plan"): the file system sees the
+        // same name, so it isn't taken.
+        let target = if current.to_lowercase() == stem.to_lowercase() {
+            dir.join(format!("{stem}.md"))
+        } else {
+            unique(dir, &stem)
+        };
         std::fs::rename(&path, &target)?;
         let new_rel = self.relative(&target).expect("inside the folder");
         let mut state = self.state();
@@ -399,7 +428,18 @@ impl Store {
     /// Its versions stay in `.splashdown/`.
     pub fn delete(&self, rel: &str) -> Result<(), String> {
         let path = self.resolve(rel).map_err(|e| e.to_string())?;
-        trash::delete(&path).map_err(|e| format!("Couldn't move it to the Trash: {e}"))?;
+        #[allow(unused_mut)]
+        let mut trash = trash::TrashContext::default();
+        // The default asks Finder through AppleScript, which a signed app
+        // can't do without an Automation permission it doesn't ask for.
+        #[cfg(target_os = "macos")]
+        {
+            use trash::macos::{DeleteMethod, TrashContextExtMacos};
+            trash.set_delete_method(DeleteMethod::NsFileManager);
+        }
+        trash
+            .delete(&path)
+            .map_err(|e| format!("Couldn't move it to the Trash: {e}"))?;
         let mut state = self.state();
         state.pinned.retain(|p| p != rel);
         if state.last.as_deref() == Some(rel) {
@@ -539,12 +579,17 @@ impl Store {
         match target {
             Target::Inbox => "Inbox.md".to_string(),
             Target::Daily { folder, format } => {
+                // A format with "/" (Obsidian's "YYYY/MM/YYYY-MM-DD") puts
+                // the note in folders by date.
+                let dated = daily_name(format, now);
+                let (subfolders, name) = dated.rsplit_once('/').unwrap_or(("", &dated));
                 let folder: Vec<String> = folder
                     .split('/')
+                    .chain(subfolders.split('/'))
                     .map(file_name_part)
                     .filter(|s| !s.is_empty())
                     .collect();
-                let name = file_name_part(&daily_name(format, now));
+                let name = file_name_part(name);
                 let name = if name.is_empty() {
                     now.format("%Y-%m-%d").to_string()
                 } else {
@@ -573,10 +618,16 @@ impl Store {
         text: &str,
         now: DateTime<Local>,
     ) -> io::Result<Appended> {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
         self.ensure()?;
         let rel = self.target_path(target, now);
         let path = self.resolve(&rel)?;
-        let existing = std::fs::read_to_string(&path).unwrap_or_default();
+        let existing = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
+            // Never write over a note that can't be read.
+            Err(e) => return Err(e),
+        };
         let existing = if existing.trim().is_empty() {
             // A new note starts with a heading: its title in the list.
             match target {
@@ -605,6 +656,7 @@ impl Store {
     /// Takes back what `append` added, if the note hasn't changed since.
     /// Returns whether it did.
     pub fn undo_append(&self, appended: &Appended) -> io::Result<bool> {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
         let path = self.resolve(&appended.path)?;
         let text = std::fs::read_to_string(&path)?;
         let unchanged = mtime_ms(&std::fs::metadata(&path)?) == appended.modified;
@@ -618,6 +670,7 @@ impl Store {
     /// Adds `text` to the end of note `rel` as its own paragraph, as is
     /// (a file transcript's next piece).
     pub fn add_paragraph(&self, rel: &str, text: &str) -> io::Result<()> {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
         let path = self.resolve(rel)?;
         let existing = std::fs::read_to_string(&path)?;
         let separator = if existing.ends_with("\n\n") {
@@ -1073,9 +1126,35 @@ mod tests {
             ".splashdown/state.json",
             "",
             "a/../../b.md",
+            // Only notes, so nothing else in the folder can be overwritten.
+            "Attachments/a.md",
+            "Taxes/2025.csv",
+            "photo.png",
         ] {
             assert!(store.read(bad).is_err(), "{bad}");
         }
+        std::fs::write(store.root().join("photo.png"), [0xff, 0xd8]).unwrap();
+        let png = Target::Note("photo.png".into());
+        assert!(
+            store
+                .append(&png, "x", at("2026-10-31T09:15:00-05:00"))
+                .is_err()
+        );
+        assert_eq!(
+            std::fs::read(store.root().join("photo.png")).unwrap(),
+            [0xff, 0xd8]
+        );
+
+        // A note that isn't UTF-8 is left alone rather than replaced.
+        std::fs::write(store.root().join("Old.md"), [b'c', b'a', b'f', 0xe9]).unwrap();
+        let old = Target::Note("Old.md".into());
+        assert!(
+            store
+                .append(&old, "x", at("2026-10-31T09:15:00-05:00"))
+                .is_err()
+        );
+        assert!(store.save("Old.md", "new", None).is_err());
+        assert_eq!(std::fs::read(store.root().join("Old.md")).unwrap().len(), 4);
         let _ = std::fs::remove_dir_all(store.root());
     }
 
@@ -1093,6 +1172,8 @@ mod tests {
         let renamed = store.rename(&a.path, "Q4 plan").unwrap();
         assert_eq!(renamed, "Q4 plan.md");
         assert!(store.list().iter().any(|n| n.path == renamed && n.pinned));
+        // A change of case only keeps the name, not "Q4 Plan 2".
+        assert_eq!(store.rename(&renamed, "Q4 Plan").unwrap(), "Q4 Plan.md");
         let _ = std::fs::remove_dir_all(store.root());
     }
 
@@ -1123,6 +1204,15 @@ mod tests {
         assert_eq!(
             d.path,
             format!("Journal/Daily/{} ddd.md", now.format("%Y-%m-%d"))
+        );
+        // Folders by date, as Obsidian can make them.
+        let nested = Target::Daily {
+            folder: "Journal".into(),
+            format: "YYYY/MM/YYYY-MM-DD".into(),
+        };
+        assert_eq!(
+            store.target_path(&nested, now),
+            format!("Journal/{}.md", now.format("%Y/%m/%Y-%m-%d"))
         );
         // With nothing opened yet, "last" is the inbox.
         assert_eq!(store.target_path(&Target::Last, now), "Inbox.md");

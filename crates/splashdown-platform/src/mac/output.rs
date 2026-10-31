@@ -151,7 +151,7 @@ pub(crate) fn quiet_output(how: Quieten) -> Option<QuietOutput> {
                 };
                 let lower = was * LOWER_TO;
                 if set(device, &address, lower) {
-                    // What the device actually took, to recognise it later.
+                    // What the device actually took, to recognize it later.
                     let set = get::<f32>(device, &address).unwrap_or(lower);
                     changes.push(Change::Volume { element, was, set });
                 }

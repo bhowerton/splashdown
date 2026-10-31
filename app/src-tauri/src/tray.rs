@@ -168,7 +168,10 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                 "mini-bar" => toggle_mini_bar(app),
                 "update" => show_updates(app),
                 "feedback" => send_feedback(app),
-                "quit" => app.exit(0),
+                "quit" => {
+                    splashdown_platform::restore_output();
+                    app.exit(0);
+                }
                 _ => {
                     if id == "whisper" {
                         toggle_whisper(app);

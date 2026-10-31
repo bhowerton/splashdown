@@ -7,7 +7,7 @@
 function renderTransforms() {
   const host = $("transforms");
   // Don't rebuild while the user is typing in it, or recording a shortcut.
-  if (host.contains(document.activeElement) || shortcutCapture) return;
+  if (typingIn(host) || shortcutCapture) return;
   host.replaceChildren(...(state.transforms ?? []).map(transformCard));
   $("transform-reset").hidden = !state.settings.transforms;
 }

@@ -6,7 +6,7 @@
 function renderSnippets() {
   const host = $("snippets");
   // Don't rebuild while the user is typing in it.
-  if (host.contains(document.activeElement)) return;
+  if (typingIn(host)) return;
   host.replaceChildren(
     ...state.settings.snippets.map((sn, i) => {
       const row = document.createElement("div");
@@ -65,7 +65,7 @@ function saveSnippets(change) {
 
 function renderReplacements() {
   const host = $("replacements");
-  if (host.contains(document.activeElement)) return;
+  if (typingIn(host)) return;
   host.replaceChildren(
     ...(state.settings.replacements ?? []).map((r, i) => {
       const row = document.createElement("div");

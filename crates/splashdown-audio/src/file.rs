@@ -90,10 +90,15 @@ impl AudioFile {
             .ok_or(FileError::NoAudio)?;
         let params = &track.codec_params;
         let rate = params.sample_rate.unwrap_or(TARGET_SAMPLE_RATE);
-        let duration = params
-            .n_frames
-            .filter(|_| rate > 0)
-            .map(|n| Duration::from_secs_f64(n as f64 / f64::from(rate)));
+        // The length is counted in the track's time base (milliseconds in
+        // MKV, the media's own timescale in MP4), or else in samples.
+        let duration = params.n_frames.and_then(|n| match params.time_base {
+            Some(base) => {
+                let t = base.calc_time(n);
+                Some(Duration::from_secs_f64(t.seconds as f64 + t.frac))
+            }
+            None => (rate > 0).then(|| Duration::from_secs_f64(n as f64 / f64::from(rate))),
+        });
         let decoder = symphonia::default::get_codecs()
             .make(params, &DecoderOptions::default())
             .map_err(|_| FileError::Unsupported(kind(path)))?;
@@ -130,8 +135,7 @@ impl AudioFile {
     /// Decodes about `BLOCK_SECS` of audio and hands it to the cutter at
     /// 16 kHz.
     fn decode_block(&mut self) -> Result<(), FileError> {
-        let want = self.rate as usize * BLOCK_SECS;
-        while self.block.len() < want {
+        while self.block.len() < self.rate as usize * BLOCK_SECS {
             let packet = match self.format.next_packet() {
                 Ok(packet) => packet,
                 // The usual way a file ends.
@@ -153,6 +157,18 @@ impl AudioFile {
             match self.decoder.decode(&packet) {
                 Ok(decoded) => {
                     let spec = *decoded.spec();
+                    // The audio's real rate can differ from the header's
+                    // (HE-AAC) or change midway: what came before is
+                    // resampled at the rate it had.
+                    if spec.rate != self.rate && spec.rate > 0 {
+                        let before = std::mem::take(&mut self.block);
+                        self.cutter.push(&resample::resample(
+                            &before,
+                            self.rate,
+                            TARGET_SAMPLE_RATE,
+                        ));
+                        self.rate = spec.rate;
+                    }
                     let channels = spec.channels.count().max(1);
                     let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
                     samples.copy_interleaved_ref(decoded);
