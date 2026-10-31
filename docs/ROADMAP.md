@@ -135,6 +135,31 @@ Cheap features that close visible gaps.
   - Prompt-injection defences re-run on the eval after every prompt change.
 - ⬜ Beta group, feedback form, known-issues list.
 
+### 7b. Notes you own
+Notes as Markdown files in a folder the user picks, replacing the scratchpad. Spec: [SPEC.md](SPEC.md) §9e. Storage: `~/Documents/Splashdown Notes/` (Windows: `Documents\Splashdown Notes\`) by default, or any folder, such as an Obsidian vault, iCloud Drive or Dropbox. Versions and pins sit in a `.splashdown/` folder inside it; nothing goes in a database or a cloud.
+- ⬜ **N1 Notes window and storage:**
+  - One `.md` file per note, with short front matter.
+  - A list with search and pins, and versions (50 per note).
+  - Changes made in other apps picked up through a folder watcher.
+  - Delete moves notes to the Trash.
+  - The scratchpad is migrated, and Send to {app} is kept.
+  - A folder picker (`tauri-plugin-dialog`).
+  - Handling of the macOS Documents prompt.
+  - A synced-folder notice on the Privacy tab.
+- ⬜ **N2 Transforms:** saved instructions (Clean up, Summary, To-dos, Email, Prompt for an AI, plus your own) run over a note or a selection, saving a version first. A transform with a shortcut works on selected text in any app. To-dos get eval cases.
+- ⬜ **N3 Capture without a window:** hold the dictation key and press N to append to Inbox, today's daily note or the last note, with an Undo toast. Also "Save to notes" in History, `splashdown://note` and `splashdown-cli note`, and optionally keeping the audio in `Attachments/`.
+- ⬜ **N4 Notes for agents:** `search_notes`, `read_note` and `append_note` in `splashdown-mcp`. Off by default, with separate switches for reading and writing.
+- ⏸ **N5 Meeting notes: decide after N1.** Two-channel recording (You and Them), transcription in pieces, a summary transform. See SPEC §9e.10.
+
+### 7c. Other planned features
+- ⬜ **Import vocabulary and snippets** exported from other dictation apps.
+- ⬜ **File transcription:** drop an audio or video file onto Notes to get a transcript note.
+- ⬜ **"Ask" panel:** a spoken question is answered in a panel by the pill (Copy, Insert) instead of being typed.
+- ⬜ **Parakeet** as a local speech model, faster than Whisper on CPU.
+- ⬜ **Shareable presets** as files.
+- ⬜ **Keep the last failed recording** even with history off.
+- ⬜ **A shareable Insights card.**
+
 ### 8. Later, to stand out
 - ✅ **MCP voice input for coding agents:** Claude Code, Cursor or Codex can ask the user to answer by voice. `splashdown-mcp`, set up as in [AGENTS.md](AGENTS.md).
 - ✅ **Whisper mode** for quiet speech: an opt-in switch (General and the menu bar) that raises quiet recordings to a normal level before transcription (up to 25×, softly limited) and lowers hands-free's "still speaking" level. A recording at about −40 dB went from "no speech found" to a word-perfect transcript.
@@ -142,4 +167,4 @@ Cheap features that close visible gaps.
 - ⬜ Localize the app's own interface.
 
 ### Not planned for 1.0
-Mobile apps, a meeting notetaker or file transcription, enterprise compliance (SOC 2/HIPAA/SSO), screen OCR context, our own speech model.
+Mobile apps, enterprise compliance (SOC 2/HIPAA/SSO), screen OCR context, our own speech model. Each is a separate product or needs servers we don't run; choosing among providers matters more than a model of our own.
