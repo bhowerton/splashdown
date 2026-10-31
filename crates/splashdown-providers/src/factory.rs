@@ -129,6 +129,19 @@ pub fn load_local_speech(
     )?))
 }
 
+/// A downloaded catalog model that loads only when it's first used: the
+/// stand-in for a cloud provider that failed.
+#[cfg(feature = "local-speech")]
+pub fn local_speech_on_demand(
+    model: SpeechModel,
+    models_dir: &Path,
+) -> ProviderResult<Arc<dyn SpeechToText>> {
+    Ok(Arc::new(crate::LocalSpeech::on_demand(
+        &model.path_in(models_dir),
+        model.profile(),
+    )?))
+}
+
 /// Any GGUF file (`--stt-model <path>`): treated as a multilingual model
 /// that transcribes when the recording ends.
 #[cfg(feature = "local-speech")]
@@ -141,6 +154,11 @@ fn load_local_speech_file(path: &Path) -> ProviderResult<Arc<dyn SpeechToText>> 
 
 #[cfg(not(feature = "local-speech"))]
 pub fn load_local_speech(_: SpeechModel, _: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
+    Err(unavailable())
+}
+
+#[cfg(not(feature = "local-speech"))]
+pub fn local_speech_on_demand(_: SpeechModel, _: &Path) -> ProviderResult<Arc<dyn SpeechToText>> {
     Err(unavailable())
 }
 

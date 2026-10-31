@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use splashdown_config::{
     AiProvider, Budget, Destination, OtherAudio, Paths, Preset, PresetModel, Secrets, Settings,
-    Situation, SpeechChoice, SpeechProvider,
+    Situation, SpeechProvider,
 };
 use splashdown_core::fallback::{FallbackModel, FallbackStt};
 use splashdown_core::{Pipeline, PromptContext, SpeechToText, SttHints, TextModel};
@@ -155,18 +155,16 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         .map_err(|e| e.to_string())?;
     let stt = splashdown_providers::factory::speech(&speech, &secrets, &paths.models_dir)
         .map_err(|e| e.to_string())?;
-    let preview = settings
-        .general
-        .live_preview()
-        .then(|| preview_model(&speech, &stt, &paths))
-        .flatten();
+    // The live preview uses the speech model the user chose, when it runs on
+    // this computer. No other model is loaded for it.
+    let preview = (settings.general.live_preview()
+        && speech.provider == SpeechProvider::WhisperLocal)
+        .then(|| stt.clone());
     // A cloud provider that fails hands the request to one on this
     // computer, if there is one, rather than losing the dictation.
     let stt = match (
         speech.destination(),
-        on_device_speech(
-            settings, &secrets, on_device, &paths, &speech, &stt, &preview,
-        ),
+        on_device_speech(settings, &secrets, on_device, &paths),
     ) {
         (Destination::Cloud, Some(backup)) => {
             tracing::info!("speech falls back to {}", backup.name());
@@ -342,15 +340,12 @@ fn on_device_text_model(
 }
 
 /// Speech-to-text on this computer for when the cloud fails: Apple's, else
-/// the live preview's model, else any downloaded local speech model.
+/// a downloaded local model, which is only loaded if the cloud does fail.
 fn on_device_speech(
     settings: &Settings,
     secrets: &Secrets,
     on_device: Situation,
     paths: &Paths,
-    speech: &SpeechChoice,
-    stt: &Arc<dyn SpeechToText>,
-    preview: &Option<Arc<dyn SpeechToText>>,
 ) -> Option<Arc<dyn SpeechToText>> {
     if on_device.apple_speech {
         let mut s = settings.clone();
@@ -366,31 +361,8 @@ fn on_device_speech(
             return Some(apple);
         }
     }
-    preview
-        .clone()
-        .or_else(|| preview_model(speech, stt, paths))
-}
-
-/// The model for the live preview: the main one if it's already local,
-/// otherwise the first downloaded local model (streaming ones come first in
-/// the catalog). Cloud speech-to-text can't stream partial results, so the
-/// preview always runs locally.
-fn preview_model(
-    speech: &SpeechChoice,
-    stt: &Arc<dyn SpeechToText>,
-    paths: &Paths,
-) -> Option<Arc<dyn SpeechToText>> {
-    if speech.provider == SpeechProvider::WhisperLocal {
-        return Some(stt.clone());
-    }
     let model = SpeechModel::ALL
         .into_iter()
         .find(|m| m.is_downloaded(&paths.models_dir))?;
-    match splashdown_providers::factory::load_local_speech(model, &paths.models_dir) {
-        Ok(stt) => Some(stt),
-        Err(e) => {
-            tracing::warn!("live preview unavailable: {e}");
-            None
-        }
-    }
+    splashdown_providers::factory::local_speech_on_demand(model, &paths.models_dir).ok()
 }

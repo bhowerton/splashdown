@@ -27,7 +27,7 @@
 
 ### 2. M2b — Speed and reliability (new)
 How fast and how reliably words land is the core of a dictation app; most of what users judge happens here.
-- 🟡 **Live text while speaking:** ✅ the overlay shows the words as you speak, using local Whisper, about once every 0.6 s, even when the final text comes from a cloud provider. ⬜ Still to do: streaming the *final* transcription from cloud providers (OpenAI realtime) to cut the time after release.
+- ✅ **Live text while speaking** (2026-10-31): with speech-to-text on this computer, a streaming model (Nemotron) shows the words as you speak and finishes the text on release. With other local models the preview re-transcribes about every 0.6 s. Cloud speech-to-text has no preview: only the model the user chose is ever loaded. ⬜ Streaming the final text from cloud providers (OpenAI realtime).
 - ✅ **Faster final text for long dictations:** after 8 s of recording, the audio up to each pause (≥ 0.4 s) is transcribed in the background; on release only the stretch after the last pause is left. The pieces are joined before the AI pass, and if any fails the whole recording is transcribed instead. Plain dictation only (not instructions or transforms). Not yet timed on real long dictations.
 - ⏸ **Compressed upload (Opus): deferred.** The 10-minute hands-free cap keeps WAV under OpenAI's 25 MB limit (about 19 MB at most), and a typical 10 s dictation is 320 KB, which uploads in well under a second. Revisit if slow connections show up in testing.
 - 🟡 **First-word safety:** ✅ mic open time is logged for every dictation (`mic … opened in N ms`). ⬜ Add a pre-roll buffer only if testing shows clipped first words.

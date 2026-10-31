@@ -227,6 +227,8 @@ pub struct Snapshot {
     update: crate::updates::Status,
     /// AI providers a preset can choose as its own model, usable now.
     preset_ai_options: Vec<AiOption>,
+    /// The speech model the user chose is still loading.
+    speech_loading: bool,
     /// Presets (by id) and transforms (`transform:` and id) whose shortcut
     /// couldn't be registered, and why.
     shortcut_errors: std::collections::HashMap<String, String>,
@@ -440,6 +442,7 @@ fn snapshot(
         update,
         preset_ai_options,
         shortcut_errors: crate::shortcuts::errors(),
+        speech_loading: splashdown_providers::speech_model_loading(),
     }
 }
 

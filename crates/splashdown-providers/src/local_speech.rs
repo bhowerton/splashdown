@@ -3,11 +3,13 @@
 //! while the user speaks and run on the CPU, where each small piece is
 //! quickest; the others use Metal on macOS.
 //!
-//! Models load in the background: the first load after an update compiles
-//! the GPU shaders, which takes about 10 s, and dictation mustn't wait for
-//! that to start.
+//! A model is only loaded once the user has chosen it, and then in the
+//! background: the first load after an update compiles the GPU shaders,
+//! which takes about 10 s, and dictation mustn't wait for that to start.
+//! A stand-in for a failed cloud provider loads only when it's needed.
 
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::sync::{Arc, Mutex, Once, Weak};
 use std::time::{Duration, Instant};
@@ -54,6 +56,14 @@ struct Loaded {
     last_used: Mutex<Instant>,
 }
 
+/// Speech models being loaded right now, for Settings.
+static LOADING: AtomicUsize = AtomicUsize::new(0);
+
+/// Whether a speech model is loading right now.
+pub fn loading() -> bool {
+    LOADING.load(Ordering::Relaxed) > 0
+}
+
 impl Loaded {
     fn model(&self) -> ProviderResult<Model> {
         *self.last_used.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
@@ -61,7 +71,10 @@ impl Loaded {
         if let Some(model) = &*loaded {
             return Ok(model.clone());
         }
-        let model = open(&self.path, self.cpu)?;
+        LOADING.fetch_add(1, Ordering::Relaxed);
+        let model = open(&self.path, self.cpu);
+        LOADING.fetch_sub(1, Ordering::Relaxed);
+        let model = model?;
         *loaded = Some(model.clone());
         Ok(model)
     }
@@ -125,8 +138,16 @@ fn watch_idle(model: Weak<Loaded>) {
 
 impl LocalSpeech {
     /// A GGUF model file, loaded in the background from now on (and again
-    /// after it's been let go).
+    /// after it's been let go): the model the user chose.
     pub fn load(path: &Path, profile: Profile) -> ProviderResult<Self> {
+        let speech = Self::on_demand(path, profile)?;
+        preload(speech.model.clone());
+        Ok(speech)
+    }
+
+    /// A GGUF model file, loaded only when it's first used: a stand-in for
+    /// a cloud provider that failed.
+    pub fn on_demand(path: &Path, profile: Profile) -> ProviderResult<Self> {
         if !path.is_file() {
             return Err(ProviderError::Unavailable(format!(
                 "model not found at {} — download it first",
@@ -145,7 +166,6 @@ impl LocalSpeech {
             last_used: Mutex::new(Instant::now()),
         });
         watch_idle(Arc::downgrade(&loaded));
-        preload(loaded.clone());
         Ok(Self {
             english_only: profile.english_only,
             streams: profile.streams,
@@ -195,6 +215,14 @@ fn run_options(model: &Model, english_only: bool, hints: &SttHints) -> RunOption
 impl SpeechToText for LocalSpeech {
     fn name(&self) -> String {
         format!("local/{}", self.model_name)
+    }
+
+    fn ready(&self) -> bool {
+        self.model
+            .loaded
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
     }
 
     fn warm_up(&self) {

@@ -186,6 +186,10 @@ pub trait SpeechToText: Send + Sync {
     /// started): a local model loads itself if it was let go. Returns at
     /// once.
     fn warm_up(&self) {}
+    /// False while a local model is still loading (the overlay says so).
+    fn ready(&self) -> bool {
+        true
+    }
     /// A transcription that runs while the user speaks, for models that can
     /// (spec §5.2). `None` means transcribe the recording when it ends.
     fn stream(&self, _hints: &SttHints) -> Option<Box<dyn SpeechStream>> {

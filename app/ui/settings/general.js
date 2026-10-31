@@ -57,10 +57,13 @@ function renderGeneral() {
   $("gen-volume").disabled = !$("gen-sounds").checked;
   $("gen-live").checked = s.general.live_preview !== false;
   const note = $("gen-live-note");
-  const ready = state.speech_models.some((m) => m.downloaded);
+  // Only the model the user chose is ever loaded, so the preview needs
+  // speech-to-text on this computer.
+  const resolved = "Ok" in state.resolved_speech ? state.resolved_speech.Ok : "";
+  const ready = resolved.startsWith("On this computer");
   note.textContent = !ready && $("gen-live").checked
-    ? "Needs a speech model on this computer: download one under Providers → Speech to text → On this computer"
-    : "Shown in the status pill; the final text still comes from your chosen provider";
+    ? "Works when speech-to-text runs on this computer: choose it under Providers → Speech to text"
+    : "Shown in the status pill as you speak";
   note.classList.toggle("warn-text", !ready && $("gen-live").checked);
 }
 

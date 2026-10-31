@@ -41,6 +41,10 @@ impl SpeechToText for FallbackStt {
     fn warm_up(&self) {
         self.primary.warm_up();
     }
+
+    fn ready(&self) -> bool {
+        self.primary.ready()
+    }
 }
 
 /// A text model that falls back to `backup` when `primary` fails.

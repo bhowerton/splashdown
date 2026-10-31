@@ -55,7 +55,7 @@
 
 - **Hold to talk.** Hold **Right Option** (Right Ctrl on Windows), speak, let go. The text lands in whatever field has focus, with a space before it when it needs one.
 - **Clean, not rewritten.** The AI pass removes fillers and false starts and fixes punctuation, at the level you choose per app: none, light, medium or high. Spoken formatting ("new paragraph", "comma") works in any language.
-- **Live text while you speak**, so you can see it's listening, even when the final text comes from a cloud model.
+- **Live text while you speak** with speech-to-text on your computer: Nemotron writes as you speak, and your text is ready the moment you let go.
 - **Hands-free** for long dictations: hold the key and press **H**, then let go. Stops on its own after 3 minutes of silence.
 - **Straight into a note:** hold the key and press **N**, and what you say is added to your Inbox (or today's daily note) instead of typed. ⌃⌥Z takes it back.
 - **Whisper mode** for speaking quietly, and **mixed languages** in one sentence.

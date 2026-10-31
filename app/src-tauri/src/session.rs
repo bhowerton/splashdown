@@ -136,9 +136,6 @@ struct LiveStream {
     stream: Box<dyn splashdown_core::SpeechStream>,
     /// Samples of the recording already fed.
     fed: usize,
-    /// The main speech model's stream: its text is the dictation's. If not,
-    /// it only feeds the live preview.
-    for_final: bool,
     /// Show its partial text in the overlay (live preview is on).
     show: bool,
 }
@@ -788,9 +785,21 @@ impl Controller {
             .then(|| focus.as_ref().and_then(read_field_context))
             .flatten();
         let clipboard = preset.clipboard_context.then(read_clipboard).flatten();
+        // The speech model the user chose may still be loading (the first
+        // load after an update takes a while): say so.
+        let loading = self
+            .engine
+            .as_ref()
+            .is_ok_and(|e| !e.pipeline_for(&preset).stt().ready());
         let shown = match &selection {
             Selection::Text(s) => OverlayState::Transform {
                 words: s.split_whitespace().count(),
+            },
+            _ if loading => OverlayState::Listening {
+                preset: Some(match preset_label(&preset) {
+                    Some(name) => format!("{name} · speech model loading…"),
+                    None => "speech model loading…".into(),
+                }),
             },
             _ => OverlayState::Listening {
                 preset: preset_label(&preset),
@@ -820,7 +829,7 @@ impl Controller {
             .as_ref()
             .ok()
             .filter(|_| !matches!(selection, Selection::Text(_)))
-            .filter(|_| !stream.as_ref().is_some_and(|s| s.for_final))
+            .filter(|_| stream.is_none())
             .map(|e| Chunker::new(e.pipeline.stt(), e.hints_for(&preset), e.audio_cleanup()));
 
         self.next_session += 1;
@@ -986,7 +995,7 @@ impl Controller {
         let rest = self.audio.finish();
         // A stream of the whole dictation gets the rest of the audio now,
         // and its text is ready a moment later (below).
-        let mut stream = active.stream.take().filter(|s| s.for_final);
+        let mut stream = active.stream.take();
         if let Some(live) = &mut stream {
             live.feed(&rest, 0);
         }
@@ -1000,8 +1009,13 @@ impl Controller {
         if engine.sounds {
             self.ui.sound(Sound::Stop, engine.sound_volume);
         }
+        let label = if engine.pipeline_for(&active.preset).stt().ready() {
+            "Working…"
+        } else {
+            "Loading speech model…"
+        };
         self.ui.show(OverlayState::Working {
-            label: "Working…".into(),
+            label: label.into(),
         });
 
         let mut selection = match &active.selection {
@@ -1960,30 +1974,21 @@ fn field_changed(focus: &Focus, before: &str) -> bool {
     }
 }
 
-/// The stream for a new recording, if there's a streaming model: the main
-/// speech model's (its text is the dictation's), or else the live
-/// preview's (partial text only). Not with noise reduction or whisper mode,
-/// which work on the whole recording.
+/// The stream for a new recording, if the user's speech model can
+/// transcribe while they speak: its text is the dictation's. Not with noise
+/// reduction or whisper mode, which work on the whole recording.
 fn live_stream(engine: &Engine, preset: &Preset) -> Option<LiveStream> {
     if engine.audio_cleanup() != splashdown_audio::Cleanup::default() {
         return None;
     }
-    let hints = engine.hints_for(preset);
-    let show = engine.preview.is_some();
-    if let Some(stream) = engine.pipeline_for(preset).stt().stream(&hints) {
-        return Some(LiveStream {
-            stream,
-            fed: 0,
-            for_final: true,
-            show,
-        });
-    }
-    let stream = engine.preview.as_ref()?.stream(&hints)?;
+    let stream = engine
+        .pipeline_for(preset)
+        .stt()
+        .stream(&engine.hints_for(preset))?;
     Some(LiveStream {
         stream,
         fed: 0,
-        for_final: false,
-        show: true,
+        show: engine.preview.is_some(),
     })
 }
 
@@ -2267,7 +2272,6 @@ mod tests {
         let mut live = LiveStream {
             stream: Box::new(CountingStream(fed.clone())),
             fed: 0,
-            for_final: true,
             show: false,
         };
         let clip = |n| AudioClip::new(vec![0.0; n], 16_000);

@@ -185,10 +185,12 @@ function renderLocalSpeech(visible) {
       st.className = "state";
       row.append(lbl, st);
       if (m.id === selected) {
+        const loading = m.downloaded && state.speech_loading;
         const b = document.createElement("span");
-        b.className = m.downloaded ? "badge ok" : "badge warn";
-        b.textContent = m.downloaded ? "In use" : "Selected · not downloaded";
+        b.className = m.downloaded && !loading ? "badge ok" : "badge warn";
+        b.textContent = loading ? "Loading…" : m.downloaded ? "In use" : "Selected · not downloaded";
         st.append(b);
+        if (loading) recheckLoading();
       }
       if (m.downloaded) {
         if (m.id !== selected) st.append(button("Use", () => chooseLocalSpeech(m.id)));
@@ -198,6 +200,22 @@ function renderLocalSpeech(visible) {
       return row;
     })
   );
+}
+
+/** While the chosen model loads, look again every second, so "Loading…"
+ *  turns into "In use" when it's ready. */
+let loadingCheck = null;
+function recheckLoading() {
+  if (loadingCheck) return;
+  loadingCheck = setTimeout(async () => {
+    loadingCheck = null;
+    try {
+      state = await invoke("get_state");
+      render();
+    } catch {
+      // Tried again on the next render.
+    }
+  }, 1000);
 }
 
 function chooseLocalSpeech(id) {
