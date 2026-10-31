@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splashdown — Hold a key. Say it. It's typed.</title>
+<meta name="description" content="Free, open-source dictation for Mac and Windows. Hold a key, speak, and clean text appears in any app. No subscription, no account, and it can run entirely on your computer.">
+<link rel="canonical" href="https://splashdown.app/">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://splashdown.app/">
+<meta property="og:title" content="Splashdown — Hold a key. Say it. It's typed.">
+<meta property="og:description" content="Free, open-source dictation for Mac and Windows. Works in every app. No subscription, no account.">
+<meta property="og:image" content="https://splashdown.app/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#0A1440">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="./"><img src="assets/icon.svg" alt="" width="36" height="36">Splashdown</a>
+  <nav>
+    <a href="#features">Features</a>
+    <a href="#privacy">Privacy</a>
+    <a href="#faq">FAQ</a>
+    <a class="gh" href="https://github.com/bhowerton/splashdown">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <section class="hero">
+    <h1>Hold a key.<br>Say it. <span>It's typed.</span></h1>
+    <p class="lede">Free, open-source dictation for Mac and Windows. Speak naturally, and clean, punctuated text appears in whatever app you're in. No subscription, no account.</p>
+    <div class="cta">
+      <a class="btn primary" id="download" href="mac">Download for Mac</a>
+      <a class="btn" id="other" href="windows">Download for Windows</a>
+    </div>
+    <p class="fine" id="fine">macOS 13+ (Apple Silicon and Intel) · Windows 10 and 11 · Signed releases</p>
+    <p class="brew">or <code>brew install --cask bhowerton/tap/splashdown</code></p>
+    <img class="demo" src="assets/demo.svg" width="960" height="480" alt="Animation: holding Option and saying 'um, so can we meet Tuesday… actually Thursday at 3' types 'Can we meet Thursday at 3?' into an email; then tapping Shift and saying 'make it more formal' rewrites it to 'Would Thursday at 3 p.m. work for you?'">
+  </section>
+
+  <section class="features" id="features">
+    <h2>Talk the way you talk. Get the text you meant.</h2>
+    <div class="grid">
+      <article>
+        <h3>Works in every app</h3>
+        <p>Email, Slack, Messages, docs, the browser, your terminal or code editor. Hold the key wherever the cursor is.</p>
+      </article>
+      <article>
+        <h3>Cleans up, doesn't rewrite</h3>
+        <p>The "um"s, false starts and do-overs disappear, punctuation appears, and your words stay yours. Choose how much cleanup each app gets.</p>
+      </article>
+      <article>
+        <h3>Commands in any language</h3>
+        <p>"Make that more formal." "Delete that last sentence." "Envíalo." Say what you want however you'd phrase it; there's no list of magic words.</p>
+      </article>
+      <article>
+        <h3>A style for every app</h3>
+        <p>Presets switch on their own: casual in Messages, polished in email, exact in your terminal. Each can translate, press Return, or use its own AI.</p>
+      </article>
+      <article>
+        <h3>On your computer or in the cloud</h3>
+        <p>Run fully offline with Apple's on-device models or the built-in local model, or use your own OpenAI, OpenRouter or Anthropic key with a spending limit.</p>
+      </article>
+      <article>
+        <h3>Free and open source, for good</h3>
+        <p>No subscription, no word limits, no account. The code is on GitHub under MIT or Apache-2.0, and every release is signed.</p>
+      </article>
+    </div>
+    <div class="shots">
+      <figure><img src="assets/presets.png" loading="lazy" alt="Settings, Presets: Default, Email, Texting, Work chat and Code presets, with cleanup level and tone choices"><figcaption>Presets for every app</figcaption></figure>
+      <figure><img src="assets/insights.png" loading="lazy" alt="Settings, Insights: words this week, words per minute, time saved, a 30-day chart and words per app"><figcaption>Insights, counted only on your computer</figcaption></figure>
+      <figure><img src="assets/privacy.png" loading="lazy" alt="Settings, Privacy: where speech and text go for the current settings, and local-only mode"><figcaption>See exactly where your words go</figcaption></figure>
+    </div>
+  </section>
+
+  <section class="privacy" id="privacy">
+    <h2>Private by default</h2>
+    <p>Splashdown has no servers, no account and no analytics. Your voice and text go only to the provider you choose, straight from your computer, or nowhere at all with on-device models. API keys stay in your system keychain, history is off unless you turn it on, and the logs never contain what you said.</p>
+    <p><a href="privacy">Everything that leaves your computer, and everything it keeps →</a></p>
+  </section>
+
+  <section class="faq" id="faq">
+    <h2>Questions</h2>
+    <details>
+      <summary>Is it really free?</summary>
+      <p>Yes. Splashdown is open source and costs nothing. If you use a cloud AI provider, you pay that provider directly with your own key; typical dictation costs cents a month, and you can set a monthly limit. With on-device models it costs nothing at all.</p>
+    </details>
+    <details>
+      <summary>What do I need to run it fully offline?</summary>
+      <p>On an Apple Silicon Mac with macOS 26, Apple's built-in speech and language models. On any other Mac or PC, local Whisper plus Splashdown's built-in local model, a free download with nothing else to install. Local-only mode then refuses every cloud provider.</p>
+    </details>
+    <details>
+      <summary>Which languages does it understand?</summary>
+      <p>Dozens. It detects the language as you speak, handles switching languages mid-sentence, and can translate into another language per app. Commands and spoken formatting work in any language too.</p>
+    </details>
+    <details>
+      <summary>How is it different from built-in dictation?</summary>
+      <p>Built-in dictation types your words as spoken. Splashdown also cleans them up, follows instructions ("make it a list"), edits by voice, adapts its style per app, and learns your vocabulary.</p>
+    </details>
+    <details>
+      <summary>Does it work with coding agents?</summary>
+      <p>Yes. File names you say become <code>@file</code> mentions for Claude Code or Cursor, and the <code>splashdown-mcp</code> server lets an agent ask you a question by voice.</p>
+    </details>
+    <details>
+      <summary>Something isn't working.</summary>
+      <p>See <a href="https://github.com/bhowerton/splashdown/blob/main/docs/TROUBLESHOOTING.md">troubleshooting</a>, or use <strong>Send feedback</strong> in the app's menu to open an issue with your versions filled in.</p>
+    </details>
+  </section>
+
+  <section class="final">
+    <img src="assets/icon.svg" alt="" width="96" height="96">
+    <h2>Give your hands a break.</h2>
+    <div class="cta">
+      <a class="btn primary" href="mac">Download for Mac</a>
+      <a class="btn" href="windows">Download for Windows</a>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <nav>
+    <a href="https://github.com/bhowerton/splashdown">GitHub</a>
+    <a href="changelog">Changelog</a>
+    <a href="privacy">Privacy</a>
+    <a href="https://github.com/bhowerton/splashdown/blob/main/docs/TROUBLESHOOTING.md">Troubleshooting</a>
+    <a href="https://github.com/bhowerton/splashdown/issues">Report a problem</a>
+  </nav>
+  <p>Made by <a href="https://github.com/bhowerton">@bhowerton</a>. Releases are signed and published by Point Dynamics, LLC.</p>
+  <p class="nocookies">This site has no cookies, no analytics and no trackers.</p>
+</footer>
+
+<script>
+  // Put the visitor's platform first. Everyone can still pick either one.
+  (function () {
+    var ua = navigator.userAgent || "";
+    var platform = (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || "";
+    var windows = /Win/i.test(platform) || /Windows/i.test(ua);
+    if (!windows) return;
+    var main = document.getElementById("download");
+    var other = document.getElementById("other");
+    main.href = "windows"; main.textContent = "Download for Windows";
+    other.href = "mac"; other.textContent = "Download for Mac";
+  })();
+</script>
+</body>
+</html>

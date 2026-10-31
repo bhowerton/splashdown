@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://splashdown.app">Website</a> ·
   <a href="#install">Install</a> ·
   <a href="#everything-it-does">Features</a> ·
   <a href="#private-by-default">Privacy</a> ·
