@@ -70,6 +70,27 @@ fn reported_cost(json: &Value) -> Option<f64> {
     json.get("usage")?.get("cost")?.as_f64()
 }
 
+/// What a reply that stopped part way probably cost, from the length of
+/// the prompt and of the text that came (about four characters a token).
+/// Unknown where there's no price list (OpenRouter reports its own costs,
+/// but only in a reply's last piece).
+pub(crate) fn estimated_text_usage(
+    flavor: Flavor,
+    local: bool,
+    model: &str,
+    prompt_chars: usize,
+    reply_chars: usize,
+) -> Usage {
+    if flavor == Flavor::Custom && local {
+        return Usage::FREE;
+    }
+    let Some(prices) = text_prices(flavor, model) else {
+        return Usage::unknown();
+    };
+    let tokens = |chars: usize| chars.div_ceil(4) as f64 / 1_000_000.0;
+    Usage::priced(tokens(prompt_chars) * prices.input + tokens(reply_chars) * prices.output)
+}
+
 /// The cost of a text completion, from its reply. `local` marks a custom
 /// server on this computer, which costs nothing.
 pub(crate) fn text_usage(flavor: Flavor, local: bool, model: &str, json: &Value) -> Usage {
@@ -136,6 +157,21 @@ mod tests {
 
     fn close(a: f64, b: f64) -> bool {
         (a - b).abs() < 1e-12
+    }
+
+    #[test]
+    fn a_cut_off_reply_is_estimated() {
+        // 4,000 characters of prompt and 400 of reply: 1,000 and 100 tokens.
+        let u = estimated_text_usage(Flavor::OpenAi, false, "gpt-4.1-mini", 4000, 400);
+        assert!(close(
+            u.cost_usd,
+            (1000.0 * 0.40 + 100.0 * 1.60) / 1_000_000.0
+        ));
+        assert!(estimated_text_usage(Flavor::OpenRouter, false, "x", 4000, 400).unpriced);
+        assert_eq!(
+            estimated_text_usage(Flavor::Custom, true, "qwen", 4000, 400),
+            Usage::FREE
+        );
     }
 
     #[test]

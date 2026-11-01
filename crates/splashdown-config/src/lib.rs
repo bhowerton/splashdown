@@ -17,7 +17,7 @@ pub use settings::{
     AiChoice, AiProvider, AiSettings, Budget, CaptureTo, DEFAULT_SOUND_VOLUME, Destination,
     GeneralSettings, HotkeySettings, LoadError, MeetingSummary, NotesSettings, OtherAudio,
     Replacement, ResolveError, Settings, Situation, SpeechChoice, SpeechProvider, SpeechSettings,
-    defaults, is_local_url,
+    defaults, is_local_url, replacement_problem,
 };
 pub use transforms::{
     NOTHING_TO_DO, Place, Transform, builtin_transforms, is_nothing_to_do, tidy_answer,

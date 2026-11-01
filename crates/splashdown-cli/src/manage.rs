@@ -196,6 +196,9 @@ pub fn settings_set(key: &str, value: Option<&str>, config: Option<PathBuf>) -> 
     if let Some(problem) = updated.hotkey_problem() {
         bail!("{problem}");
     }
+    if let Some(problem) = splashdown_config::replacement_problem(&updated.replacements) {
+        bail!("{problem}");
+    }
     save(&updated, &path, own)?;
     println!("{key} = {}", value.unwrap_or("(default)"));
     Ok(())
@@ -336,8 +339,10 @@ mod tests {
         // Numbers that come back written another way are fine.
         settings_set("general.sound_volume", Some("0.3"), Some(path.clone())).unwrap();
         settings_set("general.budget.monthly_usd", Some("5"), Some(path.clone())).unwrap();
-        // Letters that clash are refused.
+        // Letters that clash are refused, and so is a rule that can't work.
         assert!(settings_set("hotkeys.ask", Some("h"), Some(path.clone())).is_err());
+        let bad = r#"[{find = "(", replace = "x", regex = true}]"#;
+        assert!(settings_set("replacements", Some(bad), Some(path.clone())).is_err());
         assert!(settings_set("general.vocabulary", Some("7"), Some(path.clone())).is_err());
 
         settings_set("general.language", None, Some(path.clone())).unwrap();

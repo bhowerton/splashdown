@@ -10,6 +10,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+regex = "1"
 directories.workspace = true
 splashdown-core.workspace = true
 keyring.workspace = true

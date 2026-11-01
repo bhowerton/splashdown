@@ -512,7 +512,7 @@ pub async fn save_settings(
     if let Some(problem) = settings.hotkey_problem() {
         return Err(problem.into());
     }
-    if let Some(problem) = crate::replacements::check(&settings.replacements) {
+    if let Some(problem) = splashdown_config::replacement_problem(&settings.replacements) {
         return Err(problem);
     }
     // The notes folder is changed from the Notes window, so a Settings

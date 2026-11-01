@@ -127,9 +127,13 @@ pub fn ask(app: &AppHandle, mut q: Question) {
             }
         };
         let result = q.model.complete_streaming(&request, &mut on_text).await;
-        if let Ok(completion) = &result {
-            crate::spend::shared()
-                .record(&[(q.model.name(), completion.usage)], chrono::Local::now());
+        let usage = match &result {
+            Ok(completion) => Some(completion.usage),
+            Err(splashdown_core::ProviderError::Interrupted { usage, .. }) => Some(*usage),
+            Err(_) => None,
+        };
+        if let Some(usage) = usage {
+            crate::spend::shared().record(&[(q.model.name(), usage)], chrono::Local::now());
         }
         {
             let mut panel = panel();

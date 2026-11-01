@@ -24,6 +24,10 @@ pub enum ProviderError {
     /// Input exceeds what the model can take.
     #[error("input too long for this model")]
     TooLong,
+    /// A streamed reply stopped part way. What it had cost by then
+    /// (estimated) still counts toward spending.
+    #[error("the reply stopped part way: {message}")]
+    Interrupted { message: String, usage: Usage },
 }
 
 /// Hints passed to speech-to-text to improve accuracy.

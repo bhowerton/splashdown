@@ -41,6 +41,7 @@ fn provider(e: &ProviderError, who: &str, what: &str) -> String {
         ProviderError::Unavailable(msg) => format!("{who} unavailable: {msg}"),
         ProviderError::TooLong => format!("Too long for this {what} model"),
         ProviderError::InvalidResponse(_) => format!("{who} sent an unexpected reply; try again"),
+        ProviderError::Interrupted { .. } => format!("{who}'s answer stopped part way; try again"),
     }
 }
 

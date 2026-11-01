@@ -47,6 +47,24 @@ impl ChatModel {
                 || m.starts_with("o4"))
     }
 
+    /// `error`, ending a stream after `text` had come: then with what that
+    /// probably cost.
+    fn interrupted(&self, req: &TextRequest, text: &str, error: ProviderError) -> ProviderError {
+        if text.is_empty() {
+            return error;
+        }
+        ProviderError::Interrupted {
+            message: error.to_string(),
+            usage: crate::pricing::estimated_text_usage(
+                self.endpoint.flavor(),
+                self.endpoint.is_local(),
+                &self.model,
+                req.system.len() + req.user.len(),
+                text.len(),
+            ),
+        }
+    }
+
     /// What a reply cost, from its JSON (or the last chunk of a stream).
     fn usage(&self, json: &Value) -> splashdown_core::Usage {
         crate::pricing::text_usage(
@@ -156,9 +174,10 @@ impl TextModel for ChatModel {
                 Some(_) if attempt == 0 && reply.transient && reply.text.is_empty() => {
                     tokio::time::sleep(crate::endpoint::RETRY_DELAY).await;
                 }
-                Some(e) => return Err(e),
+                Some(e) => return Err(self.interrupted(req, &reply.text, e)),
                 None if !reply.finished => {
-                    return Err(ProviderError::Network("the reply was cut off".into()));
+                    let cut = ProviderError::Network("the reply was cut off".into());
+                    return Err(self.interrupted(req, &reply.text, cut));
                 }
                 None => {
                     return Ok(Completion {

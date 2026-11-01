@@ -411,6 +411,11 @@ impl Pipeline {
             // Keep the user's words rather than losing them; instructions
             // and transforms can't be done without the model.
             Err(err) if matches!(job.mode, Mode::Dictate | Mode::DictateInstruct) => {
+                // A reply that stopped part way still cost something.
+                if let ProviderError::Interrupted { usage, .. } = &err {
+                    outcome.usage += *usage;
+                    outcome.llm_usage = *usage;
+                }
                 outcome.fallback = Some(Fallback::ModelError(err.to_string()));
                 return Ok(outcome);
             }

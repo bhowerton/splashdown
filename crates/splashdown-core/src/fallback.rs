@@ -107,6 +107,10 @@ impl FallbackModel {
         }
         match self.backup.complete(&req).await {
             Ok(mut completion) => {
+                // What the primary cost before it stopped counts too.
+                if let ProviderError::Interrupted { usage, .. } = &error {
+                    completion.usage += *usage;
+                }
                 completion.usage.on_device_fallback = true;
                 Ok(completion)
             }
@@ -168,5 +172,68 @@ mod tests {
         ));
         // The flag survives adding usages up.
         assert!((Usage::priced(0.01) + t.usage).on_device_fallback);
+    }
+
+    /// Fails part way through its reply, having cost a cent.
+    struct Cut;
+
+    #[async_trait]
+    impl TextModel for Cut {
+        fn name(&self) -> String {
+            "cut".into()
+        }
+        async fn complete(&self, _: &TextRequest) -> ProviderResult<Completion> {
+            Err(ProviderError::Interrupted {
+                message: "cut off".into(),
+                usage: Usage::priced(0.01),
+            })
+        }
+        fn supports_json_schema(&self) -> bool {
+            false
+        }
+        fn context_window(&self) -> usize {
+            1000
+        }
+    }
+
+    /// Answers for free.
+    struct Local;
+
+    #[async_trait]
+    impl TextModel for Local {
+        fn name(&self) -> String {
+            "local".into()
+        }
+        async fn complete(&self, _: &TextRequest) -> ProviderResult<Completion> {
+            Ok(Completion {
+                text: "Done.".into(),
+                usage: Usage::FREE,
+            })
+        }
+        fn supports_json_schema(&self) -> bool {
+            false
+        }
+        fn context_window(&self) -> usize {
+            1000
+        }
+    }
+
+    #[test]
+    fn what_a_cut_off_reply_cost_still_counts() {
+        let model = FallbackModel {
+            primary: Arc::new(Cut),
+            backup: Arc::new(Local),
+        };
+        let req = TextRequest {
+            system: String::new(),
+            user: String::new(),
+            temperature: 0.0,
+            max_tokens: 10,
+            json_schema: None,
+        };
+        let done = futures_executor::block_on(model.complete(&req)).unwrap();
+        assert_eq!(done.text, "Done.");
+        assert!((done.usage.cost_usd - 0.01).abs() < 1e-12);
+        assert!(done.usage.on_device_fallback);
     }
 }

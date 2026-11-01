@@ -2,7 +2,7 @@
 //! find-and-replace rules applied to the final text.
 
 use chrono::{DateTime, Local};
-use regex::{Regex, RegexBuilder};
+use regex::Regex;
 use splashdown_config::Replacement;
 use splashdown_core::spoken::Snippet;
 
@@ -12,12 +12,12 @@ pub struct Replacements(Vec<(Regex, String)>);
 
 impl Replacements {
     /// Compiles the rules. Invalid ones are skipped (Settings refuses to
-    /// save them; see `check`).
+    /// save them; see `splashdown_config::replacement_problem`).
     pub fn new(rules: &[Replacement]) -> Self {
         Self(
             rules
                 .iter()
-                .filter_map(|r| match compile(r) {
+                .filter_map(|r| match r.compile() {
                     Ok(re) => Some((re, r.replace.clone())),
                     Err(e) => {
                         tracing::warn!("skipping replacement {:?}: {e}", r.find);
@@ -40,46 +40,6 @@ impl Replacements {
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
-}
-
-/// Why a rule can't be used, for Settings: `None` if it's fine.
-pub fn check(rules: &[Replacement]) -> Option<String> {
-    rules.iter().enumerate().find_map(|(i, r)| {
-        compile(r).err().map(|e| {
-            format!(
-                "Replacement {} (“{}”) isn't a valid pattern: {e}",
-                i + 1,
-                r.find
-            )
-        })
-    })
-}
-
-/// A plain rule matches its text ignoring case, as whole words where it
-/// starts or ends with a letter or digit; a regex rule is used as written.
-fn compile(rule: &Replacement) -> Result<Regex, regex::Error> {
-    if rule.find.is_empty() {
-        return Err(regex::Error::Syntax("nothing to find".into()));
-    }
-    if rule.regex {
-        return Regex::new(&rule.find);
-    }
-    let word = |c: Option<char>| c.is_some_and(char::is_alphanumeric);
-    let pattern = format!(
-        "{}{}{}",
-        if word(rule.find.chars().next()) {
-            r"\b"
-        } else {
-            ""
-        },
-        regex::escape(&rule.find),
-        if word(rule.find.chars().last()) {
-            r"\b"
-        } else {
-            ""
-        },
-    );
-    RegexBuilder::new(&pattern).case_insensitive(true).build()
 }
 
 /// Snippets with their fill-ins replaced for a dictation happening `now`:
@@ -145,12 +105,12 @@ mod tests {
         let r = Replacements::new(&[rule(r"(\d+) percent", "$1%", true)]);
         assert_eq!(r.apply("up 15 percent"), "up 15%");
         assert!(
-            check(&[rule("(", "x", true)])
+            splashdown_config::replacement_problem(&[rule("(", "x", true)])
                 .unwrap()
                 .contains("Replacement 1")
         );
         assert!(
-            check(&[rule("(", "x", false)]).is_none(),
+            splashdown_config::replacement_problem(&[rule("(", "x", false)]).is_none(),
             "plain text is escaped"
         );
         // An invalid rule is skipped, not fatal.

@@ -41,6 +41,26 @@ impl AnthropicModel {
     }
 }
 
+impl AnthropicModel {
+    /// `error`, ending a stream after `text` had come: then with what that
+    /// probably cost.
+    fn interrupted(&self, req: &TextRequest, text: &str, error: ProviderError) -> ProviderError {
+        if text.is_empty() {
+            return error;
+        }
+        ProviderError::Interrupted {
+            message: error.to_string(),
+            usage: crate::pricing::estimated_text_usage(
+                self.endpoint.flavor(),
+                false,
+                &self.model,
+                req.system.len() + req.user.len(),
+                text.len(),
+            ),
+        }
+    }
+}
+
 /// The text of the reply's text blocks.
 fn reply_text(json: &Value) -> ProviderResult<String> {
     if json["stop_reason"] == "refusal" {
@@ -111,9 +131,10 @@ impl TextModel for AnthropicModel {
                 Some(_) if attempt == 0 && reply.transient && reply.text.is_empty() => {
                     tokio::time::sleep(crate::endpoint::RETRY_DELAY).await;
                 }
-                Some(e) => return Err(e),
+                Some(e) => return Err(self.interrupted(req, &reply.text, e)),
                 None if !reply.finished => {
-                    return Err(ProviderError::Network("the reply was cut off".into()));
+                    let cut = ProviderError::Network("the reply was cut off".into());
+                    return Err(self.interrupted(req, &reply.text, cut));
                 }
                 None => {
                     let usage = json!({ "usage": reply.usage });
