@@ -41,7 +41,7 @@ fn lock() -> std::sync::MutexGuard<'static, Registered> {
     registered().lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Installs the plugin, ⌃⌥V, ⌃⌥Z and ⌃⌥N. Failing to register (another app owns the
+/// Installs the plugin, ⌃⌥V, ⌃⌥Z, ⌃⌥N and ⌃⌥M. Failing to register (another app owns the
 /// shortcut) only loses the shortcut, not the menu item.
 pub fn install(app: &tauri::App, history: Arc<History>) {
     let paste_raw = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyV);
@@ -50,6 +50,8 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
     let undo_id = undo_ai.id();
     let notes = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyN);
     let notes_id = notes.id();
+    let meeting = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyM);
+    let meeting_id = meeting.id();
     let plugin = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, shortcut, event| {
             if event.state() != ShortcutState::Pressed {
@@ -67,6 +69,10 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
             }
             if shortcut.id() == notes_id {
                 crate::notes::toggle(app);
+                return;
+            }
+            if shortcut.id() == meeting_id {
+                crate::meeting::toggle(app);
                 return;
             }
             let target = lock().targets.get(&shortcut.id()).cloned();
@@ -92,6 +98,7 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
         (paste_raw, "Ctrl+Alt+V"),
         (undo_ai, "Ctrl+Alt+Z"),
         (notes, crate::notes::ACCELERATOR),
+        (meeting, crate::meeting::ACCELERATOR),
     ] {
         if let Err(e) = app.global_shortcut().register(shortcut) {
             tracing::warn!("couldn't register {name}: {e}");

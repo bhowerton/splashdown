@@ -78,6 +78,15 @@ pub enum Request {
     /// words import`): read it again.
     #[serde(rename = "reload_settings")]
     ReloadSettings,
+    /// Start recording a meeting; answers with the note's path.
+    #[serde(rename = "meeting_start")]
+    MeetingStart,
+    /// Stop the meeting and finish its note.
+    #[serde(rename = "meeting_stop")]
+    MeetingStop,
+    /// The meeting in progress, as JSON (or `null`).
+    #[serde(rename = "meeting_status")]
+    MeetingStatus,
 }
 
 impl Request {

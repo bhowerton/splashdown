@@ -54,6 +54,10 @@ impl Ui {
         }
     }
 
+    pub fn app(&self) -> &AppHandle {
+        &self.app
+    }
+
     /// Reads the settings file again (changed by the CLI) and applies it.
     /// An open Settings window is told, so it shows the new settings rather
     /// than saving its old copy over them.

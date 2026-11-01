@@ -1557,11 +1557,19 @@ impl Controller {
     /// name and the result.
     fn run_transform(&self, id: &str, text: &str) -> Result<(String, TransformOutcome), String> {
         let engine = self.engine.as_ref().map_err(Clone::clone)?;
-        let transform = engine
-            .transforms
-            .iter()
-            .find(|t| t.id == id)
-            .ok_or("That transform no longer exists.")?;
+        // A built-in the user's list doesn't have (it was edited before the
+        // built-in existed): the meeting summary still works.
+        let builtin;
+        let transform = match engine.transforms.iter().find(|t| t.id == id) {
+            Some(t) => t,
+            None => {
+                builtin = splashdown_config::builtin_transforms()
+                    .into_iter()
+                    .find(|t| t.id == id)
+                    .ok_or("That transform no longer exists.")?;
+                &builtin
+            }
+        };
         if text.trim().is_empty() {
             return Err("There's no text to change.".into());
         }

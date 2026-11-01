@@ -319,7 +319,7 @@ fn transcribe_piece(
 
 /// Where the audio goes, from the speech-to-text's name, and whether that's
 /// this computer.
-fn place(stt_name: &str) -> (&'static str, bool) {
+pub(crate) fn place(stt_name: &str) -> (&'static str, bool) {
     match stt_name.split('/').next().unwrap_or_default() {
         "local" | "apple" => ("on this computer", true),
         "openai" => ("with OpenAI", false),

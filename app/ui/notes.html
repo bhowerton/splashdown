@@ -37,6 +37,7 @@
       <div class="nt-menu-wrap">
         <button class="btn" id="nt-more" aria-haspopup="menu" aria-expanded="false" aria-label="More">⋯</button>
         <div id="nt-menu" class="nt-menu" role="menu" hidden>
+          <button role="menuitem" data-act="meeting" id="nt-meeting-item">Record a meeting</button>
           <button role="menuitem" data-act="transcribe">Transcribe a file…</button>
           <hr>
           <button role="menuitem" data-act="rename">Rename…</button>
@@ -49,6 +50,18 @@
     </header>
 
     <div id="nt-notice" class="nt-notice" role="status" hidden></div>
+
+    <div id="nt-meeting" class="nt-job nt-meeting" hidden>
+      <span class="nt-rec" aria-hidden="true">●</span>
+      <span id="nt-meeting-text" class="nt-job-text" role="status" aria-live="polite"></span>
+      <span class="nt-levels" aria-hidden="true">
+        <span>You</span><span class="nt-level"><i id="nt-level-you"></i></span>
+        <span>Them</span><span class="nt-level"><i id="nt-level-them"></i></span>
+      </span>
+      <button class="link" id="nt-meeting-keep" hidden>Keep recording</button>
+      <button class="link" id="nt-meeting-show">Show</button>
+      <button class="link" id="nt-meeting-stop">Stop</button>
+    </div>
 
     <div id="nt-job" class="nt-job" hidden>
       <span id="nt-job-text" class="nt-job-text" role="status" aria-live="polite"></span>

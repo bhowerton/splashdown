@@ -59,6 +59,12 @@ impl Controller {
                 .notes_settings()
                 .and_then(|n| crate::notes::agent_search(&n, &query, limit))
                 .map(Some),
+            Request::MeetingStart => crate::meeting::start(self.ui.app()).map(Some),
+            Request::MeetingStop => crate::meeting::stop()
+                .map(|()| Some("Stopping; the note is being finished.".to_string())),
+            Request::MeetingStatus => serde_json::to_string(&crate::meeting::status())
+                .map(Some)
+                .map_err(|e| e.to_string()),
             Request::ReloadSettings => {
                 self.ui.reload_settings();
                 Ok(None)

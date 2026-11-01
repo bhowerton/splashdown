@@ -70,9 +70,42 @@ pub struct NotesSettings {
     pub agents_read: bool,
     /// …and add to them.
     pub agents_write: bool,
+    /// Meeting notes' folder inside the notes folder. Unset means
+    /// "Meetings".
+    pub meeting_folder: Option<String>,
+    /// Whether a meeting is summarized when it ends. Unset means always
+    /// with an AI on this computer, and asking first with a cloud one.
+    pub meeting_summary: Option<MeetingSummary>,
+    /// Keep a meeting's recording with its note.
+    pub keep_meeting_audio: bool,
+    /// Stop a meeting after 10 minutes with nobody speaking. Unset means on.
+    pub stop_when_quiet: Option<bool>,
+    /// The first meeting's reminder about telling people has been shown.
+    pub meeting_reminded: bool,
+}
+
+/// Whether to summarize a meeting when it ends.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum MeetingSummary {
+    Always,
+    Ask,
+    Never,
 }
 
 impl NotesSettings {
+    pub fn meeting_folder(&self) -> &str {
+        self.meeting_folder
+            .as_deref()
+            .map(str::trim)
+            .filter(|f| !f.is_empty())
+            .unwrap_or("Meetings")
+    }
+
+    pub fn stop_when_quiet(&self) -> bool {
+        self.stop_when_quiet.unwrap_or(true)
+    }
+
     pub fn daily_folder(&self) -> &str {
         self.daily_folder
             .as_deref()

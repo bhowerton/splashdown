@@ -521,7 +521,10 @@ pub async fn save_settings(
     // The notes folder is changed from the Notes window, so a Settings
     // window opened earlier mustn't put the old one back.
     let mut settings = settings;
-    settings.notes.folder = state.settings().notes.folder;
+    let current = state.settings();
+    settings.notes.folder = current.notes.folder;
+    // Set by the first meeting, which Settings may not have seen.
+    settings.notes.meeting_reminded |= current.notes.meeting_reminded;
     settings.save(&engine::paths()?.config_file())?;
     state
         .tray

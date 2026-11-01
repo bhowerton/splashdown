@@ -94,6 +94,20 @@
         <div class="row"><span class="lbl">Notes window<small>⌃⌥N, or Notes in the menu bar. Transforms are on the Words tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
       </div>
       <div class="group">
+        <div class="gh">Meetings</div>
+        <div class="row"><span class="lbl">Record a meeting<small>⌃⌥M, or Record a meeting in the menu bar or Notes. Your microphone is You, and what your computer plays is Them. The transcript goes into Meetings in your notes folder as the call goes.</small></span></div>
+        <label class="row"><span class="lbl">Summarize when it ends<small id="mt-summary-note">Decisions, action items and open questions, at the top of the note.</small></span>
+          <select id="mt-summary" data-setting>
+            <option value="">Ask first (always, with an AI on this computer)</option>
+            <option value="always">Always</option>
+            <option value="never">Never</option>
+          </select></label>
+        <label class="row"><span class="lbl">Keep meeting recordings<small>Saved in Attachments and linked from the note. About 115 MB per hour.</small></span>
+          <input id="mt-keep-audio" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">Stop when it's quiet<small>After 10 minutes with nobody speaking, it asks, then stops a minute later.</small></span>
+          <input id="mt-stop-quiet" type="checkbox" class="switch" data-setting></label>
+      </div>
+      <div class="group">
         <div class="gh">While you speak</div>
         <label class="row"><span class="lbl">Show words as you speak<small id="gen-live-note">Shown in the status pill as you speak</small></span>
           <input id="gen-live" type="checkbox" class="switch" data-setting></label>

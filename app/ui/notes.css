@@ -66,6 +66,11 @@
 .nt-job progress { flex: 1; min-width: 60px; height: 6px; accent-color: var(--accent); }
 .nt-job .link { font-size: 12.5px; flex-shrink: 0; }
 #nt-note[readonly] { color: var(--muted); }
+.nt-meeting { background: var(--warn-soft); }
+.nt-rec { color: var(--err); font-size: 11px; }
+.nt-levels { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 11.5px; flex: 1; justify-content: flex-end; }
+.nt-level { width: 34px; height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+.nt-level i { display: block; height: 100%; width: 0; background: var(--accent); }
 .nt-drop {
   position: fixed; inset: 8px; z-index: 20; display: flex; align-items: center; justify-content: center;
   border: 2px dashed var(--accent); border-radius: 12px; background: var(--bg);

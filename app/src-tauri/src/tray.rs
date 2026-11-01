@@ -33,6 +33,29 @@ const TRAY_ATTENTION: &[u8] = include_bytes!("../icons/tray-attention@2x.png");
 const TRAY_ATTENTION: &[u8] = include_bytes!("../icons/32x32.png");
 
 const TRAY_ID: &str = "main";
+const RECORD_MEETING: &str = "Record a meeting";
+
+/// The meeting item, relabeled while a meeting records.
+static MEETING_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
+
+/// Shows a meeting in progress (`Some("12:30")`) or none: the menu item's
+/// label, and the time next to the menu bar icon on macOS.
+pub fn show_meeting(app: &AppHandle, elapsed: Option<&str>) {
+    if let Some(item) = MEETING_ITEM.get() {
+        let _ = item.set_text(match elapsed {
+            Some(t) => format!("Stop meeting ({t})"),
+            None => RECORD_MEETING.to_string(),
+        });
+    }
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        #[cfg(target_os = "macos")]
+        let _ = tray.set_title(elapsed.map(|t| format!("● {t}")));
+        let _ = tray.set_tooltip(Some(match elapsed {
+            Some(t) => format!("Splashdown · recording a meeting ({t})"),
+            None => "Splashdown".to_string(),
+        }));
+    }
+}
 
 /// The spoken-language choices in the menu bar (the same as Settings →
 /// General). An empty code means "detect automatically".
@@ -119,6 +142,14 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
     )?;
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy last result", true, None::<&str>)?;
     let notes = MenuItem::with_id(app, "notes", "Notes", true, Some(crate::notes::ACCELERATOR))?;
+    let meeting = MenuItem::with_id(
+        app,
+        "meeting",
+        RECORD_MEETING,
+        true,
+        Some(crate::meeting::ACCELERATOR),
+    )?;
+    let _ = MEETING_ITEM.set(meeting.clone());
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let update = MenuItem::with_id(app, "update", CHECK_FOR_UPDATES, true, None::<&str>)?;
     let feedback = MenuItem::with_id(app, "feedback", "Send feedback…", true, None::<&str>)?;
@@ -136,6 +167,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
             &paste_raw,
             &copy_last,
             &notes,
+            &meeting,
             &PredefinedMenuItem::separator(app)?,
             &settings,
             &update,
@@ -164,10 +196,12 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                     }
                 }
                 "notes" => crate::notes::open(app),
+                "meeting" => crate::meeting::toggle(app),
                 "settings" => open_settings(app),
                 "mini-bar" => toggle_mini_bar(app),
                 "update" => show_updates(app),
                 "feedback" => send_feedback(app),
+                "quit" if crate::meeting::is_running() => crate::meeting::quit(app),
                 "quit" => {
                     splashdown_platform::restore_output();
                     app.exit(0);

@@ -9,6 +9,8 @@ Only these, and only when you can see why:
 | What | Where it goes | When |
 |---|---|---|
 | Your recording | The speech-to-text provider you chose (OpenAI or OpenRouter) | Each dictation, if speech-to-text is set to a cloud provider. With Apple's speech model or local Whisper it stays on your computer |
+| A meeting you record: your microphone and what your computer plays | The same speech-to-text provider | Only while you record a meeting (⌃⌥M), and only if speech-to-text is set to a cloud provider. On macOS, recording what your computer plays needs your permission the first time |
+| A recorded meeting's transcript | The AI provider that runs transforms | Only for its summary: with a cloud AI, Splashdown asks first (Settings → Notes → Meetings) |
 | The sound of an audio or video file you transcribe in Notes | The same speech-to-text provider | Only when you drop or pick a file to transcribe, and only if speech-to-text is set to a cloud provider. The file itself isn't copied or moved |
 | The transcript, plus context (the app's name unless you turn that off in Settings → Privacy, selected text you're rewriting or running a transform on, what you dictated into the same app in the last few minutes unless you turn that off, and, only if the preset turns them on, the text around the cursor or your clipboard) | The AI provider you chose (OpenAI, OpenRouter, Anthropic, or a server you run) | Each dictation, if AI cleanup is on and set to a cloud provider. With Apple's model or the built-in local model it stays on your computer |
 | A check for a newer version | GitHub Releases | At launch and once a day. Turn it off in Settings → General. Nothing about you or your dictation is sent |

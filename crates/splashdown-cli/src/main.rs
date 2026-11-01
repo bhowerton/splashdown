@@ -192,6 +192,12 @@ enum WordsCommand {
 
 #[derive(Subcommand)]
 enum MeetingCommand {
+    /// Start recording a meeting in the running app.
+    Start,
+    /// Stop the meeting; the app finishes its note.
+    Stop,
+    /// The meeting in progress, as JSON (`null` when there's none).
+    Status,
     /// Record a meeting for a while: the microphone (You, left channel)
     /// and what the computer plays (Them, right channel), as a 16 kHz
     /// stereo WAV for `meeting transcribe`.
@@ -238,6 +244,15 @@ fn main() -> Result<()> {
         Command::Note { text } => Some(Request::Note {
             text: Some(text.join(" ")).filter(|t| !t.trim().is_empty()),
         }),
+        Command::Meeting {
+            command: MeetingCommand::Start,
+        } => Some(Request::MeetingStart),
+        Command::Meeting {
+            command: MeetingCommand::Stop,
+        } => Some(Request::MeetingStop),
+        Command::Meeting {
+            command: MeetingCommand::Status,
+        } => Some(Request::MeetingStatus),
         _ => None,
     };
     if let Some(request) = request {
@@ -497,7 +512,10 @@ fn main() -> Result<()> {
         | Command::Stop
         | Command::Cancel
         | Command::Listen { .. }
-        | Command::Note { .. } => unreachable!("handled above"),
+        | Command::Note { .. }
+        | Command::Meeting {
+            command: MeetingCommand::Start | MeetingCommand::Stop | MeetingCommand::Status,
+        } => unreachable!("handled above"),
     }
     Ok(())
 }

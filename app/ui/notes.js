@@ -232,7 +232,7 @@ function updateHeader() {
   $("nt-status").title = current.path ? `${folder?.path ?? ""}/${current.path}` : "";
   // The note a file is being transcribed into can't be edited until it's
   // done, so nothing typed is lost to the next paragraph.
-  const locked = !!job && job.note === current.path;
+  const locked = (!!job && job.note === current.path) || (!!meeting && meeting.note === current.path);
   note.readOnly = locked || transforming;
   $("nt-job-show").hidden = !job || locked;
   $("nt-transform").disabled = locked || transforming;
@@ -243,6 +243,8 @@ function updateHeader() {
   }
   document.querySelector('[data-act="folder"]').disabled = !!job;
   if (locked) $("nt-status").textContent = "Being transcribed. You can edit it when it's done.";
+  $("nt-meeting-show").hidden = !meeting || meeting.note === current.path;
+  $("nt-meeting-item").textContent = meeting ? "Stop the meeting" : "Record a meeting";
   const empty = text.trim() === "";
   $("nt-copy").disabled = empty;
   const send = $("nt-send");
@@ -617,6 +619,50 @@ listen("notes-dragging", (event) => { $("nt-drop").hidden = !event.payload; });
 $("nt-job-stop").addEventListener("click", () => invoke("notes_transcribe_stop").catch((e) => toast(String(e), true)));
 $("nt-job-show").addEventListener("click", () => job && openNote(job.note));
 
+// ---------------------------------------------------------------- meetings
+
+/** The meeting recording now, or null. */
+let meeting = null;
+/** When the growing meeting note was last re-read (status comes twice a second). */
+let meetingReadAt = 0;
+
+async function showMeeting(next) {
+  const before = meeting;
+  meeting = next;
+  $("nt-meeting").hidden = !meeting;
+  if (meeting) {
+    const text = meeting.finishing
+      ? "Finishing the meeting note…"
+      : meeting.warning ?? `Meeting · ${clock(meeting.elapsed)} · transcribed ${meeting.place}${meeting.them_problem ? " · your side only" : ""}`;
+    $("nt-meeting-text").textContent = text;
+    $("nt-meeting-text").title = meeting.them_problem ?? "";
+    $("nt-meeting-keep").hidden = !meeting.warning;
+    $("nt-meeting-stop").hidden = meeting.finishing;
+    const level = (v) => `${Math.min(100, Math.round(Math.sqrt(v) * 140))}%`;
+    $("nt-level-you").style.width = level(meeting.you);
+    $("nt-level-them").style.width = level(meeting.them);
+  }
+  // A new meeting's note opens by itself.
+  if (meeting && meeting.note !== before?.note) {
+    await saveNow();
+    await refresh();
+    await openNote(meeting.note);
+  } else if (current.path && (current.path === meeting?.note || current.path === before?.note)) {
+    // It grows a turn at a time; re-read it every few seconds, and at the end.
+    if (!meeting || Date.now() - meetingReadAt > 2000) {
+      meetingReadAt = Date.now();
+      await reloadTranscript();
+    }
+  }
+  updateHeader();
+}
+
+listen("meeting-status", (event) => showMeeting(event.payload ?? null));
+listen("meeting-message", (event) => toast(event.payload.text, event.payload.error));
+$("nt-meeting-stop").addEventListener("click", () => invoke("meeting_toggle").catch((e) => toast(String(e), true)));
+$("nt-meeting-keep").addEventListener("click", () => invoke("meeting_keep_going").catch(() => {}));
+$("nt-meeting-show").addEventListener("click", () => meeting && openNote(meeting.note));
+
 // ---------------------------------------------------------------- menu
 
 function setMenu(open) {
@@ -639,6 +685,7 @@ $("nt-menu").addEventListener("click", (e) => {
     rename: startRename,
     history: () => showHistory(true),
     transcribe: () => invoke("notes_transcribe_pick").catch((err) => toast(String(err), true)),
+    meeting: () => invoke("meeting_toggle").catch((err) => toast(String(err), true)),
     reveal: () => invoke("notes_reveal", { path: current.path }).catch((err) => toast(String(err), true)),
     folder: changeFolder,
     delete: deleteNote,
@@ -750,6 +797,8 @@ function applyView(view) {
   try {
     const running = await invoke("notes_transcribing");
     if (running) showJob(running);
+    const recording = await invoke("meeting_status");
+    if (recording) showMeeting(recording);
   } catch {
     // Nothing running.
   }

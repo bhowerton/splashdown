@@ -11,6 +11,7 @@ mod export;
 mod feedback;
 mod history;
 mod insights;
+mod meeting;
 mod minibar;
 mod notes;
 mod preview;
@@ -113,6 +114,9 @@ fn main() {
             notes::files::notes_transcribe_pick,
             notes::files::notes_transcribe_stop,
             notes::files::notes_transcribing,
+            meeting::meeting_toggle,
+            meeting::meeting_keep_going,
+            meeting::meeting_status,
             notes::open_notes,
             export::export_history,
             export::export_settings,
@@ -138,6 +142,8 @@ fn main() {
 
             let settings = engine::load_settings();
             minibar::init(app.handle(), settings.general.mini_bar());
+            // A meeting the app closed on: offer to finish its note.
+            meeting::recover(app.handle());
             history.set_keep_days(settings.general.history_days());
             let onboarded = settings.general.onboarded;
             let built = engine::build(&settings);

@@ -88,7 +88,7 @@ fn store(state: &AppState) -> Result<(Arc<Store>, Option<String>), String> {
 }
 
 /// The store for `folder` (unset: the default), as `store`.
-fn store_for(folder: Option<PathBuf>) -> Result<(Arc<Store>, Option<String>), String> {
+pub(crate) fn store_for(folder: Option<PathBuf>) -> Result<(Arc<Store>, Option<String>), String> {
     let wanted = folder
         .or_else(default_folder)
         .ok_or("Couldn't find your Documents folder.")?;

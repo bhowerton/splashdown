@@ -15,9 +15,9 @@ pub use secrets::{
 };
 pub use settings::{
     AiChoice, AiProvider, AiSettings, Budget, CaptureTo, DEFAULT_SOUND_VOLUME, Destination,
-    GeneralSettings, HotkeySettings, LoadError, NotesSettings, OtherAudio, Replacement,
-    ResolveError, Settings, Situation, SpeechChoice, SpeechProvider, SpeechSettings, defaults,
-    is_local_url,
+    GeneralSettings, HotkeySettings, LoadError, MeetingSummary, NotesSettings, OtherAudio,
+    Replacement, ResolveError, Settings, Situation, SpeechChoice, SpeechProvider, SpeechSettings,
+    defaults, is_local_url,
 };
 pub use transforms::{
     NOTHING_TO_DO, Place, Transform, builtin_transforms, is_nothing_to_do, tidy_answer,

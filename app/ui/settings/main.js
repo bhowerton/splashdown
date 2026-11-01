@@ -115,6 +115,10 @@ function collect() {
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;
   s.notes.daily_format = $("nt-daily-format").value.trim() || null;
   s.notes.keep_audio = $("nt-keep-audio").checked;
+  s.notes.meeting_summary = $("mt-summary").value || null;
+  s.notes.keep_meeting_audio = $("mt-keep-audio").checked;
+  // On is the default, saved as unset.
+  s.notes.stop_when_quiet = $("mt-stop-quiet").checked ? null : false;
   s.notes.agents_read = $("pv-agents-read").checked;
   s.notes.agents_write = $("pv-agents-read").checked && $("pv-agents-write").checked;
   s.general.user_name = $("gen-name").value.trim() || null;

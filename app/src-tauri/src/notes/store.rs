@@ -281,8 +281,27 @@ impl Store {
         now: DateTime<Local>,
         origin: &Origin<'_>,
     ) -> io::Result<Note> {
+        self.create_in("", body, now, origin)
+    }
+
+    /// `create` in subfolder `folder` of the notes folder ("" for the top),
+    /// made if needed.
+    pub fn create_in(
+        &self,
+        folder: &str,
+        body: &str,
+        now: DateTime<Local>,
+        origin: &Origin<'_>,
+    ) -> io::Result<Note> {
         self.ensure()?;
-        let path = self.new_path(&self.root, body, now);
+        let parts: Vec<String> = folder
+            .split('/')
+            .map(file_name_part)
+            .filter(|p| !p.is_empty())
+            .collect();
+        let dir = parts.iter().fold(self.root.clone(), |d, p| d.join(p));
+        std::fs::create_dir_all(&dir)?;
+        let path = self.new_path(&dir, body, now);
         let mut front = format!(
             "---\nsplashdown-id: {}\ncreated: {}\n",
             new_id(now),
@@ -683,9 +702,33 @@ impl Store {
         self.write(&path, &format!("{existing}{separator}{}\n", text.trim()))
     }
 
+    /// Puts `summary` under `## Summary` above the transcript of note `rel`
+    /// (before its first `**[` paragraph), with `## Transcript` after it.
+    pub fn insert_summary(&self, rel: &str, summary: &str) -> io::Result<()> {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let path = self.resolve(rel)?;
+        let text = std::fs::read_to_string(&path)?;
+        let at = text
+            .match_indices("\n**[")
+            .next()
+            .map_or(text.len(), |(i, _)| i + 1);
+        let (before, after) = text.split_at(at);
+        let before = before.trim_end();
+        let block = format!("\n\n## Summary\n\n{}\n\n## Transcript\n\n", summary.trim());
+        self.write(&path, &format!("{before}{block}{after}"))
+    }
+
     /// Saves a recording in `Attachments/` and returns its path in the
     /// folder, for a link.
     pub fn save_attachment(&self, stem: &str, extension: &str, bytes: &[u8]) -> io::Result<String> {
+        let (path, rel) = self.new_attachment(stem, extension)?;
+        std::fs::write(&path, bytes)?;
+        Ok(rel)
+    }
+
+    /// A free file name in `Attachments/` for a recording to be written to:
+    /// its full path, and its path in the folder for a link.
+    pub fn new_attachment(&self, stem: &str, extension: &str) -> io::Result<(PathBuf, String)> {
         let dir = self.root.join(ATTACHMENTS_DIR);
         std::fs::create_dir_all(&dir)?;
         let stem = file_name_part(stem);
@@ -695,8 +738,8 @@ impl Store {
             path = dir.join(format!("{stem} {n}.{extension}"));
             n += 1;
         }
-        std::fs::write(&path, bytes)?;
-        Ok(self.relative(&path).expect("inside the folder"))
+        let rel = self.relative(&path).expect("inside the folder");
+        Ok((path, rel))
     }
 
     // ------------------------------------------------------------ the old scratchpad
@@ -991,6 +1034,30 @@ mod tests {
                 "Transcribed from **Interview.m4a**.\n\n**[0:00]** Hello.\n\n**[0:31]** Again.\n"
             ),
             "{raw}"
+        );
+
+        // A meeting: in its own folder, with the summary put on top.
+        let meeting = store
+            .create_in(
+                "Meetings",
+                "# Zoom meeting\n\nRecorded on this computer.\n",
+                at("2026-10-31T09:15:00-05:00"),
+                &Origin::default(),
+            )
+            .unwrap();
+        assert!(meeting.path.starts_with("Meetings/"), "{}", meeting.path);
+        store
+            .add_paragraph(&meeting.path, "**[0:00] Them:** Hi.")
+            .unwrap();
+        store
+            .add_paragraph(&meeting.path, "*Ended at 0:05.*")
+            .unwrap();
+        store
+            .insert_summary(&meeting.path, "### Overview\nA hello.")
+            .unwrap();
+        assert_eq!(
+            store.read(&meeting.path).unwrap().body,
+            "# Zoom meeting\n\nRecorded on this computer.\n\n## Summary\n\n### Overview\nA hello.\n\n## Transcript\n\n**[0:00] Them:** Hi.\n\n*Ended at 0:05.*\n"
         );
         let _ = std::fs::remove_dir_all(store.root());
     }

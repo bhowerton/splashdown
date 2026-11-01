@@ -242,6 +242,30 @@ fn kind(path: &Path) -> String {
         })
 }
 
+/// Cuts one side of a meeting into turns as its audio arrives (16 kHz
+/// mono): the live counterpart of `AudioFile::open_turns`.
+#[derive(Default)]
+pub struct TurnCutter(Cutter);
+
+impl TurnCutter {
+    pub fn new() -> Self {
+        Self(Cutter {
+            turns: true,
+            ..Cutter::default()
+        })
+    }
+
+    pub fn push(&mut self, samples: &[f32]) {
+        self.0.push(samples);
+    }
+
+    /// The next finished turn (or stretch of silence); with `ended`, what's
+    /// left.
+    pub fn next(&mut self, ended: bool) -> Option<Piece> {
+        self.0.next(ended)
+    }
+}
+
 /// Cuts 16 kHz audio into pieces at pauses.
 #[derive(Default)]
 struct Cutter {

@@ -4020,13 +4020,16 @@ dependencies = [
 name = "splashdown"
 version = "0.1.1"
 dependencies = [
+ "async-trait",
  "base64 0.22.1",
  "chrono",
  "directories",
  "dotenvy",
+ "hound",
  "regex",
  "serde",
  "serde_json",
+ "splashdown-apple-shim",
  "splashdown-audio",
  "splashdown-config",
  "splashdown-control",

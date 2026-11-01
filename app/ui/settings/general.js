@@ -24,6 +24,9 @@ function renderGeneral() {
   setValue($("nt-daily-folder"), notes.daily_folder ?? "");
   setValue($("nt-daily-format"), notes.daily_format ?? "");
   $("nt-keep-audio").checked = !!notes.keep_audio;
+  setValue($("mt-summary"), notes.meeting_summary === "ask" ? "" : notes.meeting_summary ?? "");
+  $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
+  $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
   $("hk-double-tap").checked = s.hotkeys.double_tap === true;
   setValue($("gen-name"), s.general.user_name);
   setValue($("gen-language"), s.general.language ?? "");

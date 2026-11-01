@@ -46,6 +46,8 @@ The app is a handful of long-lived threads that talk over channels. Only the ses
 | `splashdown-session` | `app/src-tauri/src/session.rs` | The controller: receives `Msg`s (gesture actions, new settings, redo requests), drives audio, runs the pipeline, inserts text, records history |
 | Audio | `app/src-tauri/src/audio.rs` | Owns the cpal stream (it can't move between threads) and serves start/take/stop |
 | Preview | `app/src-tauri/src/preview.rs` | Re-transcribes the recording so far with a local model for the live words in the overlay; with a streaming model the session's `LiveStream` gives them instead |
+| `transcribe-file` | `app/src-tauri/src/notes/files.rs` | Transcribes audio and video files dropped on Notes into notes, one at a time |
+| `meeting`, `meeting-audio` | `app/src-tauri/src/meeting.rs`, `splashdown-audio/src/live.rs` | A meeting: takes both sides' audio twice a second (the microphone on its own recorder thread, the computer's sound from the Swift shim's Core Audio tap or WASAPI loopback), spools it, cuts each side into turns and writes them into the note |
 | `splashdown-llm` (separate process) | `crates/splashdown-llm` | Runs the built-in local text model when it's in use; started on demand by `splashdown-providers/src/local_llm.rs`, exits after 10 idle minutes |
 | `splashdown-updates` | `app/src-tauri/src/updates.rs` | Release builds only: checks for a new version (tauri-plugin-updater, GitHub releases) 30 s after launch and then daily, if allowed in Settings. Installing happens only from the user's click |
 | Tauri async runtime | `app/src-tauri/src/commands.rs` | Settings commands. Slow work (building providers, downloads) runs here or in `spawn_blocking`, never on the main thread |
