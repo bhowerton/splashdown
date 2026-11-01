@@ -788,6 +788,9 @@ struct Job<'a> {
     /// One side only (an app's audio): turns are written without You or
     /// Them.
     one_sided: bool,
+    /// Turns are kept here instead of written into the note (transcribing
+    /// a recording again).
+    collected: Option<Vec<String>>,
 }
 
 impl<'a> Job<'a> {
@@ -806,6 +809,7 @@ impl<'a> Job<'a> {
             spool: None,
             lost_writes: false,
             one_sided: false,
+            collected: None,
         }
     }
 
@@ -885,6 +889,10 @@ impl<'a> Job<'a> {
                     p.text
                 )
             };
+            if let Some(collected) = &mut self.collected {
+                collected.push(line);
+                continue;
+            }
             if let Err(e) = self.store.add_paragraph(self.note, &line) {
                 tracing::warn!("couldn't add to the meeting note: {e}");
                 self.lost_writes = true;
@@ -1227,6 +1235,168 @@ fn keep_recording(store: &Store, note: &str, raw: &Path) -> Result<String, Strin
     Ok(rel)
 }
 
+// ---------------------------------------------------------------- again
+
+/// The recording kept with a meeting note (its `[Recording](…)` link), if
+/// it's still there.
+pub(crate) fn recording_of(store: &Store, note: &str) -> Option<PathBuf> {
+    let body = store.read(note).ok()?.body;
+    let link = body
+        .lines()
+        .rev()
+        .find_map(|l| l.trim().strip_prefix("[Recording](")?.strip_suffix(')'))?;
+    let rel = link.replace("%20", " ");
+    // Only the notes folder's own attachments.
+    if rel.contains("..") || Path::new(&rel).is_absolute() {
+        return None;
+    }
+    let path = store.root().join(rel);
+    path.is_file().then_some(path)
+}
+
+/// Transcribes a meeting's kept recording again with `speech`, and puts the
+/// new transcript in place of the old one; `model` names it in the note.
+/// Speakers keep the names they were given (by the time each turn starts);
+/// the rest of the note stays as it is. `progress` hears the seconds done,
+/// and answers false to stop. Returns why it stopped early, if it did:
+/// then nothing has changed.
+pub(crate) fn transcribe_again(
+    settings: &Settings,
+    store: &Store,
+    note: &str,
+    recording: &Path,
+    speech: &crate::session::FileSpeech,
+    model: &str,
+    progress: &mut dyn FnMut(f64) -> bool,
+) -> Result<Option<String>, String> {
+    let one_sided = store
+        .list()
+        .into_iter()
+        .find(|n| n.path == note)
+        .is_some_and(|n| n.source != "meeting");
+    let mut reader = hound::WavReader::open(recording).map_err(|e| e.to_string())?;
+    let spec = reader.spec();
+    if spec.channels != 2 || spec.sample_rate != RATE as u32 || spec.bits_per_sample != 16 {
+        return Err("the recording isn't one Splashdown made".into());
+    }
+    // The samples as the meeting's spool had them, for telling speakers
+    // apart afterwards.
+    let raw = spool_dir()?.join(format!("again-{}.raw", std::process::id()));
+    let mut spool =
+        std::io::BufWriter::new(std::fs::File::create(&raw).map_err(|e| e.to_string())?);
+    let result = (|| {
+        let mut job = Job::new(store, note, speech);
+        job.one_sided = one_sided;
+        job.collected = Some(Vec::new());
+        let mut samples = reader.samples::<i16>();
+        loop {
+            if !progress(job.recorded().as_secs_f64()) {
+                return Ok(Some("Stopped. The transcript is as it was.".to_string()));
+            }
+            let (mut you, mut them) = (Vec::new(), Vec::new());
+            for _ in 0..RATE / 2 {
+                let (Some(l), Some(r)) = (samples.next(), samples.next()) else {
+                    break;
+                };
+                let (l, r) = (l.map_err(|e| e.to_string())?, r.map_err(|e| e.to_string())?);
+                let _ = spool.write_all(&l.to_le_bytes());
+                let _ = spool.write_all(&r.to_le_bytes());
+                you.push(f32::from(l) / f32::from(i16::MAX));
+                them.push(f32::from(r) / f32::from(i16::MAX));
+            }
+            if you.is_empty() {
+                break;
+            }
+            job.push(&you, &them);
+            job.transcribe(false);
+        }
+        job.finish();
+        let turns = job.collected.take().unwrap_or_default();
+        if turns.is_empty() {
+            return Ok(Some(
+                "No speech was found. The transcript is as it was.".to_string(),
+            ));
+        }
+        let mut named = false;
+        let day = chrono::Local::now().format("%b %-d");
+        store
+            .rewrite(note, |body| {
+                let (body, kept) = with_transcript(
+                    body,
+                    &turns,
+                    &format!("*Transcribed again with {model} on {day}.*"),
+                );
+                named = kept;
+                body
+            })
+            .map_err(|e| e.to_string())?;
+        drop(spool.flush());
+        if settings.notes.meeting_speakers && !named {
+            name_speakers(store, note, &raw, one_sided);
+        }
+        Ok(None)
+    })();
+    let _ = std::fs::remove_file(&raw);
+    result
+}
+
+/// `body` with `turns` in place of its transcript, and `said` (what made
+/// them) after them. A speaker's name or number in the old transcript is
+/// kept for the new turn starting at the same time; returns whether there
+/// were any. What follows the transcript (when it ended, the recording's
+/// link) stays.
+fn with_transcript(body: &str, turns: &[String], said: &str) -> (String, bool) {
+    let lines: Vec<&str> = body.lines().collect();
+    let aside = |l: &str| {
+        let l = l.trim();
+        (l.len() > 1 && l.starts_with('*') && l.ends_with('*') && !l.starts_with("**"))
+            || l.starts_with("[Recording](")
+    };
+    // Where the transcript starts: its first turn, or else the notes at the
+    // end of the note about how it ended.
+    let start = lines
+        .iter()
+        .position(|l| turn_head(l).is_some())
+        .unwrap_or_else(|| {
+            let mut at = lines.len();
+            while at > 0 && (aside(lines[at - 1]) || lines[at - 1].trim().is_empty()) {
+                at -= 1;
+            }
+            at
+        });
+    let names: std::collections::HashMap<&str, &str> = lines[start..]
+        .iter()
+        .filter_map(|l| turn_head(l))
+        .filter(|(_, who, _)| {
+            !who.is_empty() && *who != Side::You.label() && *who != Side::Them.label()
+        })
+        .map(|(stamp, who, _)| (stamp, who))
+        .collect();
+    let turns: Vec<String> = turns
+        .iter()
+        .map(|t| match turn_head(t) {
+            Some((stamp, _, said)) if names.contains_key(stamp) => {
+                format!("**[{stamp}] {}:**{said}", names[stamp])
+            }
+            _ => t.clone(),
+        })
+        .collect();
+    let (links, notes): (Vec<&str>, Vec<&str>) = lines[start..]
+        .iter()
+        .copied()
+        .filter(|l| aside(l) && !l.trim().starts_with("*Transcribed again"))
+        .partition(|l| l.trim().starts_with("[Recording]("));
+    let mut out = lines[..start].join("\n").trim_end().to_string();
+    out.push_str("\n\n");
+    out.push_str(&turns.join("\n\n"));
+    for line in notes.into_iter().chain([said]).chain(links) {
+        out.push_str("\n\n");
+        out.push_str(line.trim());
+    }
+    out.push('\n');
+    (out, !names.is_empty())
+}
+
 // ---------------------------------------------------------------- after a crash
 
 /// At launch: a meeting whose spool is still there wasn't finished (the
@@ -1549,6 +1719,96 @@ mod tests {
             "{body}"
         );
         assert!(job.recorded() >= Duration::from_secs(5));
+    }
+
+    /// A meeting's recording transcribed again with a downloaded model.
+    /// `SPLASHDOWN_AGAIN_WAV` is a stereo 16 kHz recording (You left, Them
+    /// right) and `SPLASHDOWN_AGAIN_MODEL` a downloaded speech model's id.
+    #[test]
+    #[ignore = "needs a recording and a downloaded speech model"]
+    fn transcribes_a_recording_again() {
+        let wav = PathBuf::from(std::env::var("SPLASHDOWN_AGAIN_WAV").unwrap());
+        let id = std::env::var("SPLASHDOWN_AGAIN_MODEL").unwrap_or("parakeet-v3".into());
+        let root = std::env::temp_dir().join(format!("splashdown-again-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let store = Store::new(root.clone());
+        store.ensure().unwrap();
+        std::fs::create_dir_all(root.join("Attachments")).unwrap();
+        std::fs::copy(&wav, root.join("Attachments/Call.wav")).unwrap();
+        std::fs::write(
+            root.join("Call.md"),
+            "---\nsource: meeting\n---\n# Call\n\n**[0:00] Them:** old words\n\n*Ended at 0:23.*\n\n[Recording](Attachments/Call.wav)\n",
+        )
+        .unwrap();
+        let recording = recording_of(&store, "Call.md").expect("the link is found");
+        let models = crate::engine::paths().unwrap().models_dir;
+        let choice = splashdown_config::SpeechChoice {
+            provider: splashdown_config::SpeechProvider::WhisperLocal,
+            model: id,
+        };
+        let speech = crate::session::FileSpeech {
+            stt: splashdown_providers::factory::speech(&choice, &Secrets::default(), &models)
+                .unwrap(),
+            hints: Default::default(),
+            cleanup: Default::default(),
+        };
+        let mut seen = 0.0;
+        let stopped = transcribe_again(
+            &Settings::default(),
+            &store,
+            "Call.md",
+            &recording,
+            &speech,
+            "Parakeet v3",
+            &mut |done| {
+                seen = done;
+                true
+            },
+        )
+        .unwrap();
+        assert_eq!(stopped, None);
+        assert!(seen > 20.0, "{seen}");
+        let body = store.read("Call.md").unwrap().body;
+        println!("{body}");
+        assert!(!body.contains("old words"));
+        assert!(body.contains("Them:**"));
+        assert!(body.contains("*Transcribed again with Parakeet v3 on "));
+        assert!(
+            body.trim_end()
+                .ends_with("[Recording](Attachments/Call.wav)")
+        );
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    #[test]
+    fn a_new_transcript_keeps_names_and_the_rest() {
+        let body = "# Weekly sync\n\nWith Dana Lee.\n\n## My notes\n\nBudget!\n\n## Summary\n\nShort.\n\n**[0:01] You:** helo\n\n**[0:05] Dana Lee:** hi ther\n\n*Ended at 0:09.*\n\n*Transcribed again with Whisper on Oct 1.*\n\n[Recording](Attachments/Weekly%20sync.wav)\n";
+        let turns = [
+            "**[0:01] You:** hello".to_string(),
+            "**[0:05] Them:** hi there".to_string(),
+            "**[0:08] Them:** bye".to_string(),
+        ];
+        let (out, named) = with_transcript(
+            body,
+            &turns,
+            "*Transcribed again with Parakeet v3 on Nov 1.*",
+        );
+        assert!(named);
+        assert_eq!(
+            out,
+            "# Weekly sync\n\nWith Dana Lee.\n\n## My notes\n\nBudget!\n\n## Summary\n\nShort.\n\n**[0:01] You:** hello\n\n**[0:05] Dana Lee:** hi there\n\n**[0:08] Them:** bye\n\n*Ended at 0:09.*\n\n*Transcribed again with Parakeet v3 on Nov 1.*\n\n[Recording](Attachments/Weekly%20sync.wav)\n"
+        );
+        // Nobody spoke the first time.
+        let (out, named) = with_transcript(
+            "# Call\n\n*Ended at 0:30.*\n\n[Recording](Attachments/Call.wav)\n",
+            &turns[..1],
+            "*Again.*",
+        );
+        assert!(!named);
+        assert_eq!(
+            out,
+            "# Call\n\n**[0:01] You:** hello\n\n*Ended at 0:30.*\n\n*Again.*\n\n[Recording](Attachments/Call.wav)\n"
+        );
     }
 
     #[test]

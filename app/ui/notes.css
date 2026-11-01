@@ -500,6 +500,7 @@ dialog.nt-apps { width: min(420px, 92vw); }
 .nt-menu button.danger { color: var(--err); }
 .nt-menu button.danger:hover { color: #fff; }
 .nt-menu button:disabled { opacity: .45; background: none; color: inherit; }
+.nt-menu-head { font-size: 11px; color: var(--muted); padding: 5px 10px 3px; }
 .nt-menu .nt-kbd { margin-left: auto; border: 0; background: none; padding: 0; }
 .nt-menu button:hover .nt-kbd, .nt-menu button:focus-visible .nt-kbd { color: inherit; }
 .nt-tick { margin-left: auto; }

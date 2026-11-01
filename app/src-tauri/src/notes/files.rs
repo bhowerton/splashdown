@@ -1,7 +1,8 @@
 //! File transcription: an audio or video file dropped on Notes,
 //! or picked from its menu, becomes a transcript note, written a paragraph
 //! at a time as each stretch of about 30 s is transcribed. One file runs at
-//! a time; the rest wait their turn.
+//! a time; the rest wait their turn. A meeting's kept recording can be
+//! transcribed again the same way, with another speech model.
 
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
@@ -11,7 +12,9 @@ use std::time::{Duration, Instant};
 
 use serde::Serialize;
 use splashdown_audio::file::{AudioFile, timestamp};
+use splashdown_config::{Secrets, SpeechChoice, SpeechProvider};
 use splashdown_core::{AudioClip, SpeechToText, SttHints, Usage};
+use splashdown_providers::SpeechModel;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_dialog::DialogExt;
 
@@ -68,6 +71,14 @@ struct Item {
     /// Downloaded from this link: the note says so, and the file is
     /// deleted afterwards.
     link: Option<Link>,
+    /// A meeting's recording, transcribed again into its note.
+    again: Option<Again>,
+}
+
+struct Again {
+    note: String,
+    /// A downloaded speech model's id, or `None` for the one in Settings.
+    model: Option<String>,
 }
 
 /// A downloaded link is deleted, with the folder it was downloaded into,
@@ -159,7 +170,11 @@ fn add(app: &AppHandle, files: Vec<PathBuf>) {
         app,
         files
             .into_iter()
-            .map(|path| Item { path, link: None })
+            .map(|path| Item {
+                path,
+                link: None,
+                again: None,
+            })
             .collect(),
     );
 }
@@ -207,8 +222,9 @@ fn work(app: AppHandle) {
             .unwrap_or_else(|| file_name(path));
         // A panic (a decoder on a damaged file) mustn't leave the queue
         // marked running with the note locked until a restart.
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            transcribe(&app, path, item.link.as_ref(), &stop)
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &item.again {
+            Some(again) => transcribe_again(&app, path, again, &stop),
+            None => transcribe(&app, path, item.link.as_ref(), &stop),
         }))
         .unwrap_or_else(|_| {
             tracing::error!("transcribing a file panicked");
@@ -352,6 +368,97 @@ fn transcribe(
             .map_err(|e| e.to_string())?;
     }
     Ok(stopped)
+}
+
+/// Transcribes a meeting's recording again into its note, with the model
+/// asked for. Returns why it stopped early, if it did.
+fn transcribe_again(
+    app: &AppHandle,
+    recording: &Path,
+    again: &Again,
+    stop: &AtomicBool,
+) -> Result<Option<String>, String> {
+    let state = app.state::<AppState>();
+    let settings = state.settings();
+    let mut speech = state.session.file_speech()?;
+    let model = match &again.model {
+        Some(id) => {
+            let chosen = SpeechModel::from_id(id).ok_or("That speech model isn't known.")?;
+            let models = engine::paths()?.models_dir;
+            let choice = SpeechChoice {
+                provider: SpeechProvider::WhisperLocal,
+                model: id.clone(),
+            };
+            speech.stt =
+                splashdown_providers::factory::speech(&choice, &Secrets::default(), &models)
+                    .map_err(|e| e.to_string())?;
+            short_label(chosen)
+        }
+        None => {
+            let name = speech.stt.name();
+            name.split_once('/')
+                .map_or(name.clone(), |(_, m)| m.to_string())
+        }
+    };
+    let (place, local) = place(&speech.stt.name());
+    if !local && engine::budget_reached(&settings) {
+        return Err("the spending limit was reached".into());
+    }
+    let (store, _) = store(&state)?;
+    let title = store
+        .read(&again.note)
+        .map(|n| super::store::title_of(&n.body))
+        .unwrap_or_default();
+    let total = hound::WavReader::open(recording)
+        .ok()
+        .map(|r| f64::from(r.duration()) / f64::from(r.spec().sample_rate));
+    let mut status = Status {
+        file: format!("{title} again"),
+        note: again.note.clone(),
+        done: 0.0,
+        total,
+        waiting: 0,
+        place: place.to_string(),
+        downloading: false,
+    };
+    show(app, Some(status.clone()));
+    let mut shown = Instant::now();
+    let mut progress = |done: f64| {
+        // Twice a second is plenty for a progress bar.
+        if shown.elapsed() >= Duration::from_millis(500) {
+            shown = Instant::now();
+            status.done = done;
+            show(app, Some(status.clone()));
+        }
+        !stop.load(Ordering::Relaxed)
+    };
+    let stopped = crate::meeting::transcribe_again(
+        &settings,
+        &store,
+        &again.note,
+        recording,
+        &speech,
+        &model,
+        &mut progress,
+    )?;
+    if stopped.is_none() {
+        tell(
+            app,
+            format!("{title} was transcribed again with {model}."),
+            false,
+        );
+    }
+    Ok(stopped)
+}
+
+/// "Parakeet v3", from "Parakeet v3 · 25 European languages".
+fn short_label(model: SpeechModel) -> String {
+    model
+        .label()
+        .split(" · ")
+        .next()
+        .unwrap_or_default()
+        .to_string()
 }
 
 /// One piece, tried twice before giving up.
@@ -672,6 +779,7 @@ async fn download_file(url: &str, dir: &Path) -> Result<Item, String> {
             url: url.to_string(),
             title,
         }),
+        again: None,
     })
 }
 
@@ -736,6 +844,7 @@ fn download_page(
             url: url.to_string(),
             title: Some(title.to_string()).filter(|t| !t.is_empty()),
         }),
+        again: None,
     })
 }
 
@@ -821,6 +930,76 @@ pub fn notes_transcribe_stop() {
         let _ = child.kill();
         let _ = child.wait();
     }
+}
+
+/// A speech model a meeting can be transcribed again with.
+#[derive(Serialize)]
+pub struct AgainModel {
+    /// `None` for the one chosen in Settings.
+    id: Option<String>,
+    label: String,
+}
+
+/// The speech models a meeting can be transcribed again with: the one in
+/// Settings, then each one downloaded. Empty when the note has no
+/// recording kept.
+#[tauri::command]
+pub fn notes_transcribe_again_models(
+    path: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<Vec<AgainModel>, String> {
+    let (store, _) = store(&state)?;
+    if crate::meeting::recording_of(&store, &path).is_none() {
+        return Ok(Vec::new());
+    }
+    let models = engine::paths()?.models_dir;
+    let mut list = vec![AgainModel {
+        id: None,
+        label: "The speech model in Settings".into(),
+    }];
+    list.extend(
+        SpeechModel::ALL
+            .into_iter()
+            .filter(|m| m.is_downloaded(&models))
+            .map(|m| AgainModel {
+                id: Some(m.id().to_string()),
+                label: m.label().to_string(),
+            }),
+    );
+    Ok(list)
+}
+
+/// Transcribes a meeting's kept recording again, with `model` (a
+/// downloaded speech model's id, or none for the one in Settings), in
+/// place of its transcript. Waits behind other transcriptions.
+#[tauri::command]
+pub fn notes_transcribe_again(
+    path: String,
+    model: Option<String>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let state = app.state::<AppState>();
+    let (store, _) = store(&state)?;
+    super::not_recording(&path)?;
+    let recording = crate::meeting::recording_of(&store, &path)
+        .ok_or("This note's recording isn't kept, so it can't be transcribed again.")?;
+    if queue().status.as_ref().is_some_and(|s| s.note == path)
+        || queue()
+            .waiting
+            .iter()
+            .any(|i| i.again.as_ref().is_some_and(|a| a.note == path))
+    {
+        return Err("This note is already being transcribed.".into());
+    }
+    add_items(
+        &app,
+        vec![Item {
+            path: recording,
+            link: None,
+            again: Some(Again { note: path, model }),
+        }],
+    );
+    Ok(())
 }
 
 /// The running job, when the Notes window loads.

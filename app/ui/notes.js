@@ -397,6 +397,7 @@ function showItemMenu(n, at) {
     item(isMac ? "Show in Finder" : "Show in File Explorer", () =>
       invoke("notes_reveal", { path: n.path }).catch((err) => toast(String(err), true)),
     ),
+    ...(hasRecording(n.text) ? [item("Transcribe again…", () => transcribeAgain(n.path, at), { disabled: busy })] : []),
     document.createElement("hr"),
     item("Move to Trash", onIt(deleteNote), { disabled: busy, danger: true }),
   ], at);
@@ -1428,6 +1429,33 @@ async function showTab(next) {
 
 /** Writes (or rewrites) the summary from the transcript and the user's
  *  notes, as the app does when a meeting ends. */
+/** Whether a note links its kept recording (meetings and recordings do,
+ *  when Settings keeps them), so it can be transcribed again. */
+function hasRecording(text) {
+  return /^\[Recording\]\(.+\.wav\)\s*$/m.test(text ?? "");
+}
+
+/** Asks which speech model, then transcribes the note's recording again
+ *  in place of its transcript (the progress shows like a file's). */
+async function transcribeAgain(path, at) {
+  let models;
+  try {
+    models = await invoke("notes_transcribe_again_models", { path });
+  } catch (err) {
+    return toast(String(err), true);
+  }
+  if (!models.length) return toast("This note's recording isn't kept, so it can't be transcribed again.", true);
+  const start = async (model) => {
+    if (path === current.path) await saveNow();
+    invoke("notes_transcribe_again", { path, model }).catch((err) => toast(String(err), true));
+  };
+  const head = document.createElement("div");
+  head.className = "nt-menu-head";
+  head.textContent = "Transcribe again with";
+  const r = $("nt-title")?.getBoundingClientRect();
+  showMenu([head, ...models.map((m) => menuItem(m.label, () => start(m.id)))], at ?? { x: r ? r.left : 80, y: r ? r.bottom + 4 : 80 });
+}
+
 async function summarize() {
   if (!asMeeting || locked()) return;
   await saveNow();
@@ -2423,6 +2451,9 @@ function actions() {
     list.push({ title: "Rewrite: say how…", icon: "pen", sub: "In your own words: shorter, warmer, in French…", run: () => runTransform("", {}) });
   }
   if (asMeeting && !locked()) list.push({ title: "Summarize the meeting again", icon: "pen", run: summarize });
+  if (have && hasRecording(body) && !locked()) {
+    list.push({ title: "Transcribe again with another model…", icon: "pen", run: () => transcribeAgain(current.path) });
+  }
   list.push({ title: "New folder…", icon: "folder", run: () => newFolder(view.kind === "folder" ? view.value : "") });
   if (have) {
     list.push(
@@ -3170,6 +3201,8 @@ async function mockInvoke(cmd, args) {
       return ["Meetings", "Personal", "Personal/Recipes", "Work", "Work/Launch", "Archive"];
     case "notes_open":
       return open(args.path);
+    case "notes_transcribe_again_models":
+      return [{ id: null, label: "The speech model in Settings" }, { id: "parakeet-v3", label: "Parakeet v3 · 25 European languages" }, { id: "large-v3-turbo", label: "Whisper large-v3-turbo · about 100 languages" }];
     case "notes_save":
       return { note: { path: args.path ?? "2026-11-01 New.md", body: args.text, modified: Date.now(), source: "" }, conflict: false };
     case "notes_versions":

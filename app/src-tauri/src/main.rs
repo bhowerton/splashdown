@@ -143,6 +143,8 @@ fn main() {
             notes::files::notes_install_link_helper,
             notes::files::notes_transcribe_stop,
             notes::files::notes_transcribing,
+            notes::files::notes_transcribe_again,
+            notes::files::notes_transcribe_again_models,
             meeting::meeting_toggle,
             meeting::meeting_keep_going,
             meeting::meeting_set_notes,
