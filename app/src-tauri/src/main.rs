@@ -135,6 +135,7 @@ fn main() {
             notes::notes_delete_folder,
             notes::notes_move,
             notes::notes_set_tags,
+            notes::notes_daily,
             notes::notes_edit_transforms,
             notes::notes_add,
             notes::files::notes_transcribe_pick,

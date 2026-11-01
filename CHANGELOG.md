@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Today's note and smart views.** Today's note (⌘T) opens today's daily note in Notes, making it if it isn't there yet (the folder and name are the ones set for captures in Settings → Notes). Beside Pinned, the column has To do (notes with an unticked checkbox), Changed today and Untagged.
+
 ## 0.2.0 — 2026-11-01
 
 - **A redesigned Notes window.** Record a meeting, Transcribe (a file or a link) and Ask sit in the toolbar instead of a menu, and ⌘K finds any note or anything the window can do. Notes show their formatting as you write: headings, bullets, and checkboxes you can click, while the file stays plain Markdown. The list shows what each note is (a meeting, a transcript, a dictation) and filters to pinned notes, meetings or transcripts; each note's ⋯ (or a right-click) pins, renames, shows or trashes it. A new, empty note shows the ways to fill it, and pasting a link into one offers to transcribe it. **Paste into {app}** (⌘↩) replaces Send to, and follows whichever app you used last. Notes is now an ordinary window; ⋯ → Keep on top floats it over other apps, as the scratchpad did.

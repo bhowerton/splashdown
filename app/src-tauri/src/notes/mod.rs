@@ -1060,6 +1060,23 @@ pub fn notes_delete(path: String, state: State<'_, AppState>) -> Result<(), Stri
     store(&state)?.0.delete(&path)
 }
 
+/// Today's daily note (in the folder and with the name set for captures
+/// in Settings → Notes), made if it isn't there yet.
+#[tauri::command]
+pub fn notes_daily(state: State<'_, AppState>) -> Result<Note, String> {
+    let settings = state.settings().notes;
+    let (store, _) = store(&state)?;
+    store
+        .daily(
+            &Target::Daily {
+                folder: settings.daily_folder().to_string(),
+                format: settings.daily_format().to_string(),
+            },
+            chrono::Local::now(),
+        )
+        .map_err(|e| e.to_string())
+}
+
 /// Neither a meeting nor a file's transcript is being written into a note
 /// in `folder`, so it can be moved or trashed.
 fn nothing_written_in(folder: &str) -> Result<(), String> {

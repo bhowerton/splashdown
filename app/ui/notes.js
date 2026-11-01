@@ -236,12 +236,26 @@ function shownInList(n, v = view) {
       return within(n.folder, v.value);
     case "tag":
       return hasTag(n, v.value);
+    case "todo":
+      return /^\s*[-*+] \[ \]/m.test(n.text);
+    case "today":
+      return new Date(n.modified).toDateString() === new Date().toDateString();
+    case "untagged":
+      return !n.tags?.length;
     default:
       return true;
   }
 }
 
-const VIEW_NAMES = { all: "All notes", pinned: "Pinned", meetings: "Meetings & recordings", imported: "Transcripts" };
+const VIEW_NAMES = {
+  all: "All notes",
+  pinned: "Pinned",
+  todo: "To do",
+  today: "Changed today",
+  meetings: "Meetings & recordings",
+  imported: "Transcripts",
+  untagged: "Untagged",
+};
 
 function viewName(v = view) {
   if (v.kind === "folder") return v.value.split("/").pop();
@@ -275,6 +289,9 @@ function renderList() {
       meetings: "No meetings or recordings yet.",
       imported: "Nothing transcribed yet.",
       folder: "No notes in this folder. Drag one here, or press + to start one.",
+      todo: "Nothing to do. A note with an unticked - [ ] checkbox shows here.",
+      today: "No notes changed today.",
+      untagged: "Every note has a tag.",
       tag: "No notes with this tag.",
     }[view.kind] ?? "";
   $("nt-folder-label").textContent = folder?.label ?? "";
@@ -458,6 +475,18 @@ function showView(v) {
   renderList();
   // A narrow window has folders and tags over the list: out of the way.
   if (matchMedia("(max-width: 900px)").matches) toggleNav(false);
+}
+
+/** Opens today's daily note, making it if it isn't there yet. */
+async function openDaily() {
+  await saveNow();
+  await flushLiveNotes();
+  try {
+    showNote(await invoke("notes_daily"));
+    await refresh();
+  } catch (e) {
+    toast(String(e), true);
+  }
 }
 
 function toggleNav(show = $("nt-nav").hidden) {
@@ -2320,6 +2349,7 @@ function actions() {
   const have = !!current.path;
   const list = [
     { title: "New note", icon: "plus", keys: "⌘N", run: newNote },
+    { title: "Today's note", icon: "cal", keys: "⌘T", sub: "Today's daily note, made if it isn't there yet", run: openDaily },
     { title: meeting ? "Stop the meeting" : "Record a meeting", icon: meeting ? "stop" : "rec", sub: "Both sides of a call, transcribed as it goes", run: toggleMeeting },
     { title: "Transcribe a file…", icon: "file", keys: "⌘O", sub: "Audio or video. You can also drop one in this window.", run: pickFile },
     { title: "Transcribe a link…", icon: "link", keys: "⌘L", sub: "YouTube and other pages, or a link to a file", run: askForLink },
@@ -2935,6 +2965,7 @@ document.addEventListener("keydown", (e) => {
     f: openPalette,
     j: () => ($("nt-askpanel").hidden ? openAsk() : closeAsk()),
     n: newNote,
+    t: openDaily,
     e: () => toggleList(),
     o: pickFile,
     l: askForLink,
@@ -2955,6 +2986,7 @@ for (const b of document.querySelectorAll(".nt-nav-group [data-view]")) {
   b.addEventListener("click", () => showView({ kind: b.dataset.view, value: "" }));
 }
 $("nt-new-folder").addEventListener("click", () => newFolder(""));
+$("nt-daily").addEventListener("click", openDaily);
 $("nt-nav-toggle").addEventListener("click", () => toggleNav());
 dropTarget($("nt-folders-head"), "");
 $("nt-toggle").addEventListener("click", () => toggleList());
@@ -3074,6 +3106,8 @@ async function mockInvoke(cmd, args) {
       };
     case "notes_list":
       return list;
+    case "notes_daily":
+      return { path: "Daily/2026-11-01.md", body: "# 2026-11-01\n\n", modified: Date.now(), source: "", front_tags: [] };
     case "notes_folders":
       return ["Meetings", "Personal", "Personal/Recipes", "Work", "Work/Launch", "Archive"];
     case "notes_open":

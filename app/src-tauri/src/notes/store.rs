@@ -798,6 +798,20 @@ impl Store {
 
     /// Adds `text` at the end of the target note as its own paragraph,
     /// starting with the time (`**09:15** …`), creating the note if needed.
+    /// Today's daily note (`target`, a `Target::Daily`), made with its date
+    /// as a heading if it isn't there yet, the way a capture would make it.
+    pub fn daily(&self, target: &Target, now: DateTime<Local>) -> io::Result<Note> {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        self.ensure()?;
+        let rel = self.target_path(target, now);
+        let path = self.resolve(&rel)?;
+        if !path.exists() {
+            self.write(&path, &format!("# {}\n\n", now.format("%Y-%m-%d")))?;
+        }
+        drop(_appending);
+        self.open(&rel)
+    }
+
     pub fn append(
         &self,
         target: &Target,
@@ -1639,6 +1653,27 @@ mod tests {
             front_matter_value("---\nsource: meeting\napp: \"Zoom\"\n---\n", "app").as_deref(),
             Some("Zoom")
         );
+    }
+
+    #[test]
+    fn todays_note_is_made_once() {
+        let store = temp_store("daily");
+        let target = Target::Daily {
+            folder: "Daily".into(),
+            format: "YYYY-MM-DD".into(),
+        };
+        let now = at("2026-11-01T09:15:00-05:00");
+        let note = store.daily(&target, now).unwrap();
+        assert_eq!(note.path, "Daily/2026-11-01.md");
+        assert_eq!(note.body, "# 2026-11-01\n\n");
+        store
+            .save(&note.path, "# 2026-11-01\n\nMet Dana.", Some(note.modified))
+            .unwrap();
+        assert_eq!(
+            store.daily(&target, now).unwrap().body,
+            "# 2026-11-01\n\nMet Dana."
+        );
+        let _ = std::fs::remove_dir_all(store.root());
     }
 
     #[test]
