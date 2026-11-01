@@ -536,6 +536,42 @@ pub fn microphone_users() -> Vec<String> {
     imp::microphone_users()
 }
 
+/// An app that plays sound, to transcribe what it plays.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AudioApp {
+    /// Its bundle ID (macOS) or executable's file name (Windows).
+    pub id: String,
+    pub name: String,
+    /// Playing sound now.
+    pub playing: bool,
+    /// What to record: the app's Core Audio process objects (macOS, for
+    /// the shim's tap), or the process whose tree plays its sound (Windows,
+    /// for `app_loopback`).
+    pub sources: Vec<u32>,
+}
+
+/// The apps that play (or have played) sound since they started, playing
+/// ones first. Our own app isn't included.
+pub fn audio_apps() -> Vec<AudioApp> {
+    imp::audio_apps()
+}
+
+/// Recording one app's sound (Windows); it stops when dropped.
+#[cfg(windows)]
+pub use imp::AppLoopback;
+
+/// Where recorded sound goes: mono samples and their rate, on an audio
+/// thread.
+pub type SoundSink = Box<dyn FnMut(&[f32], u32) + Send>;
+
+/// Records what process `pid` and the processes it started play (one of
+/// `AudioApp::sources`), handing mono samples and their rate to `sink` as
+/// they come. Windows 10 2004 or later.
+#[cfg(windows)]
+pub fn app_loopback(pid: u32, sink: SoundSink) -> Result<AppLoopback> {
+    imp::app_loopback(pid, sink)
+}
+
 /// Lowers or mutes the default output device. `None` when there's nothing
 /// to do: no device or volume control, or it's already silent or muted.
 pub fn quiet_output(how: Quieten) -> Option<QuietOutput> {

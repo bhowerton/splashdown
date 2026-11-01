@@ -1,5 +1,6 @@
 // Recording what the computer plays, for meeting notes: a Core Audio process
-// tap on every app but this one (so Splashdown's own sounds stay out),
+// tap on every app but this one (so Splashdown's own sounds stay out), or on
+// chosen apps' processes only (transcribing what one app plays),
 // wrapped in a private aggregate device, read as mono Float32 and handed to
 // Rust as it arrives. macOS 14.2+; the first start asks the user for
 // permission to record this computer's audio (NSAudioCaptureUsageDescription).
@@ -71,11 +72,15 @@ private func defaultOutputUID() -> String? {
     return uid.takeRetainedValue() as String
 }
 
-/// Starts recording the computer's sound. Returns a handle for
-/// `splashdown_tap_stop`, or nil with `code` set: OS_TOO_OLD before macOS
-/// 14.2, FAILED (with the Core Audio status in `detail`) otherwise.
+/// Starts recording the computer's sound: the `count` Core Audio process
+/// objects in `processes`, or with none, every app but this one. Returns a
+/// handle for `splashdown_tap_stop`, or nil with `code` set: OS_TOO_OLD
+/// before macOS 14.2, FAILED (with the Core Audio status in `detail`)
+/// otherwise.
 @_cdecl("splashdown_tap_start")
 public func splashdown_tap_start(
+    _ processes: UnsafePointer<UInt32>?,
+    _ count: Int32,
     _ ctx: UnsafeMutableRawPointer?,
     _ callback: SplashdownAudioCallback,
     _ code: UnsafeMutablePointer<Int32>,
@@ -93,9 +98,16 @@ public func splashdown_tap_start(
     }
     let recorder = SystemTap()
 
-    // 1. A tap on everything but us, still playing through the speakers.
-    let excluded = ownProcessObject().map { [$0] } ?? []
-    let description = CATapDescription(stereoGlobalTapButExcludeProcesses: excluded)
+    // 1. A tap on everything but us (or on the chosen apps), still playing
+    // through the speakers.
+    let chosen = (0..<Int(max(count, 0))).compactMap { i in processes.map { AudioObjectID($0[i]) } }
+    let description: CATapDescription
+    if chosen.isEmpty {
+        let excluded = ownProcessObject().map { [$0] } ?? []
+        description = CATapDescription(stereoGlobalTapButExcludeProcesses: excluded)
+    } else {
+        description = CATapDescription(stereoMixdownOfProcesses: chosen)
+    }
     description.uuid = UUID()
     description.name = "Splashdown meeting"
     description.isPrivate = true

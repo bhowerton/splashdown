@@ -130,7 +130,7 @@ fn window_title(window: HWND) -> Option<String> {
 }
 
 /// Full path of a process's executable.
-fn exe_path(pid: u32) -> Option<String> {
+pub(crate) fn exe_path(pid: u32) -> Option<String> {
     // SAFETY: plain values; the handle is closed below.
     let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
     let mut buf = [0u16; 1024];
@@ -157,7 +157,7 @@ fn file_name(path: &str) -> &str {
 
 /// The executable's "File description" (e.g. "Google Chrome"), the closest
 /// Windows has to an app's display name.
-fn file_description(path: &str) -> Option<String> {
+pub(crate) fn file_description(path: &str) -> Option<String> {
     let path_w = wide(path);
     // SAFETY: `path_w` is a NUL-terminated path that outlives the call.
     let size = unsafe { GetFileVersionInfoSizeW(PCWSTR(path_w.as_ptr()), None) };

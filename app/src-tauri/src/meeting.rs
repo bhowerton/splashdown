@@ -2,6 +2,10 @@
 //! and **Them** (what the computer plays), transcribed a turn at a time into
 //! a note in `Meetings/` while it goes, and summarized when it ends.
 //!
+//! An app's audio is recorded the same way with one side: what that app
+//! plays (a webinar in a browser, a podcast app), with no microphone, into
+//! a note of timed paragraphs.
+//!
 //! The audio is spooled to the config folder as it's recorded, so a crash
 //! or a forced quit loses nothing: the next launch offers to finish the
 //! transcript. The spool is deleted once the note is done.
@@ -43,6 +47,8 @@ const RATE: usize = splashdown_audio::TARGET_SAMPLE_RATE as usize;
 const OUTPUT_CHECK: Duration = Duration::from_secs(2);
 /// The heading of what the user writes during the meeting, in its note.
 pub const MY_NOTES: &str = "My notes";
+/// An app's audio note's `source`, in its front matter.
+pub const APP_AUDIO: &str = "app-audio";
 
 /// The meeting in progress, for the Notes window and the CLI.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -62,10 +68,24 @@ pub struct Status {
     pub warning: Option<String>,
     /// Stopped; the last turns and the summary are being done.
     pub finishing: bool,
+    /// Recording an app's audio rather than a meeting: the app's name (or
+    /// "this computer's sound").
+    pub app: Option<String>,
     /// A question the note waits on ("Summarize this meeting with
     /// OpenRouter?"). It's asked in its own panel; Notes shows it too, so
     /// it can be answered there.
     pub question: Option<crate::prompt::Prompt>,
+}
+
+/// What's recorded.
+#[derive(Debug, Clone)]
+pub enum Source {
+    /// A call: the microphone and what the computer plays.
+    Meeting,
+    /// What an app plays, with no microphone: `sources` from
+    /// `splashdown_platform::audio_apps`, or none for everything the
+    /// computer plays.
+    App { name: String, sources: Vec<u32> },
 }
 
 #[derive(Default)]
@@ -107,6 +127,11 @@ pub fn toggle(app: &AppHandle) {
 /// Starts a meeting. Returns at once; the recording starts on its own
 /// thread (asking for speech-to-text waits behind any dictation).
 pub fn start(app: &AppHandle) -> Result<String, String> {
+    start_recording(app, Source::Meeting)
+}
+
+/// Starts recording `source`, as `start`.
+pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String> {
     let mut slot = running();
     if slot.is_some() {
         return Err("A meeting is already recording.".into());
@@ -121,7 +146,7 @@ pub fn start(app: &AppHandle) -> Result<String, String> {
         .spawn(move || {
             // A panic mustn't leave a meeting marked as recording for good.
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                record(&handle, &stop, &keep)
+                record(&handle, &source, &stop, &keep)
             }))
             .unwrap_or_else(|_| Err("the recording stopped unexpectedly".into()));
             if let Err(e) = result {
@@ -139,6 +164,32 @@ pub fn start(app: &AppHandle) -> Result<String, String> {
         run.thread = Some(thread);
     }
     Ok("Starting a meeting".into())
+}
+
+/// The sound of the app with `sources` (none: everything the computer
+/// plays but Splashdown).
+fn app_audio(sources: &[u32]) -> Result<LiveAudio, String> {
+    if sources.is_empty() {
+        return system_audio();
+    }
+    #[cfg(target_os = "macos")]
+    return splashdown_apple_shim::app_audio(sources);
+    #[cfg(windows)]
+    return windows_app_audio(sources[0]);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    Err("recording an app's sound isn't supported here".into())
+}
+
+/// What process `pid`'s tree plays, through Windows' process loopback.
+#[cfg(windows)]
+fn windows_app_audio(pid: u32) -> Result<LiveAudio, String> {
+    let (live, pusher) = LiveAudio::pushed(Box::new(()));
+    let capture = splashdown_platform::app_loopback(
+        pid,
+        Box::new(move |samples: &[f32], rate: u32| pusher.push(samples, rate)),
+    )
+    .map_err(|e| format!("Couldn't record that app: {e}"))?;
+    Ok(live.keeping(Box::new(capture)))
 }
 
 /// Stops the meeting; its note is finished in the background.
@@ -221,6 +272,9 @@ struct Spool {
     /// Seconds of the recording whose turns are in the note.
     #[serde(default)]
     written: f64,
+    /// The app whose audio this is, when it isn't a meeting.
+    #[serde(default)]
+    app: Option<String>,
 }
 
 fn spool_dir() -> Result<PathBuf, String> {
@@ -259,11 +313,22 @@ fn call_app() -> (Option<String>, String) {
     }
 }
 
-/// Records a meeting until it's stopped, then finishes its note.
-fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), String> {
+/// Records a meeting (or an app's audio) until it's stopped, then finishes
+/// its note.
+fn record(
+    app: &AppHandle,
+    source: &Source,
+    stop: &AtomicBool,
+    keep: &AtomicBool,
+) -> Result<(), String> {
     let state = app.state::<AppState>();
     let mut settings = state.settings();
-    if !settings.notes.meeting_reminded {
+    let listening = match source {
+        Source::App { name, .. } => Some(name.clone()),
+        Source::Meeting => None,
+    };
+    // Telling people they're recorded is about calls.
+    if listening.is_none() && !settings.notes.meeting_reminded {
         remind(app);
         settings.notes.meeting_reminded = true;
         if let Err(e) = settings.save(&crate::engine::paths()?.config_file()) {
@@ -277,34 +342,56 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
     let speech = state.session.file_speech()?;
     let (place, _) = crate::notes::files::place(&speech.stt.name());
 
-    let mut you = LiveAudio::microphone(
-        splashdown_audio::devices::choose(
-            &settings.general.microphones(),
-            &splashdown_audio::devices::inputs(),
-        )
-        .as_deref(),
-    )
-    .map_err(|e| e.to_string())?;
-    let (mut them, them_problem) = match system_audio() {
-        Ok(them) => (Some(them), None),
-        Err(e) => (None, Some(e)),
+    // An app's audio takes the microphone's place: it's the one side, and
+    // keeps the time.
+    let (mut you, mut them, them_problem) = match source {
+        Source::Meeting => {
+            let you = LiveAudio::microphone(
+                splashdown_audio::devices::choose(
+                    &settings.general.microphones(),
+                    &splashdown_audio::devices::inputs(),
+                )
+                .as_deref(),
+            )
+            .map_err(|e| e.to_string())?;
+            match system_audio() {
+                Ok(them) => (you, Some(them), None),
+                Err(e) => (you, None, Some(e)),
+            }
+        }
+        Source::App { sources, .. } => (app_audio(sources)?, None, None),
     };
 
     let now = chrono::Local::now();
-    let (app_name, title) = call_app();
+    let (app_name, title) = match &listening {
+        Some(name) => (Some(name.clone()), name.clone()),
+        None => call_app(),
+    };
     let (store, _) = crate::notes::store_for(settings.notes.folder.clone())?;
+    let recorded_from = match &listening {
+        Some(name) => format!("Recorded from {name}"),
+        None => "Recorded on this computer".into(),
+    };
     let header = format!(
-        "# {title} · {}\n\nRecorded on this computer · transcribed {place}.\n",
+        "# {title} · {}\n\n{recorded_from} · transcribed {place}.\n",
         now.format("%b %-d, %-I:%M %p")
     );
     let note = store
         .create_in(
-            settings.notes.meeting_folder(),
+            if listening.is_some() {
+                ""
+            } else {
+                settings.notes.meeting_folder()
+            },
             &header,
             now,
             &Origin {
                 app: app_name.as_deref(),
-                source: Some("meeting"),
+                source: Some(if listening.is_some() {
+                    APP_AUDIO
+                } else {
+                    "meeting"
+                }),
                 ..Origin::default()
             },
         )
@@ -326,6 +413,7 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
         folder: store.root().to_path_buf(),
         started: now.to_rfc3339(),
         written: 0.0,
+        app: listening.clone(),
     };
     let meta_path = dir.join(format!("{id}.json"));
     std::fs::write(
@@ -342,6 +430,7 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
         note: note.path.clone(),
         them_problem: them_problem.clone(),
         place: place.to_string(),
+        app: listening.clone(),
         ..Status::default()
     };
     show(app, Some(&status));
@@ -359,12 +448,14 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
     // Transcribing runs beside the recording: a turn waiting for the
     // speech model (busy with a dictation, say) never holds up capture,
     // the spool or Stop.
+    let one_sided = listening.is_some();
     let (echoes, lost_writes) = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<(Vec<f32>, Vec<f32>)>();
         let (store, note_path, speech, heard) = (&store, &note.path, &speech, &heard);
         let spool = (meta_path.clone(), spool);
         let transcriber = scope.spawn(move || {
             let mut job = Job::new(store, note_path, speech);
+            job.one_sided = one_sided;
             job.spool = Some(spool);
             while let Ok((you, them)) = rx.recv() {
                 job.push(&you, &them);
@@ -385,7 +476,7 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
             if output_checked.elapsed() >= OUTPUT_CHECK {
                 output_checked = Instant::now();
                 let now_output = splashdown_audio::devices::default_output();
-                if now_output != output && them_problem.is_none() {
+                if now_output != output && them_problem.is_none() && listening.is_none() {
                     tracing::info!(
                         "the output device changed: recording the computer's sound again"
                     );
@@ -432,7 +523,10 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
             {
                 asked = Some(Instant::now());
                 status.warning = Some(if too_long {
-                    "Meetings record for 4 hours at most. Stopping in 1 minute.".into()
+                    "Recordings last 4 hours at most. Stopping in 1 minute.".into()
+                } else if listening.is_some() {
+                    "Still listening? Nothing has been said for 10 minutes. Stopping in 1 minute."
+                        .into()
                 } else {
                     "Still in a meeting? Nobody has spoken for 10 minutes. Stopping in 1 minute."
                         .into()
@@ -445,7 +539,10 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
             if stop.load(Ordering::Relaxed) {
                 ended = Some(format!("*Ended at {at}.*"));
             } else if you.lost() {
-                ended = Some(format!("*Stopped at {at}: the microphone went away.*"));
+                ended = Some(match &listening {
+                    Some(name) => format!("*Stopped at {at}: {name}'s sound went away.*"),
+                    None => format!("*Stopped at {at}: the microphone went away.*"),
+                });
             } else if asked.is_some_and(|t| t.elapsed() >= GRACE) {
                 ended = Some(if too_long {
                     format!("*Stopped at {at}, the longest a meeting records.*")
@@ -500,7 +597,14 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
         );
         return Ok(());
     }
-    finish(app, &store, &note.path, &raw_path, &settings);
+    finish(
+        app,
+        &store,
+        &note.path,
+        &raw_path,
+        &settings,
+        listening.is_some(),
+    );
     let _ = std::fs::remove_file(&raw_path);
     let _ = std::fs::remove_file(&meta_path);
     tracing::info!("meeting ended after {:.0} s", recorded as f64 / RATE as f64);
@@ -610,6 +714,9 @@ struct Job<'a> {
     spool: Option<(PathBuf, Spool)>,
     /// A turn couldn't be written into the note.
     lost_writes: bool,
+    /// One side only (an app's audio): turns are written without You or
+    /// Them.
+    one_sided: bool,
 }
 
 impl<'a> Job<'a> {
@@ -627,6 +734,7 @@ impl<'a> Job<'a> {
             resume_at: Duration::ZERO,
             spool: None,
             lost_writes: false,
+            one_sided: false,
         }
     }
 
@@ -696,12 +804,16 @@ impl<'a> Job<'a> {
             return;
         }
         for p in paragraphs {
-            let line = format!(
-                "**[{}] {}:** {}",
-                timestamp(p.start),
-                p.side.label(),
-                p.text
-            );
+            let line = if self.one_sided {
+                format!("**[{}]** {}", timestamp(p.start), p.text)
+            } else {
+                format!(
+                    "**[{}] {}:** {}",
+                    timestamp(p.start),
+                    p.side.label(),
+                    p.text
+                )
+            };
             if let Err(e) = self.store.add_paragraph(self.note, &line) {
                 tracing::warn!("couldn't add to the meeting note: {e}");
                 self.lost_writes = true;
@@ -741,8 +853,15 @@ fn transcribe(
 
 /// After the transcript: the summary (as the settings say, asking first
 /// for a cloud AI) and the recording, if it's kept.
-fn finish(app: &AppHandle, store: &Store, note: &str, raw: &Path, settings: &Settings) {
-    summarize(app, store, note, settings);
+fn finish(
+    app: &AppHandle,
+    store: &Store,
+    note: &str,
+    raw: &Path,
+    settings: &Settings,
+    one_sided: bool,
+) {
+    summarize(app, store, note, settings, one_sided);
     if settings.notes.keep_meeting_audio {
         match keep_recording(store, note, raw) {
             Ok(link) => {
@@ -773,7 +892,9 @@ fn summary_ai(settings: &Settings) -> Option<(String, bool)> {
     Some((name.to_string(), local))
 }
 
-fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
+/// Summarizes a meeting (with the Meeting summary transform) or an app's
+/// audio (`one_sided`, with Summary).
+fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings, one_sided: bool) {
     let Some((ai, local)) = summary_ai(settings) else {
         return;
     };
@@ -788,7 +909,7 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
         Some(MeetingSummary::Always) => true,
         Some(MeetingSummary::Never) => false,
         None if local => true,
-        Some(MeetingSummary::Ask) | None => ask_to_summarize(app, &ai),
+        Some(MeetingSummary::Ask) | None => ask_to_summarize(app, &ai, one_sided),
     };
     if !run {
         return;
@@ -809,7 +930,12 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
         _ => transcript.to_string(),
     };
     let state = app.state::<AppState>();
-    match state.session.transform("meeting-summary".into(), input) {
+    let transform = if one_sided {
+        "summary"
+    } else {
+        "meeting-summary"
+    };
+    match state.session.transform(transform.into(), input) {
         Ok(out) if out.unchanged.is_none() => {
             if let Err(e) = store.insert_summary(note, &out.text) {
                 tracing::warn!("couldn't add the summary: {e}");
@@ -821,11 +947,16 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
 }
 
 /// Asks before the meeting's text goes to a cloud AI. "Always" is kept.
-fn ask_to_summarize(app: &AppHandle, ai: &str) -> bool {
-    let title = format!("Summarize this meeting with {ai}?");
-    let text = format!(
-        "The transcript goes to {ai} to write a summary of decisions, action items and open questions."
-    );
+fn ask_to_summarize(app: &AppHandle, ai: &str, one_sided: bool) -> bool {
+    let what = if one_sided { "recording" } else { "meeting" };
+    let title = format!("Summarize this {what} with {ai}?");
+    let text = if one_sided {
+        format!("The transcript goes to {ai} to write a summary of its main points.")
+    } else {
+        format!(
+            "The transcript goes to {ai} to write a summary of decisions, action items and open questions."
+        )
+    };
     let buttons = ["Summarize", "Always summarize", "Not now"];
     asking(
         app,
@@ -935,7 +1066,12 @@ fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
         app,
         "Finish transcribing it?",
         &format!(
-            "The meeting recorded {when} wasn't finished when Splashdown closed. Its recording is still here."
+            "The {} recorded {when} wasn't finished when Splashdown closed. Its recording is still here.",
+            if spool.app.is_some() {
+                "audio"
+            } else {
+                "meeting"
+            }
         ),
         &["Finish", "Delete it", "Later"],
     );
@@ -966,6 +1102,7 @@ fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
     };
     let mut job = Job::new(&store, note, &speech);
     job.resume_at = resume_at;
+    job.one_sided = spool.app.is_some();
     // Half a second at a time, as when it was recorded: all at once, every
     // turn would scan the whole meeting.
     let mut file = std::io::BufReader::new(std::fs::File::open(&raw).map_err(|e| e.to_string())?);
@@ -994,7 +1131,7 @@ fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
             timestamp(job.recorded())
         ),
     );
-    finish(app, &store, note, &raw, &settings);
+    finish(app, &store, note, &raw, &settings, spool.app.is_some());
     let _ = std::fs::remove_file(&raw);
     let _ = std::fs::remove_file(meta);
     Ok(())
@@ -1038,6 +1175,40 @@ pub fn meeting_keep_going() {
 #[tauri::command]
 pub fn meeting_status() -> Option<Status> {
     status()
+}
+
+/// An app that plays sound, for the picker.
+#[derive(Debug, Clone, Serialize)]
+pub struct AudioAppItem {
+    id: String,
+    name: String,
+    playing: bool,
+    sources: Vec<u32>,
+}
+
+/// The apps that play sound, to pick one to transcribe.
+#[tauri::command]
+pub async fn audio_apps() -> Vec<AudioAppItem> {
+    tauri::async_runtime::spawn_blocking(|| {
+        splashdown_platform::audio_apps()
+            .into_iter()
+            .map(|a| AudioAppItem {
+                id: a.id,
+                name: a.name,
+                playing: a.playing,
+                sources: a.sources,
+            })
+            .collect()
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// Starts transcribing what an app plays (`sources` from `audio_apps`; none
+/// for everything the computer plays).
+#[tauri::command]
+pub fn meeting_start_app(name: String, sources: Vec<u32>, app: AppHandle) -> Result<(), String> {
+    start_recording(&app, Source::App { name, sources }).map(|_| ())
 }
 
 /// What the user writes beside a meeting while it records: kept under

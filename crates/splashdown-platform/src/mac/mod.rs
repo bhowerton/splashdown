@@ -22,7 +22,7 @@ pub(crate) use clipboard::{
     type_text,
 };
 pub(crate) use keys::KeyListener;
-pub(crate) use mic::microphone_users;
+pub(crate) use mic::{audio_apps, microphone_users};
 pub(crate) use minibar::MiniBar;
 pub(crate) use output::{QuietOutput, quiet_output};
 pub(crate) use overlay::{Overlay, play_sound, reduce_motion};

@@ -11,7 +11,7 @@ mod providers;
 mod tap;
 
 pub use providers::{AppleLanguageModel, AppleSpeech};
-pub use tap::system_audio;
+pub use tap::{app_audio, system_audio};
 
 use std::ffi::CString;
 

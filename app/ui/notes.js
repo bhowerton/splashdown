@@ -129,17 +129,19 @@ function when(ms) {
   return d.toLocaleDateString([], opts);
 }
 
-/** "meeting", "file", "link", "capture" or "note". */
+/** "meeting", "audio" (an app's), "file", "link", "capture" or "note". */
 function kindOf(source, text) {
   if (source === "meeting") return "meeting";
+  if (source === "app-audio") return "audio";
   if (source === "file") return /Transcribed from <https?:/.test(text) ? "link" : "file";
   if (source === "capture") return "capture";
   return "note";
 }
 
-const KIND_ICON = { meeting: "people", file: "file", link: "link", capture: "mic", note: "note" };
+const KIND_ICON = { meeting: "people", audio: "sound", file: "file", link: "link", capture: "mic", note: "note" };
 const KIND_LABEL = {
   meeting: "Meeting",
+  audio: "Transcribed from an app",
   file: "Transcribed from a file",
   link: "Transcribed from a link",
   capture: "Dictated",
@@ -187,7 +189,7 @@ function shownInList(n) {
   const kind = kindOf(n.source, n.text);
   if (filter === "pinned") return n.pinned;
   if (filter === "meetings") return kind === "meeting";
-  if (filter === "imported") return kind === "file" || kind === "link";
+  if (filter === "imported") return kind === "file" || kind === "link" || kind === "audio";
   return true;
 }
 
@@ -348,9 +350,10 @@ async function newNote() {
  *  a note never turns into one while it's being written. */
 let asMeeting = false;
 
-/** A meeting's note: made by recording one, or a transcript of turns. */
+/** A meeting's note (or an app's audio, which shows the same way): made
+ *  by recording one, or a transcript of turns. */
 function isMeeting() {
-  return current.source === "meeting" || /^\*\*\[[\d:]+\] (You|Them):\*\*/m.test(body);
+  return current.source === "meeting" || current.source === "app-audio" || /^\*\*\[[\d:]+\] (You|Them):\*\*/m.test(body);
 }
 
 /** The meeting recording into the open note, if one is. */
@@ -464,9 +467,10 @@ function updateHeader() {
   $("nt-meeting").hidden = !meeting || liveHere();
   const record = $("nt-record");
   record.classList.toggle("nt-recording", !!meeting);
-  $("nt-record-label").textContent = meeting ? "Stop meeting" : "Record meeting";
+  const stopLabel = meeting?.app ? "Stop recording" : "Stop meeting";
+  $("nt-record-label").textContent = meeting ? stopLabel : "Record meeting";
   record.querySelector("use").setAttribute("href", meeting ? "#i-stop" : "#i-rec");
-  record.setAttribute("aria-label", meeting ? "Stop the meeting" : "Record a meeting");
+  record.setAttribute("aria-label", meeting ? stopLabel : "Record a meeting");
   for (const chip of document.querySelectorAll("#nt-rewrite button")) chip.disabled = isLocked || !!review;
   const empty = text.trim() === "";
   $("nt-copy").disabled = empty;
@@ -707,7 +711,8 @@ async function summarize() {
   for (const b of [$("nt-summarize"), $("nt-resummarize")]) b.disabled = true;
   $("nt-status").textContent = "Summarizing…";
   try {
-    const out = await invoke("notes_transform", { path, id: "meeting-summary", text: input, extra: null });
+    const id = current.source === "app-audio" ? "summary" : "meeting-summary";
+    const out = await invoke("notes_transform", { path, id, text: input, extra: null });
     if (out.unchanged) return toast(`Summary: ${out.unchanged}`);
     if (current.path !== path || body !== before) return toast("The note changed meanwhile, so the summary wasn't added.");
     const fresh = parseMeeting(body);
@@ -947,6 +952,92 @@ async function setOnTop(on) {
     toast(String(e), true);
   }
 }
+
+// ---------------------------------------------------------------- an app's audio
+
+/** Icons for the apps in the picker, by id, once looked up. */
+const appIcons = new Map();
+
+async function pickApp() {
+  if (meeting) return toast(meeting.app ? "Already recording an app's audio." : "A meeting is recording.");
+  const dialog = $("nt-apps");
+  if (!dialog.open) dialog.showModal();
+  await listApps();
+}
+
+async function listApps() {
+  const list = $("nt-apps-list");
+  list.replaceChildren(Object.assign(document.createElement("p"), { className: "nt-hint", textContent: "Looking for apps that play sound…" }));
+  let apps = [];
+  try {
+    apps = (await invoke("audio_apps")) ?? [];
+  } catch (e) {
+    toast(String(e), true);
+  }
+  const everything = { id: "", name: "All of this computer's sound", playing: false, sources: [], all: true };
+  const rows = [...apps, everything].map((a) => {
+    const b = document.createElement("button");
+    b.className = "nt-app";
+    b.setAttribute("role", "option");
+    const iconUrl = appIcons.get(a.id);
+    if (iconUrl) {
+      b.append(Object.assign(document.createElement("img"), { src: iconUrl, alt: "" }));
+    } else {
+      const ic = document.createElement("span");
+      ic.className = "nt-app-ic";
+      ic.dataset.app = a.id;
+      ic.append(icon("sound"));
+      b.append(ic);
+    }
+    const name = document.createElement("span");
+    name.className = "nt-app-name";
+    name.textContent = a.name;
+    b.append(name);
+    if (!a.all) {
+      const state = document.createElement("span");
+      state.className = `nt-app-state${a.playing ? " on" : ""}`;
+      state.textContent = a.playing ? "Playing" : "Not playing now";
+      b.append(state);
+    }
+    b.addEventListener("click", () => startApp(a));
+    return b;
+  });
+  if (!apps.length) {
+    rows.unshift(Object.assign(document.createElement("p"), {
+      className: "nt-hint",
+      textContent: "No app has played sound yet. Start playing something, then look again.",
+    }));
+  }
+  list.replaceChildren(...rows);
+  list.querySelector("button")?.focus();
+  // Icons, once each.
+  const missing = apps.map((a) => a.id).filter((id) => id && !appIcons.has(id));
+  if (missing.length) {
+    invoke("app_info", { ids: missing })
+      .then((infos) => {
+        for (const info of infos ?? []) {
+          if (!info.icon) continue;
+          appIcons.set(info.id, info.icon);
+          for (const slot of list.querySelectorAll(`.nt-app-ic[data-app="${CSS.escape(info.id)}"]`)) {
+            slot.replaceWith(Object.assign(document.createElement("img"), { src: info.icon, alt: "" }));
+          }
+        }
+      })
+      .catch(() => {});
+  }
+}
+
+async function startApp(a) {
+  $("nt-apps").close();
+  try {
+    await invoke("meeting_start_app", { name: a.all ? "This computer's sound" : a.name, sources: a.sources });
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+$("nt-apps-refresh").addEventListener("click", listApps);
+$("nt-apps-cancel").addEventListener("click", () => $("nt-apps").close());
 
 function editRewrites() {
   invoke("notes_edit_transforms").catch((err) => toast(String(err), true));
@@ -1574,6 +1665,7 @@ function actions() {
     { title: meeting ? "Stop the meeting" : "Record a meeting", icon: meeting ? "stop" : "rec", sub: "Both sides of a call, transcribed as it goes", run: toggleMeeting },
     { title: "Transcribe a file…", icon: "file", keys: "⌘O", sub: "Audio or video. You can also drop one in this window.", run: pickFile },
     { title: "Transcribe a link…", icon: "link", keys: "⌘L", sub: "YouTube and other pages, or a link to a file", run: askForLink },
+    { title: "Transcribe an app's audio…", icon: "sound", sub: "What a browser, a podcast app or a webinar plays, as it plays", run: pickApp, off: !!meeting },
     { title: "Ask your notes", icon: "ask", keys: "⌘J", sub: "An answer from your notes, with the notes it came from", run: () => openAsk({ scope: "all" }) },
   ];
   if (have) list.push({ title: "Ask about this note", icon: "ask", run: () => openAsk({ scope: "note" }) });
@@ -1922,7 +2014,9 @@ async function showMeeting(next) {
       ? meeting.question.title
       : meeting.finishing
       ? "Finishing the meeting note…"
-      : meeting.warning ?? `Meeting · ${clock(meeting.elapsed)} · transcribed ${meeting.place}${meeting.them_problem ? " · your side only" : ""}`;
+      : meeting.warning ?? (meeting.app
+        ? `${meeting.app} · ${clock(meeting.elapsed)} · transcribed ${meeting.place}`
+        : `Meeting · ${clock(meeting.elapsed)} · transcribed ${meeting.place}${meeting.them_problem ? " · your side only" : ""}`);
     $("nt-meeting-text").textContent = text;
     $("nt-meeting-text").title = meeting.them_problem ?? "";
     $("nt-meeting-keep").hidden = !meeting.warning;
@@ -1933,10 +2027,15 @@ async function showMeeting(next) {
     $("nt-live-you").style.width = level(meeting.you);
     $("nt-live-them").style.width = level(meeting.them);
     $("nt-live-time").textContent = meeting.finishing ? "Finishing…" : clock(meeting.elapsed);
-    $("nt-live-place").textContent = meeting.them_problem
-      ? `Your side only: ${meeting.them_problem}`
-      : `Transcribed ${meeting.place}`;
-    $("nt-live-them-wrap").hidden = !!meeting.them_problem;
+    $("nt-live-place").textContent = meeting.app
+      ? `${meeting.app} · transcribed ${meeting.place}`
+      : meeting.them_problem
+        ? `Your side only: ${meeting.them_problem}`
+        : `Transcribed ${meeting.place}`;
+    $("nt-live-them-wrap").hidden = !!meeting.them_problem || !!meeting.app;
+    $("nt-live-you-label").textContent = meeting.app ? "Sound" : "You";
+    $("nt-levels-them").hidden = !!meeting.app;
+    $("nt-levels-you-label").textContent = meeting.app ? "Sound" : "You";
     $("nt-live-stop").disabled = meeting.finishing;
     $("nt-live-warning").hidden = !meeting.warning;
     showQuestion(meeting.question);
@@ -2020,6 +2119,7 @@ const ACTS = {
   "on-top": () => setOnTop(!onTop),
   transcribe: pickFile,
   "transcribe-link": askForLink,
+  "transcribe-app": pickApp,
   meeting: toggleMeeting,
   ask: () => openAsk({ scope: "all" }),
 };
@@ -2236,6 +2336,14 @@ async function mockInvoke(cmd, args) {
     case "notes_transform":
       await new Promise((r) => setTimeout(r, 300));
       return { text: args.text.replace("lead with", "Lead with").replace("mention it's", "Say it's").replace(/- \[ \] ask Dana about the table/, "- [ ] Ask Dana whether the table helps"), unchanged: null };
+    case "audio_apps":
+      return [
+        { id: "com.google.Chrome", name: "Google Chrome", playing: true, sources: [221, 222] },
+        { id: "com.spotify.client", name: "Spotify", playing: true, sources: [230] },
+        { id: "us.zoom.xos", name: "Zoom", playing: false, sources: [259] },
+      ];
+    case "app_info":
+      return [];
     case "notes_ask":
       setTimeout(() => askUpdated({ asked: args.asked, answer: "Lead with the hold-to-talk demo [1], and say it's free [1]. The meeting agreed to cut the table [2].", done: true, error: null, sources: [{ title: "Launch post", path: list[0].path }, { title: "Weekly product sync", path: list[1].path }] }), 200);
       return null;

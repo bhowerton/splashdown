@@ -39,6 +39,8 @@ unsafe extern "C" {
         callback: Callback,
     );
     pub fn splashdown_tap_start(
+        processes: *const u32,
+        count: i32,
         ctx: *mut c_void,
         callback: AudioCallback,
         code: *mut i32,

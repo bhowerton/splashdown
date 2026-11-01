@@ -159,3 +159,7 @@ pub(crate) fn quiet_output(_how: crate::Quieten) -> Option<QuietOutput> {
 pub(crate) fn microphone_users() -> Vec<String> {
     Vec::new()
 }
+
+pub(crate) fn audio_apps() -> Vec<crate::AudioApp> {
+    Vec::new()
+}

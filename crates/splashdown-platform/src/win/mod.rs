@@ -6,6 +6,8 @@
 //! `unsupported.rs` keeps the shared crates building.
 
 #[cfg(windows)]
+mod app_audio;
+#[cfg(windows)]
 mod clipboard;
 #[cfg(windows)]
 mod keys;
@@ -20,6 +22,10 @@ mod sound;
 #[cfg(windows)]
 mod uia;
 
+#[cfg(windows)]
+pub use app_audio::AppLoopback;
+#[cfg(windows)]
+pub(crate) use app_audio::{app_loopback, audio_apps};
 #[cfg(windows)]
 pub(crate) use clipboard::{
     clipboard_text, copy_selection, copy_to_clipboard, paste_text, press, refresh_shortcut_keys,

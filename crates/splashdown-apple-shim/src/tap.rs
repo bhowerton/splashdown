@@ -1,5 +1,6 @@
 //! What the computer plays, for meeting notes: the Swift shim's Core Audio
-//! tap on every app but Splashdown (macOS 14.2+), fed into a `LiveAudio`.
+//! tap on every app but Splashdown, or on one app's processes (macOS
+//! 14.2+), fed into a `LiveAudio`.
 
 use std::ffi::c_void;
 
@@ -48,13 +49,28 @@ extern "C" fn on_audio(ctx: *mut c_void, samples: *const f32, count: i32, rate: 
 /// Starts recording what the computer plays. The first time, macOS asks
 /// the user to allow it; until they do, it records silence.
 pub fn system_audio() -> Result<LiveAudio, String> {
+    app_audio(&[])
+}
+
+/// Starts recording what the Core Audio process objects in `processes` play
+/// (an app and its helpers, from `splashdown_platform::audio_apps`); with
+/// none, every app but Splashdown.
+pub fn app_audio(processes: &[u32]) -> Result<LiveAudio, String> {
     let (live, pusher) = LiveAudio::pushed(Box::new(()));
     let pusher = Box::into_raw(Box::new(pusher));
     let (mut code, mut detail) = (0, 0);
     // SAFETY: `pusher` stays valid until the tap is stopped (`Tap::drop`),
     // and `on_audio` only reads it.
-    let handle =
-        unsafe { ffi::splashdown_tap_start(pusher.cast(), on_audio, &mut code, &mut detail) };
+    let handle = unsafe {
+        ffi::splashdown_tap_start(
+            processes.as_ptr(),
+            processes.len() as i32,
+            pusher.cast(),
+            on_audio,
+            &mut code,
+            &mut detail,
+        )
+    };
     if handle.is_null() {
         // SAFETY: the tap didn't start, so nothing else has the pusher.
         drop(unsafe { Box::from_raw(pusher) });

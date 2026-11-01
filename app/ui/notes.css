@@ -345,6 +345,22 @@
 .nt-pal-foot { display: flex; gap: 16px; padding: 8px 14px; border-top: 1px solid var(--border); background: var(--bg); font-size: 11.5px; color: var(--muted); }
 .nt-pal-empty { padding: 18px; text-align: center; color: var(--muted); font-size: 12.5px; }
 
+/* ---------------------------------------------------------------- an app's audio */
+dialog.nt-apps { width: min(420px, 92vw); }
+.nt-apps-list { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow-y: auto; margin: 6px -6px 4px; }
+.nt-app {
+  display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 8px; border: 0; border-radius: 8px;
+  background: none; text-align: left; font-size: 13px;
+}
+.nt-app:hover, .nt-app:focus-visible { background: var(--accent-soft); outline: none; }
+.nt-app img, .nt-app .nt-app-ic { width: 24px; height: 24px; flex-shrink: 0; border-radius: 6px; }
+.nt-app .nt-app-ic { display: inline-flex; align-items: center; justify-content: center; background: var(--surface-2); }
+.nt-app-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.nt-app-state { font-size: 11.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+.nt-app-state.on { color: var(--ok); }
+.nt-app-state.on::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+.nt-apps .confirm-acts { display: flex; align-items: center; gap: 8px; }
+
 /* ---------------------------------------------------------------- menus */
 .nt-menu-wrap { position: relative; }
 .nt-menu {

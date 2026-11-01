@@ -33,6 +33,7 @@
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
   <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#e5484d" stroke="none"/></symbol>
 </svg>
 
@@ -92,6 +93,7 @@
           <div id="nt-transcribe-menu" class="nt-menu" role="menu" hidden>
             <button role="menuitem" data-act="transcribe"><span>A file…</span><kbd class="nt-kbd" data-keys="⌘O"></kbd></button>
             <button role="menuitem" data-act="transcribe-link"><span>A link…</span><kbd class="nt-kbd" data-keys="⌘L"></kbd></button>
+            <button role="menuitem" data-act="transcribe-app"><span>An app's audio…</span></button>
           </div>
         </div>
         <button class="btn nt-tool" id="nt-ask" aria-pressed="false" title="Ask about this note or all your notes">
@@ -132,8 +134,8 @@
       <span class="nt-rec" aria-hidden="true">●</span>
       <span id="nt-meeting-text" class="nt-job-text" role="status" aria-live="polite"></span>
       <span class="nt-levels" aria-hidden="true">
-        <span>You</span><span class="nt-level"><i id="nt-level-you"></i></span>
-        <span>Them</span><span class="nt-level"><i id="nt-level-them"></i></span>
+        <span id="nt-levels-you-label">You</span><span class="nt-level"><i id="nt-level-you"></i></span>
+        <span id="nt-levels-them" class="nt-levels"><span>Them</span><span class="nt-level"><i id="nt-level-them"></i></span></span>
       </span>
       <button class="link" id="nt-meeting-keep" hidden>Keep recording</button>
       <button class="link" id="nt-meeting-show">Show</button>
@@ -155,7 +157,7 @@
             <div class="nt-live-bar">
               <span class="nt-recpill"><span class="nt-dot" aria-hidden="true"></span><span id="nt-live-time">Recording</span></span>
               <span id="nt-live-place" class="nt-muted nt-grow"></span>
-              <span class="nt-dev"><span class="nt-level"><i id="nt-live-you"></i></span>You</span>
+              <span class="nt-dev"><span class="nt-level"><i id="nt-live-you"></i></span><span id="nt-live-you-label">You</span></span>
               <span class="nt-dev" id="nt-live-them-wrap"><span class="nt-level"><i id="nt-live-them"></i></span>Them</span>
               <button class="btn primary" id="nt-live-stop"><svg class="ic sm"><use href="#i-stop"></use></svg>Stop and summarize</button>
             </div>
@@ -173,7 +175,7 @@
                 <div id="nt-live-transcript" class="nt-turns" aria-live="off"></div>
                 <div class="nt-live-acts">
                   <button class="btn" id="nt-missed"><svg class="ic"><use href="#i-ask"></use></svg>What did I miss?</button>
-                  <button class="btn" id="nt-live-ask">Ask about this meeting…</button>
+                  <button class="btn" id="nt-live-ask">Ask about it…</button>
                 </div>
               </section>
               <section class="nt-live-col nt-live-mine" aria-label="My notes">
@@ -325,6 +327,17 @@
     </footer>
   </div>
 </div>
+
+<dialog id="nt-apps" class="confirm nt-apps" aria-labelledby="nt-apps-title">
+  <p class="confirm-title" id="nt-apps-title">Transcribe an app's audio</p>
+  <p class="confirm-detail">What it plays is transcribed into a note as it plays, the way a meeting is. Only its sound is recorded: not the microphone, and not other apps.</p>
+  <div id="nt-apps-list" class="nt-apps-list" role="listbox" aria-label="Apps"></div>
+  <div class="confirm-acts">
+    <button class="btn" id="nt-apps-refresh"><svg class="ic sm"><use href="#i-retry"></use></svg>Look again</button>
+    <span class="nt-grow"></span>
+    <button class="btn" id="nt-apps-cancel">Cancel</button>
+  </div>
+</dialog>
 
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 <script src="vendor/editor.js"></script>

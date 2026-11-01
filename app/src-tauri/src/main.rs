@@ -139,6 +139,8 @@ fn main() {
             meeting::meeting_toggle,
             meeting::meeting_keep_going,
             meeting::meeting_set_notes,
+            meeting::meeting_start_app,
+            meeting::audio_apps,
             meeting::meeting_status,
             notes::open_notes,
             export::export_history,
