@@ -12,7 +12,7 @@ const RELEASE_TAIL: Duration = Duration::from_millis(200);
 
 enum Command {
     /// Start recording from the preferred device (or the automatic choice).
-    Start(Option<String>, Sender<Result<Level, String>>),
+    Start(Vec<String>, Sender<Result<Level, String>>),
     /// Return what's been recorded so far and keep recording.
     Take(Sender<AudioClip>),
     /// Copy what's been recorded so far, leaving it in place.
@@ -39,7 +39,7 @@ impl AudioWorker {
                             // A new session replaces any unfinished one.
                             drop(recorder.take());
                             let device = splashdown_audio::devices::choose(
-                                preferred.as_deref(),
+                                &preferred,
                                 &splashdown_audio::devices::inputs(),
                             );
                             let started = std::time::Instant::now();
@@ -89,7 +89,7 @@ impl AudioWorker {
         Self { tx }
     }
 
-    pub fn start(&self, preferred: Option<String>) -> Result<Level, String> {
+    pub fn start(&self, preferred: Vec<String>) -> Result<Level, String> {
         let (tx, rx) = mpsc::channel();
         self.tx
             .send(Command::Start(preferred, tx))

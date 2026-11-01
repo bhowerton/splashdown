@@ -149,6 +149,7 @@ function collect() {
   s.general.sounds = $("gen-sounds").checked ? null : false;
   s.general.sound_volume = Number($("gen-volume").value) / 100;
   s.general.microphone = $("gen-mic").value || null;
+  s.general.microphone_backup = (s.general.microphone && $("gen-mic-backup").value) || null;
   s.general.budget = collectBudget();
   s.general.local_only = $("pv-local").checked;
   s.general.share_app_name = $("pv-appname").checked ? null : false;

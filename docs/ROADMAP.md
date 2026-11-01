@@ -35,6 +35,7 @@ How fast and how reliably words land is the core of a dictation app; most of wha
   - A device picker in Settings → General.
   - "Automatic" uses the system default unless it's Bluetooth (detected via Core Audio's transport type), in which case it uses the built-in mic, so AirPods don't drop into call mode.
   - The device is chosen afresh for each dictation, so plugging and unplugging between dictations just works, and an unplugged choice falls back to Automatic.
+  - ✅ **A second-choice microphone** (2026-11-01): Settings → General → "If it's not connected": the first of the chosen microphone and this one that's connected is used, then Automatic. Meetings use the same order.
   - ✅ **Mic unplugged mid-recording** (2026-10-30): the recording finishes at once with what was captured, and the result line starts "Microphone disconnected". Relies on cpal reporting `DeviceNotAvailable`; not yet tried with a real unplug.
   - ✅ **Mic hears nothing** (2026-10-30): after 2.5 s of near digital silence (raw level below 0.0004, quieter than any real room) the pill says the microphone may be muted or the wrong one, and goes back to listening as soon as sound arrives. A recording that heard nothing ends with the same hint instead of "Didn't catch that".
 - ✅ **Layout-aware shortcuts:** the keys for Cmd+C/V/Z are looked up on the current layout with `UCKeyTranslate` (with Command held, so "Dvorak – QWERTY ⌘" works), on the main thread at startup and as each dictation starts.

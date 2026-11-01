@@ -60,8 +60,8 @@ pub struct Engine {
     /// Play sounds when recording starts and stops.
     pub sounds: bool,
     pub sound_volume: f32,
-    /// Preferred microphone (`None`: automatic).
-    pub microphone: Option<String>,
+    /// Preferred microphones in order (none: automatic).
+    pub microphones: Vec<String>,
 }
 
 impl Engine {
@@ -257,7 +257,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         stream_typing: settings.general.stream_typing(),
         sounds: settings.general.sounds(),
         sound_volume: settings.general.sound_volume(),
-        microphone: settings.general.microphone.clone(),
+        microphones: settings.general.microphones(),
         presets,
         transforms: settings.transforms(),
         preset_pipelines,

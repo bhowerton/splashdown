@@ -268,8 +268,14 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
     let speech = state.session.file_speech()?;
     let (place, _) = crate::notes::files::place(&speech.stt.name());
 
-    let mut you =
-        LiveAudio::microphone(settings.general.microphone.as_deref()).map_err(|e| e.to_string())?;
+    let mut you = LiveAudio::microphone(
+        splashdown_audio::devices::choose(
+            &settings.general.microphones(),
+            &splashdown_audio::devices::inputs(),
+        )
+        .as_deref(),
+    )
+    .map_err(|e| e.to_string())?;
     let (mut them, them_problem) = match system_audio() {
         Ok(them) => (Some(them), None),
         Err(e) => (None, Some(e)),

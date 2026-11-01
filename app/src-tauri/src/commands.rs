@@ -1064,7 +1064,7 @@ pub struct Microphones {
 #[tauri::command]
 pub fn list_microphones() -> Microphones {
     let inputs = splashdown_audio::devices::inputs();
-    let automatic = splashdown_audio::devices::choose(None, &inputs)
+    let automatic = splashdown_audio::devices::choose(&[], &inputs)
         .or_else(|| inputs.iter().find(|i| i.is_default).map(|i| i.name.clone()));
     Microphones {
         devices: inputs

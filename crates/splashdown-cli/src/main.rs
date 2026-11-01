@@ -605,7 +605,7 @@ fn run() -> Result<()> {
         }
         Command::Devices => {
             let inputs = splashdown_audio::devices::inputs();
-            let auto = splashdown_audio::devices::choose(None, &inputs);
+            let auto = splashdown_audio::devices::choose(&[], &inputs);
             for i in &inputs {
                 let mut tags = Vec::new();
                 if i.is_default {

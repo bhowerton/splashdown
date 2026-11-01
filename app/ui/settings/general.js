@@ -17,6 +17,7 @@ const DEFAULT_SOUND_VOLUME = 0.12;
 
 function renderGeneral() {
   const s = state.settings;
+  renderMicrophones();
   if (!capture) {
     renderKeyPicker("hk-dictation", s.hotkeys.dictation ?? defaultKey("hk-dictation"));
     renderKeyPicker("hk-instruction", s.hotkeys.instruction ?? defaultKey("hk-instruction"));
@@ -349,23 +350,45 @@ invoke("get_launch_at_login").then((on) => ($("gen-login").checked = !!on)).catc
 
 // ---------------------------------------------------------------- microphone
 
+/** The microphones last listed: `{ devices, automatic }`. */
+let micList = { devices: [], automatic: null };
+
 async function loadMicrophones() {
-  const mics = await invoke("list_microphones").catch(() => ({ devices: [], automatic: null }));
-  const sel = $("gen-mic");
+  micList = await invoke("list_microphones").catch(() => ({ devices: [], automatic: null }));
+  renderMicrophones();
+}
+
+/** The microphone and, once one is chosen, the one to use when it's not
+ *  connected. */
+function renderMicrophones() {
   // At startup the first tab can open before the state arrives; startup
   // calls this again once it has.
-  if (!state || document.activeElement === sel) return;
-  const chosen = state.settings.general.microphone;
+  if (!state) return;
+  const g = state.settings.general;
   const tag = (m) => [m.built_in && "built-in", m.bluetooth && "Bluetooth"].filter(Boolean).join(", ");
-  const options = [
-    new Option(`Automatic${mics.automatic ? ` (${mics.automatic})` : ""}`, ""),
-    ...mics.devices.map((m) => new Option(tag(m) ? `${m.name} — ${tag(m)}` : m.name, m.name)),
+  const options = (skip) => [
+    new Option(`Automatic${micList.automatic ? ` (${micList.automatic})` : ""}`, ""),
+    ...micList.devices
+      .filter((m) => m.name !== skip)
+      .map((m) => new Option(tag(m) ? `${m.name} — ${tag(m)}` : m.name, m.name)),
   ];
-  if (chosen && !mics.devices.some((m) => m.name === chosen)) {
-    options.push(new Option(`${chosen} — not connected (using Automatic)`, chosen));
+  const missing = (name) => new Option(`${name} — not connected`, name);
+  const connected = (name) => micList.devices.some((m) => m.name === name);
+  const sel = $("gen-mic");
+  if (document.activeElement !== sel) {
+    const list = options(null);
+    if (g.microphone && !connected(g.microphone)) list.push(missing(g.microphone));
+    sel.replaceChildren(...list);
+    sel.value = g.microphone ?? "";
   }
-  sel.replaceChildren(...options);
-  sel.value = chosen ?? "";
+  const backup = $("gen-mic-backup");
+  $("gen-mic-backup-row").hidden = !g.microphone;
+  if (document.activeElement !== backup) {
+    const list = options(g.microphone);
+    if (g.microphone_backup && !connected(g.microphone_backup)) list.push(missing(g.microphone_backup));
+    backup.replaceChildren(...list);
+    backup.value = g.microphone_backup ?? "";
+  }
 }
 
 // ---------------------------------------------------------------- sound volume

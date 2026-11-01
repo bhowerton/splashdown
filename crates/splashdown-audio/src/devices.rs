@@ -14,13 +14,14 @@ pub struct InputInfo {
     pub is_default: bool,
 }
 
-/// The device to open: `preferred` if it's connected, otherwise the
-/// automatic choice. `None` means "the system default".
-pub fn choose(preferred: Option<&str>, inputs: &[InputInfo]) -> Option<String> {
+/// The device to open: the first of `preferred` that's connected,
+/// otherwise the automatic choice. `None` means "the system default".
+pub fn choose(preferred: &[String], inputs: &[InputInfo]) -> Option<String> {
     if let Some(name) = preferred
-        && inputs.iter().any(|i| i.name == name)
+        .iter()
+        .find(|name| inputs.iter().any(|i| &i.name == *name))
     {
-        return Some(name.to_string());
+        return Some(name.clone());
     }
     let default = inputs.iter().find(|i| i.is_default)?;
     if !default.bluetooth {
@@ -245,7 +246,7 @@ mod tests {
             input("MacBook Pro Microphone", false, true, false),
         ];
         assert_eq!(
-            choose(None, &inputs).as_deref(),
+            choose(&[], &inputs).as_deref(),
             Some("MacBook Pro Microphone")
         );
     }
@@ -257,21 +258,33 @@ mod tests {
             input("MacBook Pro Microphone", false, true, false),
             input("AirPods Pro", true, false, false),
         ];
-        assert_eq!(choose(None, &inputs), None, "system default (the USB mic)");
+        assert_eq!(choose(&[], &inputs), None, "system default (the USB mic)");
         assert_eq!(
-            choose(Some("AirPods Pro"), &inputs).as_deref(),
+            choose(&["AirPods Pro".into()], &inputs).as_deref(),
             Some("AirPods Pro")
         );
         assert_eq!(
-            choose(Some("Gone"), &inputs),
+            choose(&["Gone".into()], &inputs),
             None,
             "unplugged choice falls back"
         );
     }
 
     #[test]
+    fn the_first_connected_choice_wins() {
+        let inputs = [
+            input("MacBook Pro Microphone", false, true, true),
+            input("AirPods Pro", true, false, false),
+        ];
+        let wanted = ["Yeti".to_string(), "AirPods Pro".to_string()];
+        assert_eq!(choose(&wanted, &inputs).as_deref(), Some("AirPods Pro"));
+        let gone = ["Yeti".to_string(), "Rode".to_string()];
+        assert_eq!(choose(&gone, &inputs), None, "automatic");
+    }
+
+    #[test]
     fn bluetooth_only_uses_it() {
         let inputs = [input("AirPods Pro", true, false, true)];
-        assert_eq!(choose(None, &inputs), None);
+        assert_eq!(choose(&[], &inputs), None);
     }
 }

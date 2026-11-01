@@ -309,6 +309,9 @@ pub struct GeneralSettings {
     /// Microphone name. Unset means automatic: the system default, unless
     /// that's a Bluetooth headset and a built-in mic exists.
     pub microphone: Option<String>,
+    /// The microphone to use when `microphone` isn't connected, before
+    /// falling back to automatic.
+    pub microphone_backup: Option<String>,
     /// Limits on what cloud providers may cost.
     pub budget: Budget,
     /// Look for a new release on launch and once a day. Unset means on.
@@ -411,6 +414,19 @@ impl GeneralSettings {
 
     pub fn check_for_updates(&self) -> bool {
         self.check_for_updates.unwrap_or(true)
+    }
+
+    /// The microphones to try, in order, before the automatic choice.
+    pub fn microphones(&self) -> Vec<String> {
+        self.microphone
+            .iter()
+            .chain(
+                self.microphone_backup
+                    .iter()
+                    .filter(|_| self.microphone.is_some()),
+            )
+            .cloned()
+            .collect()
     }
 
     pub fn sound_volume(&self) -> f32 {

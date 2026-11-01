@@ -806,8 +806,12 @@ impl Controller {
 
         // Start the mic first so the first word isn't lost while we look
         // at focus and selection.
-        let microphone = self.engine.as_ref().ok().and_then(|e| e.microphone.clone());
-        let level = match self.audio.start(microphone) {
+        let microphones = self
+            .engine
+            .as_ref()
+            .map(|e| e.microphones.clone())
+            .unwrap_or_default();
+        let level = match self.audio.start(microphones) {
             Ok(level) => level,
             Err(e) => {
                 self.notice(Tone::Warning, &format!("Microphone unavailable: {e}"));
