@@ -38,6 +38,10 @@ pub enum EvalCommand {
         audio_dir: PathBuf,
         #[arg(short, long)]
         verbose: bool,
+        /// Let the model detect each clip's language instead of telling it
+        /// (the app's "Detect automatically").
+        #[arg(long)]
+        detect_language: bool,
         #[command(flatten)]
         providers: ProviderOpts,
     },
@@ -65,8 +69,9 @@ pub async fn run(cmd: EvalCommand) -> Result<()> {
             cases,
             audio_dir,
             verbose,
+            detect_language,
             providers,
-        } => stt(&cases, &audio_dir, verbose, &providers).await,
+        } => stt(&cases, &audio_dir, verbose, detect_language, &providers).await,
         EvalCommand::MakeAudio {
             cases,
             audio_dir,
@@ -361,26 +366,39 @@ struct SttFile {
 struct SttCase {
     id: String,
     text: String,
+    /// The language spoken (ISO 639-1). Unset means English.
+    language: Option<String>,
+    /// The `say` voice for `make-audio`, for a case in another language.
+    voice: Option<String>,
 }
 
-async fn stt(path: &Path, audio_dir: &Path, verbose: bool, providers: &ProviderOpts) -> Result<()> {
+async fn stt(
+    path: &Path,
+    audio_dir: &Path,
+    verbose: bool,
+    detect_language: bool,
+    providers: &ProviderOpts,
+) -> Result<()> {
     let file: SttFile = toml::from_str(
         &std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?,
     )?;
     let settings = opts::settings(providers)?;
     let stt = opts::build_stt(&settings, &Secrets::from_env())?;
     let name = stt.name();
-    let hints = splashdown_core::SttHints {
-        vocabulary: settings.general.vocabulary.clone(),
-        language: Some("en".into()),
-        ..Default::default()
-    };
     eprintln!("Speech-to-text eval · {name} · {} cases\n", file.case.len());
 
     let mut latencies = Vec::new();
     let mut total_wer = 0.0;
     let mut errors = 0;
+    // Error rate per language, for sets with more than one.
+    let mut by_language: std::collections::BTreeMap<String, (f64, usize)> = Default::default();
     for case in &file.case {
+        let language = case.language.clone().unwrap_or_else(|| "en".into());
+        let hints = splashdown_core::SttHints {
+            vocabulary: settings.general.vocabulary.clone(),
+            language: (!detect_language).then(|| language.clone()),
+            ..Default::default()
+        };
         let wav = audio_dir.join(format!("{}.wav", case.id));
         let clip = splashdown_audio::wav::read(&wav).with_context(|| {
             format!(
@@ -399,6 +417,9 @@ async fn stt(path: &Path, audio_dir: &Path, verbose: bool, providers: &ProviderO
             Ok(t) => {
                 let rate = wer(&case.text, &t.text);
                 total_wer += rate;
+                let entry = by_language.entry(language.clone()).or_default();
+                entry.0 += rate;
+                entry.1 += 1;
                 println!(
                     "{:<26} {:>5.2}s  WER {:>5.1}%",
                     case.id,
@@ -412,6 +433,9 @@ async fn stt(path: &Path, audio_dir: &Path, verbose: bool, providers: &ProviderO
             Err(e) => {
                 errors += 1;
                 total_wer += 1.0;
+                let entry = by_language.entry(language.clone()).or_default();
+                entry.0 += 1.0;
+                entry.1 += 1;
                 println!(
                     "{:<26} {:>5.2}s  error: {e}",
                     case.id,
@@ -421,6 +445,13 @@ async fn stt(path: &Path, audio_dir: &Path, verbose: bool, providers: &ProviderO
         }
     }
     let n = file.case.len().max(1) as f64;
+    if by_language.len() > 1 {
+        let rates: Vec<String> = by_language
+            .iter()
+            .map(|(lang, (sum, count))| format!("{lang} {:.0}%", sum / *count as f64 * 100.0))
+            .collect();
+        println!("\nby language: {}", rates.join(" · "));
+    }
     latencies.sort();
     println!(
         "\n{name}: mean WER {:.1}% · {errors} errors · latency p50 {:.2}s p90 {:.2}s",
@@ -442,7 +473,7 @@ fn make_audio(path: &Path, audio_dir: &Path, voice: &str) -> Result<()> {
         let status = std::process::Command::new("say")
             .args([
                 "-v",
-                voice,
+                case.voice.as_deref().unwrap_or(voice),
                 "--file-format=WAVE",
                 "--data-format=LEI16@16000",
                 "-o",
@@ -479,10 +510,31 @@ fn percentile(sorted: &[Duration], p: f64) -> f32 {
 
 /// Lowercased words with punctuation stripped (apostrophes kept).
 fn words(text: &str) -> Vec<String> {
-    text.split(|c: char| !(c.is_alphanumeric() || c == '\''))
-        .filter(|w| !w.is_empty())
-        .map(str::to_lowercase)
-        .collect()
+    let mut out = Vec::new();
+    for word in text.split(|c: char| !(c.is_alphanumeric() || c == '\'' || is_unspaced(c))) {
+        let mut rest = String::new();
+        for c in word.chars() {
+            if is_unspaced(c) {
+                if !rest.is_empty() {
+                    out.push(std::mem::take(&mut rest).to_lowercase());
+                }
+                out.push(c.to_string());
+            } else {
+                rest.push(c);
+            }
+        }
+        if !rest.is_empty() {
+            out.push(rest.to_lowercase());
+        }
+    }
+    out
+}
+
+/// Chinese and Japanese aren't written with spaces between words: each of
+/// their characters counts as a word (so the rate is a character error
+/// rate there, the usual measure).
+fn is_unspaced(c: char) -> bool {
+    matches!(c, '\u{3040}'..='\u{30ff}' | '\u{3400}'..='\u{4dbf}' | '\u{4e00}'..='\u{9fff}')
 }
 
 /// Word error rate: word-level edit distance / reference length.
@@ -532,6 +584,9 @@ mod tests {
         assert!((wer("a b c d", "a x c d") - 0.25).abs() < 1e-9);
         assert!((wer("a b", "a b c") - 0.5).abs() < 1e-9);
         assert_eq!(wer("", ""), 0.0);
+        // One character of five wrong.
+        assert!((wer("我们下周发", "我们上周发") - 0.2).abs() < 1e-9);
+        assert_eq!(wer("新しいバージョン", "新しい バージョン。"), 0.0);
     }
 
     #[test]

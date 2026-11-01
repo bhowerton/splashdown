@@ -250,8 +250,14 @@ enum MeetingCommand {
 enum ModelsCommand {
     /// List models and whether they're downloaded.
     List,
-    /// Download a model, e.g. `nemotron-en`.
-    Download { id: String },
+    /// Download a model, e.g. `nemotron-en`. `apple` asks macOS for Apple's
+    /// speech model for `--language` (from Apple).
+    Download {
+        id: String,
+        /// For `apple`: the language (ISO 639-1), English by default.
+        #[arg(long, default_value = "en")]
+        language: String,
+    },
     /// Use a downloaded model: a speech model for speech-to-text on this
     /// computer, or a text model for the AI.
     Use {
@@ -597,7 +603,12 @@ fn run() -> Result<()> {
                     }
                     println!("\nModels folder: {}", models_dir.display());
                 }
-                ModelsCommand::Download { id } => {
+                ModelsCommand::Download { id, language } if id == "apple" => {
+                    rt.block_on(splashdown_providers::apple::prepare_speech(Some(&language)))
+                        .map_err(anyhow::Error::msg)?;
+                    println!("Apple's speech model for {language} is ready.");
+                }
+                ModelsCommand::Download { id, .. } => {
                     if SpeechModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
                         return Err(manage::CliError::NotFound(format!(
                             "unknown model \"{id}\" — see `splashdown-cli models list`"

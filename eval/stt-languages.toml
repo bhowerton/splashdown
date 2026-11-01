@@ -1,0 +1,153 @@
+# Speech-to-text in other languages: 2 sentences in each of 12. Generate
+# the audio with:  splashdown-cli eval make-audio --cases eval/stt-languages.toml --audio-dir eval/audio-languages
+# then score with: splashdown-cli eval stt --cases eval/stt-languages.toml --audio-dir eval/audio-languages --stt local --stt-model <id>
+# Add --detect-language to leave the language to the model.
+#
+# Synthesized with macOS voices, so this tests that a model handles the
+# language at all, not accuracy on real voices. Numbers are written out in
+# words, so digits vs words don't count as errors. Chinese and Japanese are
+# scored per character.
+
+[[case]]
+id = "de-1"
+language = "de"
+voice = "Anna"
+text = "Können wir das Treffen auf Donnerstagnachmittag verschieben?"
+
+[[case]]
+id = "de-2"
+language = "de"
+voice = "Anna"
+text = "Bitte schick mir den Bericht, bevor du heute Abend gehst."
+
+[[case]]
+id = "es-1"
+language = "es"
+voice = "Mónica"
+text = "¿Puedes enviarme el informe antes de la reunión de mañana?"
+
+[[case]]
+id = "es-2"
+language = "es"
+voice = "Mónica"
+text = "Creo que deberíamos lanzar la nueva versión la próxima semana."
+
+[[case]]
+id = "fr-1"
+language = "fr"
+voice = "Jacques"
+text = "Est-ce que tu peux m'envoyer le contrat avant vendredi ?"
+
+[[case]]
+id = "fr-2"
+language = "fr"
+voice = "Jacques"
+text = "Nous devons parler du budget avec toute l'équipe."
+
+[[case]]
+id = "it-1"
+language = "it"
+voice = "Alice"
+text = "Possiamo spostare la riunione a giovedì pomeriggio?"
+
+[[case]]
+id = "it-2"
+language = "it"
+voice = "Alice"
+text = "Ho letto la proposta e mi sembra molto interessante."
+
+[[case]]
+id = "pt-1"
+language = "pt"
+voice = "Luciana"
+text = "Você pode me mandar a apresentação antes da reunião?"
+
+[[case]]
+id = "pt-2"
+language = "pt"
+voice = "Luciana"
+text = "Acho que precisamos de mais tempo para terminar o projeto."
+
+[[case]]
+id = "nl-1"
+language = "nl"
+voice = "Xander"
+text = "Kun je me het verslag sturen voor de vergadering van morgen?"
+
+[[case]]
+id = "nl-2"
+language = "nl"
+voice = "Xander"
+text = "We moeten de nieuwe versie volgende week uitbrengen."
+
+[[case]]
+id = "pl-1"
+language = "pl"
+voice = "Zosia"
+text = "Czy możesz wysłać mi raport przed jutrzejszym spotkaniem?"
+
+[[case]]
+id = "pl-2"
+language = "pl"
+voice = "Zosia"
+text = "Myślę, że powinniśmy porozmawiać o budżecie."
+
+[[case]]
+id = "sv-1"
+language = "sv"
+voice = "Alva"
+text = "Kan du skicka rapporten till mig innan mötet i morgon?"
+
+[[case]]
+id = "sv-2"
+language = "sv"
+voice = "Alva"
+text = "Vi borde släppa den nya versionen nästa vecka."
+
+[[case]]
+id = "ja-1"
+language = "ja"
+voice = "Kyoko"
+text = "明日の会議の前に報告書を送ってもらえますか。"
+
+[[case]]
+id = "ja-2"
+language = "ja"
+voice = "Kyoko"
+text = "新しいバージョンは来週リリースする予定です。"
+
+[[case]]
+id = "zh-1"
+language = "zh"
+voice = "Tingting"
+text = "你能在明天开会之前把报告发给我吗？"
+
+[[case]]
+id = "zh-2"
+language = "zh"
+voice = "Tingting"
+text = "我们计划下周发布新版本。"
+
+[[case]]
+id = "ko-1"
+language = "ko"
+voice = "Yuna"
+text = "내일 회의 전에 보고서를 보내 주시겠어요?"
+
+[[case]]
+id = "ko-2"
+language = "ko"
+voice = "Yuna"
+text = "다음 주에 새 버전을 출시할 예정입니다."
+
+[[case]]
+id = "hi-1"
+language = "hi"
+voice = "Lekha"
+text = "क्या आप कल की बैठक से पहले मुझे रिपोर्ट भेज सकते हैं?"
+
+[[case]]
+id = "hi-2"
+language = "hi"
+voice = "Lekha"
+text = "हम अगले हफ्ते नया संस्करण जारी करेंगे।"

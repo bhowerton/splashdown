@@ -34,6 +34,11 @@ use transcribe_cpp::{
 const UNLOAD_AFTER: Duration = Duration::from_secs(10 * 60);
 /// The most a stream's final text may take once the last audio is in.
 const FINISH_TIMEOUT: Duration = Duration::from_secs(10);
+/// Silence put before and after a clip for the streaming models (Nemotron).
+/// They need a moment to settle: from a clip trimmed close to the speech
+/// they drop the first word, or, in some languages, everything.
+const LEAD_IN: Duration = Duration::from_millis(1000);
+const LEAD_OUT: Duration = Duration::from_millis(500);
 /// How long a transcription waits for a stream on the same model to end
 /// (a long hands-free dictation), checking this often.
 const BUSY_WAIT: Duration = Duration::from_secs(15 * 60);
@@ -234,19 +239,37 @@ fn preload(loaded: Arc<Loaded>) {
         });
 }
 
-fn run_options(model: &Model, english_only: bool, hints: &SttHints) -> RunOptions {
-    // A language the model doesn't list would fail every run: let it
-    // detect the language instead.
-    let listed = |code: &str| {
-        model.capabilities().map_or(true, |c| {
-            c.languages.is_empty() || c.languages.iter().any(|l| l.eq_ignore_ascii_case(code))
+/// The model's own name for `code` (ISO 639-1): itself, or the first of
+/// its locales for that language (Nemotron 3.5 lists `de-DE`, not `de`).
+/// `None` when it doesn't list the language: it would fail every run, so
+/// it detects the language instead.
+fn model_language(languages: &[String], code: &str) -> Option<String> {
+    if languages.is_empty() {
+        return Some(code.to_string());
+    }
+    let prefix = format!("{}-", code.to_ascii_lowercase());
+    languages
+        .iter()
+        .find(|l| l.eq_ignore_ascii_case(code))
+        .or_else(|| {
+            languages
+                .iter()
+                .find(|l| l.to_ascii_lowercase().starts_with(&prefix))
         })
-    };
+        .cloned()
+}
+
+fn run_options(model: &Model, english_only: bool, hints: &SttHints) -> RunOptions {
+    let languages = model
+        .capabilities()
+        .map(|c| c.languages)
+        .unwrap_or_default();
     RunOptions {
         language: hints
             .language
-            .clone()
-            .filter(|code| !english_only && listed(code)),
+            .as_deref()
+            .filter(|_| !english_only)
+            .and_then(|code| model_language(&languages, code)),
         vocabulary: if model.supports(Feature::Vocabulary) {
             hints.vocabulary.clone()
         } else {
@@ -281,7 +304,12 @@ impl SpeechToText for LocalSpeech {
     }
 
     async fn transcribe(&self, clip: &AudioClip, hints: &SttHints) -> ProviderResult<Transcript> {
-        let samples = to_16k(clip);
+        let mut samples = to_16k(clip);
+        if self.streams {
+            let silence = |d: Duration| std::iter::repeat_n(0.0, d.as_millis() as usize * 16);
+            samples.splice(0..0, silence(LEAD_IN));
+            samples.extend(silence(LEAD_OUT));
+        }
         let loaded = self.model.clone();
         let (english_only, hints) = (self.english_only, hints.clone());
         let (text, prompt) = tokio::task::spawn_blocking(move || {
@@ -529,6 +557,91 @@ mod tests {
     /// and the two models share one load. Needs the Nemotron (English)
     /// model downloaded and the eval audio:
     /// `cargo test -p splashdown-providers --release -- --ignored stream_and_run`.
+    /// Streaming vs one run on the multilingual set, for a model given by
+    /// `MODEL` (an id): `MODEL=nemotron cargo test -p splashdown-providers
+    /// --release -- --ignored --nocapture stream_vs_run`.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "needs a downloaded model and eval/audio-languages"]
+    async fn stream_vs_run() {
+        let id = std::env::var("MODEL").unwrap_or_else(|_| "nemotron".into());
+        let model = crate::SpeechModel::from_id(&id).unwrap();
+        let dir = splashdown_config::Paths::resolve().unwrap().models_dir;
+        let speech = LocalSpeech::on_demand(&dir.join(model.file_name()), model.profile()).unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../eval/audio-languages");
+        for case in ["fr-1", "fr-2", "it-1", "it-2", "de-1", "ja-1"] {
+            let clip = splashdown_audio::wav::read(&root.join(format!("{case}.wav"))).unwrap();
+            let mut clip = splashdown_audio::prepare(&clip).unwrap();
+            if let Ok(pad) = std::env::var("LEAD_MS") {
+                let n = pad.parse::<usize>().unwrap() * 16;
+                clip.samples.splice(0..0, std::iter::repeat_n(0.0, n));
+                clip.samples.extend(std::iter::repeat_n(0.0, n));
+            }
+            let hints = SttHints {
+                language: Some(case[..2].to_string()),
+                ..SttHints::default()
+            };
+            let run = speech.transcribe(&clip, &hints).await.unwrap().text;
+            let mut stream = speech.stream(&hints).unwrap();
+            for piece in clip.samples.chunks(1600) {
+                stream.feed(piece);
+            }
+            let streamed = tokio::task::spawn_blocking(move || stream.finish())
+                .await
+                .unwrap()
+                .unwrap();
+            println!("{case}  run: {run}\n      stream: {streamed}");
+        }
+    }
+
+    /// What each downloaded model says about itself, against the catalog.
+    /// `cargo test -p splashdown-providers --release -- --ignored --nocapture catalog`.
+    #[test]
+    #[ignore = "needs downloaded models"]
+    fn catalog_matches_the_models() {
+        let dir = splashdown_config::Paths::resolve().unwrap().models_dir;
+        let mut wrong = Vec::new();
+        for model in crate::SpeechModel::ALL {
+            let path = dir.join(model.file_name());
+            if !path.is_file() {
+                println!("{:<16} not downloaded", model.id());
+                continue;
+            }
+            let loaded = open(&path, true).unwrap();
+            let caps = loaded.capabilities().unwrap();
+            let english_only = caps.languages.len() == 1 && caps.languages[0] == "en";
+            println!(
+                "{:<16} languages {:>3} {:<40} streaming {:<5} max audio {:>6} ms  vocabulary {:<5} prompt {:<5} detect {}",
+                model.id(),
+                caps.languages.len(),
+                if std::env::var_os("ALL_LANGUAGES").is_some() {
+                    caps.languages.join(",")
+                } else {
+                    caps.languages
+                        .iter()
+                        .take(8)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(",")
+                },
+                caps.supports_streaming,
+                caps.max_audio_ms,
+                loaded.supports(Feature::Vocabulary),
+                loaded.supports(Feature::ContextPrompt),
+                caps.supports_language_detect,
+            );
+            if model.streams() != caps.supports_streaming {
+                wrong.push(format!("{}: streams", model.id()));
+            }
+            if model.english_only() != english_only && !caps.languages.is_empty() {
+                wrong.push(format!("{}: english_only", model.id()));
+            }
+        }
+        assert!(
+            wrong.is_empty(),
+            "catalog differs from the models: {wrong:?}"
+        );
+    }
+
     #[tokio::test(flavor = "multi_thread")]
     #[ignore = "needs a downloaded model and eval audio"]
     async fn stream_and_run_share_one_model() {
@@ -563,6 +676,20 @@ mod tests {
             "{}",
             run.text
         );
+    }
+
+    #[test]
+    fn languages_are_named_as_the_model_names_them() {
+        let locales: Vec<String> = ["en-US", "en-GB", "de-DE", "pt-BR", "pt-PT"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        assert_eq!(model_language(&locales, "de").as_deref(), Some("de-DE"));
+        assert_eq!(model_language(&locales, "pt").as_deref(), Some("pt-BR"));
+        assert_eq!(model_language(&locales, "ja"), None);
+        let codes: Vec<String> = ["en", "de"].into_iter().map(String::from).collect();
+        assert_eq!(model_language(&codes, "de").as_deref(), Some("de"));
+        assert_eq!(model_language(&[], "ja").as_deref(), Some("ja"));
     }
 
     #[test]

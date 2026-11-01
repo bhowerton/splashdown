@@ -70,6 +70,10 @@ Fill in as models are compared (date, model, score, p50 latency).
 | 2026-10-31 | cleanup | Qwen3-4B-2507 (**built-in default**), CPU only | 85% · for comparison with Granite | 0.41 s |
 | 2026-10-31 | cleanup | Qwen3.5-2B Q4_K_M (unsloth), fully on device | 59% (2 guarded) | 0.24 s |
 | 2026-10-31 | cleanup | Qwen3-1.7B (**built-in small**), Metal / CPU only | 56% / 52% (2 guarded) | 0.06 s / 0.15 s |
+| 2026-10-31 | stt | **All 7 local speech models** (transcribe.cpp, M-series Mac, Metal; streaming models on CPU), 10 English clips | Nemotron 3.5 5.8% · Parakeet v3 6.2% · Whisper small.en 6.2% · Whisper turbo 6.2% · Nemotron EN 7.1% · Parakeet v2 7.4% · Whisper base.en 8.2%. One word is about 1–2 points here, so these are close; most misses are numbers written as digits | 0.03–0.28 s |
+| 2026-10-31 | stt | Apple's speech model (SpeechAnalyzer, macOS 26), 10 English clips | 11.4%; "Kubernetes" heard as "cuber needs" | 0.10 s |
+| 2026-10-31 | stt | **12 languages** (`stt-languages.toml`, 24 clips in macOS voices), language given | Whisper turbo 3.4% (worst: Korean 17%, Hindi 15%, Swedish 10%) · Nemotron 3.5 9.6% (Korean 42%, Swedish 32%, French 26%) · Parakeet v3 36.1%: fine on its 25 European languages, nonsense on Japanese, Chinese, Korean and Hindi, which it doesn't have. Detecting the language gave the same results | 0.03–0.30 s |
+| 2026-10-31 | stt | Speed on a 5-minute recording (`transcribe-file`) | Parakeet v2 1.4 s · base.en 1.6 s · Parakeet v3 1.7 s · small.en 3.2 s · turbo 5.9 s · Nemotron EN 8.5 s · Nemotron 3.5 9.7 s (on the CPU by design) | — |
 | 2026-10-31 | cleanup | Meeting summary (4 cases), OpenRouter default | 4/4, 3 runs in a row | 0.65 s |
 | 2026-10-31 | cleanup | Meeting summary (4 cases), built-in local model, fully on device | 3/4: never invents a decision, task or owner, but says "Dana discussed it with the vendor" when You talked to Dana | 0.90 s |
 | 2026-10-31 | cleanup | LFM2.5-1.2B-Instruct Q4_K_M (Liquid), fully on device | 39% (5 guarded) · license limits commercial use to companies under $10M revenue | 0.15 s |
@@ -86,3 +90,10 @@ Fill in as models are compared (date, model, score, p50 latency).
 - **Chat-model speech-to-text can obey the speech.** Voxtral turned "format this as a short friendly email reply" into an email. Chat-based transcripts longer than about 5 words per second of audio are now rejected (`check_plausible_length`).
 - **Speech-to-text latency:** about 1.1 s, over the 0.7 s budget. For OpenRouter-only users, local Whisper (0.07 s on Apple Silicon) is the faster and more private choice, if they accept the model download.
 - **OpenAI:** the AI-pass default was chosen via OpenRouter (`openai/gpt-4.1-mini`). OpenAI's own API and `gpt-4o-mini-transcribe` haven't been measured directly yet (no OpenAI key).
+
+**All local speech models (2026-10-31).** Every catalog model was downloaded through `splashdown-cli models download` (all links work) and checked against what its file reports (`cargo test -p splashdown-providers --release -- --ignored --nocapture catalog`): the streaming and English-only flags match. Three findings, fixed or noted:
+- **Nemotron needs a lead-in.** From a clip trimmed to 0.2 s of silence, Nemotron 3.5 dropped the first word (Italian) or everything (a French clip), in a single run and when streaming alike. A second of silence before and half a second after fixes it, so `LocalSpeech::transcribe` adds them for streaming models (13.9% → 9.6% across the 12 languages). Dictation streams from the key press, so it already had the silence.
+- **Nemotron 3.5 names its languages as locales** (`de-DE`, not `de`). The language setting is now mapped to the model's own name; before, every non-English dictation would have failed as an unsupported language.
+- **Only the Whisper models take vocabulary hints.** Nemotron and Parakeet don't support them, so the vocabulary list only reaches the AI pass with those.
+
+Run the language set with `splashdown-cli eval make-audio --cases eval/stt-languages.toml --audio-dir eval/audio-languages`, then `eval stt` with the same `--cases` and `--audio-dir` (add `--detect-language` to leave the language to the model). `splashdown-cli models download apple` fetches Apple's speech model for a language.
