@@ -6,13 +6,14 @@
 //! directory (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `SPLASHDOWN_CUSTOM_API_KEY`).
 
 mod eval;
+mod manage;
 mod opts;
 mod record;
 mod report;
 
 use std::path::PathBuf;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
 use splashdown_control::Request;
 use splashdown_core::{AudioJob, Mode, TextJob};
@@ -137,6 +138,29 @@ enum Command {
         #[command(subcommand)]
         command: eval::EvalCommand,
     },
+    /// The running app's state: ready, recording, providers, meeting.
+    /// Exits with 3 when the app isn't running.
+    Status {
+        /// Print it as JSON.
+        #[arg(long)]
+        json: bool,
+    },
+    /// Read and change settings by dotted key (`general.language`), as in
+    /// config.toml. A running app uses the change at once.
+    Settings {
+        #[command(subcommand)]
+        command: SettingsCommand,
+    },
+    /// Search history (newest first): what was said or inserted. With no
+    /// words, the latest entries.
+    History {
+        query: Vec<String>,
+        #[arg(long, default_value_t = 20)]
+        limit: usize,
+        /// Print the entries as JSON.
+        #[arg(long)]
+        json: bool,
+    },
     /// Your vocabulary, corrections and snippets.
     Words {
         #[command(subcommand)]
@@ -228,9 +252,66 @@ enum ModelsCommand {
     List,
     /// Download a model, e.g. `nemotron-en`.
     Download { id: String },
+    /// Use a downloaded model: a speech model for speech-to-text on this
+    /// computer, or a text model for the AI.
+    Use {
+        id: String,
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
 }
 
-fn main() -> Result<()> {
+#[derive(Subcommand)]
+enum SettingsCommand {
+    /// Every setting that's set, as `key = value`.
+    List {
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
+    /// One setting's value. Exits with 4 if it isn't set.
+    Get {
+        key: String,
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
+    /// Set a setting: `settings set general.language de`, or a TOML value
+    /// (`true`, `0.5`, `["Tauri", "Kubernetes"]`). Exits with 4 for a
+    /// setting Splashdown doesn't have.
+    Set {
+        key: String,
+        value: String,
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
+    /// Put a setting back to its default.
+    Unset {
+        key: String,
+        #[arg(long)]
+        config: Option<PathBuf>,
+    },
+    /// Where the settings file is.
+    Path,
+}
+
+/// Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running
+/// (for commands that need it), 4 no such setting or model.
+fn main() -> std::process::ExitCode {
+    match run() {
+        Ok(()) => std::process::ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("Error: {e:#}");
+            // The app answered, but doesn't know the request yet.
+            if format!("{e:#}").contains("unknown variant") {
+                eprintln!(
+                    "The running Splashdown is older than this splashdown-cli: quit it and open the new one."
+                );
+            }
+            std::process::ExitCode::from(manage::exit_code(&e))
+        }
+    }
+}
+
+fn run() -> Result<()> {
     let cli = Cli::parse();
     // Remote control: no keys, models or runtime needed.
     let request = match &cli.command {
@@ -260,6 +341,31 @@ fn main() -> Result<()> {
             println!("{text}");
         }
         return Ok(());
+    }
+
+    // Status, settings and history need no keys or runtime either.
+    match &cli.command {
+        Command::Status { json } => return manage::status(*json),
+        Command::History { query, limit, json } => {
+            return manage::history(&query.join(" "), *limit, *json);
+        }
+        Command::Settings { command } => {
+            return match command {
+                SettingsCommand::List { config } => manage::settings_list(config.clone()),
+                SettingsCommand::Get { key, config } => manage::settings_get(key, config.clone()),
+                SettingsCommand::Set { key, value, config } => {
+                    manage::settings_set(key, Some(value), config.clone())
+                }
+                SettingsCommand::Unset { key, config } => {
+                    manage::settings_set(key, None, config.clone())
+                }
+                SettingsCommand::Path => {
+                    println!("{}", opts::paths()?.config_file().display());
+                    Ok(())
+                }
+            };
+        }
+        _ => {}
     }
 
     // A missing .env.local is fine; keys may come from the environment.
@@ -493,7 +599,10 @@ fn main() -> Result<()> {
                 }
                 ModelsCommand::Download { id } => {
                     if SpeechModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
-                        bail!("unknown model \"{id}\" — see `splashdown-cli models list`");
+                        return Err(manage::CliError::NotFound(format!(
+                            "unknown model \"{id}\" — see `splashdown-cli models list`"
+                        ))
+                        .into());
                     }
                     let path = rt.block_on(splashdown_providers::models::download_by_id(
                         &id,
@@ -503,6 +612,7 @@ fn main() -> Result<()> {
                     eprintln!();
                     println!("{}", path.display());
                 }
+                ModelsCommand::Use { id, config } => manage::use_model(&id, config)?,
             }
         }
         Command::Config { providers } => opts::print_config(&providers)?,
@@ -513,6 +623,9 @@ fn main() -> Result<()> {
         | Command::Cancel
         | Command::Listen { .. }
         | Command::Note { .. }
+        | Command::Status { .. }
+        | Command::History { .. }
+        | Command::Settings { .. }
         | Command::Meeting {
             command: MeetingCommand::Start | MeetingCommand::Stop | MeetingCommand::Status,
         } => unreachable!("handled above"),
@@ -612,7 +725,7 @@ fn system_audio() -> Result<splashdown_audio::live::LiveAudio> {
     #[cfg(windows)]
     return Ok(splashdown_audio::live::LiveAudio::system_output()?);
     #[cfg(not(any(target_os = "macos", windows)))]
-    bail!("recording the computer's sound isn't supported here");
+    anyhow::bail!("recording the computer's sound isn't supported here");
 }
 
 /// Records both sides of a meeting into a stereo WAV.

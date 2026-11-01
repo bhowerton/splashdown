@@ -87,6 +87,9 @@ pub enum Request {
     /// The meeting in progress, as JSON (or `null`).
     #[serde(rename = "meeting_status")]
     MeetingStatus,
+    /// The app's state as JSON: version, whether it's ready, recording,
+    /// which providers it uses, and any meeting.
+    Status,
 }
 
 impl Request {

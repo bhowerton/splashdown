@@ -59,6 +59,9 @@ impl Controller {
                 .notes_settings()
                 .and_then(|n| crate::notes::agent_search(&n, &query, limit))
                 .map(Some),
+            Request::Status => serde_json::to_string(&self.status(recording))
+                .map(Some)
+                .map_err(|e| e.to_string()),
             Request::MeetingStart => crate::meeting::start(self.ui.app()).map(Some),
             Request::MeetingStop => crate::meeting::stop()
                 .map(|()| Some("Stopping; the note is being finished.".to_string())),
@@ -89,6 +92,29 @@ impl Controller {
             },
         };
         let _ = reply.send(result);
+    }
+
+    /// For `splashdown-cli status`.
+    fn status(&self, recording: bool) -> serde_json::Value {
+        let (ready, problem, speech, ai) = match &self.engine {
+            Ok(engine) => (
+                true,
+                None,
+                Some(engine.pipeline.stt_name()),
+                engine.pipeline.llm_name(),
+            ),
+            Err(e) => (false, Some(e.clone()), None, None),
+        };
+        serde_json::json!({
+            "version": env!("CARGO_PKG_VERSION"),
+            "ready": ready,
+            "problem": problem,
+            "recording": recording,
+            "working": self.active.is_some() && !recording,
+            "speech": speech,
+            "ai": ai,
+            "meeting": crate::meeting::status(),
+        })
     }
 
     /// Notes settings as last saved. Not the engine's copy: notes work
