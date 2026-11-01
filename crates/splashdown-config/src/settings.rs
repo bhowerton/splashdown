@@ -231,11 +231,10 @@ impl HotkeySettings {
 
     pub fn ask_key(&self) -> PhysicalKey {
         let taken = [self.hands_free_key(), self.note_key()];
-        let fallback = if taken.contains(&PhysicalKey::Letter('a')) {
-            'k'
-        } else {
-            'a'
-        };
+        let fallback = ['a', 'k', 'j', 'q']
+            .into_iter()
+            .find(|&c| !taken.contains(&PhysicalKey::Letter(c)))
+            .unwrap_or('a');
         let letter = self
             .ask
             .map(|c| c.to_ascii_lowercase())
@@ -608,6 +607,21 @@ pub enum LoadError {
 }
 
 impl Settings {
+    /// Why these hotkeys can't work together, if they can't: two keys or
+    /// letters that are the same.
+    pub fn hotkey_problem(&self) -> Option<&'static str> {
+        let h = &self.hotkeys;
+        if h.dictation_key() == h.instruction_key() {
+            Some("The dictation and instruction keys must be different.")
+        } else if h.note_key() == h.hands_free_key() {
+            Some("The hands-free and note letters must be different.")
+        } else if h.ask_key() == h.hands_free_key() || h.ask_key() == h.note_key() {
+            Some("The ask letter must differ from the hands-free and note letters.")
+        } else {
+            None
+        }
+    }
+
     /// Loads settings from `path`; a missing file means all defaults.
     pub fn load(path: &Path) -> Result<Self, LoadError> {
         match std::fs::read_to_string(path) {

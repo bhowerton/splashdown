@@ -79,10 +79,11 @@ pub fn parse(text: &str) -> Result<Imported, ImportError> {
 fn from_json(json: serde_json::Value) -> Imported {
     #[derive(Deserialize)]
     struct Dictionary {
+        // Read one entry at a time: one odd entry mustn't lose the rest.
         #[serde(default)]
-        vocabulary: Vec<Term>,
+        vocabulary: Vec<serde_json::Value>,
         #[serde(default)]
-        replacements: Vec<DictionaryReplacement>,
+        replacements: Vec<serde_json::Value>,
     }
     /// `{ "term": "Tauri" }`, or just `"Tauri"`.
     #[derive(Deserialize)]
@@ -105,17 +106,25 @@ fn from_json(json: serde_json::Value) -> Imported {
         {
             out.kind = "dictionary export";
             if let Ok(file) = serde_json::from_value::<Dictionary>(json) {
-                out.vocabulary = file
-                    .vocabulary
-                    .into_iter()
-                    .map(|t| match t {
-                        Term::Object { term } | Term::Plain(term) => term,
-                    })
-                    .collect();
+                for term in file.vocabulary {
+                    match serde_json::from_value::<Term>(term) {
+                        Ok(Term::Object { term } | Term::Plain(term))
+                            if !term.trim().is_empty() =>
+                        {
+                            out.vocabulary.push(term.trim().to_string());
+                        }
+                        _ => out.skipped += 1,
+                    }
+                }
                 for r in file.replacements {
-                    for find in r.sources {
+                    let Ok(r) = serde_json::from_value::<DictionaryReplacement>(r) else {
+                        out.skipped += 1;
+                        continue;
+                    };
+                    // An empty or blank "find" would match everywhere.
+                    for find in r.sources.iter().map(|s| s.trim()).filter(|s| !s.is_empty()) {
                         out.replacements.push(Replacement {
-                            find,
+                            find: find.to_string(),
                             replace: r.replacement.clone(),
                             regex: false,
                         });
@@ -186,7 +195,13 @@ fn from_lines(text: &str) -> Imported {
         ..Imported::default()
     };
     for (i, line) in text.lines().enumerate() {
-        let Some(fields) = csv_fields(line) else {
+        // Tab-separated (a .tsv, or copied from a spreadsheet), else CSV.
+        let fields = if line.contains('\t') {
+            Some(line.split('\t').map(str::to_string).collect())
+        } else {
+            csv_fields(line)
+        };
+        let Some(fields) = fields else {
             out.skipped += 1;
             continue;
         };
@@ -329,6 +344,25 @@ mod tests {
         // Plain strings work too.
         let plain = parse(r#"{"vocabulary": ["Tauri", "Anselm"]}"#).unwrap();
         assert_eq!(plain.vocabulary, ["Tauri", "Anselm"]);
+        // An odd entry is skipped, not the whole file; blank sources go.
+        let odd = parse(
+            r#"{"vocabulary": [{"term": null}, "Tauri"],
+                "replacements": [{"replacement": "x"},
+                                 {"replacement": "Kubernetes", "sources": ["", " ", " kube "]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(odd.vocabulary, ["Tauri"]);
+        assert_eq!(odd.skipped, 2);
+        assert_eq!(odd.replacements.len(), 1);
+        assert_eq!(odd.replacements[0].find, "kube");
+    }
+
+    #[test]
+    fn reads_tab_separated_lines() {
+        let got = parse("misspelling\tcorrection\nteh\tthe\nOpenRouter\n").unwrap();
+        assert_eq!(got.replacements.len(), 1);
+        assert_eq!(got.replacements[0].find, "teh");
+        assert_eq!(got.vocabulary, ["OpenRouter"]);
     }
 
     #[test]

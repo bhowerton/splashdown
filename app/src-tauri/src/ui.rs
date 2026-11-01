@@ -62,18 +62,20 @@ impl Ui {
     /// An open Settings window is told, so it shows the new settings rather
     /// than saving its old copy over them.
     pub fn reload_settings(&self) {
-        use tauri::{Emitter, Manager};
+        use tauri::Manager;
         let Some(state) = self.app.try_state::<crate::commands::AppState>() else {
             return;
         };
-        *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = crate::engine::load_settings();
+        let settings = crate::engine::load_settings();
+        crate::commands::show_settings(&self.app, &state, &settings);
+        *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
         let app = self.app.clone();
         tauri::async_runtime::spawn(async move {
             let state = app.state::<crate::commands::AppState>();
             if let Some(e) = state.apply().await {
                 tracing::warn!("settings reloaded, but: {e}");
             }
-            let _ = app.emit_to("settings", "settings-reloaded", ());
+            crate::commands::settings_changed_elsewhere(&app);
         });
     }
 

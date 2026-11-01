@@ -509,15 +509,8 @@ pub async fn save_settings(
     state: State<'_, AppState>,
     app: AppHandle,
 ) -> Result<Saved, String> {
-    if settings.hotkeys.dictation_key() == settings.hotkeys.instruction_key() {
-        return Err("The dictation and instruction keys must be different.".into());
-    }
-    if settings.hotkeys.note_key() == settings.hotkeys.hands_free_key() {
-        return Err("The hands-free and note letters must be different.".into());
-    }
-    let ask = settings.hotkeys.ask_key();
-    if ask == settings.hotkeys.hands_free_key() || ask == settings.hotkeys.note_key() {
-        return Err("The ask letter must differ from the hands-free and note letters.".into());
+    if let Some(problem) = settings.hotkey_problem() {
+        return Err(problem.into());
     }
     if let Some(problem) = crate::replacements::check(&settings.replacements) {
         return Err(problem);
@@ -530,19 +523,32 @@ pub async fn save_settings(
     // Set by the first meeting, which Settings may not have seen.
     settings.notes.meeting_reminded |= current.notes.meeting_reminded;
     settings.save(&engine::paths()?.config_file())?;
-    state
-        .tray
-        .show_language(settings.general.language.as_deref());
-    state.tray.show_whisper(settings.general.whisper_mode());
-    state.tray.show_mini_bar(settings.general.mini_bar());
-    crate::minibar::set_visible(settings.general.mini_bar());
-    crate::shortcuts::sync(&app, &settings.presets(), &settings.transforms());
+    show_settings(&app, &state, &settings);
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
     let engine_error = state.apply().await;
     Ok(Saved {
         state: state.snapshot(),
         engine_error,
     })
+}
+
+/// Brings what settings show outside the engine up to date: the menu bar,
+/// the mini bar and global shortcuts.
+pub fn show_settings(app: &AppHandle, state: &AppState, settings: &Settings) {
+    state
+        .tray
+        .show_language(settings.general.language.as_deref());
+    state.tray.show_whisper(settings.general.whisper_mode());
+    state.tray.show_mini_bar(settings.general.mini_bar());
+    crate::minibar::set_visible(settings.general.mini_bar());
+    crate::shortcuts::sync(app, &settings.presets(), &settings.transforms());
+}
+
+/// Settings were saved from somewhere other than the Settings window (the
+/// menu bar, a meeting's question, the call offer): an open Settings
+/// window reads them again rather than saving its older copy over them.
+pub fn settings_changed_elsewhere(app: &AppHandle) {
+    let _ = app.emit_to("settings", "settings-reloaded", ());
 }
 
 /// Checks a key with its provider, then stores it in the keychain.

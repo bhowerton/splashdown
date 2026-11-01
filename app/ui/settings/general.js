@@ -4,11 +4,12 @@
 // microphone, live preview, sounds. Also the Words & language tab's name,
 // language and vocabulary (its snippets live in snippets.js).
 
-/** The ask letter when none is set: A, or K if hands-free or notes use A. */
+/** The ask letter when none is set: the first of A, K, J, Q that hands-free
+ *  and notes don't use (as `Hotkeys::ask_key`). */
 function askDefault(hotkeys) {
   const hands = (hotkeys.hands_free || "h").toLowerCase();
   const note = (hotkeys.note || (hands === "n" ? "m" : "n")).toLowerCase();
-  return hands === "a" || note === "a" ? "k" : "a";
+  return ["a", "k", "j", "q"].find((c) => c !== hands && c !== note) ?? "a";
 }
 
 /** Fallback for a backend that doesn't send `defaults.sound_volume` yet.
@@ -33,7 +34,7 @@ function renderGeneral() {
   setValue($("nt-daily-folder"), notes.daily_folder ?? "");
   setValue($("nt-daily-format"), notes.daily_format ?? "");
   $("nt-keep-audio").checked = !!notes.keep_audio;
-  setValue($("mt-summary"), notes.meeting_summary === "ask" ? "" : notes.meeting_summary ?? "");
+  setValue($("mt-summary"), notes.meeting_summary ?? "");
   $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
   $("mt-offer").checked = notes.offer_on_calls ?? true;
@@ -49,7 +50,9 @@ function renderGeneral() {
   const other = s.general.language && s.general.language !== "en";
   $("gen-language-note").hidden = !(englishOnly && other);
   $("gen-language-note").textContent = "Your speech model only understands English. Choose Nemotron 3.5 or Whisper large-v3-turbo under Providers → Speech to text → On this computer.";
-  setValue($("gen-vocab"), s.general.vocabulary.join(", "));
+  // One per line, so a term with a comma in it ("Smith, Jones & Co")
+  // comes back whole.
+  setValue($("gen-vocab"), s.general.vocabulary.join("\n"));
   $("hist-keep").checked = s.general.keep_history === true; // on the History tab; off unless turned on
   $("hist-audio").checked = s.general.keep_audio === true;
   $("gen-near-cursor").checked = s.general.overlay_near_cursor !== false;

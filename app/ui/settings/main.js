@@ -97,6 +97,16 @@ function renderUpdate() {
 
 // ---------------------------------------------------------------- save
 
+/** The vocabulary box's terms: one per line, or comma-separated on a line,
+ *  except that a line that's already a term (with a comma in it) stays one. */
+function vocabularyFrom(text, known) {
+  return text
+    .split("\n")
+    .flatMap((line) => (known.includes(line.trim()) ? [line] : line.split(",")))
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
 /** The settings as shown in the form (every tab), ready for save_settings. */
 function collect() {
   const s = structuredClone(state.settings);
@@ -110,9 +120,12 @@ function collect() {
   const note = $("hk-note").value.trim().toLowerCase();
   const noteDefault = letter === "n" ? "m" : "n";
   s.hotkeys.note = /^[a-z]$/.test(note) && note !== noteDefault ? note : null;
-  // A letter; the default (A, or K when A is taken) is saved as unset.
+  // A letter; the default (A, or the next free one) is saved as unset. A
+  // default that was only shown stays unset when another letter takes its
+  // place, so it moves rather than clashing.
   const ask = $("hk-ask").value.trim().toLowerCase();
-  s.hotkeys.ask = /^[a-z]$/.test(ask) && ask !== askDefault(s.hotkeys) ? ask : null;
+  const shownDefault = !state.settings.hotkeys.ask && ask === askDefault(state.settings.hotkeys);
+  s.hotkeys.ask = /^[a-z]$/.test(ask) && ask !== askDefault(s.hotkeys) && !shownDefault ? ask : null;
   s.notes = { ...(s.notes ?? {}) };
   s.notes.capture_to = $("nt-capture-to").value;
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;
@@ -131,7 +144,7 @@ function collect() {
   s.notes.agents_write = $("pv-agents-read").checked && $("pv-agents-write").checked;
   s.general.user_name = $("gen-name").value.trim() || null;
   s.general.language = $("gen-language").value || null;
-  s.general.vocabulary = $("gen-vocab").value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
+  s.general.vocabulary = vocabularyFrom($("gen-vocab").value, state.settings.general.vocabulary);
   s.general.live_preview = $("gen-live").checked ? null : false;
   s.general.stream_typing = $("gen-stream").checked ? null : false;
   s.general.keep_history = $("hist-keep").checked ? true : null;

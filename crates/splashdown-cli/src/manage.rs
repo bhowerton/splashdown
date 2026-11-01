@@ -188,11 +188,13 @@ pub fn settings_set(key: &str, value: Option<&str>, config: Option<PathBuf>) -> 
         .try_into()
         .with_context(|| format!("{key} can't be {}", value.unwrap_or("unset")))?;
     // A key Splashdown doesn't know is dropped when it reads the settings:
-    // say so rather than pretend it was saved.
-    if let Some(v) = &wanted
-        && lookup(&self::tree(&updated)?, key) != Some(v)
-    {
+    // say so rather than pretend it was saved. (Only that it's there: a
+    // number may come back as 5.0 for 5.)
+    if wanted.is_some() && lookup(&self::tree(&updated)?, key).is_none() {
         return Err(CliError::NotFound(format!("Splashdown has no setting {key}")).into());
+    }
+    if let Some(problem) = updated.hotkey_problem() {
+        bail!("{problem}");
     }
     save(&updated, &path, own)?;
     println!("{key} = {}", value.unwrap_or("(default)"));
@@ -331,6 +333,11 @@ mod tests {
         // A typo isn't saved quietly, and neither is the wrong kind of value.
         let typo = settings_set("general.langauge", Some("de"), Some(path.clone())).unwrap_err();
         assert_eq!(exit_code(&typo), 4);
+        // Numbers that come back written another way are fine.
+        settings_set("general.sound_volume", Some("0.3"), Some(path.clone())).unwrap();
+        settings_set("general.budget.monthly_usd", Some("5"), Some(path.clone())).unwrap();
+        // Letters that clash are refused.
+        assert!(settings_set("hotkeys.ask", Some("h"), Some(path.clone())).is_err());
         assert!(settings_set("general.vocabulary", Some("7"), Some(path.clone())).is_err());
 
         settings_set("general.language", None, Some(path.clone())).unwrap();

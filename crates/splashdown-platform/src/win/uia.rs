@@ -809,6 +809,8 @@ fn icon_pixels(icon: HICON) -> Option<Vec<u8>> {
     // SAFETY: `info` is writable; the bitmaps it gets are deleted below.
     unsafe { GetIconInfo(icon, &mut info) }.ok()?;
     let mut pixels = vec![0u8; (ICON_PX * ICON_PX * 4) as usize];
+    // The mask: white where an icon without alpha is see-through.
+    let mut mask = vec![0u8; pixels.len()];
     let mut bmi = BITMAPINFO {
         bmiHeader: BITMAPINFOHEADER {
             biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
@@ -824,7 +826,7 @@ fn icon_pixels(icon: HICON) -> Option<Vec<u8>> {
     };
     // SAFETY: a memory DC for the copy, deleted right after; `pixels`
     // holds the 32-bit rows `bmi` describes.
-    let lines = unsafe {
+    let (lines, mask_lines) = unsafe {
         let dc = CreateCompatibleDC(None);
         let lines = GetDIBits(
             dc,
@@ -835,20 +837,37 @@ fn icon_pixels(icon: HICON) -> Option<Vec<u8>> {
             &mut bmi,
             DIB_RGB_COLORS,
         );
+        let mut mask_bmi = bmi;
+        let mask_lines = GetDIBits(
+            dc,
+            info.hbmMask,
+            0,
+            ICON_PX as u32,
+            Some(mask.as_mut_ptr().cast()),
+            &mut mask_bmi,
+            DIB_RGB_COLORS,
+        );
         let _ = DeleteDC(dc);
         let _ = DeleteObject(info.hbmColor.into());
         let _ = DeleteObject(info.hbmMask.into());
-        lines
+        (lines, mask_lines)
     };
     if lines != ICON_PX {
         return None;
     }
-    // BGRA to RGBA; an icon with no alpha at all is opaque.
+    // BGRA to RGBA. An icon with no alpha at all (an older one) is opaque
+    // except where its mask is white.
     let has_alpha = pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0);
-    for p in pixels.as_chunks_mut::<4>().0 {
+    let masked = mask_lines == ICON_PX;
+    for (p, m) in pixels
+        .as_chunks_mut::<4>()
+        .0
+        .iter_mut()
+        .zip(mask.as_chunks::<4>().0)
+    {
         p.swap(0, 2);
         if !has_alpha {
-            p[3] = 255;
+            p[3] = if masked && m[0] != 0 { 0 } else { 255 };
         }
     }
     Some(pixels)

@@ -204,11 +204,11 @@ impl History {
         let mut entries = self.lock();
         entries.push(entry.clone());
         let expired = self.drop_expired(&mut entries, entry.at);
-        // The oldest unpinned entries make way.
+        // The oldest unpinned entries make way, never the one just added.
         let mut excess = entries.len().saturating_sub(MAX_ENTRIES);
         let dropped = excess;
         entries.retain(|e| {
-            if excess == 0 || e.pinned {
+            if excess == 0 || e.pinned || e.at == entry.at {
                 return true;
             }
             excess -= 1;

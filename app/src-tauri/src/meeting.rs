@@ -681,6 +681,7 @@ fn ask_to_summarize(app: &AppHandle, ai: &str) -> bool {
             && settings.save(&paths.config_file()).is_ok()
         {
             *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+            crate::commands::settings_changed_elsewhere(app);
         }
         return true;
     }

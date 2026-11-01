@@ -365,6 +365,7 @@ fn toggle_whisper(app: &AppHandle) {
         if let Err(e) = state.toggle_whisper_mode().await {
             tracing::warn!("couldn't change whisper mode: {e}");
         }
+        crate::commands::settings_changed_elsewhere(&app);
     });
 }
 
@@ -379,6 +380,7 @@ fn toggle_mini_bar(app: &AppHandle) {
         if let Err(e) = state.set_mini_bar(on) {
             tracing::warn!("couldn't change the mini bar: {e}");
         }
+        crate::commands::settings_changed_elsewhere(&app);
     });
 }
 
@@ -394,6 +396,7 @@ fn set_language(app: &AppHandle, code: &str) {
         if let Err(e) = state.set_language(language).await {
             tracing::warn!("couldn't change the language: {e}");
         }
+        crate::commands::settings_changed_elsewhere(&app);
     });
 }
 

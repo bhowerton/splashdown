@@ -280,6 +280,7 @@ pub async fn call_offer_answer(answer: String, app: AppHandle) -> Result<(), Str
             settings.notes.offer_on_calls = Some(false);
             settings.save(&crate::engine::paths()?.config_file())?;
             *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+            crate::commands::settings_changed_elsewhere(&app);
             Ok(())
         }
         _ => Ok(()),
