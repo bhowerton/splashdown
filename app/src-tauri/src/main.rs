@@ -19,6 +19,7 @@ mod notes;
 mod pill;
 mod preview;
 mod project;
+mod prompt;
 mod recent;
 mod replacements;
 mod rescue;
@@ -137,6 +138,8 @@ fn main() {
             ask::ask_copy,
             ask::ask_close,
             ask::ask_followup,
+            prompt::prompt_state,
+            prompt::prompt_answer,
             calls::call_offer_state,
             calls::call_offer_answer,
         ])

@@ -81,6 +81,10 @@ impl Model {
         let Some(bar) = &self.bar else {
             return;
         };
+        tracing::debug!(
+            "mini bar: {}",
+            if self.visible { "shown" } else { "hidden" }
+        );
         let state = self.state();
         bar.set_state(state);
         bar.set_tooltip(&self.tooltip(state));

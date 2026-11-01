@@ -18,7 +18,6 @@ use splashdown_audio::live::LiveAudio;
 use splashdown_config::{Destination, MeetingSummary, Secrets, Settings};
 use splashdown_core::meeting::{Meeting, Paragraph, Segment, Side};
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogResult};
 
 use crate::commands::AppState;
 use crate::notes::store::{Origin, Store};
@@ -159,18 +158,13 @@ pub fn keep_going() {
 pub fn quit(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
-        let answer = app
-            .dialog()
-            .message("Stop it and finish the note before quitting?")
-            .title("A meeting is recording")
-            .buttons(MessageDialogButtons::OkCancelCustom(
-                "Stop and quit".into(),
-                "Keep recording".into(),
-            ))
-            .blocking_show_with_result();
-        let stop_and_quit = answer == MessageDialogResult::Ok
-            || matches!(&answer, MessageDialogResult::Custom(s) if s == "Stop and quit");
-        if !stop_and_quit {
+        let answer = crate::prompt::ask(
+            &app,
+            "A meeting is recording",
+            "Stop it and finish the note before quitting?",
+            &["Stop and quit", "Keep recording"],
+        );
+        if answer != Some(0) {
             return;
         }
         let thread = running().as_mut().and_then(|run| {
@@ -265,7 +259,6 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
     let mut settings = state.settings();
     if !settings.notes.meeting_reminded {
         remind(app);
-        settings = state.settings();
         settings.notes.meeting_reminded = true;
         if let Err(e) = settings.save(&crate::engine::paths()?.config_file()) {
             tracing::warn!("couldn't save the meeting reminder: {e}");
@@ -578,14 +571,17 @@ fn write_stereo(out: &mut impl std::io::Write, left: &[f32], right: &[f32]) {
 }
 
 /// The first meeting: a reminder that the people on the call should know.
+/// The recording doesn't wait for it.
 fn remind(app: &AppHandle) {
-    app.dialog()
-        .message(
+    let app = app.clone();
+    std::thread::spawn(move || {
+        crate::prompt::ask(
+            &app,
+            "Recording a meeting",
             "Splashdown records your microphone and what your computer plays, and writes a transcript into your notes. Recording laws vary: let the people on the call know you're transcribing it.",
-        )
-        .title("Recording a meeting")
-        .buttons(MessageDialogButtons::OkCustom("Got it".into()))
-        .blocking_show();
+            &["Got it"],
+        );
+    });
 }
 
 /// The turn-by-turn transcript, written into the note as it's finished.
@@ -808,22 +804,15 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
 
 /// Asks before the meeting's text goes to a cloud AI. "Always" is kept.
 fn ask_to_summarize(app: &AppHandle, ai: &str) -> bool {
-    let answer = app
-        .dialog()
-        .message(format!(
+    let answer = crate::prompt::ask(
+        app,
+        &format!("Summarize this meeting with {ai}?"),
+        &format!(
             "The transcript goes to {ai} to write a summary of decisions, action items and open questions."
-        ))
-        .title(format!("Summarize this meeting with {ai}?"))
-        .buttons(MessageDialogButtons::YesNoCancelCustom(
-            "Summarize".into(),
-            "Always summarize".into(),
-            "Not now".into(),
-        ))
-        .blocking_show_with_result();
-    let pressed = |label: &str, plain: MessageDialogResult| {
-        answer == plain || matches!(&answer, MessageDialogResult::Custom(s) if s == label)
-    };
-    if pressed("Always summarize", MessageDialogResult::No) {
+        ),
+        &["Summarize", "Always summarize", "Not now"],
+    );
+    if answer == Some(1) {
         let state = app.state::<AppState>();
         let mut settings = state.settings();
         settings.notes.meeting_summary = Some(MeetingSummary::Always);
@@ -835,7 +824,7 @@ fn ask_to_summarize(app: &AppHandle, ai: &str) -> bool {
         }
         return true;
     }
-    pressed("Summarize", MessageDialogResult::Yes)
+    answer == Some(0)
 }
 
 /// The spool as a WAV in `Attachments/`. Returns its path for the link.
@@ -904,27 +893,20 @@ fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
                 .to_string()
         })
         .unwrap_or_default();
-    let answer = app
-        .dialog()
-        .message(format!(
+    let answer = crate::prompt::ask(
+        app,
+        "Finish transcribing it?",
+        &format!(
             "The meeting recorded {when} wasn't finished when Splashdown closed. Its recording is still here."
-        ))
-        .title("Finish transcribing it?")
-        .buttons(MessageDialogButtons::YesNoCancelCustom(
-            "Finish".into(),
-            "Delete it".into(),
-            "Later".into(),
-        ))
-        .blocking_show_with_result();
-    let pressed = |label: &str, plain: MessageDialogResult| {
-        answer == plain || matches!(&answer, MessageDialogResult::Custom(s) if s == label)
-    };
-    if pressed("Delete it", MessageDialogResult::No) {
+        ),
+        &["Finish", "Delete it", "Later"],
+    );
+    if answer == Some(1) {
         let _ = std::fs::remove_file(&raw);
         let _ = std::fs::remove_file(meta);
         return Ok(());
     }
-    if !pressed("Finish", MessageDialogResult::Yes) {
+    if answer != Some(0) {
         return Ok(());
     }
 

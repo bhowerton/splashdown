@@ -8,7 +8,8 @@
     "notes",
     "ask",
     "call-offer",
-    "meeting-pill"
+    "meeting-pill",
+    "prompt"
   ],
   "permissions": [
     "core:default",
