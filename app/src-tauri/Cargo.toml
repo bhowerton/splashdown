@@ -17,6 +17,7 @@ tauri-build = { version = "2", features = [] }
 base64 = "0.22"
 chrono.workspace = true
 directories.workspace = true
+reqwest.workspace = true
 dotenvy.workspace = true
 hound.workspace = true
 regex = "1"

@@ -685,6 +685,14 @@ $("nt-menu").addEventListener("click", (e) => {
     rename: startRename,
     history: () => showHistory(true),
     transcribe: () => invoke("notes_transcribe_pick").catch((err) => toast(String(err), true)),
+    "transcribe-link": async () => {
+      const url = await askText("Transcribe a link", {
+        detail: "A link to an audio or video file, or a page such as YouTube (needs yt-dlp installed).",
+        placeholder: "https://",
+        action: "Transcribe",
+      });
+      if (url) invoke("notes_transcribe_url", { url }).catch((err) => toast(String(err), true));
+    },
     meeting: () => invoke("meeting_toggle").catch((err) => toast(String(err), true)),
     reveal: () => invoke("notes_reveal", { path: current.path }).catch((err) => toast(String(err), true)),
     folder: changeFolder,

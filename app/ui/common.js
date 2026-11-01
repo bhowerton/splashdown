@@ -64,6 +64,50 @@ function askConfirm(message, { action = "Delete", detail = "" } = {}) {
   });
 }
 
+/** Asks for a line of text in a small modal; resolves to it, or null. */
+function askText(message, { detail = "", placeholder = "", action = "OK" } = {}) {
+  return new Promise((resolve) => {
+    const dialog = document.createElement("dialog");
+    dialog.className = "confirm";
+    const form = document.createElement("form");
+    form.method = "dialog";
+    const title = document.createElement("p");
+    title.className = "confirm-title";
+    title.textContent = message;
+    form.append(title);
+    if (detail) {
+      const small = document.createElement("p");
+      small.className = "confirm-detail";
+      small.textContent = detail;
+      form.append(small);
+    }
+    const input = document.createElement("input");
+    input.type = "text";
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    input.style.width = "100%";
+    input.style.boxSizing = "border-box";
+    const acts = document.createElement("div");
+    acts.className = "confirm-acts";
+    const cancel = button("Cancel", () => dialog.close("cancel"));
+    cancel.type = "button";
+    const ok = document.createElement("button");
+    ok.className = "btn primary";
+    ok.textContent = action;
+    ok.value = "ok";
+    acts.append(cancel, ok);
+    form.append(input, acts);
+    dialog.append(form);
+    dialog.addEventListener("close", () => {
+      resolve(dialog.returnValue === "ok" && input.value.trim() ? input.value.trim() : null);
+      dialog.remove();
+    });
+    document.body.append(dialog);
+    dialog.showModal();
+    input.focus();
+  });
+}
+
 let toastTimer;
 function toast(text, error = false) {
   const t = $("toast");

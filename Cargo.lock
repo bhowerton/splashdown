@@ -4027,6 +4027,7 @@ dependencies = [
  "dotenvy",
  "hound",
  "regex",
+ "reqwest",
  "serde",
  "serde_json",
  "splashdown-apple-shim",
