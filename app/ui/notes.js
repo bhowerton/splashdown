@@ -1317,9 +1317,18 @@ function renderTurns(list, turns, { live = false, recording = false } = {}) {
     ts.addEventListener("click", () => playFrom(t.time));
     const words = document.createElement("div");
     if (t.who) {
-      const who = document.createElement("div");
-      who.className = `nt-who ${t.who === "You" ? "you" : t.who === "Them" ? "them" : ""}`;
+      // A finished note's speakers can be named: click one.
+      const who = document.createElement(live ? "div" : "button");
+      who.className = `nt-who ${whoClass(t.who)}`;
       who.textContent = t.who;
+      if (!live) {
+        who.title = `Name ${t.who}`;
+        who.setAttribute("aria-label", `${t.who}: name this speaker`);
+        who.addEventListener("click", () => {
+          const r = who.getBoundingClientRect();
+          nameSpeaker(t.who, { x: r.left, y: r.bottom + 4 });
+        });
+      }
       words.append(who);
     }
     const said = document.createElement("div");
@@ -1337,6 +1346,55 @@ function renderTurns(list, turns, { live = false, recording = false } = {}) {
   }
   list.replaceChildren(...rows);
   if (live && atEnd) list.scrollTop = list.scrollHeight;
+}
+
+/** A speaker's color: You, Them, and the others told apart in turn. */
+function whoClass(who) {
+  if (who === "You") return "you";
+  if (who === "Them") return "them";
+  const others = [...new Set(turnsOf(body).map((t) => t.who).filter((w) => w && w !== "You" && w !== "Them"))];
+  return `other${Math.max(0, others.indexOf(who)) % 4}`;
+}
+
+/** The people a meeting's note says were invited ("With Dana, Sam."). */
+function invited() {
+  const m = /^With (.+)\.$/m.exec(parseMeeting(body).head);
+  return m ? m[1].split(/,\s*/).filter(Boolean) : [];
+}
+
+/** Names speaker `who` in the whole transcript: from the people invited,
+ *  or typed. */
+function nameSpeaker(who, at) {
+  if (locked()) return;
+  const taken = new Set(turnsOf(body).map((t) => t.who));
+  const names = invited().filter((n) => !taken.has(n));
+  showMenu([
+    ...names.map((n) => menuItem(n, () => renameSpeaker(who, n))),
+    ...(names.length ? [document.createElement("hr")] : []),
+    menuItem("Type a name…", async () => {
+      const name = await askText(`Who is ${who}?`, {
+        detail: "Every turn they said gets this name.",
+        placeholder: "Name",
+        action: "Name",
+      });
+      if (name) renameSpeaker(who, name);
+    }),
+  ], at);
+}
+
+function renameSpeaker(who, name) {
+  name = name.replace(/[*:\n\[\]]/g, "").trim();
+  if (!name || name === who) return;
+  const esc = who.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const turn = new RegExp(`^(\\*\\*\\[[\\d:]+\\] )${esc}(:\\*\\*)`, "gm");
+  const m = parseMeeting(body.replace(turn, `$1${name}$2`));
+  // "(Speaker 2)" after an action item names them too.
+  const summary = m.parts.find((p) => p.key === "summary");
+  if (summary) summary.text = summary.text.split(`(${who})`).join(`(${name})`);
+  body = composeMeeting(m);
+  render({ reload: true });
+  scheduleSave();
+  toast(`${who} is now ${name}`);
 }
 
 /** Find in the transcript: shows the turns that have it, marked. */

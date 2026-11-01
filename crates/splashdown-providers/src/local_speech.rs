@@ -142,6 +142,38 @@ fn open(path: &Path, cpu: bool) -> ProviderResult<Model> {
     .map_err(|e| ProviderError::Unavailable(format!("couldn't load speech model: {e}")))
 }
 
+/// A stretch of audio said by one speaker.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct SpeakerTurn {
+    /// From 1.
+    pub speaker: u32,
+    pub start: Duration,
+    pub end: Duration,
+}
+
+/// Who spoke when in `pcm` (16 kHz mono), with the diarization model at
+/// `path` (`models::Diarizer`). Slow for long audio: call off the UI thread.
+pub fn diarize(path: &Path, pcm: &[f32]) -> ProviderResult<Vec<SpeakerTurn>> {
+    let model = open(path, false)?;
+    let mut session = model.diarize_session().map_err(|e| {
+        ProviderError::Unavailable(format!("couldn't start telling speakers apart: {e}"))
+    })?;
+    let turns = session
+        .run(pcm, &transcribe_cpp::DiarizeOptions::default())
+        .map_err(|e| {
+            ProviderError::Unavailable(format!("couldn't tell the speakers apart: {e}"))
+        })?;
+    Ok(turns
+        .into_iter()
+        .filter(|t| t.t1_ms > t.t0_ms && t.speaker_id > 0)
+        .map(|t| SpeakerTurn {
+            speaker: t.speaker_id as u32,
+            start: Duration::from_millis(t.t0_ms.max(0) as u64),
+            end: Duration::from_millis(t.t1_ms.max(0) as u64),
+        })
+        .collect())
+}
+
 /// Lets the model go once it's been idle a while; stops when the provider
 /// is dropped.
 fn watch_idle(model: Weak<Loaded>) {
@@ -640,6 +672,33 @@ mod tests {
             wrong.is_empty(),
             "catalog differs from the models: {wrong:?}"
         );
+    }
+
+    /// Prints who spoke when in a 16 kHz recording:
+    /// `SPLASHDOWN_DIARIZE_WAV=call.wav cargo test -p splashdown-providers
+    /// --features local-speech -- --ignored --nocapture diarizes`.
+    #[test]
+    #[ignore = "needs the downloaded diarization model and a recording"]
+    fn diarizes() {
+        let wav = std::env::var("SPLASHDOWN_DIARIZE_WAV").expect("SPLASHDOWN_DIARIZE_WAV");
+        let dir = splashdown_config::Paths::resolve().unwrap().models_dir;
+        let clip = splashdown_audio::wav::read(Path::new(&wav)).unwrap();
+        let started = Instant::now();
+        let turns =
+            super::diarize(&crate::models::Diarizer::path_in(&dir), &to_16k(&clip)).unwrap();
+        println!(
+            "{} s of audio in {:?}",
+            clip.samples.len() / 16_000,
+            started.elapsed()
+        );
+        for t in turns {
+            println!(
+                "speaker {}: {:.1}–{:.1} s",
+                t.speaker,
+                t.start.as_secs_f32(),
+                t.end.as_secs_f32()
+            );
+        }
     }
 
     #[tokio::test(flavor = "multi_thread")]

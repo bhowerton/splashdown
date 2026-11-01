@@ -318,6 +318,18 @@ li[aria-expanded="true"] > .nt-nav-row .nt-twisty .ic { transform: rotate(90deg)
 .nt-who { font-size: 12px; font-weight: 650; }
 .nt-who.you { color: var(--accent); }
 .nt-who.them { color: var(--warn); }
+.nt-who.other0 { color: #7c3aed; }
+.nt-who.other1 { color: #0d9488; }
+.nt-who.other2 { color: #db2777; }
+.nt-who.other3 { color: #b45309; }
+button.nt-who { border: 0; background: none; padding: 0; font: inherit; font-size: 12px; font-weight: 650; border-radius: 4px; }
+button.nt-who:hover { text-decoration: underline; }
+@media (prefers-color-scheme: dark) {
+  .nt-who.other0 { color: #a78bfa; }
+  .nt-who.other1 { color: #2dd4bf; }
+  .nt-who.other2 { color: #f472b6; }
+  .nt-who.other3 { color: #fbbf24; }
+}
 .nt-turn-text { font-size: 14px; line-height: 1.55; }
 .nt-turn mark { background: #ffe39a; color: inherit; border-radius: 2px; }
 .nt-aside-line { font-size: 12.5px; color: var(--muted); font-style: italic; }

@@ -896,6 +896,20 @@ impl Store {
         self.write(&path, &format!("{before}{block}{after}"))
     }
 
+    /// Rewrites note `rel`'s text with `change` (its front matter kept), while
+    /// nothing else is added to it.
+    pub fn rewrite(&self, rel: &str, change: impl FnOnce(&str) -> String) -> io::Result<()> {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let path = self.resolve(rel)?;
+        let file = std::fs::read_to_string(&path)?;
+        let (front, body) = split_front_matter(&file);
+        let changed = change(&body.replace("\r\n", "\n"));
+        if changed == body {
+            return Ok(());
+        }
+        self.write(&path, &format!("{front}{changed}"))
+    }
+
     /// Puts `text` under `## {heading}` in note `rel` (a meeting's own
     /// notes, written while the transcript grows below them).
     pub fn set_section(&self, rel: &str, heading: &str, text: &str) -> io::Result<()> {

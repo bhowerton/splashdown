@@ -652,7 +652,10 @@ pub async fn download_model(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Saved, String> {
-    if SpeechModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
+    if SpeechModel::from_id(&id).is_none()
+        && LocalModel::from_id(&id).is_none()
+        && id != splashdown_providers::models::Diarizer::ID
+    {
         return Err("Unknown model.".into());
     }
     // Two downloads of one model would write the same partial file.

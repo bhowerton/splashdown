@@ -20,7 +20,9 @@ pub use chat::ChatModel;
 pub use endpoint::{Endpoint, Flavor, OPENAI_BASE_URL, OPENROUTER_BASE_URL};
 pub use local_llm::LocalLlm;
 #[cfg(feature = "local-speech")]
-pub use local_speech::{LocalSpeech, Profile as SpeechProfile, loading as speech_model_loading};
+pub use local_speech::{
+    LocalSpeech, Profile as SpeechProfile, SpeakerTurn, diarize, loading as speech_model_loading,
+};
 pub use models::{LocalModel, SpeechModel};
 #[cfg(feature = "local-speech")]
 pub use silero::Silero;

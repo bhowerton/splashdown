@@ -97,6 +97,9 @@ pub struct NotesSettings {
     /// Name a meeting (and list who's in it) from the calendar event on
     /// when it starts. macOS only.
     pub meeting_calendar: bool,
+    /// Tell the other people in a meeting apart (Speaker 1, Speaker 2…)
+    /// with the downloaded diarization model.
+    pub meeting_speakers: bool,
 }
 
 /// Whether to summarize a meeting when it ends.

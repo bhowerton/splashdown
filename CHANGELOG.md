@@ -4,6 +4,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
+- **Speaker names in meetings.** Turn on Settings → Notes → Meetings → Tell the other people apart, and when a meeting ends, the other side's turns are split into Speaker 1, Speaker 2 and so on (up to four); a recording of the room gets the same. Click a speaker in the Transcript tab to name them, from the people on the calendar invite or by typing, and every turn they said, and their action items, take the name. It runs on your computer with NVIDIA's Sortformer model, downloaded once (about 139 MB); an hour's call takes under a minute.
 - **Meetings named from your calendar (Mac).** Turn on Settings → Notes → Meetings → Name meetings from my calendar, and a meeting note takes the title of the calendar event on when it starts and says who else is invited, instead of "Meeting · Nov 1". The calendar is read on your Mac only; macOS asks first.
 - **Today's note and smart views.** Today's note (⌘T) opens today's daily note in Notes, making it if it isn't there yet (the folder and name are the ones set for captures in Settings → Notes). Beside Pinned, the column has To do (notes with an unticked checkbox), Changed today and Untagged.
 

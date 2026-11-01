@@ -39,6 +39,7 @@ function renderGeneral() {
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
   $("mt-offer").checked = notes.offer_on_calls ?? true;
   $("mt-calendar").checked = !!notes.meeting_calendar;
+  $("mt-speakers").checked = !!notes.meeting_speakers;
   // EventKit is the Mac's; there's no calendar to read on Windows yet.
   $("mt-calendar-row").hidden = state.platform !== "macos";
   $("mt-pill").checked = notes.meeting_pill ?? state.platform === "windows";
@@ -342,6 +343,28 @@ function renderHotkeyLegend(d) {
 }
 
 // ---------------------------------------------------------------- launch at login
+
+// Turning it on downloads the speaker model (once); if that fails, it goes
+// back off.
+$("mt-speakers").addEventListener("change", async (e) => {
+  if (!e.target.checked) return;
+  const note = $("mt-speakers-note");
+  const before = note.textContent;
+  const stop = await listen("model-download", (ev) => {
+    if (ev.payload.id !== "sortformer" || !ev.payload.total) return;
+    note.textContent = `Downloading the speaker model… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
+  });
+  try {
+    await invoke("download_model", { id: "sortformer" });
+  } catch (err) {
+    e.target.checked = false;
+    e.target.dispatchEvent(new Event("change", { bubbles: true }));
+    toast(`Couldn't download the speaker model: ${err}`, true);
+  } finally {
+    stop();
+    note.textContent = before;
+  }
+});
 
 // Turning it on asks macOS for the calendar; refused, it goes back off.
 $("mt-calendar").addEventListener("change", async (e) => {

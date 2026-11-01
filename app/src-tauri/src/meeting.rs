@@ -932,6 +932,10 @@ fn finish(
     settings: &Settings,
     one_sided: bool,
 ) {
+    // Speakers first, so the summary can say who said what.
+    if settings.notes.meeting_speakers {
+        name_speakers(store, note, raw, one_sided);
+    }
     summarize(app, store, note, settings, one_sided);
     if settings.notes.keep_meeting_audio {
         match keep_recording(store, note, raw) {
@@ -942,6 +946,137 @@ fn finish(
             Err(e) => tracing::warn!("couldn't keep the meeting recording: {e}"),
         }
     }
+}
+
+/// Tells the other people apart (a meeting's Them side, or everyone in a
+/// one-sided recording) with the downloaded diarization model, and labels
+/// their turns Speaker 1, Speaker 2… Nothing changes with only one voice,
+/// or without the model.
+fn name_speakers(store: &Store, note: &str, raw: &Path, one_sided: bool) {
+    let Ok(models) = crate::engine::paths().map(|p| p.models_dir) else {
+        return;
+    };
+    let model = splashdown_providers::models::Diarizer::path_in(&models);
+    if !model.is_file() {
+        return;
+    }
+    let Ok(bytes) = std::fs::read(raw) else {
+        return;
+    };
+    // The spool is You left, Them right; a one-sided recording is all left.
+    let channel = if one_sided { 0 } else { 2 };
+    let pcm: Vec<f32> = bytes
+        .as_chunks::<4>()
+        .0
+        .iter()
+        .map(|f| f32::from(i16::from_le_bytes([f[channel], f[channel + 1]])) / f32::from(i16::MAX))
+        .collect();
+    let started = Instant::now();
+    let turns = match splashdown_providers::diarize(&model, &pcm) {
+        Ok(turns) => turns,
+        Err(e) => {
+            tracing::warn!("couldn't tell the speakers apart: {e}");
+            return;
+        }
+    };
+    tracing::info!(
+        "speakers told apart in {:.1} s ({} turns)",
+        started.elapsed().as_secs_f32(),
+        turns.len()
+    );
+    let spans: Vec<(u32, f64, f64)> = turns
+        .iter()
+        .map(|t| (t.speaker, t.start.as_secs_f64(), t.end.as_secs_f64()))
+        .collect();
+    let side = if one_sided { None } else { Some("Them") };
+    if let Err(e) = store.rewrite(note, |body| label_speakers(body, &spans, side)) {
+        tracing::warn!("couldn't label the speakers: {e}");
+    }
+}
+
+/// `body` with the turns from one side (`side`, or every unlabelled turn of
+/// a one-sided recording with `None`) labelled by who spoke: each turn gets
+/// the speaker of `spans` (speaker, start s, end s) it overlaps most,
+/// numbered in the order they first speak. Unchanged unless there are two
+/// or more.
+fn label_speakers(body: &str, spans: &[(u32, f64, f64)], side: Option<&str>) -> String {
+    // Each turn of that side: its line, and when it starts and ends (the
+    // next turn's start).
+    let lines: Vec<&str> = body.split('\n').collect();
+    let mut turns: Vec<(usize, f64)> = Vec::new();
+    let mut starts: Vec<f64> = Vec::new();
+    for (i, line) in lines.iter().enumerate() {
+        let Some((stamp, who, _)) = turn_head(line) else {
+            continue;
+        };
+        let at = seconds(stamp);
+        starts.push(at);
+        if who == side.unwrap_or("") {
+            turns.push((i, at));
+        }
+    }
+    let end_of = |at: f64| {
+        starts
+            .iter()
+            .copied()
+            .filter(|&s| s > at)
+            .fold(f64::INFINITY, f64::min)
+    };
+    let speaker_of = |from: f64, to: f64| {
+        let mut best: Option<(u32, f64)> = None;
+        for &(speaker, s, e) in spans {
+            let overlap = e.min(to) - s.max(from);
+            if overlap > 0.0 && best.is_none_or(|(_, o)| overlap > o) {
+                best = Some((speaker, overlap));
+            }
+        }
+        best.map(|(speaker, _)| speaker)
+    };
+    let found: Vec<Option<u32>> = turns
+        .iter()
+        .map(|&(_, at)| speaker_of(at, end_of(at).min(at + 120.0)))
+        .collect();
+    // Numbered as they first speak.
+    let mut order: Vec<u32> = Vec::new();
+    for s in found.iter().flatten() {
+        if !order.contains(s) {
+            order.push(*s);
+        }
+    }
+    if order.len() < 2 {
+        return body.to_string();
+    }
+    let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
+    for (&(i, _), speaker) in turns.iter().zip(&found) {
+        let (Some(speaker), Some((stamp, _, said))) = (speaker, turn_head(lines[i])) else {
+            continue;
+        };
+        let n = order.iter().position(|s| s == speaker).unwrap_or(0) + 1;
+        out[i] = format!("**[{stamp}] Speaker {n}:**{said}");
+    }
+    out.join("\n")
+}
+
+/// A transcript turn's time stamp, who said it ("" when it doesn't say)
+/// and what was said: `**[1:02] Them:** …` or `**[1:02]** …`.
+fn turn_head(line: &str) -> Option<(&str, &str, &str)> {
+    let rest = line.strip_prefix("**[")?;
+    let (stamp, rest) = rest.split_once(']')?;
+    if !stamp.chars().all(|c| c.is_ascii_digit() || c == ':') || stamp.is_empty() {
+        return None;
+    }
+    if let Some(said) = rest.strip_prefix("**") {
+        return Some((stamp, "", said));
+    }
+    let (who, said) = rest.strip_prefix(' ')?.split_once(":**")?;
+    Some((stamp, who, said))
+}
+
+/// "1:02:30" or "12:05" in seconds.
+fn seconds(stamp: &str) -> f64 {
+    stamp.split(':').fold(0.0, |total, n| {
+        total * 60.0 + n.parse::<f64>().unwrap_or(0.0)
+    })
 }
 
 /// The AI that runs transforms (it writes the summary): a name for the
@@ -1414,6 +1549,25 @@ mod tests {
             "{body}"
         );
         assert!(job.recorded() >= Duration::from_secs(5));
+    }
+
+    #[test]
+    fn the_other_side_is_told_apart() {
+        let body = "# Call\n\n**[0:00] Them:** Hi.\n\n**[0:05] You:** Hello.\n\n**[0:09] Them:** I'm Sam.\n\n**[0:20] Them:** And I'm Dana.\n";
+        // Sam until 0:15, Dana after.
+        let spans = [(3, 0.0, 4.5), (3, 9.0, 15.0), (1, 20.0, 26.0)];
+        assert_eq!(
+            label_speakers(body, &spans, Some("Them")),
+            "# Call\n\n**[0:00] Speaker 1:** Hi.\n\n**[0:05] You:** Hello.\n\n**[0:09] Speaker 1:** I'm Sam.\n\n**[0:20] Speaker 2:** And I'm Dana.\n"
+        );
+        // One voice: left as it was.
+        assert_eq!(label_speakers(body, &[(1, 0.0, 30.0)], Some("Them")), body);
+        // A recording of the room: unlabelled turns get labels.
+        let room = "**[0:00]** Today: cells.\n\n**[0:30]** A question?\n";
+        assert_eq!(
+            label_speakers(room, &[(1, 0.0, 25.0), (2, 30.0, 34.0)], None),
+            "**[0:00] Speaker 1:** Today: cells.\n\n**[0:30] Speaker 2:** A question?\n"
+        );
     }
 
     #[test]

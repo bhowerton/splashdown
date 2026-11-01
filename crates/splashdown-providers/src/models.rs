@@ -311,12 +311,41 @@ async fn download_file(
 }
 
 /// Downloads a catalog model (speech or local text) by id.
+/// NVIDIA's streaming Sortformer: who spoke when, for up to four speakers.
+/// Tells the other people on a meeting apart. NVIDIA Open Model License,
+/// 8-bit, about 139 MB.
+pub struct Diarizer;
+
+impl Diarizer {
+    pub const ID: &'static str = "sortformer";
+    pub const FILE: &'static str = "diar_streaming_sortformer_4spk-v2.1-Q8_0.gguf";
+    /// Approximate download size in MB, for UI.
+    pub const APPROX_MB: u32 = 139;
+
+    pub fn url() -> String {
+        format!(
+            "https://huggingface.co/handy-computer/diar_streaming_sortformer_4spk-v2.1-gguf/resolve/main/{}",
+            Self::FILE
+        )
+    }
+
+    pub fn path_in(models_dir: &Path) -> PathBuf {
+        models_dir.join(Self::FILE)
+    }
+
+    pub fn is_downloaded(models_dir: &Path) -> bool {
+        Self::path_in(models_dir).is_file()
+    }
+}
+
 pub async fn download_by_id(
     id: &str,
     models_dir: &Path,
     progress: impl FnMut(u64, Option<u64>),
 ) -> Result<PathBuf, ProviderError> {
-    if let Some(m) = SpeechModel::from_id(id) {
+    if id == Diarizer::ID {
+        download_file(&Diarizer::url(), &Diarizer::path_in(models_dir), progress).await
+    } else if let Some(m) = SpeechModel::from_id(id) {
         m.download(models_dir, progress).await
     } else if let Some(m) = LocalModel::from_id(id) {
         m.download(models_dir, progress).await
