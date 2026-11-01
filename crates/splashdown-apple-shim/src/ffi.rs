@@ -47,6 +47,8 @@ unsafe extern "C" {
         detail: *mut i32,
     ) -> *mut c_void;
     pub fn splashdown_tap_stop(handle: *mut c_void);
+    pub fn splashdown_calendar_access(ctx: *mut c_void, callback: Callback);
+    pub fn splashdown_calendar_now(ctx: *mut c_void, callback: Callback);
     pub fn splashdown_apple_transcribe(
         path: *const c_char,
         locale: *const c_char,

@@ -8,5 +8,8 @@
   <!-- Recording while the dictation key is held. -->
   <key>com.apple.security.device.audio-input</key>
   <true/>
+  <!-- Meeting titles from the calendar, when the user turns it on. -->
+  <key>com.apple.security.personal-information.calendars</key>
+  <true/>
 </dict>
 </plist>

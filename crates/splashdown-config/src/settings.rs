@@ -94,6 +94,9 @@ pub struct NotesSettings {
     pub meeting_reminded: bool,
     /// Keep the Notes window above other apps' windows.
     pub keep_on_top: bool,
+    /// Name a meeting (and list who's in it) from the calendar event on
+    /// when it starts. macOS only.
+    pub meeting_calendar: bool,
 }
 
 /// Whether to summarize a meeting when it ends.

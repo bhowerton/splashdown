@@ -23,6 +23,8 @@ Only these, and only when you can see why:
 | A link you transcribe in Notes | The site it points to (YouTube, a podcast host), which sends the audio | Only when you transcribe a link. For a page such as YouTube, the link helper (yt-dlp and QuickJS) is downloaded from GitHub the first time, after asking, and yt-dlp checks GitHub for an update about once a week when it's used |
 | Feedback | A GitHub issue page in your browser | Only when you choose "Send feedback". It's pre-filled with versions and provider names; you see it before submitting |
 
+If you turn on Name meetings from my calendar (Settings → Notes → Meetings, macOS only), Splashdown reads the calendar event on when a meeting starts, its title and who's invited, to name the note. It's read on your Mac and only goes where the meeting's transcript goes.
+
 To offer to record a call, Splashdown checks every two seconds which apps are using the microphone (Settings → Notes → Meetings). Only the apps' names are read, nothing leaves your computer, and nothing is recorded until you click Record.
 
 If you allow coding agents to read your notes (Settings → Privacy, off by default), what an agent reads goes to that agent's own AI provider.

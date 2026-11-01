@@ -177,6 +177,40 @@ pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String
     Ok("Starting a meeting".into())
 }
 
+/// The calendar event on now: its title and who else is invited.
+#[derive(Debug, Clone)]
+struct Event {
+    title: String,
+    people: Vec<String>,
+}
+
+#[cfg(target_os = "macos")]
+fn calendar_event() -> Option<Event> {
+    let event = tauri::async_runtime::block_on(splashdown_apple_shim::calendar_now())?;
+    tracing::info!(
+        "meeting named from the calendar ({} other people)",
+        event.people.len()
+    );
+    Some(Event {
+        title: event.title,
+        people: event.people,
+    })
+}
+
+#[cfg(not(target_os = "macos"))]
+fn calendar_event() -> Option<Event> {
+    None
+}
+
+/// Asks for the calendar (Settings → Notes → Meetings): whether it's allowed.
+#[tauri::command]
+pub async fn calendar_access() -> bool {
+    #[cfg(target_os = "macos")]
+    return splashdown_apple_shim::calendar_access().await;
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
 /// The sound of the app with `sources` (none: everything the computer
 /// plays but Splashdown).
 fn app_audio(sources: &[u32]) -> Result<LiveAudio, String> {
@@ -381,10 +415,18 @@ fn record(
     };
 
     let now = chrono::Local::now();
+    // A meeting on the calendar names the note and says who's in it.
+    let event = match source {
+        Source::Meeting if settings.notes.meeting_calendar => calendar_event(),
+        _ => None,
+    };
     let (app_name, title) = match &listening {
         _ if microphone_only => (None, "Recording".to_string()),
         Some(name) => (Some(name.clone()), name.clone()),
-        None => call_app(),
+        None => {
+            let (app_name, title) = call_app();
+            (app_name, event.as_ref().map_or(title, |e| e.title.clone()))
+        }
     };
     let (store, _) = crate::notes::store_for(settings.notes.folder.clone())?;
     let recorded_from = match &listening {
@@ -392,8 +434,13 @@ fn record(
         Some(name) => format!("Recorded from {name}"),
         None => "Recorded on this computer".into(),
     };
+    let with = event
+        .as_ref()
+        .filter(|e| !e.people.is_empty())
+        .map(|e| format!("With {}.\n\n", e.people.join(", ")))
+        .unwrap_or_default();
     let header = format!(
-        "# {title} · {}\n\n{recorded_from} · transcribed {place}.\n",
+        "# {title} · {}\n\n{with}{recorded_from} · transcribed {place}.\n",
         now.format("%b %-d, %-I:%M %p")
     );
     let note = store

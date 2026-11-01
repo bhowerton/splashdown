@@ -6,10 +6,12 @@
 //! The crate is empty on every OS except macOS.
 #![cfg(target_os = "macos")]
 
+mod calendar;
 mod ffi;
 mod providers;
 mod tap;
 
+pub use calendar::{CalendarEvent, calendar_access, calendar_now};
 pub use providers::{AppleLanguageModel, AppleSpeech};
 pub use tap::{app_audio, system_audio};
 

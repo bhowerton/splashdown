@@ -38,6 +38,9 @@ function renderGeneral() {
   $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
   $("mt-offer").checked = notes.offer_on_calls ?? true;
+  $("mt-calendar").checked = !!notes.meeting_calendar;
+  // EventKit is the Mac's; there's no calendar to read on Windows yet.
+  $("mt-calendar-row").hidden = state.platform !== "macos";
   $("mt-pill").checked = notes.meeting_pill ?? state.platform === "windows";
   $("hk-double-tap").checked = s.hotkeys.double_tap === true;
   setValue($("gen-name"), s.general.user_name);
@@ -339,6 +342,16 @@ function renderHotkeyLegend(d) {
 }
 
 // ---------------------------------------------------------------- launch at login
+
+// Turning it on asks macOS for the calendar; refused, it goes back off.
+$("mt-calendar").addEventListener("change", async (e) => {
+  if (!e.target.checked) return;
+  const allowed = await invoke("calendar_access").catch(() => false);
+  if (allowed) return;
+  e.target.checked = false;
+  e.target.dispatchEvent(new Event("change", { bubbles: true }));
+  toast("macOS didn't allow it. You can allow Splashdown in System Settings → Privacy & Security → Calendars.", true);
+});
 
 $("gen-login").addEventListener("change", async (e) => {
   try {

@@ -136,6 +136,7 @@ function collect() {
   // On is the default, saved as unset.
   s.notes.stop_when_quiet = $("mt-stop-quiet").checked ? null : false;
   s.notes.offer_on_calls = $("mt-offer").checked ? null : false;
+  s.notes.meeting_calendar = $("mt-calendar").checked;
   // The default (on for Windows, off for macOS) is saved as unset.
   const pillDefault = state.platform === "windows";
   s.notes.meeting_pill = $("mt-pill").checked === pillDefault ? null : $("mt-pill").checked;
