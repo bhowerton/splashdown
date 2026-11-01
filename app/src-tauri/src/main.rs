@@ -21,6 +21,7 @@ mod preview;
 mod project;
 mod recent;
 mod replacements;
+mod rescue;
 mod session;
 mod shortcuts;
 mod spend;
@@ -146,6 +147,8 @@ fn main() {
                     .map(|p| p.history_file())
                     .unwrap_or_else(|_| std::env::temp_dir().join("splashdown-history.jsonl")),
             ));
+            // A dictation the app closed on is kept for Retry.
+            rescue::recover();
             let tray_menu = tray::install(app.handle(), history.clone())?;
             ui::init_overlay();
             splashdown_platform::refresh_shortcut_keys();

@@ -37,6 +37,15 @@ const RECORD_MEETING: &str = "Record a meeting";
 
 /// The meeting item, relabeled while a meeting records.
 static MEETING_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
+/// "Retry last dictation", enabled while a failed recording is kept.
+static RETRY_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
+
+/// Enables "Retry last dictation" while a failed recording is kept.
+pub fn show_retry(kept: bool) {
+    if let Some(item) = RETRY_ITEM.get() {
+        let _ = item.set_enabled(kept);
+    }
+}
 
 /// Shows a meeting in progress (`Some("12:30")`) or none: the menu item's
 /// label, and the time next to the menu bar icon on macOS.
@@ -141,6 +150,14 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         Some(UNDO_AI_ACCELERATOR),
     )?;
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy last result", true, None::<&str>)?;
+    let retry = MenuItem::with_id(
+        app,
+        "retry-last",
+        "Retry last dictation",
+        crate::rescue::kept().is_some(),
+        None::<&str>,
+    )?;
+    let _ = RETRY_ITEM.set(retry.clone());
     let notes = MenuItem::with_id(app, "notes", "Notes", true, Some(crate::notes::ACCELERATOR))?;
     let meeting = MenuItem::with_id(
         app,
@@ -166,6 +183,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
             &undo_ai,
             &paste_raw,
             &copy_last,
+            &retry,
             &notes,
             &meeting,
             &PredefinedMenuItem::separator(app)?,
@@ -190,6 +208,11 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
             match id {
                 "paste-raw" => actions::paste_last_raw(&history),
                 "copy-last" => actions::copy_last(&history),
+                "retry-last" => {
+                    if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                        state.session.retry_last();
+                    }
+                }
                 "undo-ai" => {
                     if let Some(state) = app.try_state::<crate::commands::AppState>() {
                         state.session.undo_ai_edit();

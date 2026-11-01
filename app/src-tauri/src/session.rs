@@ -122,6 +122,8 @@ enum Msg {
     PresetShortcut(String),
     /// Replace the last AI-edited insertion with what was said.
     UndoAiEdit,
+    /// Run the kept recording that failed again (`rescue`).
+    RetryLast,
     /// Run a transform on text from Notes, and answer.
     Transform(TransformRequest),
     /// A transform's shortcut, in another app: run it on the selection.
@@ -213,6 +215,11 @@ impl Handle {
     /// "Undo AI edit" (⌃⌥Z or the menu bar).
     pub fn undo_ai_edit(&self) {
         let _ = self.tx.send(Msg::UndoAiEdit);
+    }
+
+    /// "Retry last dictation": transcribes the kept recording again.
+    pub fn retry_last(&self) {
+        let _ = self.tx.send(Msg::RetryLast);
     }
 
     /// A preset's shortcut was pressed.
@@ -399,6 +406,8 @@ struct Controller {
     last_notice: Option<String>,
     /// The microphone went away mid-recording; the result says so.
     mic_lost: bool,
+    /// Why the last pipeline run failed (not "no speech").
+    pipeline_error: Option<String>,
 }
 
 impl Controller {
@@ -438,6 +447,7 @@ impl Controller {
             pending_audio: None,
             last_notice: None,
             mic_lost: false,
+            pipeline_error: None,
         }
     }
 
@@ -472,6 +482,7 @@ impl Controller {
                 Ok(Msg::Control(request, reply)) => self.control(request, reply),
                 Ok(Msg::PresetShortcut(id)) => self.preset_shortcut(&id),
                 Ok(Msg::UndoAiEdit) => self.undo_ai_edit(),
+                Ok(Msg::RetryLast) => self.retry_last(),
                 Ok(Msg::Transform(t)) => {
                     let result = self.run_transform(&t.id, &t.text).map(|(_, out)| out);
                     let _ = t.reply.send(result);
@@ -985,6 +996,21 @@ impl Controller {
                 let speech = j.prefix.as_ref().map_or(&j.speech, |p| &p.whole);
                 (speech.clone(), j.instruction_speech.clone())
             });
+        // On disk until its text is in, so a failure (or the app closing)
+        // doesn't lose it.
+        if let Some(j) = &job {
+            let speech = j.prefix.as_ref().map_or(&j.speech, |p| &p.whole);
+            crate::rescue::start(
+                speech,
+                j.instruction_speech.as_ref(),
+                &crate::rescue::Kept {
+                    at: history::Entry::now_ms(),
+                    app: active.focus.as_ref().map(|f| f.app.name.clone()),
+                    preset: Some(active.preset.id.clone()),
+                    reason: String::new(),
+                },
+            );
+        }
         let files = active.project.take().and_then(project_files);
         let mut typer = job
             .as_ref()
@@ -1012,6 +1038,20 @@ impl Controller {
         // Return pressed during or after the recording asks for a send.
         // Taking it also hands Return back to apps, however this ended.
         let send = self.lock().take_send();
+        match (&outcome, self.pipeline_error.take()) {
+            (None, Some(error)) => {
+                crate::rescue::failed(&error);
+                crate::tray::show_retry(true);
+                self.notice(
+                    Tone::Warning,
+                    &format!(
+                        "{} · Kept: Retry last dictation in the menu bar",
+                        short(&error)
+                    ),
+                );
+            }
+            _ => crate::rescue::done(),
+        }
         if let Some((outcome, took)) = outcome {
             crate::spend::record_outcome(&outcome);
             self.pending_audio = recording;
@@ -1223,6 +1263,7 @@ impl Controller {
         preset: &Preset,
         on_text: Option<&mut OnText<'_>>,
     ) -> Option<(Outcome, Duration)> {
+        self.pipeline_error = None;
         let engine = self.engine.as_ref().ok()?;
         let started = Instant::now();
         let pipeline = engine.pipeline_for(preset);
@@ -1242,6 +1283,7 @@ impl Controller {
                 let llm = pipeline.llm_name();
                 let message = errors::pipeline(&e, Some(&stt), llm.as_deref());
                 self.notice(Tone::Warning, &short(&message));
+                self.pipeline_error = Some(message);
                 None
             }
         }
@@ -1931,6 +1973,76 @@ impl Controller {
     /// Replaces the last AI-edited insertion with what was said: undo the
     /// paste, then paste the transcript. Only right after it, in the same
     /// app, like other edits of "that".
+    /// "Retry last dictation": runs the kept recording again with the
+    /// preset it was dictated with, and puts the text on the clipboard (the
+    /// field it was meant for may be gone).
+    fn retry_last(&mut self) {
+        if self.active.is_some() {
+            return;
+        }
+        let (Some(kept), Some((speech, instruction))) =
+            (crate::rescue::kept(), crate::rescue::audio())
+        else {
+            crate::tray::show_retry(false);
+            return self.notice(Tone::Info, "No dictation to retry");
+        };
+        let Ok(engine) = &self.engine else {
+            return self.notice(Tone::Warning, "Splashdown isn't ready: see Settings");
+        };
+        let preset = kept
+            .preset
+            .as_ref()
+            .and_then(|id| engine.presets.iter().find(|p| &p.id == id))
+            .cloned()
+            .unwrap_or_else(|| self.match_preset(None));
+        let mode = match (&instruction, preset.ai) {
+            (Some(_), _) => Mode::DictateInstruct,
+            (None, true) => Mode::Dictate,
+            (None, false) => Mode::Raw,
+        };
+        let app_name = kept.app.clone().filter(|_| engine.share_app_name);
+        let job = AudioJob {
+            mode,
+            speech,
+            instruction_speech: instruction,
+            selection: None,
+            context: PromptContext {
+                snippets: crate::replacements::fill_in(
+                    &engine.context.snippets,
+                    chrono::Local::now(),
+                    None,
+                ),
+                ..prompt_context(&engine.context, app_name, &preset, None)
+            },
+            hints: engine.hints_for(&preset),
+            standing_instruction: preset.standing_instruction(),
+            prefix: None,
+        };
+        self.ui.show(OverlayState::Working {
+            label: "Retrying…".into(),
+        });
+        let Some((mut outcome, took)) = self.run_pipeline(job, &preset, None) else {
+            // Still kept; the notice says why.
+            self.pipeline_error = None;
+            return;
+        };
+        if let Ok(engine) = &self.engine
+            && !engine.replacements.is_empty()
+        {
+            outcome.text = engine.replacements.apply(&outcome.text);
+        }
+        crate::spend::record_outcome(&outcome);
+        self.record(&outcome, None, &preset, took);
+        if let Err(e) = splashdown_platform::copy_to_clipboard(&outcome.text) {
+            tracing::warn!("couldn't copy the retried dictation: {e}");
+            return self.notice(Tone::Warning, "Retried, but couldn't copy it: see History");
+        }
+        crate::rescue::forget();
+        crate::tray::show_retry(false);
+        self.done("Retried · copied to the clipboard");
+        self.check_budget();
+    }
+
     fn undo_ai_edit(&mut self) {
         if let Some((captured, at)) = self.last_capture.take()
             && at.elapsed() < UNDO_WINDOW
