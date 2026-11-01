@@ -338,6 +338,33 @@ impl Diarizer {
     }
 }
 
+/// Finds notes by what they mean rather than the words they use, for Ask.
+/// Qwen3 Embedding 0.6B, 8-bit, run by `splashdown-llm`; over 100
+/// languages. Apache-2.0, about 639 MB.
+pub struct Embedder;
+
+impl Embedder {
+    pub const ID: &'static str = "qwen3-embedding";
+    pub const FILE: &'static str = "Qwen3-Embedding-0.6B-Q8_0.gguf";
+    /// Approximate download size in MB, for UI.
+    pub const APPROX_MB: u32 = 639;
+
+    pub fn url() -> String {
+        format!(
+            "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/{}",
+            Self::FILE
+        )
+    }
+
+    pub fn path_in(models_dir: &Path) -> PathBuf {
+        models_dir.join(Self::FILE)
+    }
+
+    pub fn is_downloaded(models_dir: &Path) -> bool {
+        Self::path_in(models_dir).is_file()
+    }
+}
+
 pub async fn download_by_id(
     id: &str,
     models_dir: &Path,
@@ -345,6 +372,8 @@ pub async fn download_by_id(
 ) -> Result<PathBuf, ProviderError> {
     if id == Diarizer::ID {
         download_file(&Diarizer::url(), &Diarizer::path_in(models_dir), progress).await
+    } else if id == Embedder::ID {
+        download_file(&Embedder::url(), &Embedder::path_in(models_dir), progress).await
     } else if let Some(m) = SpeechModel::from_id(id) {
         m.download(models_dir, progress).await
     } else if let Some(m) = LocalModel::from_id(id) {

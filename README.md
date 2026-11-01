@@ -99,7 +99,7 @@
 - **Formatting as you write:** headings, bullets and checkboxes you can click, with the Markdown marks out of the way.
 - **⌘K** finds any note, folder or tag, and anything the window can do.
 - **Rewrites you check before keeping.** Clean up, Summary, To-dos, Email, Prompt for an AI, or your own; the result shows what changed, and you keep it or say what to change ("warmer", "in French"). Give one a shortcut to use it on selected text in any app.
-- **Ask your notes (⌘J)** about one note or all of them; answers link to the notes they came from.
+- **Ask your notes (⌘J)** about one note or all of them; answers link to the notes they came from. Turn on Find notes by meaning and Ask finds the notes about what you mean, not only ones with the same words, on your computer.
 - Pins, earlier versions you can restore, and **Paste into** (⌘↩), which pastes the note into the app you used last.
 
 ### Meetings and transcripts
@@ -200,7 +200,7 @@ Every default was chosen by measurement. The cleanup prompt is tested on 54 case
 - NVIDIA Parakeet TDT: CC-BY-4.0.
 - NVIDIA Streaming Sortformer (tells speakers apart in meetings): NVIDIA Open Model License.
 - OpenAI Whisper: MIT.
-- Qwen3: Apache-2.0.
+- Qwen3 and Qwen3 Embedding (finds notes by meaning): Apache-2.0.
 
 Built in: Silero VAD (finds the speech in a recording), MIT. The Notes editor is built on CodeMirror and Lezer, MIT ([app/ui/vendor/editor.LICENSES.txt](app/ui/vendor/editor.LICENSES.txt)).
 

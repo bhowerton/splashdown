@@ -15,6 +15,10 @@ function askDefault(hotkeys) {
 /** Fallback for a backend that doesn't send `defaults.sound_volume` yet.
  *  Matches splashdown_config's DEFAULT_SOUND_VOLUME. */
 const DEFAULT_SOUND_VOLUME = 0.12;
+// What "Find notes by meaning" says when it's not busy, and whether its
+// progress is being shown.
+const MEANING_NOTE = $("nt-meaning-note").textContent;
+let meaningShown = false;
 
 function renderGeneral() {
   const s = state.settings;
@@ -40,6 +44,8 @@ function renderGeneral() {
   $("mt-offer").checked = notes.offer_on_calls ?? true;
   $("mt-calendar").checked = !!notes.meeting_calendar;
   $("mt-speakers").checked = !!notes.meeting_speakers;
+  $("nt-meaning").checked = !!notes.ask_by_meaning;
+  if (notes.ask_by_meaning) showMeaningProgress();
   // EventKit is the Mac's; there's no calendar to read on Windows yet.
   $("mt-calendar-row").hidden = state.platform !== "macos";
   $("mt-pill").checked = notes.meeting_pill ?? state.platform === "windows";
@@ -365,6 +371,44 @@ $("mt-speakers").addEventListener("change", async (e) => {
     note.textContent = before;
   }
 });
+
+// Turning it on downloads the embedding model, then reads the notes.
+$("nt-meaning").addEventListener("change", async (e) => {
+  if (!e.target.checked) return;
+  const note = $("nt-meaning-note");
+  const stop = await listen("model-download", (ev) => {
+    if (ev.payload.id !== "qwen3-embedding" || !ev.payload.total) return;
+    note.textContent = `Downloading the model… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
+  });
+  try {
+    await invoke("download_model", { id: "qwen3-embedding" });
+  } catch (err) {
+    e.target.checked = false;
+    e.target.dispatchEvent(new Event("change", { bubbles: true }));
+    toast(`Couldn't download the model: ${err}`, true);
+    note.textContent = MEANING_NOTE;
+    return;
+  } finally {
+    stop();
+  }
+  // Saved by now, so the notes are read.
+  setTimeout(showMeaningProgress, 500);
+});
+
+// While the notes are being read for meaning, how far it's got.
+async function showMeaningProgress() {
+  if (meaningShown) return;
+  meaningShown = true;
+  const note = $("nt-meaning-note");
+  while ($("nt-meaning").checked) {
+    const [done, total] = await invoke("notes_meaning_progress").catch(() => [0, 0]);
+    if (!total || done >= total) break;
+    note.textContent = `Reading your notes: ${done} of ${total}…`;
+    await new Promise((r) => setTimeout(r, 2000));
+  }
+  note.textContent = MEANING_NOTE;
+  meaningShown = false;
+}
 
 // Turning it on asks macOS for the calendar; refused, it goes back off.
 $("mt-calendar").addEventListener("change", async (e) => {

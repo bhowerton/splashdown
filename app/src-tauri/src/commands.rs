@@ -655,6 +655,7 @@ pub async fn download_model(
     if SpeechModel::from_id(&id).is_none()
         && LocalModel::from_id(&id).is_none()
         && id != splashdown_providers::models::Diarizer::ID
+        && id != splashdown_providers::models::Embedder::ID
     {
         return Err("Unknown model.".into());
     }

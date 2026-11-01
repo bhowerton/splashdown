@@ -95,6 +95,8 @@
           <span class="nt-daily"><input id="nt-daily-folder" type="text" placeholder="Daily" aria-label="Daily notes folder" spellcheck="false" data-setting> / <input id="nt-daily-format" type="text" placeholder="YYYY-MM-DD" aria-label="Daily note file name" spellcheck="false" data-setting></span></div>
         <label class="row"><span class="lbl">Keep the recording with the note<small>Saved in Attachments, next to your notes, and linked from what you said. About 2 MB per minute.</small></span>
           <input id="nt-keep-audio" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">Find notes by meaning<small id="nt-meaning-note">Ask finds notes about what you mean, not only ones with the same words: “why was the launch delayed?” finds the note that says it was pushed back. Runs on this computer; the first time downloads the Qwen3 Embedding model (about 639 MB).</small></span>
+          <input id="nt-meaning" type="checkbox" class="switch" data-setting></label>
         <div class="row"><span class="lbl">Notes window<small>⌃⌥N, or Notes in the menu bar. Transforms are on the Words tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
       </div>
       <div class="group">

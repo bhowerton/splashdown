@@ -93,6 +93,9 @@ impl TextModel for LocalLlm {
                 usage: Usage::FREE,
             }),
             LocalLlmReply::TooLong => Err(ProviderError::TooLong),
+            LocalLlmReply::Vectors { .. } => Err(ProviderError::InvalidResponse(
+                "local model: unexpected reply".into(),
+            )),
             LocalLlmReply::Error { message } => Err(ProviderError::Unavailable(format!(
                 "local model: {message}"
             ))),
@@ -124,6 +127,67 @@ impl TextModel for LocalLlm {
     fn context_window(&self) -> usize {
         // The helper's context size (it answers `TooLong` beyond it).
         4096
+    }
+}
+
+/// The built-in embedding model (`models::Embedder`), run by the same
+/// helper in a process of its own: one vector per piece of text, so notes
+/// can be found by what they mean.
+pub struct LocalEmbedder {
+    model: PathBuf,
+    helper: Mutex<Helper>,
+}
+
+/// What the embedding model is told a question is for (Qwen3 Embedding
+/// reads questions with an instruction, and notes without).
+const FIND_NOTES: &str = "Given a question, retrieve notes that help answer it";
+
+impl LocalEmbedder {
+    /// Checks the model and helper exist; starts nothing yet.
+    pub fn new(model: &Path) -> ProviderResult<Self> {
+        if !model.is_file() {
+            return Err(ProviderError::Unavailable(format!(
+                "the embedding model isn't downloaded ({})",
+                model.display()
+            )));
+        }
+        Ok(Self {
+            model: model.to_path_buf(),
+            helper: Mutex::new(Helper {
+                path: helper_path()?,
+                process: None,
+            }),
+        })
+    }
+
+    /// A vector for each of `texts` (notes, or pieces of them), each of
+    /// unit length. Blocks while the model works.
+    pub fn embed(&self, texts: &[String]) -> ProviderResult<Vec<Vec<f32>>> {
+        let request = LocalLlmRequest::Embed {
+            model: self.model.clone(),
+            cpu_only: false,
+            texts: texts.to_vec(),
+        };
+        let reply = self
+            .helper
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .request(&request)?;
+        match reply {
+            LocalLlmReply::Vectors { vectors } if vectors.len() == texts.len() => Ok(vectors),
+            LocalLlmReply::Error { message } => Err(ProviderError::Unavailable(format!(
+                "embedding model: {message}"
+            ))),
+            _ => Err(ProviderError::InvalidResponse(
+                "embedding model: unexpected reply".into(),
+            )),
+        }
+    }
+
+    /// The vector for a question, to compare with the notes' vectors.
+    pub fn embed_question(&self, question: &str) -> ProviderResult<Vec<f32>> {
+        let text = format!("Instruct: {FIND_NOTES}\nQuery:{question}");
+        Ok(self.embed(&[text])?.remove(0))
     }
 }
 

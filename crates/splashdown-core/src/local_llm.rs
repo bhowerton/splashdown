@@ -22,6 +22,13 @@ pub enum LocalLlmRequest {
         temperature: f32,
         max_tokens: u32,
     },
+    /// One vector per text, for finding notes by meaning (an embedding
+    /// model). Replies `Vectors`, each of unit length.
+    Embed {
+        model: PathBuf,
+        cpu_only: bool,
+        texts: Vec<String>,
+    },
 }
 
 impl LocalLlmRequest {
@@ -31,16 +38,22 @@ impl LocalLlmRequest {
             LocalLlmRequest::Load { model, cpu_only }
             | LocalLlmRequest::Complete {
                 model, cpu_only, ..
+            }
+            | LocalLlmRequest::Embed {
+                model, cpu_only, ..
             } => (model, *cpu_only),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
 pub enum LocalLlmReply {
     Ok {
         text: String,
+    },
+    Vectors {
+        vectors: Vec<Vec<f32>>,
     },
     /// The prompt doesn't fit in the model's context.
     TooLong,

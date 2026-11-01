@@ -152,6 +152,7 @@ fn main() {
             meeting::audio_apps,
             meeting::meeting_status,
             notes::open_notes,
+            notes::notes_meaning_progress,
             export::export_history,
             export::export_settings,
             export::check_settings_file,

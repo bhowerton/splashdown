@@ -38,6 +38,13 @@ const SEED: u32 = 1234;
 /// does the same when thinking is off).
 const NO_THINKING: &str = "<think>\n\n</think>\n\n";
 
+/// Most tokens of a text an embedding reads; the app sends shorter pieces.
+const EMBED_TOKENS: usize = 512;
+/// Tokens per embedding batch, and so the most in one text.
+const EMBED_BATCH: u32 = 2048;
+/// Most texts in one embedding batch.
+const EMBED_SEQS: u32 = 16;
+
 /// Seconds since start of the last request, for the idle watchdog.
 static LAST_REQUEST: AtomicU64 = AtomicU64::new(0);
 
@@ -95,18 +102,26 @@ fn main() {
                 continue;
             }
         };
-        let mut session = match Session::new(&backend, &model) {
-            Ok(s) => s,
-            Err(e) => {
-                send(error(e));
-                next = requests.next();
-                continue;
-            }
-        };
+        // A chat session for completions, an embedder for vectors: made on
+        // first use, since a model is one or the other.
+        let mut session = None;
+        let mut embedder = None;
 
         let mut request = request;
         loop {
-            send(session.handle(&request));
+            let reply = match &request {
+                LocalLlmRequest::Embed { texts, .. } => {
+                    match ready(&mut embedder, || Embedder::new(&backend, &model)) {
+                        Ok(e) => e.handle(texts),
+                        Err(e) => error(e),
+                    }
+                }
+                _ => match ready(&mut session, || Session::new(&backend, &model)) {
+                    Ok(s) => s.handle(&request),
+                    Err(e) => error(e),
+                },
+            };
+            send(reply);
             match requests.next() {
                 Some(Ok(r)) if r.target() == (&path, cpu_only) => request = r,
                 // Another model, a bad line, or the end of input.
@@ -123,6 +138,17 @@ fn error(message: impl Into<String>) -> LocalLlmReply {
     LocalLlmReply::Error {
         message: message.into(),
     }
+}
+
+/// What `slot` holds, made by `make` the first time.
+fn ready<T>(
+    slot: &mut Option<T>,
+    make: impl FnOnce() -> Result<T, String>,
+) -> Result<&mut T, String> {
+    if slot.is_none() {
+        *slot = Some(make()?);
+    }
+    Ok(slot.as_mut().expect("just made"))
 }
 
 fn load(backend: &LlamaBackend, path: &Path, cpu_only: bool) -> Result<LlamaModel, String> {
@@ -177,7 +203,7 @@ impl<'m> Session<'m> {
 
     fn handle(&mut self, request: &LocalLlmRequest) -> LocalLlmReply {
         match request {
-            LocalLlmRequest::Load { .. } => LocalLlmReply::Ok {
+            LocalLlmRequest::Load { .. } | LocalLlmRequest::Embed { .. } => LocalLlmReply::Ok {
                 text: String::new(),
             },
             LocalLlmRequest::Complete {
@@ -302,6 +328,100 @@ impl<'m> Session<'m> {
         Ok(LocalLlmReply::Ok {
             text: String::from_utf8_lossy(&out).trim().to_string(),
         })
+    }
+}
+
+/// An embedding model with a context that pools each text into one
+/// vector.
+struct Embedder<'m> {
+    model: &'m LlamaModel,
+    ctx: LlamaContext<'m>,
+}
+
+impl<'m> Embedder<'m> {
+    fn new(backend: &LlamaBackend, model: &'m LlamaModel) -> Result<Self, String> {
+        let threads = threads();
+        // A whole batch is one micro-batch: models that read in both
+        // directions need all of a text at once.
+        let params = LlamaContextParams::default()
+            .with_n_ctx(NonZeroU32::new(EMBED_BATCH))
+            .with_n_batch(EMBED_BATCH)
+            .with_n_ubatch(EMBED_BATCH)
+            .with_n_seq_max(EMBED_SEQS)
+            .with_embeddings(true)
+            .with_n_threads(threads)
+            .with_n_threads_batch(threads);
+        let ctx = model
+            .new_context(backend, params)
+            .map_err(|e| format!("couldn't create a context: {e}"))?;
+        Ok(Self { model, ctx })
+    }
+
+    fn handle(&mut self, texts: &[String]) -> LocalLlmReply {
+        match self.embed(texts) {
+            Ok(vectors) => LocalLlmReply::Vectors { vectors },
+            Err(e) => {
+                self.ctx.clear_kv_cache();
+                error(e)
+            }
+        }
+    }
+
+    /// Each text's vector, of unit length. Texts longer than
+    /// `EMBED_TOKENS` are cut short; several share each batch.
+    fn embed(&mut self, texts: &[String]) -> Result<Vec<Vec<f32>>, String> {
+        let vocab = self.model.vocab();
+        let tokenized: Vec<Vec<LlamaToken>> = texts
+            .iter()
+            .map(|text| {
+                let mut tokens = vocab.tokenize(text.as_bytes(), true, true);
+                tokens.truncate(EMBED_TOKENS);
+                if tokens.is_empty() {
+                    tokens.push(vocab.bos());
+                }
+                tokens
+            })
+            .collect();
+        let mut vectors = Vec::with_capacity(texts.len());
+        let mut batch = LlamaBatch::new(EMBED_BATCH as usize, EMBED_SEQS as i32);
+        let mut start = 0;
+        while start < tokenized.len() {
+            // As many texts as fit.
+            let mut end = start;
+            let mut used = 0;
+            while end < tokenized.len()
+                && end - start < EMBED_SEQS as usize
+                && used + tokenized[end].len() <= EMBED_BATCH as usize
+            {
+                used += tokenized[end].len();
+                end += 1;
+            }
+            batch.clear();
+            for (seq, tokens) in tokenized[start..end].iter().enumerate() {
+                batch
+                    .add_sequence(tokens, seq as i32, true)
+                    .map_err(|e| format!("batch: {e}"))?;
+            }
+            self.ctx.clear_kv_cache();
+            self.ctx
+                .decode(&mut batch)
+                .map_err(|e| format!("embedding: {e}"))?;
+            for seq in 0..end - start {
+                let v = self
+                    .ctx
+                    .embeddings_seq_ith(seq as i32)
+                    .map_err(|e| format!("embedding: {e}"))?;
+                let norm = v
+                    .iter()
+                    .map(|x| x * x)
+                    .sum::<f32>()
+                    .sqrt()
+                    .max(f32::EPSILON);
+                vectors.push(v.iter().map(|x| x / norm).collect());
+            }
+            start = end;
+        }
+        Ok(vectors)
     }
 }
 

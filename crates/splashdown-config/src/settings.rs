@@ -100,6 +100,9 @@ pub struct NotesSettings {
     /// Tell the other people in a meeting apart (Speaker 1, Speaker 2…)
     /// with the downloaded diarization model.
     pub meeting_speakers: bool,
+    /// Ask finds notes by what they mean too, not only by their words,
+    /// with the downloaded embedding model.
+    pub ask_by_meaning: bool,
 }
 
 /// Whether to summarize a meeting when it ends.

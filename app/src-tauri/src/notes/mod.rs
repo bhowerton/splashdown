@@ -5,6 +5,7 @@
 
 pub mod files;
 mod link_helper;
+pub mod meaning;
 pub mod media;
 pub mod store;
 
@@ -434,7 +435,7 @@ const ASK_EXCERPT: usize = 1200;
 /// Excerpts of the notes that best match `question`, for the Ask panel, if
 /// Settings allows it. Matching is by the question's words, weighted by how
 /// rare each is across the notes, so "the", "der" or "le" count for little
-/// in any language.
+/// in any language; and by meaning too when that's turned on.
 pub fn excerpts_for(
     settings: &NotesSettings,
     question: &str,
@@ -445,33 +446,98 @@ pub fn excerpts_for(
     let Ok((store, _)) = store_for(settings.folder.clone()) else {
         return Vec::new();
     };
-    matching(&store.list(), question, ASK_NOTES, ASK_EXCERPT)
-        .into_iter()
-        .map(|(_, excerpt)| excerpt)
-        .collect()
+    matching(
+        &store,
+        question,
+        ASK_NOTES,
+        ASK_EXCERPT,
+        settings.ask_by_meaning,
+    )
+    .into_iter()
+    .map(|(_, excerpt)| excerpt)
+    .collect()
 }
 
 /// The `limit` notes that best match `question`: each one's path, and up
-/// to `chars` of it around its best word.
+/// to `chars` of it around its best word, or the part closest in meaning.
+/// With `by_meaning`, notes are ranked by both, each note by its places in
+/// the two rankings (reciprocal rank fusion), so a note high in either
+/// comes up and one high in both comes first.
 fn matching(
-    notes: &[Summary],
+    store: &Arc<Store>,
     question: &str,
     limit: usize,
     chars: usize,
+    by_meaning: bool,
 ) -> Vec<(String, splashdown_core::ask::NoteExcerpt)> {
-    best_matches(notes, question, limit)
+    /// Damps the difference between the top places (the usual 60).
+    const K: f64 = 60.0;
+    let notes = store.list();
+    let mut ranked: Vec<(f64, &Summary, Option<String>, Option<meaning::Piece>)> = Vec::new();
+    for (place, (note, word)) in best_matches(&notes, question, limit)
         .into_iter()
-        .map(|(note, word)| {
+        .enumerate()
+    {
+        ranked.push((1.0 / (K + place as f64), note, Some(word), None));
+    }
+    let meant = if by_meaning {
+        meaning::search(store, &notes, question, limit)
+    } else {
+        Vec::new()
+    };
+    for (place, hit) in meant.into_iter().enumerate() {
+        let score = 1.0 / (K + place as f64);
+        match ranked.iter_mut().find(|r| r.1.path == hit.path) {
+            Some(r) => {
+                r.0 += score;
+                r.3 = Some(hit.piece);
+            }
+            None => {
+                if let Some(note) = notes.iter().find(|n| n.path == hit.path) {
+                    ranked.push((score, note, None, Some(hit.piece)));
+                }
+            }
+        }
+    }
+    ranked.sort_by(|a, b| b.0.total_cmp(&a.0).then(b.1.modified.cmp(&a.1.modified)));
+    ranked
+        .into_iter()
+        .take(limit)
+        .map(|(_, note, word, piece)| {
+            let text = match (piece, word) {
+                (Some(piece), _) => around_piece(&note.text, piece, chars),
+                (None, Some(word)) => around(&note.text, &word, chars),
+                (None, None) => clip(&note.text, chars, false),
+            };
             (
                 note.path.clone(),
                 splashdown_core::ask::NoteExcerpt {
                     title: note.title.clone(),
                     date: day_of(note.modified),
-                    text: around(&note.text, &word, chars),
+                    text,
                 },
             )
         })
         .collect()
+}
+
+/// Up to `max` characters of `text` with `piece` in them, starting a little
+/// before it.
+fn around_piece(text: &str, piece: meaning::Piece, max: usize) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= max {
+        return text.to_string();
+    }
+    let before = max.saturating_sub(piece.len) / 3;
+    let start = piece.start.saturating_sub(before).min(chars.len() - max);
+    let mut out: String = chars[start..start + max].iter().collect();
+    if start > 0 {
+        out.insert(0, '…');
+    }
+    if start + max < chars.len() {
+        out.push('…');
+    }
+    out
 }
 
 /// "2026-10-30", for a time in Unix ms.
@@ -819,6 +885,7 @@ pub fn toggle(app: &AppHandle) {
 /// focused.
 pub fn open(app: &AppHandle) {
     remember_front_app();
+    read_for_meaning(app);
     if let Some(window) = app.get_webview_window(WINDOW) {
         let _ = window.show();
         let _ = window.set_focus();
@@ -1401,7 +1468,21 @@ pub async fn notes_ask(
             };
             (vec![excerpt], vec![source])
         }
-        None => matching(&store.list(), &question, NOTES_ASK_NOTES, NOTES_ASK_EXCERPT)
+        None => {
+            // Finding notes by meaning can take a moment.
+            let by_meaning = state.settings().notes.ask_by_meaning;
+            let asked = question.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                matching(
+                    &store,
+                    &asked,
+                    NOTES_ASK_NOTES,
+                    NOTES_ASK_EXCERPT,
+                    by_meaning,
+                )
+            })
+            .await
+            .map_err(|e| e.to_string())?
             .into_iter()
             .map(|(path, excerpt)| {
                 let source = Source {
@@ -1410,7 +1491,8 @@ pub async fn notes_ask(
                 };
                 (excerpt, source)
             })
-            .unzip(),
+            .unzip()
+        }
     };
     tracing::info!("asking in Notes, with {} note(s)", notes.len());
     let context = splashdown_core::ask::AskContext {
@@ -1485,6 +1567,34 @@ pub fn notes_edit_transforms(app: AppHandle) {
 }
 
 /// From Settings → Privacy.
+/// Brings the notes' vectors up to date in the background, when Ask finds
+/// notes by meaning: changed notes are then ready by the time they're
+/// asked about.
+fn read_for_meaning(app: &AppHandle) {
+    let Some(state) = app.try_state::<AppState>() else {
+        return;
+    };
+    let settings = state.settings().notes;
+    if !settings.ask_by_meaning || !meaning::available() {
+        return;
+    }
+    if let Ok((store, _)) = store_for(settings.folder) {
+        meaning::update_soon(store);
+    }
+}
+
+/// How far along reading the notes for meaning is, for Settings: notes
+/// read, of all of them (and starts reading any that aren't).
+#[tauri::command]
+pub async fn notes_meaning_progress(app: AppHandle) -> Result<(usize, usize), String> {
+    read_for_meaning(&app);
+    let state = app.state::<AppState>();
+    let (store, _) = store(&state)?;
+    tauri::async_runtime::spawn_blocking(move || meaning::progress(store.root(), &store.list()))
+        .await
+        .map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn open_notes(app: AppHandle) {
     open(&app);
