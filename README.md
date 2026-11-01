@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Hold a key. Say it. It's typed.</strong><br>
-  Free, open-source dictation for Mac and Windows. Works in every app. No subscription, no account.
+  Free, open-source dictation for Mac and Windows, with notes, meeting notes and transcripts built in. Works in every app. No subscription, no account.
 </p>
 
 <p align="center">
@@ -41,6 +41,7 @@
 - **Free and open source, for good.** No subscription, no account, no word limits. Your own API key costs cents a month, and you can set a spending limit.
 - **Works everywhere you type.** Email, Slack, Messages, docs, the browser, your terminal or code editor: any text field in any app.
 - **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
+- **Notes, meetings and transcripts, too.** Dictate into notes that are plain Markdown files, record a call without a bot joining it, transcribe whatever an app is playing, and ask your notes questions.
 - **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
 <p align="center">
@@ -49,12 +50,19 @@
   <img src="docs/assets/readme/privacy.png" width="266" alt="Settings, Privacy: where speech and text go for the current settings, local-only mode, and what the AI is told">
 </p>
 
+<p align="center">
+  <img src="docs/assets/readme/notes.png" width="266" alt="Notes: folders and tags on the left, the notes list, and a note with its tags and a Rewrite bar">
+  <img src="docs/assets/readme/meeting.png" width="266" alt="A meeting note: Summary, Transcript and My notes tabs, with the overview, decisions and action items">
+  <img src="docs/assets/readme/ask.png" width="266" alt="Ask beside a note: a question about the launch, answered with numbered links to the notes it came from">
+</p>
+
 ## Everything it does
 
 ### Dictate anywhere
 
 - **Hold to talk.** Hold **Right Option** (Right Ctrl on Windows), speak, let go. The text lands in whatever field has focus, with a space before it when it needs one.
 - **Clean, not rewritten.** The AI pass removes fillers and false starts and fixes punctuation, at the level you choose per app: none, light, medium or high. Spoken formatting ("new paragraph", "comma") works in any language.
+- **No waiting for the AI:** with a cloud AI, its text is typed as it's written, starting a moment after you let go.
 - **Live text while you speak** with speech-to-text on your computer: Nemotron writes as you speak, and your text is ready the moment you let go.
 - **Hands-free** for long dictations: hold the key and press **H**, then let go. Stops on its own after 3 minutes of silence.
 - **Straight into a note:** hold the key and press **N**, and what you say is added to your Inbox (or today's daily note) instead of typed. ⌃⌥Z takes it back.
@@ -80,9 +88,31 @@
 - **A stand-in when the cloud fails.** If your provider is offline or out of credit, the dictation is retried on your computer, and the result says so.
 - Smaller on-device models handle cleanup well but follow instructions less reliably than cloud models, so instructions can be sent to the cloud while plain dictation stays local.
 
+### Ask a question
+
+- **Hold the key, press A, ask.** "What's the German word for deadline?", or select text first and ask "what does this say?". The answer appears in a small panel with Insert and Copy, and can draw on your notes ("what did we decide about the launch?"). Follow-ups carry on the conversation.
+
+### Notes
+
+- **⌃⌥N opens Notes**, for when there's no text field around. Every note is a plain Markdown file in a folder you choose, so Obsidian, iCloud Drive and Dropbox work, and nothing is locked in.
+- **Folders and tags.** Nested folders (the real ones on disk) and Obsidian-style `#tags`, nested with `/`, in a column with counts. Drag a note onto a folder, or use Move to….
+- **Formatting as you write:** headings, bullets and checkboxes you can click, with the Markdown marks out of the way.
+- **⌘K** finds any note, folder or tag, and anything the window can do.
+- **Rewrites you check before keeping.** Clean up, Summary, To-dos, Email, Prompt for an AI, or your own; the result shows what changed, and you keep it or say what to change ("warmer", "in French"). Give one a shortcut to use it on selected text in any app.
+- **Ask your notes (⌘J)** about one note or all of them; answers link to the notes they came from.
+- Pins, earlier versions you can restore, and **Paste into** (⌘↩), which pastes the note into the app you used last.
+
+### Meetings and transcripts
+
+- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down. A kept recording plays back from any turn. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record.
+- **Transcribe an app's audio:** a webinar in the browser, a podcast app, a call you're only listening to. Only that app's sound is recorded, with a level meter that says whether it's hearing words.
+- **Transcribe the microphone** for a lecture or a conversation in the room, hands-free.
+- **Transcribe files and links:** drop a voice memo, interview or video onto Notes, or paste a YouTube or podcast link.
+
 ### Everything else
 
-- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), **Notes** for when there's no text field: plain Markdown files in a folder you choose (Obsidian, iCloud Drive and Dropbox work), with nested folders and tags, ⌘K search, pins, earlier versions, Ask your notes, transcripts of an app's audio as it plays, meeting notes with your own notes beside the transcript, and **transforms** you can check before keeping (Clean up, Summary, To-dos, Email, Prompt for an AI, or your own; give one a shortcut to use it on selected text in any app), and an always-on-screen **mini bar** for clicking instead of holding a key.
+- **A dictation is never lost.** If the speech service or the AI fails, or Splashdown closes mid-way, the recording is kept and **Retry last dictation** turns it into text. A cloud provider that's down is stood in for by a model on your computer.
+- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), and an always-on-screen **mini bar** for clicking instead of holding a key.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
 
@@ -103,12 +133,15 @@
 | Press Return when it's typed | Tap **Return** while holding, or right after letting go (again to undo) |
 | Go hands-free | While holding **Right Option**, press **H**, then let go; tap Right Option once more to finish (double-tap can be turned on in Settings) |
 | Add to your notes instead of typing | While holding, press **N**; ⌃⌥Z right after takes it back |
+| Ask a question | While holding, press **A**, then ask |
+| Record a meeting | **⌃⌥M** (again to stop) |
 | Use another preset | While holding, press **1–9** |
 | Change the spoken language | Menu bar → **Language** (detects it automatically by default) |
 | Cancel | **Esc** |
 | Paste exactly what you said, without the AI | **⌃⌥V** |
 | Swap the AI's version for exactly what you said | **⌃⌥Z** right after it's typed |
 | Dictate a note with no text field around | **⌃⌥N** opens Notes; **Paste into** (⌘↩) pastes the note into the app you were in |
+| Get around Notes | **⌘K** any note, folder, tag or action · **⌘J** Ask · **⌘N** new note · **⌘O** transcribe a file · **⌘L** a link · **⌘E** hide the list · **⌘⇧E** hide folders and tags |
 | Dictate with the mouse | Choose **Mouse button 4** or **5** as the dictation key in Settings; hold it or double-click it like a key |
 | Start or finish from Raycast, Alfred or Shortcuts | Open `splashdown://toggle` (also `start`, `stop`, `cancel`) |
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
@@ -207,7 +240,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 | `crates/splashdown-cli` | The `splashdown-cli` developer tool and evals, and `splashdown-cli toggle`/`listen`/`note` for the running app |
 | `crates/splashdown-control` | The running app's control socket: protocol, client, server |
 | `crates/splashdown-mcp` | `splashdown-mcp`, voice input for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
-| `app/` | The menu bar app (Tauri) and its Settings and onboarding windows |
+| `app/` | The menu bar app (Tauri) and its Settings, onboarding and Notes windows; `app/editor` builds the Notes editor |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md) |
 
 </details>

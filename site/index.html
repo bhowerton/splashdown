@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Splashdown — Hold a key. Say it. It's typed.</title>
-<meta name="description" content="Free, open-source dictation for Mac and Windows. Hold a key, speak, and clean text appears in any app. No subscription, no account, and it can run entirely on your computer.">
+<meta name="description" content="Free, open-source dictation for Mac and Windows. Hold a key, speak, and clean text appears in any app. Notes, meeting notes without a bot, and transcripts of anything your computer plays. No subscription, no account, and it can run entirely on your computer.">
 <link rel="canonical" href="https://splashdown.app/">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon-180.png">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://splashdown.app/">
 <meta property="og:title" content="Splashdown — Hold a key. Say it. It's typed.">
-<meta property="og:description" content="Free, open-source dictation for Mac and Windows. Works in every app. No subscription, no account.">
+<meta property="og:description" content="Free, open-source dictation for Mac and Windows, with notes, meeting notes and transcripts built in. No subscription, no account.">
 <meta property="og:image" content="https://splashdown.app/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A1440">
@@ -23,6 +23,7 @@
   <a class="brand" href="./"><img src="assets/icon.svg" alt="" width="36" height="36">Splashdown</a>
   <nav>
     <a href="#features">Features</a>
+    <a href="#notes">Notes &amp; meetings</a>
     <a href="#privacy">Privacy</a>
     <a href="#faq">FAQ</a>
     <a class="gh" href="https://github.com/bhowerton/splashdown">GitHub</a>
@@ -32,7 +33,7 @@
 <main>
   <section class="hero">
     <h1>Hold a key.<br>Say it. <span>It's typed.</span></h1>
-    <p class="lede">Free, open-source dictation for Mac and Windows. Speak naturally, and clean, punctuated text appears in whatever app you're in. No subscription, no account.</p>
+    <p class="lede">Free, open-source dictation for Mac and Windows. Speak naturally, and clean, punctuated text appears in whatever app you're in. Notes, meeting notes and transcripts are built in. No subscription, no account.</p>
     <div class="cta">
       <a class="btn primary" id="download" href="mac">Download for Mac</a>
       <a class="btn" id="other" href="windows">Download for Windows</a>
@@ -77,6 +78,41 @@
     </div>
   </section>
 
+  <section class="features" id="notes">
+    <h2>Notes, meetings and transcripts, built in.</h2>
+    <div class="grid">
+      <article>
+        <h3>Notes that are just files</h3>
+        <p>Every note is a Markdown file in a folder you choose, so Obsidian, iCloud and Dropbox see them too. Nested folders, #tags, ⌘K to find anything, and formatting as you write.</p>
+      </article>
+      <article>
+        <h3>Meeting notes without a bot</h3>
+        <p>Record your microphone and what the call plays, turn by turn, with your own notes beside the live transcript. A summary of decisions and action items follows, and Splashdown offers to record when a call starts.</p>
+      </article>
+      <article>
+        <h3>Transcribe anything that plays</h3>
+        <p>A webinar in your browser, a podcast app, a lecture in the room, a voice memo or a YouTube link: pick it, and it's written into a note as it plays.</p>
+      </article>
+      <article>
+        <h3>Ask your notes</h3>
+        <p>Hold the key, press A and ask, from any app, or press ⌘J in Notes. Answers come from your notes and link to the ones they used.</p>
+      </article>
+      <article>
+        <h3>Rewrites you check first</h3>
+        <p>Clean up, summarize, turn into an email or say how in your own words. See exactly what changed, then keep it or try again.</p>
+      </article>
+      <article>
+        <h3>Nothing gets lost</h3>
+        <p>If a provider fails or the app closes mid-sentence, the recording is kept and turned into text when you're ready. Earlier versions of every note are kept too.</p>
+      </article>
+    </div>
+    <div class="shots">
+      <figure><img src="assets/notes.png" loading="lazy" alt="Notes: folders and tags on the left, the notes list, and a note with its tags and a Rewrite bar"><figcaption>Folders, tags and Markdown files</figcaption></figure>
+      <figure><img src="assets/meeting.png" loading="lazy" alt="A meeting note: Summary, Transcript and My notes tabs, with the overview, decisions and action items"><figcaption>A meeting, summarized</figcaption></figure>
+      <figure><img src="assets/ask.png" loading="lazy" alt="Ask beside a note: a question about the launch, answered with numbered links to the notes it came from"><figcaption>Answers with their sources</figcaption></figure>
+    </div>
+  </section>
+
   <section class="privacy" id="privacy">
     <h2>Private by default</h2>
     <p>Splashdown has no servers, no account and no analytics. Your voice and text go only to the provider you choose, straight from your computer, or nowhere at all with on-device models. API keys stay in your system keychain, history is off unless you turn it on, and the logs never contain what you said.</p>
@@ -106,8 +142,16 @@
       <p>Yes. Export your dictionary or snippets from the other app, then choose <strong>Settings → Words &amp; language → Import…</strong> in Splashdown. Your vocabulary, corrections and snippets come along, nothing you already have changes, and there's no word limit waiting for you.</p>
     </details>
     <details>
+      <summary>Does it record meetings? Does a bot join the call?</summary>
+      <p>No bot joins. Splashdown records your microphone and what your computer plays, on your computer, and writes the conversation into a note as it goes, each turn marked You or Them. Tell people they're being recorded. With speech-to-text on your computer, nothing leaves it; with a cloud AI, it asks before sending the transcript for a summary.</p>
+    </details>
+    <details>
+      <summary>Where are my notes kept?</summary>
+      <p>In a folder you choose (Documents › Splashdown Notes unless you pick another), one Markdown file per note, with folders as real folders. Other apps can open and edit them, and Splashdown picks up their changes. Nothing is kept in a database or a cloud of ours.</p>
+    </details>
+    <details>
       <summary>Does it work with coding agents?</summary>
-      <p>Yes. File names you say become <code>@file</code> mentions for Claude Code or Cursor, and the <code>splashdown-mcp</code> server lets an agent ask you a question by voice.</p>
+      <p>Yes. File names you say become <code>@file</code> mentions for Claude Code or Cursor, and the <code>splashdown-mcp</code> server lets an agent ask you a question by voice and, if you allow it, search and add to your notes.</p>
     </details>
     <details>
       <summary>Something isn't working.</summary>
