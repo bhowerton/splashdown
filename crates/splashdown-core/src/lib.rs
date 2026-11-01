@@ -10,6 +10,7 @@ pub mod files;
 pub mod gesture;
 pub mod guard;
 pub mod local_llm;
+pub mod meeting;
 mod mode;
 pub mod pipeline;
 pub mod prompt;

@@ -105,6 +105,10 @@ struct CleanupCase {
     /// Case-insensitive words/phrases the output must not contain.
     #[serde(default)]
     reject: Vec<String>,
+    /// Case-insensitive text it must not contain, punctuation included
+    /// ("- [ ]", "(Dana)").
+    #[serde(default)]
+    reject_text: Vec<String>,
     min_lines: Option<usize>,
     max_chars: Option<usize>,
 }
@@ -157,6 +161,11 @@ impl CleanupCase {
                     .windows(phrase.len())
                     .any(|w| w == phrase.as_slice())
             {
+                out.push(format!("contains {r:?}"));
+            }
+        }
+        for r in &self.reject_text {
+            if lower.contains(&r.to_lowercase()) {
                 out.push(format!("contains {r:?}"));
             }
         }
@@ -286,7 +295,12 @@ async fn cleanup_one(
                     }
                     None => {}
                 }
-                (outcome.text, fails)
+                // What the app would put in the note.
+                let text = match &case.transform {
+                    Some(id) => splashdown_config::tidy_answer(id, &outcome.text),
+                    None => outcome.text,
+                };
+                (text, fails)
             }
             Err(e) => {
                 errors += 1;
@@ -534,6 +548,7 @@ mod tests {
             transform: None,
             expect: vec!["friday".into()],
             reject: vec!["um".into(), "you know".into()],
+            reject_text: Vec::new(),
             min_lines: None,
             max_chars: None,
         };

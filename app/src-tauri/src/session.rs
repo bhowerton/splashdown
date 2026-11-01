@@ -1580,6 +1580,8 @@ impl Controller {
             errors::pipeline(&e, None, llm.as_deref())
         })?;
         crate::spend::record_outcome(&outcome);
+        let mut outcome = outcome;
+        outcome.text = splashdown_config::tidy_answer(&transform.id, &outcome.text);
         let unchanged = match &outcome.fallback {
             Some(Fallback::Guard(splashdown_core::guard::GuardReason::Empty)) => {
                 Some("nothing came back, so nothing changed".to_string())

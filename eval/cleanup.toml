@@ -7,6 +7,8 @@
 #   reject    case-insensitive whole words/phrases it must not contain
 #   min_lines minimum number of non-empty lines
 #   max_chars maximum length
+#   reject_text case-insensitive text it must not contain, punctuation
+#               included ("- [ ]")
 # The eval context always uses user name "Alex" and vocabulary Tauri, OpenRouter, Kubernetes.
 
 # ---------------------------------------------------------------- fillers
@@ -389,3 +391,68 @@ selection = "so um the the invoice is uh four hundred and twenty dollars and it'
 # The self-correction wins, however the date is written.
 expect = ["Kubernetes", "invoice"]
 reject = ["um", "uh", "fifteenth", "15th"]
+
+# ---------------------------------------------------------------- meeting summary
+
+[[case]]
+id = "meeting-summary-decisions-and-owners"
+transform = "meeting-summary"
+selection = """
+**[0:00] Them:** Can we move the launch from Tuesday to Thursday? QA needs two more days.
+
+**[0:06] You:** Thursday works. Priya, can you update the release notes by Wednesday?
+
+**[0:11] Them:** Sure, I'll do the release notes. And the budget stays at $8,000.
+
+**[0:17] You:** Great. I'll tell marketing to hold the press email until Thursday.
+"""
+expect = ["Thursday", "Priya", "release notes", "8,000", "- [ ]", "marketing"]
+reject = ["Monday", "Friday"]
+
+[[case]]
+id = "meeting-summary-nothing-to-do"
+transform = "meeting-summary"
+selection = """
+**[0:00] Them:** How was the conference?
+
+**[0:03] You:** Good. The keynote on local speech models was the best part.
+
+**[0:08] Them:** Nice. I heard the venue was huge.
+
+**[0:11] You:** It was, and the coffee was terrible.
+"""
+# A catch-up with nothing agreed or to do: no empty headings, no made-up
+# tasks, and questions that got answers aren't open questions.
+expect = ["keynote"]
+reject = ["action items", "open questions"]
+reject_text = ["- [ ]"]
+
+[[case]]
+id = "meeting-summary-no-invented-owner"
+transform = "meeting-summary"
+selection = """
+**[0:00] Them:** The vendor still hasn't signed. Someone needs to send them the revised contract this week.
+
+**[0:07] You:** I talked to Dana about it on Monday. She thinks they'll sign once the price is fixed.
+
+**[0:13] Them:** Okay. Then we keep the price at $40 per seat.
+"""
+# Dana was talked to, not given the task: nobody owns it. And it was You
+# who talked to Dana, not Dana who talked to the vendor.
+expect = ["contract", "$40"]
+reject = ["Dana discussed", "Dana talked", "Dana spoke", "Dana met"]
+reject_text = ["(Dana)", "Dana:", "Dana to send", "Dana will send", "Dana should send", "Owner: Dana", "— Dana", "- Dana"]
+
+[[case]]
+id = "meeting-summary-open-question"
+transform = "meeting-summary"
+selection = """
+**[0:00] You:** Do we support Windows 10 at launch?
+
+**[0:03] Them:** Not sure. We'd need to check with the installer team first.
+
+**[0:08] You:** Okay, let's come back to it next week.
+"""
+# Raised, not settled: an open question, never a decision.
+expect = ["Windows 10"]
+reject = ["decided to support", "will support Windows 10", "agreed to support"]

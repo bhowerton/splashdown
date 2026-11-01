@@ -44,6 +44,78 @@ pub fn is_nothing_to_do(answer: &str) -> bool {
         .eq_ignore_ascii_case(NOTHING_TO_DO)
 }
 
+/// A transform's answer, tidied where models are known to slip. For the
+/// meeting summary: headings with nothing (or only "None") under them are
+/// dropped, and action items are always checkboxes.
+pub fn tidy_answer(transform_id: &str, answer: &str) -> String {
+    if transform_id != "meeting-summary" {
+        return answer.to_string();
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut section: Vec<String> = Vec::new();
+    let flush = |section: &mut Vec<String>, out: &mut Vec<String>| {
+        let has_content = section.iter().skip(1).any(|line| !is_empty_item(line));
+        if has_content || !section.first().is_some_and(|h| h.starts_with('#')) {
+            out.append(section);
+        }
+        section.clear();
+    };
+    for line in answer.lines() {
+        if line.trim_start().starts_with('#') {
+            flush(&mut section, &mut out);
+        }
+        let in_actions = section
+            .first()
+            .is_some_and(|h| h.to_lowercase().contains("action item"));
+        let trimmed = line.trim_start();
+        let line = match trimmed
+            .strip_prefix("- ")
+            .or_else(|| trimmed.strip_prefix("* "))
+        {
+            Some(rest) if in_actions && !rest.starts_with('[') => format!("- [ ] {rest}"),
+            _ => line.to_string(),
+        };
+        section.push(line);
+    }
+    flush(&mut section, &mut out);
+    let text = out.join("\n");
+    // No blank runs left where a section was.
+    let mut tidy = String::with_capacity(text.len());
+    for line in text.lines() {
+        if line.trim().is_empty() && tidy.ends_with("\n\n") {
+            continue;
+        }
+        tidy.push_str(line.trim_end());
+        tidy.push('\n');
+    }
+    tidy.trim().to_string()
+}
+
+/// A line that says nothing: blank, a bare bullet or checkbox, or "None".
+fn is_empty_item(line: &str) -> bool {
+    let text = line
+        .trim()
+        .trim_start_matches(['-', '*', '•'])
+        .trim()
+        .trim_start_matches("[ ]")
+        .trim()
+        .trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace())
+        .to_lowercase();
+    matches!(
+        text.as_str(),
+        "" | "none"
+            | "n/a"
+            | "na"
+            | "nothing"
+            | "none specified"
+            | "none noted"
+            | "none yet"
+            | "none mentioned"
+            | "none raised"
+            | "none discussed"
+    )
+}
+
 /// The transforms a new install has. Each can be edited or removed.
 pub fn builtin_transforms() -> Vec<Transform> {
     let t = |id: &str, name: &str, place: Place, instruction: &str| Transform {
@@ -73,6 +145,12 @@ pub fn builtin_transforms() -> Vec<Transform> {
             "List the tasks this text says someone needs to do, one per line as a Markdown checkbox (\"- [ ] \" then the task), in the order they come up, keeping names, dates and amounts exactly. A task is something the text says someone will, must or should do (\"I need to…\", \"can you…\", \"remember to…\"); what already happened, opinions and descriptions are not tasks, and never make one up. If the text has no tasks, output exactly NONE.",
         ),
         t(
+            "meeting-summary",
+            "Meeting summary",
+            Place::Below,
+            "Summarize this meeting transcript for someone who was in the meeting. \"You\" and \"Them\" are the two sides of the call. Use these headings, and leave out any heading with nothing under it: \"### Overview\" (two or three sentences), \"### Decisions\" (what was agreed, as bullet points), \"### Action items\" (one per line as a Markdown checkbox, \"- [ ] \" then the task, with who will do it and by when only when the transcript says so), and \"### Open questions\" (a question goes here only if nobody answered it before the meeting ended: if the transcript has the answer, leave it out). Use only what was said: never invent a decision, a task, an owner, a date or a number, don't change who said or did what, and keep names, dates and amounts exactly as they are.",
+        ),
+        t(
             "email",
             "Email",
             Place::Replace,
@@ -90,6 +168,27 @@ pub fn builtin_transforms() -> Vec<Transform> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn meeting_summaries_lose_empty_headings() {
+        let answer = "### Overview\nA catch-up about the conference.\n\n### Decisions\n- None\n\n### Action items\n* Send the deck (Priya)\n- [ ] Book the room\n\n### Open questions\n*\n";
+        assert_eq!(
+            tidy_answer("meeting-summary", answer),
+            "### Overview\nA catch-up about the conference.\n\n### Action items\n- [ ] Send the deck (Priya)\n- [ ] Book the room"
+        );
+        assert_eq!(
+            tidy_answer(
+                "meeting-summary",
+                "### Overview\nShort.\n\n### Action items\n- [ ] None\n"
+            ),
+            "### Overview\nShort."
+        );
+        // Other transforms are left as they are.
+        assert_eq!(
+            tidy_answer("summary", "### Decisions\nNone"),
+            "### Decisions\nNone"
+        );
+    }
 
     #[test]
     fn nothing_to_do_however_it_is_written() {

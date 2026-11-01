@@ -137,6 +137,11 @@ enum Command {
         #[command(subcommand)]
         command: eval::EvalCommand,
     },
+    /// Meeting recordings: You and Them on separate channels.
+    Meeting {
+        #[command(subcommand)]
+        command: MeetingCommand,
+    },
     /// Start hands-free dictation in the running app, or finish it.
     Toggle,
     /// Start hands-free dictation in the running app.
@@ -158,6 +163,20 @@ enum Command {
     Note {
         /// The text to add, e.g. `splashdown-cli note buy oat milk`.
         text: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum MeetingCommand {
+    /// Transcribe a recorded meeting, a stereo file with You (the
+    /// microphone) on the left and Them (the computer's sound) on the
+    /// right, and print the transcript as Markdown.
+    Transcribe {
+        file: PathBuf,
+        #[command(flatten)]
+        providers: ProviderOpts,
+        #[command(flatten)]
+        context: ContextOpts,
     },
 }
 
@@ -280,6 +299,22 @@ fn main() -> Result<()> {
                 setup.pipeline.stt().as_ref(),
                 &context.hints(&setup.settings),
                 cleanup,
+            )?;
+        }
+        Command::Meeting {
+            command:
+                MeetingCommand::Transcribe {
+                    file,
+                    providers,
+                    context,
+                },
+        } => {
+            let setup = Setup::new_speech_only(&providers)?;
+            transcribe_meeting(
+                &rt,
+                &file,
+                setup.pipeline.stt().as_ref(),
+                &context.hints(&setup.settings),
             )?;
         }
         Command::Interpret {
@@ -446,6 +481,71 @@ fn transcribe_file(
         "transcribed {:.0} s of audio (the file says {}) in {:.1} s with {}",
         audio.as_secs_f64(),
         length.map_or("nothing".into(), |d| format!("{:.0} s", d.as_secs_f64())),
+        start.elapsed().as_secs_f64(),
+        stt.name()
+    );
+    Ok(())
+}
+
+/// Transcribes both sides of a meeting recording a piece at a time, oldest
+/// first, and prints each paragraph once it's final.
+fn transcribe_meeting(
+    rt: &tokio::runtime::Runtime,
+    path: &std::path::Path,
+    stt: &dyn splashdown_core::SpeechToText,
+    hints: &splashdown_core::SttHints,
+) -> Result<()> {
+    use splashdown_audio::file::{AudioFile, Piece, timestamp};
+    use splashdown_core::meeting::{Meeting, Paragraph, Segment, Side};
+
+    let open = |channel| {
+        AudioFile::open_turns(path, channel).with_context(|| format!("reading {}", path.display()))
+    };
+    let mut sides = [(Side::You, open(0)?), (Side::Them, open(1)?)];
+    let mut next: [Option<Piece>; 2] = [sides[0].1.next_piece()?, sides[1].1.next_piece()?];
+    let print = |paragraphs: Vec<Paragraph>| {
+        for p in paragraphs {
+            println!(
+                "\n**[{}] {}:** {}",
+                timestamp(p.start),
+                p.side.label(),
+                p.text
+            );
+        }
+    };
+    let stem = path.file_stem().unwrap_or_default().to_string_lossy();
+    println!("# {stem}");
+    let start = std::time::Instant::now();
+    let mut meeting = Meeting::new();
+    // The side whose next piece starts first goes next, so the transcript
+    // moves forward evenly.
+    while let Some(i) = (0..2)
+        .filter(|&i| next[i].is_some())
+        .min_by_key(|&i| next[i].as_ref().map(|p| p.start))
+    {
+        let piece = next[i].take().expect("chosen because it's there");
+        let end = piece.start + piece.clip.duration();
+        let text = match splashdown_audio::prepare(&piece.clip) {
+            Some(clip) => rt.block_on(stt.transcribe(&clip, hints))?.text,
+            None => String::new(),
+        };
+        meeting.push(Segment {
+            side: sides[i].0,
+            start: piece.start,
+            end,
+            text,
+        });
+        next[i] = sides[i].1.next_piece()?;
+        if next[i].is_none() {
+            // This side is over: nothing more will come from it.
+            meeting.reached(sides[i].0, std::time::Duration::MAX);
+        }
+        print(meeting.ready());
+    }
+    let echoes = meeting.echoes;
+    print(meeting.finish());
+    eprintln!(
+        "transcribed in {:.1} s with {}; {echoes} piece(s) dropped as echo",
         start.elapsed().as_secs_f64(),
         stt.name()
     );

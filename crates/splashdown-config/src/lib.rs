@@ -18,7 +18,9 @@ pub use settings::{
     ResolveError, Settings, Situation, SpeechChoice, SpeechProvider, SpeechSettings, defaults,
     is_local_url,
 };
-pub use transforms::{NOTHING_TO_DO, Place, Transform, builtin_transforms, is_nothing_to_do};
+pub use transforms::{
+    NOTHING_TO_DO, Place, Transform, builtin_transforms, is_nothing_to_do, tidy_answer,
+};
 
 use std::path::PathBuf;
 

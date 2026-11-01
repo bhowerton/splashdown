@@ -26,6 +26,23 @@ const MIN_PAUSE_MS: u32 = 300;
 /// Source audio resampled at a time, in seconds.
 const BLOCK_SECS: usize = 10;
 
+// Cutting by turns (one side of a meeting): a piece per stretch of speech.
+/// 20 ms frames at 16 kHz.
+const FRAME: usize = 320;
+/// A pause this long ends a turn...
+const TURN_PAUSE_FRAMES: usize = 35;
+/// ...once there's been this much speech.
+const MIN_TURN_FRAMES: usize = 15;
+/// A turn longer than this is cut at a short pause (or here).
+const MAX_TURN: Duration = Duration::from_secs(30);
+/// Silence kept around speech so words aren't clipped.
+const PAD_FRAMES: usize = 10;
+/// With no speech, silence is handed on in steps this long, so the other
+/// side's turns aren't held up waiting for this one.
+const SILENCE_STEP: Duration = Duration::from_secs(5);
+/// Frames quieter than this are never speech.
+const MIN_RMS: f32 = 0.008;
+
 #[derive(Debug, thiserror::Error)]
 pub enum FileError {
     #[error("couldn't open the file: {0}")]
@@ -58,10 +75,30 @@ pub struct AudioFile {
     block: Vec<f32>,
     cutter: Cutter,
     ended: bool,
+    /// One channel only (a meeting recording: You left, Them right), or
+    /// all of them mixed.
+    channel: Option<usize>,
 }
 
 impl AudioFile {
     pub fn open(path: &Path) -> Result<Self, FileError> {
+        Self::open_channel(path, None)
+    }
+
+    /// Like `open`, reading only `channel` (0 is the first) when it's set.
+    /// A file with fewer channels reads as silence on the missing ones.
+    pub fn open_channel(path: &Path, channel: Option<usize>) -> Result<Self, FileError> {
+        Self::opened(path, channel, false)
+    }
+
+    /// One side of a meeting recording, in pieces by turn: each stretch of
+    /// speech is a piece that starts where the speech does, and silence
+    /// comes as pieces with nothing said.
+    pub fn open_turns(path: &Path, channel: usize) -> Result<Self, FileError> {
+        Self::opened(path, Some(channel), true)
+    }
+
+    fn opened(path: &Path, channel: Option<usize>, turns: bool) -> Result<Self, FileError> {
         let source = MediaSourceStream::new(Box::new(File::open(path)?), Default::default());
         let mut hint = Hint::new();
         if let Some(extension) = path.extension().and_then(|e| e.to_str()) {
@@ -109,8 +146,12 @@ impl AudioFile {
             rate,
             duration,
             block: Vec::new(),
-            cutter: Cutter::default(),
+            cutter: Cutter {
+                turns,
+                ..Cutter::default()
+            },
             ended: false,
+            channel,
         })
     }
 
@@ -172,12 +213,13 @@ impl AudioFile {
                     let channels = spec.channels.count().max(1);
                     let mut samples = SampleBuffer::<f32>::new(decoded.capacity() as u64, spec);
                     samples.copy_interleaved_ref(decoded);
-                    self.block.extend(
-                        samples
-                            .samples()
-                            .chunks(channels)
-                            .map(|frame| frame.iter().sum::<f32>() / channels as f32),
-                    );
+                    self.block
+                        .extend(samples.samples().chunks(channels).map(
+                            |frame| match self.channel {
+                                Some(c) => frame.get(c).copied().unwrap_or(0.0),
+                                None => frame.iter().sum::<f32>() / channels as f32,
+                            },
+                        ));
                 }
                 // A damaged packet: skip it, as players do.
                 Err(Error::DecodeError(e)) => tracing::debug!("skipped a damaged packet: {e}"),
@@ -207,6 +249,8 @@ struct Cutter {
     buffer: Vec<f32>,
     /// Samples already handed out.
     taken: usize,
+    /// A piece per turn instead of about 30 s at a time.
+    turns: bool,
 }
 
 impl Cutter {
@@ -217,6 +261,9 @@ impl Cutter {
     /// The next piece, if there's enough audio for one (or `ended`, any
     /// audio at all).
     fn next(&mut self, ended: bool) -> Option<Piece> {
+        if self.turns {
+            return self.next_turn(ended);
+        }
         let rate = TARGET_SAMPLE_RATE as usize;
         let max = MAX_PIECE.as_secs() as usize * rate;
         if self.buffer.is_empty() || (!ended && self.buffer.len() < max) {
@@ -231,20 +278,86 @@ impl Cutter {
                 .filter(|&cut| cut > 0)
                 .unwrap_or(max)
         };
-        let samples: Vec<f32> = self.buffer.drain(..cut).collect();
-        let start = Duration::from_secs_f64(self.taken as f64 / rate as f64);
-        self.taken += cut;
-        Some(Piece {
+        Some(self.take(0, cut))
+    }
+
+    /// The next turn: from where speech starts to the first pause after it
+    /// (at most `MAX_TURN`), or a stretch of silence.
+    fn next_turn(&mut self, ended: bool) -> Option<Piece> {
+        if self.buffer.is_empty() {
+            return None;
+        }
+        let rate = TARGET_SAMPLE_RATE as usize;
+        let energies: Vec<f32> = self.buffer.chunks(FRAME).map(rms).collect();
+        let mut sorted = energies.clone();
+        sorted.sort_by(f32::total_cmp);
+        let threshold = (sorted[sorted.len() / 10] * 3.0).max(MIN_RMS);
+        let Some(first) = energies.iter().position(|e| *e > threshold) else {
+            // Nothing said yet. The newest audio could be the start of a
+            // word, so a little is kept back.
+            let step = SILENCE_STEP.as_secs() as usize * rate;
+            if !ended && self.buffer.len() < step {
+                return None;
+            }
+            let keep = if ended { 0 } else { PAD_FRAMES * FRAME };
+            return Some(self.take(0, self.buffer.len() - keep));
+        };
+        let lead = first.saturating_sub(PAD_FRAMES) * FRAME;
+        let mut quiet = 0;
+        let mut pause = None;
+        for (i, e) in energies.iter().enumerate().skip(first + MIN_TURN_FRAMES) {
+            if *e > threshold {
+                quiet = 0;
+                continue;
+            }
+            quiet += 1;
+            if quiet >= TURN_PAUSE_FRAMES {
+                pause = Some((i + 1 - quiet + PAD_FRAMES) * FRAME);
+                break;
+            }
+        }
+        let max = lead + MAX_TURN.as_secs() as usize * rate;
+        let cut = match pause {
+            Some(cut) if cut <= max => cut,
+            // A long turn: cut at its latest short pause, or at the limit.
+            _ if self.buffer.len() >= max => {
+                let window = AudioClip::new(self.buffer[lead..max].to_vec(), TARGET_SAMPLE_RATE);
+                let from = MIN_PIECE.as_secs() as usize * rate / 2;
+                lead + vad::find_pause(&window, from, MIN_PAUSE_MS, 0)
+                    .filter(|&cut| cut > 0)
+                    .unwrap_or(max - lead)
+            }
+            _ if ended => self.buffer.len(),
+            _ => return None,
+        };
+        Some(self.take(lead, cut.min(self.buffer.len())))
+    }
+
+    /// Hands out the buffer up to `to`, the piece starting at `from` (what
+    /// comes before it is silence, skipped).
+    fn take(&mut self, from: usize, to: usize) -> Piece {
+        let rate = TARGET_SAMPLE_RATE as f64;
+        let samples: Vec<f32> = self.buffer.drain(..to).skip(from).collect();
+        let start = Duration::from_secs_f64((self.taken + from) as f64 / rate);
+        self.taken += to;
+        Piece {
             start,
             clip: AudioClip::new(samples, TARGET_SAMPLE_RATE),
-        })
+        }
     }
 }
 
+fn rms(samples: &[f32]) -> f32 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
+}
+
 /// A time in the file as the transcript shows it: `12:30`, or `1:02:30`
-/// past an hour.
+/// past an hour. Rounded, since pieces start a moment before the speech.
 pub fn timestamp(at: Duration) -> String {
-    let secs = at.as_secs();
+    let secs = (at.as_millis() as u64 + 500) / 1000;
     let (h, m, s) = (secs / 3600, secs / 60 % 60, secs % 60);
     if h > 0 {
         format!("{h}:{m:02}:{s:02}")
@@ -374,10 +487,85 @@ mod tests {
         );
     }
 
+    fn turns(samples: &[f32]) -> Vec<Piece> {
+        let mut cutter = Cutter {
+            turns: true,
+            ..Cutter::default()
+        };
+        let mut out = Vec::new();
+        for block in samples.chunks(RATE * BLOCK_SECS) {
+            cutter.push(block);
+            while let Some(piece) = cutter.next(false) {
+                out.push(piece);
+            }
+        }
+        while let Some(piece) = cutter.next(true) {
+            out.push(piece);
+        }
+        out
+    }
+
+    #[test]
+    fn a_meeting_side_is_cut_into_turns() {
+        // Silence, a turn, the other side's turn (silence here), a turn.
+        let samples = audio(&[
+            (2.0, false),
+            (3.0, true),
+            (8.0, false),
+            (4.0, true),
+            (1.0, false),
+        ]);
+        let pieces = turns(&samples);
+        let spoken: Vec<&Piece> = pieces
+            .iter()
+            .filter(|p| p.clip.samples.iter().any(|s| s.abs() > 0.1))
+            .collect();
+        assert_eq!(spoken.len(), 2, "{pieces:?}");
+        // Each starts where the speech does, less 0.2 s of padding (the
+        // test's speech opens with a 0.1 s gap, so 2.1 s and 13.1 s).
+        assert!(
+            (spoken[0].start.as_secs_f32() - 1.9).abs() < 0.05,
+            "{:?}",
+            spoken[0].start
+        );
+        assert!(
+            (spoken[1].start.as_secs_f32() - 12.9).abs() < 0.05,
+            "{:?}",
+            spoken[1].start
+        );
+        // Everything is accounted for, silence included, in order.
+        let end = pieces.last().map(|p| p.start + p.clip.duration()).unwrap();
+        assert!((end.as_secs_f32() - 18.0).abs() < 0.05, "{end:?}");
+        assert!(
+            pieces
+                .windows(2)
+                .all(|w| w[0].start + w[0].clip.duration() <= w[1].start)
+        );
+    }
+
+    #[test]
+    fn a_silent_side_keeps_moving() {
+        let pieces = turns(&audio(&[(23.0, false)]));
+        assert!(pieces.len() >= 2, "{}", pieces.len());
+        assert!(
+            pieces
+                .iter()
+                .all(|p| p.clip.samples.iter().all(|s| s.abs() < 0.01))
+        );
+    }
+
+    #[test]
+    fn a_long_turn_is_capped() {
+        let pieces = turns(&audio(&[(70.0, true)]));
+        assert!(pieces.len() >= 3, "{}", pieces.len());
+        assert!(pieces.iter().all(|p| p.clip.duration() <= MAX_TURN));
+    }
+
     #[test]
     fn timestamps() {
         assert_eq!(timestamp(Duration::from_secs(0)), "0:00");
         assert_eq!(timestamp(Duration::from_secs(750)), "12:30");
         assert_eq!(timestamp(Duration::from_secs(3750)), "1:02:30");
+        assert_eq!(timestamp(Duration::from_millis(11_800)), "0:12");
     }
 }

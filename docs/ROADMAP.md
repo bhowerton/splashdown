@@ -160,7 +160,7 @@ Notes as Markdown files in a folder the user picks, replacing the scratchpad. St
   - Optionally, the recording is kept in `Attachments/`.
   - ⬜ The mini bar's "Dictate a note".
 - ✅ **N4 Notes for agents** (2026-10-31): `search_notes`, `read_note` and `append_note` in `splashdown-mcp`, through the control socket. Off by default, with separate switches for reading and writing on the Privacy tab.
-- ⏸ **N5 Meeting notes: decide after N1.** Two-channel recording (You and Them), transcription in pieces, a summary transform.
+- 🟡 **N5 Meeting notes** (decided 2026-10-31): record a call with no bot as two sides, You (the microphone) and Them (the computer's sound), transcribed in pieces into a note, with a summary at the end. ✅ The two-sided transcript (turns in time order, You/Them paragraphs, speaker echo dropped), checked with `splashdown-cli meeting transcribe` on a stereo recording; ✅ the **Meeting summary** transform (eval: 4/4 on the cloud default, 3/4 on the built-in local model). ⬜ Recording the computer's sound (cpal 0.17), the app's start and stop, the pill and the note.
 
 ### 7c. Other planned features
 The working list of improvements after 0.1.1, in rough order. Mark items here as they land.

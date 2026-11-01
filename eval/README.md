@@ -70,6 +70,8 @@ Fill in as models are compared (date, model, score, p50 latency).
 | 2026-10-31 | cleanup | Qwen3-4B-2507 (**built-in default**), CPU only | 85% · for comparison with Granite | 0.41 s |
 | 2026-10-31 | cleanup | Qwen3.5-2B Q4_K_M (unsloth), fully on device | 59% (2 guarded) | 0.24 s |
 | 2026-10-31 | cleanup | Qwen3-1.7B (**built-in small**), Metal / CPU only | 56% / 52% (2 guarded) | 0.06 s / 0.15 s |
+| 2026-10-31 | cleanup | Meeting summary (4 cases), OpenRouter default | 4/4, 3 runs in a row | 0.65 s |
+| 2026-10-31 | cleanup | Meeting summary (4 cases), built-in local model, fully on device | 3/4: never invents a decision, task or owner, but says "Dana discussed it with the vendor" when You talked to Dana | 0.90 s |
 | 2026-10-31 | cleanup | LFM2.5-1.2B-Instruct Q4_K_M (Liquid), fully on device | 39% (5 guarded) · license limits commercial use to companies under $10M revenue | 0.15 s |
 | 2026-10-31 | stt | Parakeet TDT 0.6B v2 Q4_K_M (transcribe.cpp), Metal / CPU only | WER 7.4% (formatting only) · 45 s clip in 0.25 s / 1.08 s | 0.03 s / 0.09 s |
 | 2026-10-31 | stt | Nemotron streaming EN 0.6B Q4_K_M (transcribe.cpp), Metal / CPU only | WER 7.1% · streaming on CPU: 4% of real time while speaking, **0.03 s after release** | 0.03 s / 0.10 s |
