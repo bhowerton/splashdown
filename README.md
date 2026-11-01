@@ -104,6 +104,10 @@
 
 ### Meetings and transcripts
 
+<p align="center">
+  <img src="docs/assets/sources.svg" width="800" alt="Animation: a video call, a podcast app, a video in the browser, the room and a file take turns; each one's sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags.">
+</p>
+
 - **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down. A kept recording plays back from any turn. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record.
 - **Transcribe an app's audio:** a webinar in the browser, a podcast app, a call you're only listening to. Only that app's sound is recorded, with a level meter that says whether it's hearing words.
 - **Transcribe the microphone** for a lecture or a conversation in the room, hands-free.

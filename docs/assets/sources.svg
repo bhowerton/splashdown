@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="500" viewBox="0 0 960 500" role="img" aria-labelledby="t d">
+<title id="t">From any sound to a note</title>
+<desc id="d">Five sources take turns: a video call, a podcast app, a video in the browser, the room and a file. As each plays, its sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags: the call becomes a meeting note with You and Them, the podcast and the video become transcripts, the lecture is recorded from the microphone, and an interview file is transcribed.</desc>
+<style>@keyframes on0{0.50%,19.20%{opacity:1} 19.80%,100%{opacity:0}}
+.on0{animation:on0 20s linear infinite}
+@keyframes note0{0%,1.00%{opacity:0} 1.60%,19.20%{opacity:1} 19.80%,100%{opacity:0}}
+.note0{animation:note0 20s linear infinite}
+@keyframes row00{0%,2.60%{opacity:0;transform:translateY(6px)} 3.20%,19.20%{opacity:1;transform:none} 19.80%,100%{opacity:0;transform:translateY(6px)}}
+.row00{animation:row00 20s linear infinite}
+@keyframes row01{0%,6.00%{opacity:0;transform:translateY(6px)} 6.60%,19.20%{opacity:1;transform:none} 19.80%,100%{opacity:0;transform:translateY(6px)}}
+.row01{animation:row01 20s linear infinite}
+@keyframes row02{0%,9.40%{opacity:0;transform:translateY(6px)} 10.00%,19.20%{opacity:1;transform:none} 19.80%,100%{opacity:0;transform:translateY(6px)}}
+.row02{animation:row02 20s linear infinite}
+@keyframes box0{0%,12.80%{opacity:0;transform:translateY(6px)} 13.40%,19.20%{opacity:1;transform:none} 19.80%,100%{opacity:0;transform:translateY(6px)}}
+.box0{animation:box0 20s linear infinite}
+@keyframes tags0{0%,15.00%{opacity:0;transform:translateY(6px)} 15.60%,19.20%{opacity:1;transform:none} 19.80%,100%{opacity:0;transform:translateY(6px)}}
+.tags0{animation:tags0 20s linear infinite}
+@keyframes say0{0.50%,19.20%{opacity:1} 19.80%,100%{opacity:0}}
+.say0{animation:say0 20s linear infinite}
+@keyframes on1{0%,19.90%{opacity:0} 20.50%,39.20%{opacity:1} 39.80%,100%{opacity:0}}
+.on1{animation:on1 20s linear infinite}
+@keyframes note1{0%,21.00%{opacity:0} 21.60%,39.20%{opacity:1} 39.80%,100%{opacity:0}}
+.note1{animation:note1 20s linear infinite}
+@keyframes row10{0%,22.60%{opacity:0;transform:translateY(6px)} 23.20%,39.20%{opacity:1;transform:none} 39.80%,100%{opacity:0;transform:translateY(6px)}}
+.row10{animation:row10 20s linear infinite}
+@keyframes row11{0%,26.00%{opacity:0;transform:translateY(6px)} 26.60%,39.20%{opacity:1;transform:none} 39.80%,100%{opacity:0;transform:translateY(6px)}}
+.row11{animation:row11 20s linear infinite}
+@keyframes row12{0%,29.40%{opacity:0;transform:translateY(6px)} 30.00%,39.20%{opacity:1;transform:none} 39.80%,100%{opacity:0;transform:translateY(6px)}}
+.row12{animation:row12 20s linear infinite}
+@keyframes box1{0%,32.80%{opacity:0;transform:translateY(6px)} 33.40%,39.20%{opacity:1;transform:none} 39.80%,100%{opacity:0;transform:translateY(6px)}}
+.box1{animation:box1 20s linear infinite}
+@keyframes tags1{0%,35.00%{opacity:0;transform:translateY(6px)} 35.60%,39.20%{opacity:1;transform:none} 39.80%,100%{opacity:0;transform:translateY(6px)}}
+.tags1{animation:tags1 20s linear infinite}
+@keyframes say1{0%,19.90%{opacity:0} 20.50%,39.20%{opacity:1} 39.80%,100%{opacity:0}}
+.say1{animation:say1 20s linear infinite}
+@keyframes on2{0%,39.90%{opacity:0} 40.50%,59.20%{opacity:1} 59.80%,100%{opacity:0}}
+.on2{animation:on2 20s linear infinite}
+@keyframes note2{0%,41.00%{opacity:0} 41.60%,59.20%{opacity:1} 59.80%,100%{opacity:0}}
+.note2{animation:note2 20s linear infinite}
+@keyframes row20{0%,42.60%{opacity:0;transform:translateY(6px)} 43.20%,59.20%{opacity:1;transform:none} 59.80%,100%{opacity:0;transform:translateY(6px)}}
+.row20{animation:row20 20s linear infinite}
+@keyframes row21{0%,46.00%{opacity:0;transform:translateY(6px)} 46.60%,59.20%{opacity:1;transform:none} 59.80%,100%{opacity:0;transform:translateY(6px)}}
+.row21{animation:row21 20s linear infinite}
+@keyframes row22{0%,49.40%{opacity:0;transform:translateY(6px)} 50.00%,59.20%{opacity:1;transform:none} 59.80%,100%{opacity:0;transform:translateY(6px)}}
+.row22{animation:row22 20s linear infinite}
+@keyframes box2{0%,52.80%{opacity:0;transform:translateY(6px)} 53.40%,59.20%{opacity:1;transform:none} 59.80%,100%{opacity:0;transform:translateY(6px)}}
+.box2{animation:box2 20s linear infinite}
+@keyframes tags2{0%,55.00%{opacity:0;transform:translateY(6px)} 55.60%,59.20%{opacity:1;transform:none} 59.80%,100%{opacity:0;transform:translateY(6px)}}
+.tags2{animation:tags2 20s linear infinite}
+@keyframes say2{0%,39.90%{opacity:0} 40.50%,59.20%{opacity:1} 59.80%,100%{opacity:0}}
+.say2{animation:say2 20s linear infinite}
+@keyframes on3{0%,59.90%{opacity:0} 60.50%,79.20%{opacity:1} 79.80%,100%{opacity:0}}
+.on3{animation:on3 20s linear infinite}
+@keyframes note3{0%,61.00%{opacity:0} 61.60%,79.20%{opacity:1} 79.80%,100%{opacity:0}}
+.note3{animation:note3 20s linear infinite}
+@keyframes row30{0%,62.60%{opacity:0;transform:translateY(6px)} 63.20%,79.20%{opacity:1;transform:none} 79.80%,100%{opacity:0;transform:translateY(6px)}}
+.row30{animation:row30 20s linear infinite}
+@keyframes row31{0%,66.00%{opacity:0;transform:translateY(6px)} 66.60%,79.20%{opacity:1;transform:none} 79.80%,100%{opacity:0;transform:translateY(6px)}}
+.row31{animation:row31 20s linear infinite}
+@keyframes row32{0%,69.40%{opacity:0;transform:translateY(6px)} 70.00%,79.20%{opacity:1;transform:none} 79.80%,100%{opacity:0;transform:translateY(6px)}}
+.row32{animation:row32 20s linear infinite}
+@keyframes box3{0%,72.80%{opacity:0;transform:translateY(6px)} 73.40%,79.20%{opacity:1;transform:none} 79.80%,100%{opacity:0;transform:translateY(6px)}}
+.box3{animation:box3 20s linear infinite}
+@keyframes tags3{0%,75.00%{opacity:0;transform:translateY(6px)} 75.60%,79.20%{opacity:1;transform:none} 79.80%,100%{opacity:0;transform:translateY(6px)}}
+.tags3{animation:tags3 20s linear infinite}
+@keyframes say3{0%,59.90%{opacity:0} 60.50%,79.20%{opacity:1} 79.80%,100%{opacity:0}}
+.say3{animation:say3 20s linear infinite}
+@keyframes on4{0%,79.90%{opacity:0} 80.50%,99.20%{opacity:1} 99.80%,100%{opacity:0}}
+.on4{animation:on4 20s linear infinite}
+@keyframes note4{0%,81.00%{opacity:0} 81.60%,99.20%{opacity:1} 99.80%,100%{opacity:0}}
+.note4{animation:note4 20s linear infinite}
+@keyframes row40{0%,82.60%{opacity:0;transform:translateY(6px)} 83.20%,99.20%{opacity:1;transform:none} 99.80%,100%{opacity:0;transform:translateY(6px)}}
+.row40{animation:row40 20s linear infinite}
+@keyframes row41{0%,86.00%{opacity:0;transform:translateY(6px)} 86.60%,99.20%{opacity:1;transform:none} 99.80%,100%{opacity:0;transform:translateY(6px)}}
+.row41{animation:row41 20s linear infinite}
+@keyframes row42{0%,89.40%{opacity:0;transform:translateY(6px)} 90.00%,99.20%{opacity:1;transform:none} 99.80%,100%{opacity:0;transform:translateY(6px)}}
+.row42{animation:row42 20s linear infinite}
+@keyframes box4{0%,92.80%{opacity:0;transform:translateY(6px)} 93.40%,99.20%{opacity:1;transform:none} 99.80%,100%{opacity:0;transform:translateY(6px)}}
+.box4{animation:box4 20s linear infinite}
+@keyframes tags4{0%,95.00%{opacity:0;transform:translateY(6px)} 95.60%,99.20%{opacity:1;transform:none} 99.80%,100%{opacity:0;transform:translateY(6px)}}
+.tags4{animation:tags4 20s linear infinite}
+@keyframes say4{0%,79.90%{opacity:0} 80.50%,99.20%{opacity:1} 99.80%,100%{opacity:0}}
+.say4{animation:say4 20s linear infinite}
+
+/* Sound flowing into the pill, and its level. */
+@keyframes flow{to{stroke-dashoffset:-28}}
+.flow{animation-name:on0,flow;animation-duration:20s,.6s;animation-timing-function:linear;animation-iteration-count:infinite}
+.flow.on1{animation-name:on1,flow}.flow.on2{animation-name:on2,flow}.flow.on3{animation-name:on3,flow}.flow.on4{animation-name:on4,flow}
+@keyframes bar{0%{transform:scaleY(.25)}100%{transform:scaleY(1)}}
+.bar{transform-box:fill-box;transform-origin:center;animation:bar .45s ease-in-out infinite alternate}
+.bar:nth-of-type(2n){animation-delay:-.15s}.bar:nth-of-type(3n){animation-delay:-.3s}
+@keyframes twinkle{0%,100%{opacity:.9}50%{opacity:.35}}
+.star{animation:twinkle 3s ease-in-out infinite}
+.star:nth-of-type(2n){animation-delay:-1.4s}.star:nth-of-type(3n){animation-delay:-2.1s}
+
+/* Without motion: the call, as a finished note. */
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important}
+  .k1,.k2,.k3,.k4{opacity:0}
+  .k0{opacity:1;transform:none}
+}
+.pulse{animation:flow .6s linear infinite}
+</style>
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="500" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0A1440"/><stop offset=".65" stop-color="#16337A"/><stop offset="1" stop-color="#2F64B8"/>
+  </linearGradient>
+  <linearGradient id="sea" x1="0" y1="470" x2="0" y2="500" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0F6FA8"/><stop offset="1" stop-color="#06305C"/>
+  </linearGradient>
+  <filter id="shadow" x="-20%" y="-30%" width="140%" height="180%">
+    <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".35"/>
+  </filter>
+  <clipPath id="card"><rect width="960" height="500" rx="28"/></clipPath>
+  <clipPath id="window"><rect x="612" y="44" width="308" height="364" rx="14"/></clipPath>
+</defs>
+<g clip-path="url(#card)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="960" height="500" fill="url(#sky)"/>
+  <circle class="star" cx="326" cy="40" r="2.2" fill="#fff"/><circle class="star" cx="518" cy="110" r="1.8" fill="#fff"/><circle class="star" cx="941" cy="200" r="2.4" fill="#fff"/><circle class="star" cx="346" cy="380" r="2" fill="#fff"/><circle class="star" cx="557" cy="330" r="1.6" fill="#fff"/><circle class="star" cx="19" cy="250" r="1.8" fill="#fff"/>
+  <path d="M0 478 C160.0 466 320.0 490 480.0 478 S800.0 466 960 478 V500 H0 Z" fill="url(#sea)"/>
+
+  <!-- Where the sound comes from. -->
+  <path d="M296 75.0 C346 75.0 322 230.0 372 230.0" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="2"/><path class="on0 k0 flow" d="M296 75.0 C346 75.0 322 230.0 372 230.0" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><path d="M296 151.0 C346 151.0 322 230.0 372 230.0" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="2"/><path class="on1 k1 flow" d="M296 151.0 C346 151.0 322 230.0 372 230.0" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><path d="M296 227.0 C346 227.0 322 230.0 372 230.0" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="2"/><path class="on2 k2 flow" d="M296 227.0 C346 227.0 322 230.0 372 230.0" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><path d="M296 303.0 C346 303.0 322 230.0 372 230.0" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="2"/><path class="on3 k3 flow" d="M296 303.0 C346 303.0 322 230.0 372 230.0" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><path d="M296 379.0 C346 379.0 322 230.0 372 230.0" fill="none" stroke="#fff" stroke-opacity=".14" stroke-width="2"/><path class="on4 k4 flow" d="M296 379.0 C346 379.0 322 230.0 372 230.0" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/>
+  <g class=""><rect x="40" y="44" width="256" height="62" rx="14" fill="#fff" fill-opacity=".96"/><rect x="54" y="57" width="36" height="36" rx="10" fill="#3B82F6"/><g transform="translate(60 63)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="14" height="12" rx="2"/><path d="m16 10 6-3v10l-6-3"/></g><text x="102" y="71" font-size="15.5" font-weight="600" fill="#111827">A video call</text><text x="102" y="90" font-size="12.5" fill="#6B7280">Zoom, Teams, Meet</text><g class="on0 k0"><rect x="38" y="42" width="260" height="66" rx="16" fill="none" stroke="#F2551F" stroke-width="3"/><rect class="bar" x="256" y="59" width="4" height="14" rx="2" fill="#3B82F6"/><rect class="bar" x="263" y="59" width="4" height="14" rx="2" fill="#3B82F6"/><rect class="bar" x="270" y="59" width="4" height="14" rx="2" fill="#3B82F6"/><rect class="bar" x="277" y="59" width="4" height="14" rx="2" fill="#3B82F6"/></g></g><g class=""><rect x="40" y="120" width="256" height="62" rx="14" fill="#fff" fill-opacity=".96"/><rect x="54" y="133" width="36" height="36" rx="10" fill="#8B5CF6"/><g transform="translate(60 139)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 15v-3a8 8 0 0 1 16 0v3"/><rect x="2" y="14" width="5" height="7" rx="2"/><rect x="17" y="14" width="5" height="7" rx="2"/></g><text x="102" y="147" font-size="15.5" font-weight="600" fill="#111827">A podcast app</text><text x="102" y="166" font-size="12.5" fill="#6B7280">Spotify, Podcasts</text><g class="on1 k1"><rect x="38" y="118" width="260" height="66" rx="16" fill="none" stroke="#F2551F" stroke-width="3"/><rect class="bar" x="256" y="135" width="4" height="14" rx="2" fill="#8B5CF6"/><rect class="bar" x="263" y="135" width="4" height="14" rx="2" fill="#8B5CF6"/><rect class="bar" x="270" y="135" width="4" height="14" rx="2" fill="#8B5CF6"/><rect class="bar" x="277" y="135" width="4" height="14" rx="2" fill="#8B5CF6"/></g></g><g class=""><rect x="40" y="196" width="256" height="62" rx="14" fill="#fff" fill-opacity=".96"/><rect x="54" y="209" width="36" height="36" rx="10" fill="#EF4444"/><g transform="translate(60 215)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M2 9h20"/><path d="m10 12 5 2.5-5 2.5z"/></g><text x="102" y="223" font-size="15.5" font-weight="600" fill="#111827">A video in your browser</text><text x="102" y="242" font-size="12.5" fill="#6B7280">YouTube, webinars</text><g class="on2 k2"><rect x="38" y="194" width="260" height="66" rx="16" fill="none" stroke="#F2551F" stroke-width="3"/><rect class="bar" x="256" y="211" width="4" height="14" rx="2" fill="#EF4444"/><rect class="bar" x="263" y="211" width="4" height="14" rx="2" fill="#EF4444"/><rect class="bar" x="270" y="211" width="4" height="14" rx="2" fill="#EF4444"/><rect class="bar" x="277" y="211" width="4" height="14" rx="2" fill="#EF4444"/></g></g><g class=""><rect x="40" y="272" width="256" height="62" rx="14" fill="#fff" fill-opacity=".96"/><rect x="54" y="285" width="36" height="36" rx="10" fill="#10B981"/><g transform="translate(60 291)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v4"/></g><text x="102" y="299" font-size="15.5" font-weight="600" fill="#111827">The room</text><text x="102" y="318" font-size="12.5" fill="#6B7280">Lectures, talks</text><g class="on3 k3"><rect x="38" y="270" width="260" height="66" rx="16" fill="none" stroke="#F2551F" stroke-width="3"/><rect class="bar" x="256" y="287" width="4" height="14" rx="2" fill="#10B981"/><rect class="bar" x="263" y="287" width="4" height="14" rx="2" fill="#10B981"/><rect class="bar" x="270" y="287" width="4" height="14" rx="2" fill="#10B981"/><rect class="bar" x="277" y="287" width="4" height="14" rx="2" fill="#10B981"/></g></g><g class=""><rect x="40" y="348" width="256" height="62" rx="14" fill="#fff" fill-opacity=".96"/><rect x="54" y="361" width="36" height="36" rx="10" fill="#F59E0B"/><g transform="translate(60 367)" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 14v3M12 12v5M15 14v3"/></g><text x="102" y="375" font-size="15.5" font-weight="600" fill="#111827">A file or a link</text><text x="102" y="394" font-size="12.5" fill="#6B7280">Voice memos, links</text><g class="on4 k4"><rect x="38" y="346" width="260" height="66" rx="16" fill="none" stroke="#F2551F" stroke-width="3"/><rect class="bar" x="256" y="363" width="4" height="14" rx="2" fill="#F59E0B"/><rect class="bar" x="263" y="363" width="4" height="14" rx="2" fill="#F59E0B"/><rect class="bar" x="270" y="363" width="4" height="14" rx="2" fill="#F59E0B"/><rect class="bar" x="277" y="363" width="4" height="14" rx="2" fill="#F59E0B"/></g></g>
+
+  <!-- Splashdown, transcribing. -->
+  <g filter="url(#shadow)"><rect x="372" y="206" width="206" height="48" rx="24" fill="#17171C" fill-opacity=".94"/></g><circle cx="396" cy="230" r="6" fill="#F2551F"/><text x="410" y="236" font-size="16" font-weight="600" fill="#F4F4F5">Transcribing</text><g><rect class="bar" x="520" y="221" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="528" y="221" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="536" y="221" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="544" y="221" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="552" y="221" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="560" y="221" width="4" height="18" rx="2" fill="#FF9A3D"/></g>
+  <path d="M578 230.0 H612" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12" class="pulse"/>
+
+  <!-- The note it becomes. -->
+  <g filter="url(#shadow)"><rect x="612" y="44" width="308" height="364" rx="14" fill="#fff"/></g>
+  <g clip-path="url(#window)">
+    <rect x="612" y="44" width="308" height="36" fill="#EEF1F6"/>
+    <circle cx="632" cy="62" r="5.5" fill="#FF5F57"/><circle cx="650" cy="62" r="5.5" fill="#FEBC2E"/><circle cx="668" cy="62" r="5.5" fill="#28C840"/>
+    <text x="766.0" y="67" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text>
+    <g class="note0 k0"><text x="632" y="114" font-size="18" font-weight="700" fill="#111827">Weekly product sync</text><text x="632" y="134" font-size="12.5" fill="#6B7280">Meeting · 34 min · You and Them</text><g class="row00 k0"><text x="632" y="156" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:04</text><text x="674" y="156" font-size="14" fill="#111827"><tspan font-weight="700" fill="#B45309">Them </tspan>Can we cut the pricing table?</text></g><g class="row01 k0"><text x="632" y="196" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:21</text><text x="674" y="196" font-size="14" fill="#111827"><tspan font-weight="700" fill="#2563EB">You </tspan>Yes, three rows is plenty.</text></g><g class="row02 k0"><text x="632" y="236" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:48</text><text x="674" y="236" font-size="14" fill="#111827"><tspan font-weight="700" fill="#B45309">Them </tspan>I&#x27;ll model the annual plan.</text></g><g class="box0 k0"><rect x="626" y="276" width="280" height="50" rx="10" fill="#EEF4FF"/><text x="638" y="297" font-size="12" font-weight="700" fill="#2563EB" letter-spacing=".04em">ACTION ITEMS</text><text x="638" y="318" font-size="13.5" fill="#111827">☐  Model the annual plan · Them</text></g><g class="tags0 k0"><rect x="632" y="362" width="75" height="24" rx="12" fill="#E0E7FF"/><text x="670" y="378" text-anchor="middle" font-size="12.5" fill="#3730A3">#pricing</text><rect x="715.2" y="362" width="83" height="24" rx="12" fill="#E0E7FF"/><text x="756" y="378" text-anchor="middle" font-size="12.5" fill="#3730A3">#meetings</text></g></g><g class="note1 k1"><text x="632" y="114" font-size="18" font-weight="700" fill="#111827">Writing for the ear</text><text x="632" y="134" font-size="12.5" fill="#6B7280">Transcribed from Spotify · 42 min</text><g class="row10 k1"><text x="632" y="156" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:00</text><text x="674" y="156" font-size="14" fill="#111827">Welcome back to the show.</text></g><g class="row11 k1"><text x="632" y="196" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">1:12</text><text x="674" y="196" font-size="14" fill="#111827">Short sentences are easier to hear.</text></g><g class="row12 k1"><text x="632" y="236" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">3:40</text><text x="674" y="236" font-size="14" fill="#111827">Read it aloud before you publish.</text></g><g class="box1 k1"><rect x="626" y="276" width="280" height="50" rx="10" fill="#EEF4FF"/><text x="638" y="297" font-size="12" font-weight="700" fill="#2563EB" letter-spacing=".04em">SUMMARY</text><text x="638" y="318" font-size="13.5" fill="#111827">•  Write the way you&#x27;d say it</text></g><g class="tags1 k1"><rect x="632" y="362" width="75" height="24" rx="12" fill="#E0E7FF"/><text x="670" y="378" text-anchor="middle" font-size="12.5" fill="#3730A3">#writing</text></g></g><g class="note2 k2"><text x="632" y="114" font-size="18" font-weight="700" fill="#111827">Keynote: AI on the device</text><text x="632" y="134" font-size="12.5" fill="#6B7280">Transcribed from Chrome · 18 min</text><g class="row20 k2"><text x="632" y="156" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:00</text><text x="674" y="156" font-size="14" fill="#111827">Thanks for joining us today.</text></g><g class="row21 k2"><text x="632" y="196" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">2:15</text><text x="674" y="196" font-size="14" fill="#111827">Everything runs on the device.</text></g><g class="row22 k2"><text x="632" y="236" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">6:02</text><text x="674" y="236" font-size="14" fill="#111827">It&#x27;s available this fall.</text></g><g class="box2 k2"><rect x="626" y="276" width="280" height="50" rx="10" fill="#EEF4FF"/><text x="638" y="297" font-size="12" font-weight="700" fill="#2563EB" letter-spacing=".04em">SUMMARY</text><text x="638" y="318" font-size="13.5" fill="#111827">•  Runs locally, ships this fall</text></g><g class="tags2 k2"><rect x="632" y="362" width="83" height="24" rx="12" fill="#E0E7FF"/><text x="673" y="378" text-anchor="middle" font-size="12.5" fill="#3730A3">#research</text></g></g><g class="note3 k3"><text x="632" y="114" font-size="18" font-weight="700" fill="#111827">Biology, lecture 7</text><text x="632" y="134" font-size="12.5" fill="#6B7280">Recorded from the microphone</text><g class="row30 k3"><text x="632" y="156" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:00</text><text x="674" y="156" font-size="14" fill="#111827">Today: how cells divide.</text></g><g class="row31 k3"><text x="632" y="196" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">2:40</text><text x="674" y="196" font-size="14" fill="#111827">Mitosis has four phases.</text></g><g class="row32 k3"><text x="632" y="236" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">9:15</text><text x="674" y="236" font-size="14" fill="#111827">This part is on the exam.</text></g><g class="box3 k3"><rect x="626" y="276" width="280" height="50" rx="10" fill="#EEF4FF"/><text x="638" y="297" font-size="12" font-weight="700" fill="#2563EB" letter-spacing=".04em">TO DO</text><text x="638" y="318" font-size="13.5" fill="#111827">☐  Review the four phases</text></g><g class="tags3 k3"><rect x="632" y="362" width="127" height="24" rx="12" fill="#E0E7FF"/><text x="696" y="378" text-anchor="middle" font-size="12.5" fill="#3730A3">#school/biology</text></g></g><g class="note4 k4"><text x="632" y="114" font-size="18" font-weight="700" fill="#111827">Interview with Dana</text><text x="632" y="134" font-size="12.5" fill="#6B7280">Transcribed from interview-03.m4a</text><g class="row40 k4"><text x="632" y="156" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:00</text><text x="674" y="156" font-size="14" fill="#111827">Thanks for making the time.</text></g><g class="row41 k4"><text x="632" y="196" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">4:30</text><text x="674" y="196" font-size="14" fill="#111827">Onboarding took too long.</text></g><g class="row42 k4"><text x="632" y="236" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">7:10</text><text x="674" y="236" font-size="14" fill="#111827">The videos could be shorter.</text></g><g class="box4 k4"><rect x="626" y="276" width="280" height="50" rx="10" fill="#EEF4FF"/><text x="638" y="297" font-size="12" font-weight="700" fill="#2563EB" letter-spacing=".04em">SUMMARY</text><text x="638" y="318" font-size="13.5" fill="#111827">•  Shorter onboarding videos</text></g><g class="tags4 k4"><rect x="632" y="362" width="164" height="24" rx="12" fill="#E0E7FF"/><text x="714" y="378" text-anchor="middle" font-size="12.5" fill="#3730A3">#research/interviews</text></g></g>
+  </g>
+
+  <!-- What's happening. -->
+  <text class="say0 k0" x="480.0" y="458" text-anchor="middle" font-size="18" font-style="italic" fill="#E6ECFF">A call becomes a meeting note, with its action items</text><text class="say1 k1" x="480.0" y="458" text-anchor="middle" font-size="18" font-style="italic" fill="#E6ECFF">A podcast becomes a transcript you can search</text><text class="say2 k2" x="480.0" y="458" text-anchor="middle" font-size="18" font-style="italic" fill="#E6ECFF">A video in your browser, written down as it plays</text><text class="say3 k3" x="480.0" y="458" text-anchor="middle" font-size="18" font-style="italic" fill="#E6ECFF">A lecture in the room, from the microphone</text><text class="say4 k4" x="480.0" y="458" text-anchor="middle" font-size="18" font-style="italic" fill="#E6ECFF">A voice memo or a link, dropped onto Notes</text>
+</g>
+</svg>
