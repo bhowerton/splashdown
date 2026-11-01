@@ -107,6 +107,15 @@ impl Ui {
 
     /// Shows the overlay by the text cursor (`None`: the usual place).
     pub fn anchor(&self, caret: Option<splashdown_platform::CaretRect>) {
+        if let Some(c) = &caret {
+            tracing::debug!(
+                "text cursor at {:.0},{:.0}, {:.0}×{:.0}",
+                c.x,
+                c.y,
+                c.width,
+                c.height
+            );
+        }
         self.on_overlay(move |o| o.set_anchor(caret));
     }
 

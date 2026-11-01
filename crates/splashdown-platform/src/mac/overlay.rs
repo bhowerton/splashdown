@@ -20,7 +20,11 @@ use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
 use crate::{OverlayState, PlatformError, Result, Sound, Tone};
 
 /// Space between the text cursor and the overlay.
-const CARET_GAP: f64 = 8.0;
+const CARET_GAP: f64 = 12.0;
+/// The least a caret's line is taken to be: some apps (a web page's text
+/// box, Notes) report the caret as a sliver at the top of its line, and the
+/// pill would cover the line being typed.
+const MIN_LINE: f64 = 24.0;
 const HEIGHT: f64 = 38.0;
 const PAD_X: f64 = 14.0;
 const DOT: f64 = 10.0;
@@ -390,7 +394,7 @@ impl Overlay {
         // AppKit a bottom-left one.
         let primary_height = screens.firstObject()?.frame().size.height;
         let caret_top = primary_height - caret.y;
-        let caret_bottom = caret_top - caret.height;
+        let caret_bottom = caret_top - caret.height.max(MIN_LINE);
         let point = NSPoint::new(caret.x, caret_bottom);
         let screen = screens.iter().find(|s| {
             let f = s.frame();
