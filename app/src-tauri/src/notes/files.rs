@@ -650,11 +650,8 @@ fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> 
         (Some(title), Some(path)) => (title.trim(), PathBuf::from(path.trim())),
         _ => {
             let err = String::from_utf8_lossy(&output.stderr);
-            let reason = err
-                .lines()
-                .rfind(|l| !l.trim().is_empty())
-                .unwrap_or("it gave no file");
-            return Err(format!("yt-dlp couldn't get it: {}", reason.trim()));
+            tracing::warn!("yt-dlp failed: {}", err.trim());
+            return Err(yt_dlp_error(&err));
         }
     };
     if !output.status.success() || !path.exists() {
@@ -667,6 +664,32 @@ fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> 
             title: Some(title.to_string()).filter(|t| !t.is_empty()),
         }),
     })
+}
+
+/// What to tell the user when yt-dlp fails, from what it wrote.
+fn yt_dlp_error(stderr: &str) -> String {
+    let reason = stderr
+        .lines()
+        .rfind(|l| !l.trim().is_empty())
+        .unwrap_or("it gave no file")
+        .trim()
+        .trim_start_matches("ERROR: ");
+    // Sites change their pages often, and an older yt-dlp then gets
+    // refused or can't find the video.
+    if reason.contains("403")
+        || reason.contains("Forbidden")
+        || reason.contains("Sign in to confirm")
+    {
+        let update = if cfg!(windows) {
+            "winget upgrade yt-dlp"
+        } else {
+            "brew upgrade yt-dlp"
+        };
+        return format!(
+            "The site refused the download. That usually means yt-dlp needs updating ({update}); then try again."
+        );
+    }
+    format!("yt-dlp couldn't get it: {reason}")
 }
 
 /// Runs `command` to the end, unless Stop ends it first.
@@ -803,6 +826,14 @@ mod tests {
         assert_eq!(
             url_label(&format!("https://example.org/{}/talk.mp3", "a/".repeat(30))),
             "example.org/…/talk.mp3"
+        );
+        assert!(
+            yt_dlp_error("ERROR: unable to download video data: HTTP Error 403: Forbidden\n")
+                .contains("yt-dlp needs updating")
+        );
+        assert_eq!(
+            yt_dlp_error("ERROR: Video unavailable\n"),
+            "yt-dlp couldn't get it: Video unavailable"
         );
         // The server's content type never becomes part of a path.
         assert_eq!(extension_for("audio/mpeg"), "mp3");
