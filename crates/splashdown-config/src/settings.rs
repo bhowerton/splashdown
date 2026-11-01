@@ -80,6 +80,10 @@ pub struct NotesSettings {
     pub keep_meeting_audio: bool,
     /// Stop a meeting after 10 minutes with nobody speaking. Unset means on.
     pub stop_when_quiet: Option<bool>,
+    /// Show a small bar on screen while a meeting records. Unset means on
+    /// on Windows, where the tray can't show the time, and off on macOS,
+    /// where the menu bar does.
+    pub meeting_pill: Option<bool>,
     /// Offer to record a meeting when a call app starts using the
     /// microphone. Unset means on.
     pub offer_on_calls: Option<bool>,
@@ -110,6 +114,10 @@ impl NotesSettings {
 
     pub fn stop_when_quiet(&self) -> bool {
         self.stop_when_quiet.unwrap_or(true)
+    }
+
+    pub fn meeting_pill(&self) -> bool {
+        self.meeting_pill.unwrap_or(cfg!(windows))
     }
 
     pub fn offer_on_calls(&self) -> bool {

@@ -36,6 +36,7 @@ function renderGeneral() {
   $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
   $("mt-offer").checked = notes.offer_on_calls ?? true;
+  $("mt-pill").checked = notes.meeting_pill ?? state.platform === "windows";
   $("hk-double-tap").checked = s.hotkeys.double_tap === true;
   setValue($("gen-name"), s.general.user_name);
   setValue($("gen-language"), s.general.language ?? "");

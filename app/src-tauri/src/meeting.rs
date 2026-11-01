@@ -188,7 +188,7 @@ fn tell(app: &AppHandle, text: String, error: bool) {
     let _ = app.emit_to(crate::notes::WINDOW, MESSAGE, Message { text, error });
 }
 
-/// Updates the menu bar and the Notes window.
+/// Updates the menu bar, the Notes window and the meeting pill.
 fn show(app: &AppHandle, status: Option<&Status>) {
     if let Some(run) = running().as_mut()
         && let Some(status) = status
@@ -199,6 +199,7 @@ fn show(app: &AppHandle, status: Option<&Status>) {
         .filter(|s| !s.finishing)
         .map(|s| timestamp(Duration::from_secs_f64(s.elapsed)));
     crate::tray::show_meeting(app, elapsed.as_deref());
+    crate::pill::update(app, status);
     let _ = app.emit_to(crate::notes::WINDOW, STATUS, status);
 }
 

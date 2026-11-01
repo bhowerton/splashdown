@@ -1,15 +1,17 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "settings",
-  "description": "The Settings, setup, Notes, Ask and call offer windows: app commands plus core events (download progress).",
+  "description": "The Settings, setup, Notes, Ask, call offer and meeting pill windows: app commands plus core events (download progress).",
   "windows": [
     "settings",
     "onboarding",
     "notes",
     "ask",
-    "call-offer"
+    "call-offer",
+    "meeting-pill"
   ],
   "permissions": [
-    "core:default"
+    "core:default",
+    "core:window:allow-start-dragging"
   ]
 }

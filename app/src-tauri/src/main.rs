@@ -16,6 +16,7 @@ mod insights;
 mod meeting;
 mod minibar;
 mod notes;
+mod pill;
 mod preview;
 mod project;
 mod recent;

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Meeting</title>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="pill.css">
+</head>
+<body class="pl-body">
+<main class="pl" data-tauri-drag-region>
+  <span class="pl-dot" aria-hidden="true" data-tauri-drag-region></span>
+  <span id="pl-text" class="pl-text" role="status" aria-live="off" data-tauri-drag-region></span>
+  <span id="pl-levels" class="pl-levels" data-tauri-drag-region>
+    <span class="pl-level" title="You"><b id="pl-you"></b></span>
+    <span class="pl-level" title="Them"><b id="pl-them"></b></span>
+  </span>
+  <button class="btn" id="pl-keep" hidden>Keep recording</button>
+  <button class="btn" id="pl-notes" title="Show the meeting note">Note</button>
+  <button class="btn primary" id="pl-stop">Stop</button>
+</main>
+<script src="common.js"></script>
+<script src="pill.js"></script>
+</body>
+</html>

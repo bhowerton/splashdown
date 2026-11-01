@@ -1,0 +1,18 @@
+/* The meeting pill (300 × 40, no title bar): a red dot, the time, both
+   sides' levels and Stop. Drag it by anything but the buttons. Colors and
+   buttons come from settings.css. */
+.pl-body { overflow: hidden; background: var(--surface); }
+.pl {
+  height: 100vh; box-sizing: border-box; display: flex; align-items: center; gap: 8px;
+  padding: 0 8px 0 12px; border: 1px solid var(--border); cursor: default;
+  -webkit-user-select: none; user-select: none;
+}
+.pl-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--err); flex-shrink: 0; animation: pl-pulse 2s ease-in-out infinite; }
+.pl.finishing .pl-dot { background: var(--muted); animation: none; }
+@keyframes pl-pulse { 50% { opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .pl-dot { animation: none; } }
+.pl-text { font-size: 12.5px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+.pl-levels { display: flex; flex-direction: column; gap: 3px; }
+.pl-level { display: block; width: 28px; height: 4px; border-radius: 2px; background: var(--border); overflow: hidden; }
+.pl-level b { display: block; height: 100%; width: 0; background: var(--accent); }
+.pl .btn { padding: 3px 9px; font-size: 12px; }
