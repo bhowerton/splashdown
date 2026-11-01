@@ -80,16 +80,36 @@ fn longest_cleanup(source: &str) -> f32 {
     source.chars().count() as f32 * CLEANUP_LENGTH_RANGE.end() + CLEANUP_GROWTH_SLACK
 }
 
-/// Whether a reply that is still arriving could yet be accepted as it
-/// reads so far: false once it's already too long, or when it starts with
-/// wrapping `check` strips (tags, thinking, a code fence, quotes), which
-/// can't be shown until the whole reply is in.
-pub fn may_pass(mode: Mode, source: &str, partial: &str) -> bool {
-    let text = partial.trim_start();
+/// What to do with a reply that's still arriving.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Partial {
+    /// It can be shown as it reads so far.
+    Show,
+    /// Not yet: a dictated question's reply is shown once it has its
+    /// question mark (a model that answers the question never gets one).
+    Wait,
+    /// It can't be accepted as it is: too long already, or wrapped in
+    /// something `check` strips (tags, thinking, a code fence, quotes),
+    /// which can't be shown until the whole reply is in.
+    Stop,
+}
+
+/// Judges a reply that's still arriving, for showing it as it comes.
+pub fn partial(mode: Mode, source: &str, so_far: &str) -> Partial {
+    let text = so_far.trim_start();
     if text.starts_with(['<', '`', '"', '“']) {
-        return false;
+        return Partial::Stop;
     }
-    mode != Mode::Dictate || text.chars().count() as f32 <= longest_cleanup(source)
+    if mode != Mode::Dictate {
+        return Partial::Show;
+    }
+    if text.chars().count() as f32 > longest_cleanup(source) {
+        Partial::Stop
+    } else if has_question(source) && !text.contains(QUESTION_MARKS) {
+        Partial::Wait
+    } else {
+        Partial::Show
+    }
 }
 
 /// Question marks in the scripts we support: Latin, full-width (Chinese,
@@ -153,19 +173,33 @@ mod tests {
 
     #[test]
     fn partial_replies_that_cant_pass_are_caught_early() {
-        assert!(may_pass(Mode::Dictate, "um hello there", "Hello"));
-        assert!(may_pass(Mode::Dictate, "um hello there", ""));
-        assert!(!may_pass(
-            Mode::Dictate,
-            "um hello there",
-            "<transcript>Hel"
-        ));
-        assert!(!may_pass(Mode::Dictate, "um hello there", "```"));
-        assert!(!may_pass(Mode::Dictate, "um hello there", " \"Hello"));
+        let p = |mode, source, so_far| partial(mode, source, so_far);
+        assert_eq!(p(Mode::Dictate, "um hello there", "Hello"), Partial::Show);
+        assert_eq!(p(Mode::Dictate, "um hello there", ""), Partial::Show);
+        assert_eq!(
+            p(Mode::Dictate, "um hello there", "<transcript>Hel"),
+            Partial::Stop
+        );
+        assert_eq!(p(Mode::Dictate, "um hello there", "```"), Partial::Stop);
+        assert_eq!(
+            p(Mode::Dictate, "um hello there", " \"Hello"),
+            Partial::Stop
+        );
         let poem = "Roses are red, violets are blue, ".repeat(3);
-        assert!(!may_pass(Mode::Dictate, "write a poem", &poem));
+        assert_eq!(p(Mode::Dictate, "write a poem", &poem), Partial::Stop);
         // An instruction can make it as long as it asks.
-        assert!(may_pass(Mode::DictateInstruct, "write a poem", &poem));
+        assert_eq!(
+            p(Mode::DictateInstruct, "write a poem", &poem),
+            Partial::Show
+        );
+        // A question waits for its question mark.
+        let q = "what time does the store close?";
+        assert_eq!(p(Mode::Dictate, q, "What time does the"), Partial::Wait);
+        assert_eq!(p(Mode::Dictate, q, "The store closes at"), Partial::Wait);
+        assert_eq!(
+            p(Mode::Dictate, q, "What time does the store close? I"),
+            Partial::Show
+        );
     }
 
     #[test]

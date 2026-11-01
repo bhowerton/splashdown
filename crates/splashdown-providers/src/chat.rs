@@ -123,29 +123,52 @@ impl TextModel for ChatModel {
             // OpenRouter sends usage at the end already (`usage.include`).
             body["stream_options"] = json!({ "include_usage": true });
         }
-        let request = self.endpoint.post("chat/completions").json(&body);
-        let mut events = match self.endpoint.send_streaming(request).await? {
-            Streamed::Events(events) => events,
-            Streamed::Whole(json) => {
-                return Ok(Completion {
-                    text: chat_content(&json)?,
-                    usage: self.usage(&json),
-                });
-            }
-        };
-        let mut reply = StreamedReply::default();
-        while let Some(data) = events.next().await? {
-            if data == "[DONE]" {
-                break;
-            }
-            if reply.take(&data)? {
-                on_text(&reply.text);
+        for attempt in 0..2 {
+            let request = self.endpoint.post("chat/completions").json(&body);
+            let mut events = match self.endpoint.send_streaming(request).await? {
+                Streamed::Events(events) => events,
+                Streamed::Whole(json) => {
+                    return Ok(Completion {
+                        text: chat_content(&json)?,
+                        usage: self.usage(&json),
+                    });
+                }
+            };
+            let mut reply = StreamedReply::default();
+            let failed = loop {
+                match events.next().await {
+                    Ok(Some(data)) if data == "[DONE]" => {
+                        reply.finished = true;
+                        break None;
+                    }
+                    Ok(Some(data)) => match reply.take(&data) {
+                        Ok(true) => on_text(&reply.text),
+                        Ok(false) => {}
+                        Err(e) => break Some(e),
+                    },
+                    Ok(None) => break None,
+                    Err(e) => break Some(e),
+                }
+            };
+            match failed {
+                // A rate limit or upstream hiccup before any text: once
+                // more, as `send_json` does.
+                Some(_) if attempt == 0 && reply.transient && reply.text.is_empty() => {
+                    tokio::time::sleep(crate::endpoint::RETRY_DELAY).await;
+                }
+                Some(e) => return Err(e),
+                None if !reply.finished => {
+                    return Err(ProviderError::Network("the reply was cut off".into()));
+                }
+                None => {
+                    return Ok(Completion {
+                        usage: self.usage(&reply.usage),
+                        text: reply.text,
+                    });
+                }
             }
         }
-        Ok(Completion {
-            usage: self.usage(&reply.usage),
-            text: reply.text,
-        })
+        unreachable!("the second attempt always returns")
     }
 
     fn supports_json_schema(&self) -> bool {
@@ -164,6 +187,11 @@ struct StreamedReply {
     text: String,
     /// The chunk that reported usage (the last one).
     usage: Value,
+    /// A reason to stop arrived (a `finish_reason`, or `[DONE]`): the reply
+    /// is whole.
+    finished: bool,
+    /// The error that ended it is worth a retry (rate limit, server error).
+    transient: bool,
 }
 
 impl StreamedReply {
@@ -176,10 +204,17 @@ impl StreamedReply {
             let message = error["message"]
                 .as_str()
                 .map_or_else(|| error.to_string(), str::to_string);
+            let code = error["code"]
+                .as_u64()
+                .or_else(|| error["code"].as_str().and_then(|c| c.parse().ok()));
+            self.transient = matches!(code, Some(429 | 500 | 502 | 503 | 504));
             return Err(ProviderError::Api(message));
         }
         if chunk.get("usage").is_some_and(|u| !u.is_null()) {
             self.usage = chunk.clone();
+        }
+        if chunk["choices"][0]["finish_reason"].is_string() {
+            self.finished = true;
         }
         match chunk["choices"][0]["delta"]["content"].as_str() {
             Some(delta) if !delta.is_empty() => {
@@ -246,11 +281,22 @@ mod tests {
         assert_eq!(grew, [false, true, true, false]);
         assert_eq!(reply.text, "Hello there.");
         assert_eq!(reply.usage["usage"]["completion_tokens"], 3);
+        assert!(reply.finished);
+
+        let mut reply = StreamedReply::default();
         assert!(
             reply
                 .take(r#"{"error":{"code":502,"message":"upstream failed"}}"#)
                 .is_err()
         );
+        assert!(reply.transient && !reply.finished);
+        let mut reply = StreamedReply::default();
+        assert!(
+            reply
+                .take(r#"{"error":{"code":400,"message":"bad request"}}"#)
+                .is_err()
+        );
+        assert!(!reply.transient);
     }
 
     #[test]

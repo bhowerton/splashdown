@@ -173,7 +173,10 @@ impl Endpoint {
     }
 
     async fn stream_once(req: reqwest::RequestBuilder) -> Result<Streamed, Failure> {
+        // A long answer from a slow model takes more than the usual 60 s;
+        // a stalled one is caught between chunks instead (`Events::next`).
         let resp = req
+            .timeout(STREAM_TIMEOUT)
             .send()
             .await
             .map_err(|e| Failure::Fatal(network_error(e)))?;
@@ -232,7 +235,11 @@ impl Endpoint {
     }
 }
 
-const RETRY_DELAY: Duration = Duration::from_millis(400);
+pub(crate) const RETRY_DELAY: Duration = Duration::from_millis(400);
+/// The longest a streamed reply may take in all.
+const STREAM_TIMEOUT: Duration = Duration::from_secs(600);
+/// The longest wait for the next piece of a streamed reply.
+const STREAM_IDLE: Duration = Duration::from_secs(30);
 
 /// A reply to a request for a streamed answer.
 pub(crate) enum Streamed {
@@ -259,7 +266,10 @@ impl Events {
                     return Ok(Some(data));
                 }
             }
-            match self.resp.chunk().await.map_err(network_error)? {
+            let chunk = tokio::time::timeout(STREAM_IDLE, self.resp.chunk())
+                .await
+                .map_err(|_| ProviderError::Network("the reply stopped coming".into()))?;
+            match chunk.map_err(network_error)? {
                 Some(bytes) => self.buf.extend_from_slice(&bytes),
                 None => {
                     // A last line without its line break, then what's left.

@@ -387,9 +387,13 @@ impl Pipeline {
                 // Stops passing the reply on once the guard would reject it.
                 let mut passing = true;
                 let mut forward = |so_far: &str| {
-                    passing = passing && guard::may_pass(task.mode(), &source, so_far);
-                    if passing {
-                        on_text(so_far);
+                    if !passing {
+                        return;
+                    }
+                    match guard::partial(task.mode(), &source, so_far) {
+                        guard::Partial::Show => on_text(so_far),
+                        guard::Partial::Wait => {}
+                        guard::Partial::Stop => passing = false,
                     }
                 };
                 llm.complete_streaming(&request, &mut forward).await

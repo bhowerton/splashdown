@@ -435,7 +435,11 @@ impl Recognizer {
                 self.swallow_capture = ev.down;
                 return (true, None);
             }
-            if let (State::Pressed { .. }, true) = (self.state, ev.down) {
+            // Not a quick chord such as Right Ctrl+N (a new window): the
+            // dictation key has been held a moment first.
+            if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
+                && now.duration_since(since) >= self.timing.hold
+            {
                 self.swallow_capture = true;
                 return (true, Some(Action::Capture));
             }
@@ -452,7 +456,10 @@ impl Recognizer {
                 self.swallow_ask = ev.down;
                 return (true, None);
             }
-            if let (State::Pressed { .. }, true) = (self.state, ev.down) {
+            // As for the note key: Right Ctrl+A (select all) passes through.
+            if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
+                && now.duration_since(since) >= self.timing.hold
+            {
                 self.swallow_ask = true;
                 return (true, Some(Action::Ask));
             }
@@ -745,6 +752,7 @@ mod tests {
             .with_hands_free(Letter('h'), false)
             .with_capture(Letter('n'));
         assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.at(400);
         assert_eq!(
             c.r.on_event(KeyEvent::down(Letter('n')), c.now),
             (true, Some(Action::Capture))
@@ -771,6 +779,7 @@ mod tests {
             .with_capture(Letter('n'))
             .with_ask(Letter('a'));
         assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.at(400);
         assert_eq!(
             c.r.on_event(KeyEvent::down(Letter('a')), c.now),
             (true, Some(Action::Ask))
@@ -783,6 +792,18 @@ mod tests {
             c.r.on_event(KeyEvent::down(Letter('a')), c.now),
             (false, None)
         );
+    }
+
+    #[test]
+    fn a_quick_chord_is_a_shortcut_not_ask() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default()).with_ask(Letter('a'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        // Right Ctrl+A, select all: reaches the app.
+        c.at(60);
+        let (swallowed, action) = c.r.on_event(KeyEvent::down(Letter('a')), c.now);
+        assert!(!swallowed);
+        assert_ne!(action, Some(Action::Ask));
     }
 
     #[test]

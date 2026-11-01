@@ -78,32 +78,58 @@ impl TextModel for AnthropicModel {
     ) -> ProviderResult<Completion> {
         let mut body = self.body(req);
         body["stream"] = json!(true);
-        let request = self.endpoint.post("messages").json(&body);
-        let mut events = match self.endpoint.send_streaming(request).await? {
-            Streamed::Events(events) => events,
-            Streamed::Whole(json) => {
-                return Ok(Completion {
-                    text: reply_text(&json)?,
-                    usage: crate::pricing::text_usage(
-                        self.endpoint.flavor(),
-                        false,
-                        &self.model,
-                        &json,
-                    ),
-                });
-            }
-        };
-        let mut reply = StreamedReply::default();
-        while let Some(data) = events.next().await? {
-            if reply.take(&data)? {
-                on_text(&reply.text);
+        for attempt in 0..2 {
+            let request = self.endpoint.post("messages").json(&body);
+            let mut events = match self.endpoint.send_streaming(request).await? {
+                Streamed::Events(events) => events,
+                Streamed::Whole(json) => {
+                    return Ok(Completion {
+                        text: reply_text(&json)?,
+                        usage: crate::pricing::text_usage(
+                            self.endpoint.flavor(),
+                            false,
+                            &self.model,
+                            &json,
+                        ),
+                    });
+                }
+            };
+            let mut reply = StreamedReply::default();
+            let failed = loop {
+                match events.next().await {
+                    Ok(Some(data)) => match reply.take(&data) {
+                        Ok(true) => on_text(&reply.text),
+                        Ok(false) => {}
+                        Err(e) => break Some(e),
+                    },
+                    Ok(None) => break None,
+                    Err(e) => break Some(e),
+                }
+            };
+            match failed {
+                // Overloaded or rate-limited before any text: once more.
+                Some(_) if attempt == 0 && reply.transient && reply.text.is_empty() => {
+                    tokio::time::sleep(crate::endpoint::RETRY_DELAY).await;
+                }
+                Some(e) => return Err(e),
+                None if !reply.finished => {
+                    return Err(ProviderError::Network("the reply was cut off".into()));
+                }
+                None => {
+                    let usage = json!({ "usage": reply.usage });
+                    return Ok(Completion {
+                        text: reply.text,
+                        usage: crate::pricing::text_usage(
+                            self.endpoint.flavor(),
+                            false,
+                            &self.model,
+                            &usage,
+                        ),
+                    });
+                }
             }
         }
-        let usage = json!({ "usage": reply.usage });
-        Ok(Completion {
-            text: reply.text,
-            usage: crate::pricing::text_usage(self.endpoint.flavor(), false, &self.model, &usage),
-        })
+        unreachable!("the second attempt always returns")
     }
 
     fn supports_json_schema(&self) -> bool {
@@ -121,6 +147,10 @@ struct StreamedReply {
     text: String,
     /// Token counts: input from `message_start`, output from `message_delta`.
     usage: serde_json::Map<String, Value>,
+    /// `message_stop` arrived: the reply is whole.
+    finished: bool,
+    /// The error that ended it is worth a retry (overloaded, rate limit).
+    transient: bool,
 }
 
 impl StreamedReply {
@@ -145,10 +175,18 @@ impl StreamedReply {
                 }
                 &event["usage"]
             }
+            Some("message_stop") => {
+                self.finished = true;
+                return Ok(false);
+            }
             Some("error") => {
                 let message = event["error"]["message"]
                     .as_str()
                     .unwrap_or("stream failed");
+                self.transient = matches!(
+                    event["error"]["type"].as_str(),
+                    Some("overloaded_error" | "rate_limit_error" | "api_error")
+                );
                 return Err(ProviderError::Api(message.to_string()));
             }
             _ => return Ok(false),
@@ -199,6 +237,9 @@ mod tests {
         assert_eq!(reply.usage["input_tokens"], 12);
         assert_eq!(reply.usage["cache_read_input_tokens"], 800);
         assert_eq!(reply.usage["output_tokens"], 4);
+        assert!(reply.finished);
+
+        let mut reply = StreamedReply::default();
         assert!(
             reply
                 .take(
@@ -206,6 +247,7 @@ mod tests {
                 )
                 .is_err()
         );
+        assert!(reply.transient && !reply.finished);
     }
 
     #[test]

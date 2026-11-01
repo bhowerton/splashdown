@@ -10,6 +10,7 @@
 use std::sync::Arc;
 
 use splashdown_platform::{Focus, InsertMethod, KeyAction};
+use unicode_segmentation::UnicodeSegmentation;
 
 use crate::project::Project;
 use crate::replacements::Replacements;
@@ -33,9 +34,13 @@ impl StreamTyper {
         files: Option<Arc<Project>>,
         replacements: Replacements,
     ) -> Option<Self> {
-        // A terminal runs each line it's given, and a password field
-        // doesn't want a draft.
-        if splashdown_platform::is_terminal(&focus.app.id) || focus.is_secure_field() {
+        // A terminal runs each line it's given, a password field doesn't
+        // want a draft, and in a spreadsheet a typed line break moves to
+        // another cell.
+        if splashdown_platform::is_terminal(&focus.app.id)
+            || focus.is_secure_field()
+            || is_spreadsheet(focus)
+        {
             return None;
         }
         Some(Self {
@@ -50,6 +55,12 @@ impl StreamTyper {
     /// Whether anything was typed (then `finish` must complete it).
     pub fn started(&self) -> bool {
         !self.typed.is_empty()
+    }
+
+    /// Typing stopped part way (focus moved, or typing failed): what's in
+    /// the field isn't known, so it can't be finished from.
+    pub fn stopped(&self) -> bool {
+        self.stopped
     }
 
     /// Whether the text began with a space, to keep the final text the same.
@@ -108,17 +119,25 @@ impl StreamTyper {
         }
     }
 
-    /// Makes what was typed into `text`, the final text (with its leading
-    /// space, if any): deletes from where they differ, then types the rest.
-    pub fn finish(&mut self, text: &str) -> splashdown_platform::Result<()> {
-        let same = common_prefix(&self.typed, text);
-        let extra = self.typed[same..].chars().count();
+    /// Makes what was typed into `focus` into `text`, the final text (with
+    /// its leading space, if any): deletes from where they differ, then
+    /// types the rest. Stops if the focus moves while deleting.
+    pub fn finish(&mut self, focus: &Focus, text: &str) -> splashdown_platform::Result<()> {
+        let same = common_start(&self.typed, text);
+        // One Backspace deletes a whole character as shown: an emoji with
+        // its skin tone, a flag, an accented letter.
+        let extra = self.typed[same..].graphemes(true).count();
         if extra > 0 {
             tracing::info!(
                 "the final text differs from what was streamed: retyping the last {extra} characters"
             );
         }
-        for _ in 0..extra {
+        for i in 0..extra {
+            if i % 10 == 0 && !focus.is_current() {
+                return Err(splashdown_platform::PlatformError::Failed(
+                    "the focus moved".into(),
+                ));
+            }
             splashdown_platform::press(KeyAction::Backspace)?;
         }
         let rest = &text[same..];
@@ -136,12 +155,41 @@ impl StreamTyper {
     }
 }
 
+/// Spreadsheets, by app id or web address.
+fn is_spreadsheet(focus: &Focus) -> bool {
+    let id = focus.app.id.to_lowercase();
+    [
+        "com.microsoft.excel",
+        "com.apple.iwork.numbers",
+        "excel.exe",
+    ]
+    .contains(&id.as_str())
+        || focus
+            .app
+            .url
+            .as_deref()
+            .is_some_and(|u| u.contains("docs.google.com/spreadsheets"))
+}
+
 /// The reply up to its last whole word: the last word may still grow.
 /// `None` until there's a whole word.
 fn whole_words(so_far: &str) -> Option<&str> {
     let text = so_far.trim_start();
     let end = text.rfind(char::is_whitespace)?;
     Some(text[..end].trim_end()).filter(|s| !s.is_empty())
+}
+
+/// The length in bytes of the longest common start of `a` and `b`, on a
+/// boundary between characters as shown in `a` (so deleting back to it
+/// never leaves half an emoji or an accent without its letter).
+fn common_start(a: &str, b: &str) -> usize {
+    let same = common_prefix(a, b);
+    a.grapheme_indices(true)
+        .map(|(i, _)| i)
+        .chain(std::iter::once(a.len()))
+        .take_while(|&i| i <= same)
+        .last()
+        .unwrap_or(0)
 }
 
 /// The length in bytes of the longest common start of `a` and `b`, on a
@@ -175,5 +223,17 @@ mod tests {
         assert_eq!(common_prefix("café au", "café noir"), 6);
         assert_eq!(common_prefix("é", "è"), 0);
         assert_eq!(common_prefix("", "x"), 0);
+    }
+
+    #[test]
+    fn deleting_back_keeps_whole_characters() {
+        // A thumbs-up with a skin tone differs from one without in its
+        // second code point: the whole emoji is retyped.
+        assert_eq!(common_start("Great 👍🏽", "Great 👍"), 6);
+        // An accent typed as a separate mark goes with its letter.
+        assert_eq!(common_start("cafe\u{301} au", "cafe noir"), 3);
+        assert_eq!(common_start("Hello there", "Hello world"), 6);
+        assert_eq!(common_start("Hello", "Hello there"), 5);
+        assert_eq!("Great 👍🏽"[6..].graphemes(true).count(), 1);
     }
 }

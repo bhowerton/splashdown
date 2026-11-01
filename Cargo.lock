@@ -4046,6 +4046,7 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "trash",
+ "unicode-segmentation",
 ]
 
 [[package]]

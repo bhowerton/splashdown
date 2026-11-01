@@ -978,6 +978,8 @@ impl Controller {
             self.ask(active);
             return;
         }
+        // Only an error from this dictation's own run counts below.
+        self.pipeline_error = None;
         let spoke = active.started.elapsed();
         let job = self.prepare(&mut active);
         if job.is_none()
@@ -1002,7 +1004,8 @@ impl Controller {
             });
         // On disk until its text is in, so a failure (or the app closing)
         // doesn't lose it.
-        if let Some(j) = &job {
+        // Not a transform: its selection isn't kept, so it couldn't be retried.
+        if let Some(j) = job.as_ref().filter(|j| j.mode != Mode::Transform) {
             let speech = j.prefix.as_ref().map_or(&j.speech, |p| &p.whole);
             crate::rescue::start(
                 speech,
@@ -1053,6 +1056,16 @@ impl Controller {
                         short(&error)
                     ),
                 );
+            }
+            // The words went in as heard (or an instruction was dropped):
+            // kept, so Retry can run the AI on them once it's back.
+            (Some((outcome, _)), _)
+                if matches!(outcome.fallback, Some(Fallback::ModelError(_))) =>
+            {
+                if let Some(Fallback::ModelError(error)) = &outcome.fallback {
+                    crate::rescue::failed(&format!("AI unavailable: {error}"));
+                }
+                crate::tray::show_retry(true);
             }
             _ => crate::rescue::done(),
         }
@@ -1308,8 +1321,12 @@ impl Controller {
         let target_pid = active.focus.as_ref().map(|f| f.app.pid);
 
         if outcome.text.trim().is_empty() {
-            if let Some(typer) = typer.as_mut().filter(|_| still_focused) {
-                let _ = typer.finish("");
+            if let Some((typer, focus)) = typer
+                .as_mut()
+                .filter(|t| still_focused && !t.stopped())
+                .zip(active.focus.as_ref())
+            {
+                let _ = typer.finish(focus, "");
             }
             self.notice(Tone::Info, "Didn't catch that");
             return;
@@ -1328,14 +1345,19 @@ impl Controller {
         }
 
         let app_id = active.focus.as_ref().map_or("?", |f| f.app.id.as_str());
-        if !still_focused {
+        // Typing the stream stopped part way (focus moved, or typing
+        // failed): what's in the field can't be finished from.
+        let broken = typer.as_ref().is_some_and(StreamTyper::stopped);
+        if !still_focused || broken {
             tracing::info!("focus moved away from {app_id} before inserting: copied instead");
             let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
             let note = if send { " (not sent)" } else { "" };
-            self.notice(
-                Tone::Warning,
-                &format!("Focus changed — copied to clipboard{note}"),
-            );
+            let what = if typer.is_some() {
+                "part of it was typed there; all of it is on the clipboard"
+            } else {
+                "copied to clipboard"
+            };
+            self.notice(Tone::Warning, &format!("Focus changed — {what}{note}"));
             return;
         }
         let method = match active.preset.insert {
@@ -1381,7 +1403,10 @@ impl Controller {
             })
             .flatten();
         let mut inserted = match &mut typer {
-            Some(typer) => typer.finish(&text),
+            Some(typer) => match active.focus.as_ref() {
+                Some(focus) => typer.finish(focus, &text),
+                None => splashdown_platform::insert_text(&text, method),
+            },
             None => splashdown_platform::insert_text(&text, method),
         };
         if inserted.is_ok()
@@ -1637,8 +1662,12 @@ impl Controller {
     fn ask(&mut self, mut active: Active) {
         let job = self.prepare(&mut active);
         let _ = self.lock().take_send();
-        self.pending_command = None;
         let Some(mut job) = job else {
+            // The instruction key came before anything was said: what came
+            // after it is the question.
+            if let Some(clip) = self.pending_command.take() {
+                self.ask_from(&active, &clip);
+            }
             return;
         };
         // Only the words: the question goes to the AI as it was said.
@@ -1657,6 +1686,28 @@ impl Controller {
         }
         self.show_answer(&active, question, selection);
         self.check_budget();
+    }
+
+    /// A question recorded on its own (after the instruction key).
+    fn ask_from(&mut self, active: &Active, clip: &AudioClip) {
+        let Ok(engine) = &self.engine else {
+            return self.ui.hide();
+        };
+        let pipeline = engine.pipeline_for(&active.preset);
+        let hints = engine.hints_for(&active.preset);
+        let heard = tauri::async_runtime::block_on(pipeline.transcribe_only(clip, &hints));
+        let stt = pipeline.stt_name();
+        match heard {
+            Ok((question, usage)) if !question.trim().is_empty() => {
+                crate::spend::shared().record(&[(stt, usage)], chrono::Local::now());
+                self.show_answer(active, question.trim().to_string(), None);
+            }
+            Ok(_) => self.notice(Tone::Info, "Didn't catch that"),
+            Err(e) => {
+                let message = errors::pipeline(&e, Some(&stt), None);
+                self.notice(Tone::Warning, &short(&message));
+            }
+        }
     }
 
     /// Opens the Ask panel on `question`, asked from `active`'s app.

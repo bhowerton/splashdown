@@ -458,12 +458,52 @@ pub fn excerpts_for(
         .collect()
 }
 
-/// The words in `text`, lowercased, three letters or more.
+/// Words too common to tell notes apart, in the languages most used: with
+/// only a few notes, how often a word appears across them can't show it.
+const COMMON_WORDS: &[&str] = &[
+    // English
+    "the", "and", "for", "are", "was", "were", "what", "when", "where", "which", "who", "whom",
+    "why", "how", "that", "this", "these", "those", "with", "from", "about", "did", "does", "has",
+    "have", "had", "can", "could", "would", "should", "will", "our", "your", "you", "they",
+    "their", "them", "there", "then", "than", "but", "not", "any", "all", "its", "into", "out",
+    "who's", "what's", "whats", "tell", "said", "say", // German
+    "der", "die", "das", "und", "ist", "was", "wie", "wer", "wann", "wo", "warum", "welche",
+    "haben", "hat", "wir", "ihr", "sie", "ein", "eine", "einen", "mit", "von", "für", "über",
+    // French
+    "les", "des", "est", "que", "qui", "quoi", "quand", "comment", "pour", "avec", "nous", "vous",
+    "une", "dans", "sur", "pas", "quel", "quelle", // Spanish and Portuguese
+    "los", "las", "que", "qué", "quién", "cuándo", "dónde", "cómo", "por", "para", "con", "una",
+    "del", "nos", "fue", "son", "está", "uma", "não", "com", "quem", "quando", "onde", "como",
+    // Italian and Dutch
+    "che", "chi", "cosa", "quando", "dove", "come", "per", "con", "una", "het", "een", "wat", "wie",
+    "wanneer", "waar", "hoe", "voor", "met", "van", "zijn",
+];
+
+/// Scripts written without spaces between words.
+fn unspaced(c: char) -> bool {
+    matches!(c as u32,
+        0x3040..=0x30FF // Hiragana, Katakana
+        | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF // CJK ideographs
+    )
+}
+
+/// The words in `text` worth matching, lowercased: three letters or more
+/// and not among the most common words; in Chinese and Japanese, which
+/// have no spaces, each pair of characters.
 fn words_of(text: &str) -> std::collections::HashSet<String> {
-    text.split(|c: char| !c.is_alphanumeric())
-        .filter(|w| w.chars().count() >= 3)
-        .map(str::to_lowercase)
-        .collect()
+    let mut words = std::collections::HashSet::new();
+    for token in text.split(|c: char| !c.is_alphanumeric()) {
+        let chars: Vec<char> = token.chars().collect();
+        if chars.iter().any(|&c| unspaced(c)) {
+            words.extend(chars.windows(2).map(|w| w.iter().collect::<String>()));
+            continue;
+        }
+        let word = token.to_lowercase();
+        if word.chars().count() >= 3 && !COMMON_WORDS.contains(&word.as_str()) {
+            words.insert(word);
+        }
+    }
+    words
 }
 
 /// The `limit` notes that match `question` best, each with its rarest
@@ -529,10 +569,25 @@ fn around(text: &str, word: &str, max: usize) -> String {
     if chars.len() <= max {
         return text.to_string();
     }
-    let lower = text.to_lowercase();
-    let at = lower
-        .find(word)
-        .map_or(0, |byte| lower[..byte].chars().count());
+    // The word itself, not inside a longer one ("art", not "start").
+    let lower: Vec<char> = text.chars().flat_map(char::to_lowercase).collect();
+    let lower = if lower.len() == chars.len() {
+        lower
+    } else {
+        chars.clone()
+    };
+    let word: Vec<char> = word.chars().collect();
+    let edge = |i: usize| {
+        lower
+            .get(i)
+            .is_none_or(|c| !c.is_alphanumeric() || unspaced(*c))
+    };
+    let at = (0..lower.len().saturating_sub(word.len() - 1))
+        .find(|&i| {
+            lower[i..i + word.len()] == word[..]
+                && (unspaced(word[0]) || (i == 0 || edge(i - 1)) && edge(i + word.len()))
+        })
+        .unwrap_or(0);
     let start = at.saturating_sub(max / 3).min(chars.len() - max);
     let mut out: String = chars[start..start + max].iter().collect();
     if start > 0 {
@@ -1102,14 +1157,28 @@ mod tests {
         assert_eq!(titles, ["Launch plan", "Standup"]);
         assert_eq!(found[0].1, "docs");
         assert!(best_matches(&notes, "the", 3).is_empty());
-        // Whole words: "and" isn't in "Standup".
-        let found = best_matches(&notes, "and", 3);
+        // Whole words: "stand" isn't in "Standup".
+        assert!(best_matches(&notes, "stand", 3).is_empty());
+        let found = best_matches(&notes, "eggs", 3);
         assert_eq!(found.len(), 1);
         assert_eq!(found[0].0.title, "Groceries");
         assert!(best_matches(&notes, "", 3).is_empty());
         // A single note still matches.
         let one = [summary("Launch plan", "Thursday.", 1)];
         assert_eq!(best_matches(&one, "launch day", 3).len(), 1);
+    }
+
+    #[test]
+    fn common_words_and_unspaced_scripts() {
+        let w = words_of("What did we decide about the Launch?");
+        assert!(w.contains("decide") && w.contains("launch"));
+        assert!(!w.contains("what") && !w.contains("the") && !w.contains("about"));
+        // Japanese: pairs of characters.
+        let w = words_of("発売日はいつ");
+        assert!(w.contains("発売") && w.contains("売日"));
+        // With a single note, common words don't make it match.
+        let one = [summary("Weather", "What is the forecast", 1)];
+        assert!(best_matches(&one, "what's the time", 3).is_empty());
     }
 
     #[test]
@@ -1120,6 +1189,9 @@ mod tests {
         assert!(cut.contains("needle"));
         assert_eq!(cut.chars().count(), 302);
         assert_eq!(around("short", "x", 300), "short");
+        // The whole word, not part of a longer one.
+        let text = format!("start {} the art show", "x".repeat(2000));
+        assert!(around(&text, "art", 300).contains("art show"));
     }
 
     #[test]

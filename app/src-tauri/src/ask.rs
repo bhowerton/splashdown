@@ -4,7 +4,6 @@
 //! asked from, Copy puts it on the clipboard. A question typed into the
 //! panel, or asked again while it's open, follows on from the ones before.
 
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
@@ -55,6 +54,9 @@ pub struct Shown {
 
 #[derive(Default)]
 struct Panel {
+    /// Which question is being answered; an older answer still streaming
+    /// in stops showing once a new question is asked.
+    asked: u64,
     shown: Shown,
     target: Option<(i32, String)>,
     /// The last question's context and model, for a typed follow-up.
@@ -70,27 +72,27 @@ fn panel() -> std::sync::MutexGuard<'static, Panel> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-/// Which question is being answered; an older answer still streaming in
-/// stops showing once a new question is asked.
-static ASKED: AtomicU64 = AtomicU64::new(0);
-
 /// Shows the panel with `q` and answers it in the background. While the
 /// panel is open with an answer, `q` follows on from it.
 pub fn ask(app: &AppHandle, mut q: Question) {
-    let asked = ASKED.fetch_add(1, Ordering::SeqCst) + 1;
     let open_now = app
         .get_webview_window(WINDOW)
         .is_some_and(|w| w.is_visible().unwrap_or(false));
-    {
+    let asked = {
         let mut panel = panel();
+        panel.asked += 1;
         let before = &panel.shown;
         let mut earlier = Vec::new();
-        if open_now && before.done && before.error.is_none() && !before.answer.is_empty() {
+        if open_now {
+            // The conversation so far, and the last question if it was
+            // answered.
             earlier = before.earlier.clone();
-            earlier.push(Turn {
-                question: before.question.clone(),
-                answer: before.answer.clone(),
-            });
+            if before.done && before.error.is_none() && !before.answer.is_empty() {
+                earlier.push(Turn {
+                    question: before.question.clone(),
+                    answer: before.answer.clone(),
+                });
+            }
             let drop = earlier.len().saturating_sub(EARLIER);
             earlier.drain(..drop);
         }
@@ -108,7 +110,8 @@ pub fn ask(app: &AppHandle, mut q: Question) {
         panel.target = q.target.clone();
         panel.context = Some(q.context.clone());
         panel.model = Some(q.model.clone());
-    }
+        panel.asked
+    };
     let request = splashdown_core::ask::request(&q.question, &q.context);
     open(app);
     changed(app);
@@ -116,8 +119,10 @@ pub fn ask(app: &AppHandle, mut q: Question) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let mut on_text = |so_far: &str| {
-            if ASKED.load(Ordering::SeqCst) == asked {
-                panel().shown.answer = so_far.to_string();
+            let mut panel = panel();
+            if panel.asked == asked {
+                panel.shown.answer = so_far.to_string();
+                drop(panel);
                 changed(&app);
             }
         };
@@ -126,11 +131,11 @@ pub fn ask(app: &AppHandle, mut q: Question) {
             crate::spend::shared()
                 .record(&[(q.model.name(), completion.usage)], chrono::Local::now());
         }
-        if ASKED.load(Ordering::SeqCst) != asked {
-            return;
-        }
         {
             let mut panel = panel();
+            if panel.asked != asked {
+                return;
+            }
             panel.shown.done = true;
             match result {
                 Ok(completion) => panel.shown.answer = completion.text.trim().to_string(),

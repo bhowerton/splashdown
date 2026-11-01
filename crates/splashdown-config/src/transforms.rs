@@ -67,11 +67,9 @@ pub fn tidy_answer(transform_id: &str, answer: &str) -> String {
         let in_actions = section
             .first()
             .is_some_and(|h| h.to_lowercase().contains("action item"));
-        let trimmed = line.trim_start();
-        let line = match trimmed
-            .strip_prefix("- ")
-            .or_else(|| trimmed.strip_prefix("* "))
-        {
+        // Top-level bullets only: an indented one is a detail of the item
+        // above it, not a task of its own.
+        let line = match line.strip_prefix("- ").or_else(|| line.strip_prefix("* ")) {
             Some(rest) if in_actions && !rest.starts_with('[') => format!("- [ ] {rest}"),
             _ => line.to_string(),
         };
@@ -182,6 +180,14 @@ mod tests {
                 "### Overview\nShort.\n\n### Action items\n- [ ] None\n"
             ),
             "### Overview\nShort."
+        );
+        // A detail under an action item stays a detail.
+        assert_eq!(
+            tidy_answer(
+                "meeting-summary",
+                "### Action items\n- Send the deck\n  - by Friday\n"
+            ),
+            "### Action items\n- [ ] Send the deck\n  - by Friday"
         );
         // Other transforms are left as they are.
         assert_eq!(
