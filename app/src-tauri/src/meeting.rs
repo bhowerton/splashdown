@@ -4,7 +4,8 @@
 //!
 //! An app's audio is recorded the same way with one side: what that app
 //! plays (a webinar in a browser, a podcast app), with no microphone, into
-//! a note of timed paragraphs.
+//! a note of timed paragraphs. So is the microphone on its own (a lecture,
+//! a conversation in the room), with no computer sound.
 //!
 //! The audio is spooled to the config folder as it's recorded, so a crash
 //! or a forced quit loses nothing: the next launch offers to finish the
@@ -86,7 +87,14 @@ pub enum Source {
     /// `splashdown_platform::audio_apps`, or none for everything the
     /// computer plays.
     App { name: String, sources: Vec<u32> },
+    /// The microphone alone: a lecture, a conversation in the room.
+    Microphone,
 }
+
+/// The name of a one-sided recording's sound, as the page shows it.
+const MICROPHONE: &str = "Microphone";
+/// A microphone recording's note's `source`, in its front matter.
+pub const RECORDING: &str = "recording";
 
 #[derive(Default)]
 struct Running {
@@ -325,10 +333,13 @@ fn record(
     let mut settings = state.settings();
     let listening = match source {
         Source::App { name, .. } => Some(name.clone()),
+        Source::Microphone => Some(MICROPHONE.to_string()),
         Source::Meeting => None,
     };
-    // Telling people they're recorded is about calls.
-    if listening.is_none() && !settings.notes.meeting_reminded {
+    let microphone_only = matches!(source, Source::Microphone);
+    // Telling people they're recorded is about other people: a call, or
+    // the room.
+    if !matches!(source, Source::App { .. }) && !settings.notes.meeting_reminded {
         remind(app);
         settings.notes.meeting_reminded = true;
         if let Err(e) = settings.save(&crate::engine::paths()?.config_file()) {
@@ -344,31 +355,37 @@ fn record(
 
     // An app's audio takes the microphone's place: it's the one side, and
     // keeps the time.
+    let microphone = || {
+        LiveAudio::microphone(
+            splashdown_audio::devices::choose(
+                &settings.general.microphones(),
+                &splashdown_audio::devices::inputs(),
+            )
+            .as_deref(),
+        )
+        .map_err(|e| e.to_string())
+    };
     let (mut you, mut them, them_problem) = match source {
         Source::Meeting => {
-            let you = LiveAudio::microphone(
-                splashdown_audio::devices::choose(
-                    &settings.general.microphones(),
-                    &splashdown_audio::devices::inputs(),
-                )
-                .as_deref(),
-            )
-            .map_err(|e| e.to_string())?;
+            let you = microphone()?;
             match system_audio() {
                 Ok(them) => (you, Some(them), None),
                 Err(e) => (you, None, Some(e)),
             }
         }
         Source::App { sources, .. } => (app_audio(sources)?, None, None),
+        Source::Microphone => (microphone()?, None, None),
     };
 
     let now = chrono::Local::now();
     let (app_name, title) = match &listening {
+        _ if microphone_only => (None, "Recording".to_string()),
         Some(name) => (Some(name.clone()), name.clone()),
         None => call_app(),
     };
     let (store, _) = crate::notes::store_for(settings.notes.folder.clone())?;
     let recorded_from = match &listening {
+        _ if microphone_only => "Recorded from the microphone".to_string(),
         Some(name) => format!("Recorded from {name}"),
         None => "Recorded on this computer".into(),
     };
@@ -387,10 +404,10 @@ fn record(
             now,
             &Origin {
                 app: app_name.as_deref(),
-                source: Some(if listening.is_some() {
-                    APP_AUDIO
-                } else {
-                    "meeting"
+                source: Some(match source {
+                    Source::Meeting => "meeting",
+                    Source::App { .. } => APP_AUDIO,
+                    Source::Microphone => RECORDING,
                 }),
                 ..Origin::default()
             },
@@ -540,8 +557,10 @@ fn record(
                 ended = Some(format!("*Ended at {at}.*"));
             } else if you.lost() {
                 ended = Some(match &listening {
-                    Some(name) => format!("*Stopped at {at}: {name}'s sound went away.*"),
-                    None => format!("*Stopped at {at}: the microphone went away.*"),
+                    Some(name) if !microphone_only => {
+                        format!("*Stopped at {at}: {name}'s sound went away.*")
+                    }
+                    _ => format!("*Stopped at {at}: the microphone went away.*"),
                 });
             } else if asked.is_some_and(|t| t.elapsed() >= GRACE) {
                 ended = Some(if too_long {
@@ -1209,6 +1228,12 @@ pub async fn audio_apps() -> Vec<AudioAppItem> {
 #[tauri::command]
 pub fn meeting_start_app(name: String, sources: Vec<u32>, app: AppHandle) -> Result<(), String> {
     start_recording(&app, Source::App { name, sources }).map(|_| ())
+}
+
+/// Starts transcribing the microphone alone.
+#[tauri::command]
+pub fn meeting_start_microphone(app: AppHandle) -> Result<(), String> {
+    start_recording(&app, Source::Microphone).map(|_| ())
 }
 
 /// What the user writes beside a meeting while it records: kept under

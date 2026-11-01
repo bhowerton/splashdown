@@ -94,6 +94,7 @@
             <button role="menuitem" data-act="transcribe"><span>A file…</span><kbd class="nt-kbd" data-keys="⌘O"></kbd></button>
             <button role="menuitem" data-act="transcribe-link"><span>A link…</span><kbd class="nt-kbd" data-keys="⌘L"></kbd></button>
             <button role="menuitem" data-act="transcribe-app"><span>An app's audio…</span></button>
+            <button role="menuitem" data-act="transcribe-mic"><span>The microphone</span></button>
           </div>
         </div>
         <button class="btn nt-tool" id="nt-ask" aria-pressed="false" title="Ask about this note or all your notes">
@@ -311,6 +312,8 @@
     <p>Drop audio or video to transcribe it into a note</p>
   </div>
 </main>
+
+<div id="nt-item-menu" class="nt-menu nt-item-menu" role="menu" aria-label="Note" hidden></div>
 
 <div id="nt-palette" class="nt-overlay" hidden>
   <div class="nt-palette" role="dialog" aria-modal="true" aria-label="Search notes and actions">

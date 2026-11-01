@@ -63,6 +63,11 @@
 .nt-item[aria-current="true"] { background: var(--accent-soft); }
 .nt-item[aria-current="true"] .ic { color: var(--accent); }
 .nt-item-text { min-width: 0; flex: 1; }
+.nt-item-row { position: relative; }
+.nt-item-more { position: absolute; right: 4px; top: 6px; width: 24px; height: 24px; opacity: 0; background: var(--sidebar); }
+.nt-item-row:hover .nt-item-more, .nt-item-more:focus-visible, .nt-item-more[aria-expanded="true"] { opacity: 1; }
+.nt-item-row:hover .nt-item-meta, .nt-item-row:hover .nt-item-title { padding-right: 24px; }
+.nt-item-menu { position: fixed; top: 0; left: 0; right: auto; z-index: 25; }
 .nt-item-title { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nt-item-meta { display: block; font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .nt-side-foot { border-top: 1px solid var(--border); }

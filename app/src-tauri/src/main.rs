@@ -140,6 +140,7 @@ fn main() {
             meeting::meeting_keep_going,
             meeting::meeting_set_notes,
             meeting::meeting_start_app,
+            meeting::meeting_start_microphone,
             meeting::audio_apps,
             meeting::meeting_status,
             notes::open_notes,

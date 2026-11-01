@@ -133,15 +133,17 @@ function when(ms) {
 function kindOf(source, text) {
   if (source === "meeting") return "meeting";
   if (source === "app-audio") return "audio";
+  if (source === "recording") return "recording";
   if (source === "file") return /Transcribed from <https?:/.test(text) ? "link" : "file";
   if (source === "capture") return "capture";
   return "note";
 }
 
-const KIND_ICON = { meeting: "people", audio: "sound", file: "file", link: "link", capture: "mic", note: "note" };
+const KIND_ICON = { meeting: "people", audio: "sound", recording: "mic", file: "file", link: "link", capture: "mic", note: "note" };
 const KIND_LABEL = {
   meeting: "Meeting",
   audio: "Transcribed from an app",
+  recording: "Recorded from the microphone",
   file: "Transcribed from a file",
   link: "Transcribed from a link",
   capture: "Dictated",
@@ -188,7 +190,7 @@ function snippetOf(text) {
 function shownInList(n) {
   const kind = kindOf(n.source, n.text);
   if (filter === "pinned") return n.pinned;
-  if (filter === "meetings") return kind === "meeting";
+  if (filter === "meetings") return kind === "meeting" || kind === "recording";
   if (filter === "imported") return kind === "file" || kind === "link" || kind === "audio";
   return true;
 }
@@ -244,8 +246,70 @@ function listItem(n) {
   text.append(title, meta);
   b.append(icon(KIND_ICON[kind]), text);
   b.addEventListener("click", () => openNote(n.path));
-  li.append(b);
+  b.addEventListener("contextmenu", (e) => {
+    e.preventDefault();
+    showItemMenu(n, { x: e.clientX, y: e.clientY });
+  });
+  const more = document.createElement("button");
+  more.className = "nt-iconbtn nt-item-more";
+  more.setAttribute("aria-label", `Actions for ${n.title || "Untitled"}`);
+  more.setAttribute("aria-haspopup", "menu");
+  more.title = "Pin, rename, show in Finder or move to the Trash";
+  more.append(icon("more"));
+  more.addEventListener("click", (e) => {
+    e.stopPropagation();
+    const r = more.getBoundingClientRect();
+    showItemMenu(n, { x: r.left, y: r.bottom + 4 });
+  });
+  li.className = "nt-item-row";
+  if (n.pinned) li.dataset.pinned = "true";
+  li.append(b, more);
   return li;
+}
+
+/** A note's own menu in the list (its ⋯, or a right-click): what the
+ *  header does for the open note, for any note. */
+function showItemMenu(n, at) {
+  setMenus(null);
+  const menu = $("nt-item-menu");
+  const busy = (!!job && job.note === n.path) || (!!meeting && meeting.note === n.path);
+  const item = (label, run, { disabled = false, danger = false } = {}) => {
+    const b = document.createElement("button");
+    b.setAttribute("role", "menuitem");
+    b.textContent = label;
+    b.disabled = disabled;
+    if (danger) b.className = "danger";
+    b.addEventListener("click", async () => {
+      hideItemMenu();
+      run();
+    });
+    return b;
+  };
+  // Acting on another note opens it first, as the header acts on the open one.
+  const onIt = (run) => async () => {
+    if (n.path !== current.path) await openNote(n.path);
+    if (current.path === n.path) run();
+  };
+  menu.replaceChildren(
+    item(n.pinned ? "Unpin" : "Pin to the top", () => setPinned(n.path, !n.pinned)),
+    item("Rename…", onIt(startRename), { disabled: busy }),
+    item(isMac ? "Show in Finder" : "Show in File Explorer", () =>
+      invoke("notes_reveal", { path: n.path }).catch((err) => toast(String(err), true)),
+    ),
+    document.createElement("hr"),
+    item("Move to Trash", onIt(deleteNote), { disabled: busy, danger: true }),
+  );
+  menu.hidden = false;
+  // Kept on screen.
+  const w = menu.offsetWidth;
+  const h = menu.offsetHeight;
+  menu.style.left = `${Math.max(4, Math.min(at.x, innerWidth - w - 4))}px`;
+  menu.style.top = `${Math.max(4, Math.min(at.y, innerHeight - h - 4))}px`;
+  menu.querySelector("button:not(:disabled)")?.focus();
+}
+
+function hideItemMenu() {
+  $("nt-item-menu").hidden = true;
 }
 
 /** Keeps the list's entry for the open note in step with the editor. */
@@ -353,7 +417,7 @@ let asMeeting = false;
 /** A meeting's note (or an app's audio, which shows the same way): made
  *  by recording one, or a transcript of turns. */
 function isMeeting() {
-  return current.source === "meeting" || current.source === "app-audio" || /^\*\*\[[\d:]+\] (You|Them):\*\*/m.test(body);
+  return ["meeting", "app-audio", "recording"].includes(current.source) || /^\*\*\[[\d:]+\] (You|Them):\*\*/m.test(body);
 }
 
 /** The meeting recording into the open note, if one is. */
@@ -711,7 +775,7 @@ async function summarize() {
   for (const b of [$("nt-summarize"), $("nt-resummarize")]) b.disabled = true;
   $("nt-status").textContent = "Summarizing…";
   try {
-    const id = current.source === "app-audio" ? "summary" : "meeting-summary";
+    const id = current.source === "meeting" ? "meeting-summary" : "summary";
     const out = await invoke("notes_transform", { path, id, text: input, extra: null });
     if (out.unchanged) return toast(`Summary: ${out.unchanged}`);
     if (current.path !== path || body !== before) return toast("The note changed meanwhile, so the summary wasn't added.");
@@ -835,9 +899,14 @@ async function sendNote() {
 async function togglePin() {
   if (!current.path) return;
   const open = notes.find((n) => n.path === current.path);
+  await setPinned(current.path, !open?.pinned);
+}
+
+async function setPinned(path, pinned) {
   try {
-    await invoke("notes_pin", { path: current.path, pinned: !open?.pinned });
+    await invoke("notes_pin", { path, pinned });
     await refresh();
+    toast(pinned ? "Pinned to the top of the list" : "Unpinned");
   } catch (e) {
     toast(String(e), true);
   }
@@ -959,7 +1028,7 @@ async function setOnTop(on) {
 const appIcons = new Map();
 
 async function pickApp() {
-  if (meeting) return toast(meeting.app ? "Already recording an app's audio." : "A meeting is recording.");
+  if (meeting) return toast(meeting.app ? "Already recording." : "A meeting is recording.");
   const dialog = $("nt-apps");
   if (!dialog.open) dialog.showModal();
   await listApps();
@@ -1024,6 +1093,16 @@ async function listApps() {
         }
       })
       .catch(() => {});
+  }
+}
+
+/** Transcribes the microphone alone into a note, hands-free. */
+async function recordMicrophone() {
+  if (meeting) return toast(meeting.app ? "Already recording." : "A meeting is recording.");
+  try {
+    await invoke("meeting_start_microphone");
+  } catch (e) {
+    toast(String(e), true);
   }
 }
 
@@ -1665,6 +1744,7 @@ function actions() {
     { title: meeting ? "Stop the meeting" : "Record a meeting", icon: meeting ? "stop" : "rec", sub: "Both sides of a call, transcribed as it goes", run: toggleMeeting },
     { title: "Transcribe a file…", icon: "file", keys: "⌘O", sub: "Audio or video. You can also drop one in this window.", run: pickFile },
     { title: "Transcribe a link…", icon: "link", keys: "⌘L", sub: "YouTube and other pages, or a link to a file", run: askForLink },
+    { title: "Transcribe the microphone", icon: "mic", sub: "A lecture, a talk or a conversation in the room, as it's said", run: recordMicrophone, off: !!meeting },
     { title: "Transcribe an app's audio…", icon: "sound", sub: "What a browser, a podcast app or a webinar plays, as it plays", run: pickApp, off: !!meeting },
     { title: "Ask your notes", icon: "ask", keys: "⌘J", sub: "An answer from your notes, with the notes it came from", run: () => openAsk({ scope: "all" }) },
   ];
@@ -2033,9 +2113,10 @@ async function showMeeting(next) {
         ? `Your side only: ${meeting.them_problem}`
         : `Transcribed ${meeting.place}`;
     $("nt-live-them-wrap").hidden = !!meeting.them_problem || !!meeting.app;
-    $("nt-live-you-label").textContent = meeting.app ? "Sound" : "You";
+    const side = meeting.app === "Microphone" ? "Mic" : meeting.app ? "Sound" : "You";
+    $("nt-live-you-label").textContent = side;
     $("nt-levels-them").hidden = !!meeting.app;
-    $("nt-levels-you-label").textContent = meeting.app ? "Sound" : "You";
+    $("nt-levels-you-label").textContent = side;
     $("nt-live-stop").disabled = meeting.finishing;
     $("nt-live-warning").hidden = !meeting.warning;
     showQuestion(meeting.question);
@@ -2092,6 +2173,7 @@ $("nt-meeting-show").addEventListener("click", () => meeting && openNote(meeting
 
 /** Opens menu `name` ("more", "transcribe") or, with null, closes them. */
 function setMenus(name) {
+  hideItemMenu();
   for (const [key, btn, menu] of [["more", "nt-more", "nt-menu"], ["transcribe", "nt-transcribe", "nt-transcribe-menu"]]) {
     const open = key === name;
     $(menu).hidden = !open;
@@ -2108,7 +2190,10 @@ $("nt-transcribe").addEventListener("click", (e) => {
   e.stopPropagation();
   setMenus($("nt-transcribe-menu").hidden ? "transcribe" : null);
 });
-document.addEventListener("click", () => setMenus(null));
+document.addEventListener("click", () => {
+  setMenus(null);
+  hideItemMenu();
+});
 
 const ACTS = {
   rename: startRename,
@@ -2120,6 +2205,7 @@ const ACTS = {
   transcribe: pickFile,
   "transcribe-link": askForLink,
   "transcribe-app": pickApp,
+  "transcribe-mic": recordMicrophone,
   meeting: toggleMeeting,
   ask: () => openAsk({ scope: "all" }),
 };
@@ -2132,7 +2218,7 @@ for (const menu of [$("nt-menu"), $("nt-transcribe-menu"), $("nt-start")]) {
   });
 }
 // Arrow keys move through an open menu.
-for (const menu of [$("nt-menu"), $("nt-transcribe-menu")]) {
+for (const menu of [$("nt-menu"), $("nt-transcribe-menu"), $("nt-item-menu")]) {
   menu.addEventListener("keydown", (e) => {
     if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
     e.preventDefault();
@@ -2176,6 +2262,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     if (!$("nt-palette").hidden) return closePalette();
     if (!$("nt-menu").hidden || !$("nt-transcribe-menu").hidden) return setMenus(null);
+    if (!$("nt-item-menu").hidden) return hideItemMenu();
     if (!$("nt-rename").hidden) return endRename();
     if (review) {
       closeReview();
