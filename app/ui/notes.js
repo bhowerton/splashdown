@@ -232,7 +232,7 @@ function updateHeader() {
   $("nt-status").title = current.path ? `${folder?.path ?? ""}/${current.path}` : "";
   // The note a file is being transcribed into can't be edited until it's
   // done, so nothing typed is lost to the next paragraph.
-  const locked = (!!job && job.note === current.path) || (!!meeting && meeting.note === current.path);
+  const locked = (!!job && !job.downloading && job.note === current.path) || (!!meeting && meeting.note === current.path);
   note.readOnly = locked || transforming;
   $("nt-job-show").hidden = !job || locked;
   $("nt-transform").disabled = locked || transforming;
@@ -570,6 +570,14 @@ async function showJob(next) {
   const before = job;
   job = next;
   $("nt-job").hidden = !job;
+  $("nt-job-show").hidden = !!job?.downloading;
+  if (job?.downloading) {
+    // A link, before there's anything to transcribe (or a note to open).
+    $("nt-job-bar").removeAttribute("value");
+    $("nt-job-text").textContent = `Downloading ${job.file}…`;
+    updateHeader();
+    return;
+  }
   if (job) {
     const progress = $("nt-job-bar");
     let done;
@@ -585,7 +593,8 @@ async function showJob(next) {
   }
   // A new transcript opens by itself, unless another note is being worked on.
   const started = job && job.note !== before?.note;
-  if (started && (!before || current.path === before.note || (!current.path && !note.value.trim()))) {
+  const wasDownload = before?.downloading;
+  if (started && (!before || wasDownload || current.path === before.note || (!current.path && !note.value.trim()))) {
     await saveNow();
     await refresh();
     await openNote(job.note);

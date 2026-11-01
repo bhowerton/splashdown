@@ -51,6 +51,9 @@ pub struct Status {
     waiting: usize,
     /// "on this computer", "with OpenAI".
     place: String,
+    /// A link is still downloading (there's no note yet).
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    downloading: bool,
 }
 
 #[derive(Clone, Serialize)]
@@ -275,6 +278,7 @@ fn transcribe(
         total: file.duration().map(|d| d.as_secs_f64()),
         waiting: 0,
         place: place.to_string(),
+        downloading: false,
     };
     show(app, Some(status.clone()));
 
@@ -444,6 +448,24 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
         .join(format!("{}-{n}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     tell(&app, "Downloading…".into(), false);
+    // The Notes bar shows it, with Stop, unless a file is already being
+    // transcribed (then Stop ends both).
+    CANCEL.store(false, Ordering::Relaxed);
+    let shown = !queue().running;
+    if shown {
+        show(
+            &app,
+            Some(Status {
+                file: url_label(&url),
+                note: String::new(),
+                done: 0.0,
+                total: None,
+                waiting: 0,
+                place: String::new(),
+                downloading: true,
+            }),
+        );
+    }
     let direct = url_extension(&url).is_some_and(|ext| EXTENSIONS.contains(&ext.as_str()));
     let item = match yt_dlp().filter(|_| !direct) {
         Some(program) => {
@@ -455,6 +477,9 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
         }
         None => download_file(&url, &dir).await,
     };
+    if shown && !queue().running {
+        show(&app, None);
+    }
     match item {
         Ok(item) => {
             add_items(&app, vec![item]);
@@ -465,6 +490,25 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
             Err(e)
         }
     }
+}
+
+/// Set by Stop: a download in progress ends.
+static CANCEL: AtomicBool = AtomicBool::new(false);
+/// yt-dlp while it runs, for Stop to end it.
+static DOWNLOADER: Mutex<Option<std::process::Child>> = Mutex::new(None);
+
+const STOPPED: &str = "Download stopped.";
+
+/// A link, short, for the Notes bar: its host and the end of its path.
+fn url_label(url: &str) -> String {
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let rest = rest.split(['?', '#']).next().unwrap_or(rest);
+    if rest.chars().count() <= 48 {
+        return rest.to_string();
+    }
+    let host = rest.split('/').next().unwrap_or(rest);
+    let last = rest.rsplit('/').next().unwrap_or("");
+    format!("{host}/…/{last}")
 }
 
 /// How long a download may wait for the next piece.
@@ -550,6 +594,9 @@ async fn download_file(url: &str, dir: &Path) -> Result<Item, String> {
         .map_err(|_| "The download stopped coming.".to_string())?
         .map_err(|e| format!("The download stopped: {e}"))?
     {
+        if CANCEL.load(Ordering::Relaxed) {
+            return Err(STOPPED.into());
+        }
         written += chunk.len() as u64;
         if written > MAX_DOWNLOAD {
             return Err("That file is over 2 GB.".into());
@@ -567,7 +614,8 @@ async fn download_file(url: &str, dir: &Path) -> Result<Item, String> {
 
 /// Downloads a page's audio with yt-dlp.
 fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> {
-    let output = std::process::Command::new(program)
+    let mut command = std::process::Command::new(program);
+    command
         // `--print` would otherwise skip the download.
         .args([
             "--no-playlist",
@@ -592,8 +640,9 @@ fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> 
         .args(["--print", "after_move:filepath", "--print", "title"])
         .args(["--max-filesize", "2G", "--"])
         .arg(url)
-        .output()
-        .map_err(|e| format!("Couldn't run yt-dlp: {e}"))?;
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped());
+    let output = run_stoppable(command)?;
     let stdout = String::from_utf8_lossy(&output.stdout);
     let mut lines = stdout.lines().filter(|l| !l.trim().is_empty());
     // The title is printed before the download, the file's path after.
@@ -618,6 +667,53 @@ fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> 
             title: Some(title.to_string()).filter(|t| !t.is_empty()),
         }),
     })
+}
+
+/// Runs `command` to the end, unless Stop ends it first.
+fn run_stoppable(mut command: std::process::Command) -> Result<std::process::Output, String> {
+    let mut child = command
+        .spawn()
+        .map_err(|e| format!("Couldn't run yt-dlp: {e}"))?;
+    // Read its output as it comes, or it could fill the pipe and wait.
+    let read = |pipe: Option<Box<dyn std::io::Read + Send>>| {
+        std::thread::spawn(move || {
+            let mut bytes = Vec::new();
+            if let Some(mut pipe) = pipe {
+                let _ = pipe.read_to_end(&mut bytes);
+            }
+            bytes
+        })
+    };
+    let stdout = read(child.stdout.take().map(|p| Box::new(p) as _));
+    let stderr = read(child.stderr.take().map(|p| Box::new(p) as _));
+    *DOWNLOADER.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
+    let status = loop {
+        std::thread::sleep(Duration::from_millis(200));
+        let mut slot = DOWNLOADER.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(child) = slot.as_mut() else {
+            break None;
+        };
+        match child.try_wait() {
+            Ok(Some(status)) => {
+                slot.take();
+                break Some(status);
+            }
+            Ok(None) => {}
+            Err(e) => {
+                slot.take();
+                return Err(e.to_string());
+            }
+        }
+    };
+    let output = std::process::Output {
+        status: status.ok_or(STOPPED)?,
+        stdout: stdout.join().unwrap_or_default(),
+        stderr: stderr.join().unwrap_or_default(),
+    };
+    if CANCEL.load(Ordering::Relaxed) {
+        return Err(STOPPED.into());
+    }
+    Ok(output)
 }
 
 /// yt-dlp, if it's installed: on the `PATH`, or where Homebrew and winget
@@ -651,6 +747,13 @@ pub fn notes_transcribe_stop() {
     let mut queue = queue();
     queue.waiting.clear();
     queue.stop.store(true, Ordering::Relaxed);
+    drop(queue);
+    // And a link still downloading.
+    CANCEL.store(true, Ordering::Relaxed);
+    if let Some(mut child) = DOWNLOADER.lock().unwrap_or_else(|e| e.into_inner()).take() {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 
 /// The running job, when the Notes window loads.
@@ -664,6 +767,25 @@ mod tests {
     use super::*;
 
     #[test]
+    #[cfg(unix)]
+    fn stop_ends_a_download_part_way() {
+        CANCEL.store(false, Ordering::Relaxed);
+        let mut command = std::process::Command::new("sleep");
+        command
+            .arg("30")
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::piped());
+        let started = Instant::now();
+        std::thread::spawn(|| {
+            std::thread::sleep(Duration::from_millis(400));
+            notes_transcribe_stop();
+        });
+        assert_eq!(run_stoppable(command).unwrap_err(), STOPPED);
+        assert!(started.elapsed() < Duration::from_secs(5));
+        assert!(DOWNLOADER.lock().unwrap().is_none());
+    }
+
+    #[test]
     fn links_to_files_are_told_from_pages() {
         let ext = |u: &str| url_extension(u);
         assert_eq!(ext("https://x.org/ep/42.MP3?dl=1").as_deref(), Some("mp3"));
@@ -674,6 +796,14 @@ mod tests {
         assert_eq!(ext("https://www.youtube.com/watch?v=abc"), None);
         assert_eq!(ext("https://x.org/"), None);
         assert!(yt_dlp().is_none_or(|p| p.is_file()));
+        assert_eq!(
+            url_label("https://example.org/ep/42.mp3?x=1"),
+            "example.org/ep/42.mp3"
+        );
+        assert_eq!(
+            url_label(&format!("https://example.org/{}/talk.mp3", "a/".repeat(30))),
+            "example.org/…/talk.mp3"
+        );
         // The server's content type never becomes part of a path.
         assert_eq!(extension_for("audio/mpeg"), "mp3");
         assert_eq!(extension_for("audio/x-m4a; charset=binary"), "m4a");
