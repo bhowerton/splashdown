@@ -1,34 +1,47 @@
 //! The Ask panel: a spoken question (dictation key + A, or a spoken
 //! command that's a question) answered in a small window instead of typed.
 //! The answer streams in; Insert pastes it into the app the question was
-//! asked from, Copy puts it on the clipboard.
+//! asked from, Copy puts it on the clipboard. A question typed into the
+//! panel, or asked again while it's open, follows on from the ones before.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
-use splashdown_core::{TextModel, TextRequest};
+use splashdown_core::TextModel;
+use splashdown_core::ask::AskContext;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 pub const WINDOW: &str = "ask";
 /// App event with the panel's new state (`Shown`).
 const CHANGED: &str = "ask-changed";
 
+/// Earlier questions a follow-up carries along, at most.
+const EARLIER: usize = 6;
+
 /// A question to answer.
 pub struct Question {
     /// As it was said.
     pub question: String,
-    pub request: TextRequest,
+    /// What it may be answered from.
+    pub context: AskContext,
     pub model: Arc<dyn TextModel>,
     /// The app it was asked from (pid and name), for Insert.
     pub target: Option<(i32, String)>,
-    /// How many notes the answer may draw on.
-    pub notes: usize,
+}
+
+/// An earlier question and its answer, shown above the current one.
+#[derive(Debug, Clone, Serialize)]
+pub struct Turn {
+    pub question: String,
+    pub answer: String,
 }
 
 /// What the panel shows.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct Shown {
+    /// Earlier turns of this conversation.
+    pub earlier: Vec<Turn>,
     pub question: String,
     /// The answer so far.
     pub answer: String,
@@ -44,6 +57,9 @@ pub struct Shown {
 struct Panel {
     shown: Shown,
     target: Option<(i32, String)>,
+    /// The last question's context and model, for a typed follow-up.
+    context: Option<AskContext>,
+    model: Option<Arc<dyn TextModel>>,
 }
 
 fn panel() -> std::sync::MutexGuard<'static, Panel> {
@@ -58,19 +74,42 @@ fn panel() -> std::sync::MutexGuard<'static, Panel> {
 /// stops showing once a new question is asked.
 static ASKED: AtomicU64 = AtomicU64::new(0);
 
-/// Shows the panel with `q` and answers it in the background.
-pub fn ask(app: &AppHandle, q: Question) {
+/// Shows the panel with `q` and answers it in the background. While the
+/// panel is open with an answer, `q` follows on from it.
+pub fn ask(app: &AppHandle, mut q: Question) {
     let asked = ASKED.fetch_add(1, Ordering::SeqCst) + 1;
+    let open_now = app
+        .get_webview_window(WINDOW)
+        .is_some_and(|w| w.is_visible().unwrap_or(false));
     {
         let mut panel = panel();
+        let before = &panel.shown;
+        let mut earlier = Vec::new();
+        if open_now && before.done && before.error.is_none() && !before.answer.is_empty() {
+            earlier = before.earlier.clone();
+            earlier.push(Turn {
+                question: before.question.clone(),
+                answer: before.answer.clone(),
+            });
+            let drop = earlier.len().saturating_sub(EARLIER);
+            earlier.drain(..drop);
+        }
+        q.context.earlier = earlier
+            .iter()
+            .map(|t| (t.question.clone(), t.answer.clone()))
+            .collect();
         panel.shown = Shown {
+            earlier,
             question: q.question.clone(),
             app: q.target.as_ref().map(|(_, name)| name.clone()),
-            notes: q.notes,
+            notes: q.context.notes.len(),
             ..Shown::default()
         };
         panel.target = q.target.clone();
+        panel.context = Some(q.context.clone());
+        panel.model = Some(q.model.clone());
     }
+    let request = splashdown_core::ask::request(&q.question, &q.context);
     open(app);
     changed(app);
 
@@ -82,7 +121,7 @@ pub fn ask(app: &AppHandle, q: Question) {
                 changed(&app);
             }
         };
-        let result = q.model.complete_streaming(&q.request, &mut on_text).await;
+        let result = q.model.complete_streaming(&request, &mut on_text).await;
         if let Ok(completion) = &result {
             crate::spend::shared()
                 .record(&[(q.model.name(), completion.usage)], chrono::Local::now());
@@ -190,6 +229,41 @@ pub async fn ask_insert(text: String, app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn ask_copy(text: String) -> Result<(), String> {
     splashdown_platform::copy_to_clipboard(&text).map_err(|e| e.to_string())
+}
+
+/// A question typed into the panel: follows on from the ones before, with
+/// the same selection and context, and notes that match it.
+#[tauri::command]
+pub fn ask_followup(question: String, app: AppHandle) -> Result<(), String> {
+    let question = question.trim().to_string();
+    if question.is_empty() {
+        return Ok(());
+    }
+    let (context, model, target) = {
+        let panel = panel();
+        (
+            panel.context.clone(),
+            panel.model.clone(),
+            panel.target.clone(),
+        )
+    };
+    let (Some(mut context), Some(model)) = (context, model) else {
+        return Err("Ask a question with the dictation key and A first.".into());
+    };
+    context.notes = app
+        .try_state::<crate::commands::AppState>()
+        .map(|s| crate::notes::excerpts_for(&s.settings().notes, &question))
+        .unwrap_or_default();
+    ask(
+        &app,
+        Question {
+            question,
+            context,
+            model,
+            target,
+        },
+    );
+    Ok(())
 }
 
 /// Esc or Close: hides the panel and gives focus back.

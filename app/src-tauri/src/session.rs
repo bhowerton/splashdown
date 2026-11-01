@@ -1687,20 +1687,19 @@ impl Controller {
                 .map(|f| f.app.name.clone()),
             user_name: engine.context.user_name.clone(),
             today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+            earlier: Vec::new(),
         };
-        let notes = context.notes.len();
-        tracing::info!("asking, with {notes} matching note(s)");
+        tracing::info!("asking, with {} matching note(s)", context.notes.len());
         crate::ask::ask(
             self.ui.app(),
             crate::ask::Question {
-                request: splashdown_core::ask::request(&question, &context),
                 question,
+                context,
                 model,
                 target: active
                     .focus
                     .as_ref()
                     .map(|f| (f.app.pid, f.app.name.clone())),
-                notes,
             },
         );
         self.ui.hide();

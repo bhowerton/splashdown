@@ -132,6 +132,7 @@ fn main() {
             ask::ask_insert,
             ask::ask_copy,
             ask::ask_close,
+            ask::ask_followup,
             calls::call_offer_state,
             calls::call_offer_answer,
         ])

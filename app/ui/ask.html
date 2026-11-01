@@ -9,8 +9,14 @@
 </head>
 <body class="ak-body">
 <main class="ak">
-  <p id="ak-question" class="ak-question"></p>
-  <div id="ak-answer" class="ak-answer" aria-live="polite" tabindex="0"></div>
+  <div id="ak-scroll" class="ak-scroll">
+    <div id="ak-earlier"></div>
+    <p id="ak-question" class="ak-question"></p>
+    <div id="ak-answer" class="ak-answer" aria-live="polite" tabindex="0"></div>
+  </div>
+  <form id="ak-follow" class="ak-follow">
+    <input id="ak-follow-input" type="text" placeholder="Ask a follow-up…" aria-label="Ask a follow-up" autocomplete="off" spellcheck="true" disabled>
+  </form>
   <footer class="ak-bar">
     <span id="ak-note" class="ak-note"></span>
     <span class="ak-grow"></span>
