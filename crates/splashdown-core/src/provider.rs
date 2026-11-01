@@ -209,11 +209,24 @@ pub trait SpeechStream: Send {
     fn finish(self: Box<Self>) -> ProviderResult<String>;
 }
 
+/// Called with a streamed reply so far (see `TextModel::complete_streaming`).
+pub type OnText<'a> = dyn for<'s> FnMut(&'s str) + Send + 'a;
+
 #[async_trait]
 pub trait TextModel: Send + Sync {
     /// Short identifier for logs and history, e.g. `openrouter/google/gemini-2.5-flash-lite`.
     fn name(&self) -> String;
     async fn complete(&self, req: &TextRequest) -> ProviderResult<Completion>;
+    /// Like `complete`, calling `on_text` with the reply so far each time
+    /// more of it arrives. Models that can't stream answer all at once and
+    /// never call it.
+    async fn complete_streaming(
+        &self,
+        req: &TextRequest,
+        _on_text: &mut OnText<'_>,
+    ) -> ProviderResult<Completion> {
+        self.complete(req).await
+    }
     fn supports_json_schema(&self) -> bool;
     /// Context window in tokens.
     fn context_window(&self) -> usize;

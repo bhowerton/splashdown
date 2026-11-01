@@ -125,6 +125,7 @@ function collect() {
   s.general.language = $("gen-language").value || null;
   s.general.vocabulary = $("gen-vocab").value.split(/[,\n]/).map((v) => v.trim()).filter(Boolean);
   s.general.live_preview = $("gen-live").checked ? null : false;
+  s.general.stream_typing = $("gen-stream").checked ? null : false;
   s.general.keep_history = $("hist-keep").checked ? true : null;
   s.general.keep_audio = $("hist-audio").checked ? true : null;
   s.general.overlay_near_cursor = $("gen-near-cursor").checked ? null : false;

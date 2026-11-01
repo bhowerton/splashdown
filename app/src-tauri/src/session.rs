@@ -24,8 +24,8 @@ use splashdown_audio::Level;
 use splashdown_core::command::Command;
 use splashdown_core::gesture::{Action, PhysicalKey, Recognizer, Timing};
 use splashdown_core::{
-    AudioClip, AudioJob, Fallback, Mode, Outcome, PipelineError, Prefix, PromptContext, TextJob,
-    Usage,
+    AudioClip, AudioJob, Fallback, Mode, OnText, Outcome, PipelineError, Prefix, PromptContext,
+    TextJob, Usage,
 };
 use splashdown_platform::{Focus, InsertMethod, KeyAction, OverlayState, Selection, Sound, Tone};
 
@@ -40,6 +40,7 @@ use crate::history::{self, History};
 use crate::preview::{self, PreviewWorker};
 use crate::project::{self, Project};
 use crate::spend::BudgetState;
+use crate::stream_typing::StreamTyper;
 use crate::tray::TrayIconState;
 use crate::ui::Ui;
 
@@ -972,9 +973,18 @@ impl Controller {
                 (speech.clone(), j.instruction_speech.clone())
             });
         let files = active.project.take().and_then(project_files);
+        let mut typer = job
+            .as_ref()
+            .and_then(|_| self.stream_typer(&active, files.clone()));
+        let focus = active.focus.as_ref();
+        let mut on_text = typer
+            .as_mut()
+            .zip(focus)
+            .map(|(typer, focus)| move |so_far: &str| typer.offer(focus, so_far));
+        let on_text = on_text.as_mut().map(|f| f as &mut OnText<'_>);
         let outcome = job
             .map(|job| with_file_names(job, files.as_deref()))
-            .and_then(|job| self.run_pipeline(job, &active.preset))
+            .and_then(|job| self.run_pipeline(job, &active.preset, on_text))
             .map(|(mut outcome, took)| {
                 if let Some(project) = &files {
                     outcome.text = splashdown_core::files::tag_files(&outcome.text, &project.files);
@@ -992,9 +1002,21 @@ impl Controller {
         if let Some((outcome, took)) = outcome {
             crate::spend::record_outcome(&outcome);
             self.pending_audio = recording;
-            self.deliver(active, outcome, took, send, spoke);
+            let typer = typer.filter(StreamTyper::started);
+            self.deliver(active, outcome, took, send, spoke, typer);
             self.check_budget();
         }
+    }
+
+    /// Types the AI's text as it streams in, when that's on and the
+    /// dictation goes into a field (not a note).
+    fn stream_typer(&self, active: &Active, files: Option<Arc<Project>>) -> Option<StreamTyper> {
+        let engine = self.engine.as_ref().ok()?;
+        if !engine.stream_typing || active.capture {
+            return None;
+        }
+        let focus = active.focus.as_ref().filter(|f| f.is_current())?;
+        StreamTyper::new(focus, files, engine.replacements.clone())
     }
 
     /// After spending: warn once a period nears its limit, and switch to
@@ -1181,11 +1203,17 @@ impl Controller {
     }
 
     /// Runs the pipeline (blocking this thread), or shows what went wrong.
-    fn run_pipeline(&mut self, job: AudioJob, preset: &Preset) -> Option<(Outcome, Duration)> {
+    /// The AI's text goes to `on_text` as it streams in.
+    fn run_pipeline(
+        &mut self,
+        job: AudioJob,
+        preset: &Preset,
+        on_text: Option<&mut OnText<'_>>,
+    ) -> Option<(Outcome, Duration)> {
         let engine = self.engine.as_ref().ok()?;
         let started = Instant::now();
         let pipeline = engine.pipeline_for(preset);
-        let result = tauri::async_runtime::block_on(pipeline.run(job));
+        let result = tauri::async_runtime::block_on(pipeline.run_streaming(job, on_text));
         let took = started.elapsed();
         tracing::debug!("processing took {:.2}s", took.as_secs_f32());
 
@@ -1215,11 +1243,15 @@ impl Controller {
         took: Duration,
         send: bool,
         spoke: Duration,
+        mut typer: Option<StreamTyper>,
     ) {
         let still_focused = active.focus.as_ref().is_none_or(Focus::is_current);
         let target_pid = active.focus.as_ref().map(|f| f.app.pid);
 
         if outcome.text.trim().is_empty() {
+            if let Some(typer) = typer.as_mut().filter(|_| still_focused) {
+                let _ = typer.finish("");
+            }
             self.notice(Tone::Info, "Didn't catch that");
             return;
         }
@@ -1248,25 +1280,32 @@ impl Controller {
             return;
         }
         let method = match active.preset.insert {
+            _ if typer.is_some() => InsertMethod::Type { soft_breaks: true },
             InsertMode::Paste => InsertMethod::Paste,
             InsertMode::Type => InsertMethod::Type {
                 soft_breaks: !splashdown_platform::is_terminal(app_id),
             },
         };
         // Right after other text, a space first ("…now?" + "Does…"), judged
-        // from the character before the cursor. Not for a transform, which
-        // replaces a selection in place.
-        let space = outcome.mode != Mode::Transform
-            && active
-                .focus
-                .as_ref()
-                .and_then(Focus::text_and_cursor)
-                .is_some_and(|(field, cursor)| {
-                    splashdown_core::spoken::needs_space(
-                        field[..cursor].chars().next_back(),
-                        outcome.text.chars().next(),
-                    )
-                });
+        // from the character before the cursor (before anything was
+        // streamed in). Not for a transform, which replaces a selection in
+        // place.
+        let space = match &typer {
+            Some(typer) => typer.space(),
+            None => {
+                outcome.mode != Mode::Transform
+                    && active
+                        .focus
+                        .as_ref()
+                        .and_then(Focus::text_and_cursor)
+                        .is_some_and(|(field, cursor)| {
+                            splashdown_core::spoken::needs_space(
+                                field[..cursor].chars().next_back(),
+                                outcome.text.chars().next(),
+                            )
+                        })
+            }
+        };
         let text = if space {
             format!(" {}", outcome.text)
         } else {
@@ -1282,7 +1321,10 @@ impl Controller {
                     .and_then(|f| f.field_text().map(|t| (f, t)))
             })
             .flatten();
-        let mut inserted = splashdown_platform::insert_text(&text, method);
+        let mut inserted = match &mut typer {
+            Some(typer) => typer.finish(&text),
+            None => splashdown_platform::insert_text(&text, method),
+        };
         if inserted.is_ok()
             && let Some((focus, before)) = &check
             && !field_changed(focus, before)

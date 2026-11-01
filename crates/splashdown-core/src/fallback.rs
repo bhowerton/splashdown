@@ -8,7 +8,8 @@ use async_trait::async_trait;
 
 use crate::AudioClip;
 use crate::provider::{
-    Completion, ProviderResult, SpeechToText, SttHints, TextModel, TextRequest, Transcript,
+    Completion, OnText, ProviderError, ProviderResult, SpeechToText, SttHints, TextModel,
+    TextRequest, Transcript,
 };
 
 /// Speech-to-text that falls back to `backup` when `primary` fails.
@@ -60,20 +61,22 @@ impl TextModel for FallbackModel {
     }
 
     async fn complete(&self, req: &TextRequest) -> ProviderResult<Completion> {
-        let error = match self.primary.complete(req).await {
-            Ok(completion) => return Ok(completion),
-            Err(e) => e,
-        };
-        let mut req = req.clone();
-        if !self.backup.supports_json_schema() {
-            req.json_schema = None;
+        match self.primary.complete(req).await {
+            Ok(completion) => Ok(completion),
+            Err(e) => self.stand_in(req, e).await,
         }
-        match self.backup.complete(&req).await {
-            Ok(mut completion) => {
-                completion.usage.on_device_fallback = true;
-                Ok(completion)
-            }
-            Err(_) => Err(error),
+    }
+
+    /// Streams from the primary; the backup, if it's needed, answers all at
+    /// once.
+    async fn complete_streaming(
+        &self,
+        req: &TextRequest,
+        on_text: &mut OnText<'_>,
+    ) -> ProviderResult<Completion> {
+        match self.primary.complete_streaming(req, on_text).await {
+            Ok(completion) => Ok(completion),
+            Err(e) => self.stand_in(req, e).await,
         }
     }
 
@@ -91,10 +94,31 @@ impl TextModel for FallbackModel {
     }
 }
 
+impl FallbackModel {
+    /// The backup's answer after the primary failed with `error`.
+    async fn stand_in(
+        &self,
+        req: &TextRequest,
+        error: ProviderError,
+    ) -> ProviderResult<Completion> {
+        let mut req = req.clone();
+        if !self.backup.supports_json_schema() {
+            req.json_schema = None;
+        }
+        match self.backup.complete(&req).await {
+            Ok(mut completion) => {
+                completion.usage.on_device_fallback = true;
+                Ok(completion)
+            }
+            Err(_) => Err(error),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::provider::{ProviderError, Usage};
+    use crate::provider::Usage;
 
     struct Stt(Result<&'static str, ()>);
 

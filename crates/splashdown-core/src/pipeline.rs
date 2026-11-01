@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 
 use crate::guard::{self, GuardReason, Verdict};
 use crate::prompt::{self, PromptContext, PromptTask};
-use crate::provider::{ProviderError, SpeechToText, SttHints, TextModel, TextRequest, Usage};
+use crate::provider::{
+    OnText, ProviderError, SpeechToText, SttHints, TextModel, TextRequest, Usage,
+};
 use crate::spoken;
 use crate::{AudioClip, Mode};
 
@@ -165,6 +167,19 @@ impl Pipeline {
     }
 
     pub async fn run(&self, job: AudioJob) -> Result<Outcome, PipelineError> {
+        self.run_streaming(job, None).await
+    }
+
+    /// `run`, passing the AI's reply so far to `on_text` as it arrives, for
+    /// typing it while the rest is written. Only plain dictation and
+    /// dictation with an instruction stream, and only when no snippet was
+    /// said (the model writes placeholders for those). The outcome is still
+    /// what to insert in the end: the guard may reject what was streamed.
+    pub async fn run_streaming(
+        &self,
+        job: AudioJob,
+        on_text: Option<&mut OnText<'_>>,
+    ) -> Result<Outcome, PipelineError> {
         let started = Instant::now();
         let speech = self.transcribe_speech(&job.speech, job.prefix, &job.hints);
         let ((speech, stt_usage), instruction) = match &job.instruction_speech {
@@ -202,13 +217,16 @@ impl Pipeline {
             (mode, instruction, _) => (mode, instruction),
         };
         let mut outcome = self
-            .process_text(TextJob {
-                mode,
-                content,
-                instruction,
-                selection: job.selection,
-                context: job.context,
-            })
+            .process_text_streaming(
+                TextJob {
+                    mode,
+                    content,
+                    instruction,
+                    selection: job.selection,
+                    context: job.context,
+                },
+                on_text,
+            )
             .await?;
         outcome.stt_time = stt_time;
         outcome.stt_name = Some(self.stt.name());
@@ -261,7 +279,16 @@ impl Pipeline {
     }
 
     /// Runs the AI pass and sanity guard on already-transcribed text.
-    pub async fn process_text(&self, mut job: TextJob) -> Result<Outcome, PipelineError> {
+    pub async fn process_text(&self, job: TextJob) -> Result<Outcome, PipelineError> {
+        self.process_text_streaming(job, None).await
+    }
+
+    /// `process_text`, streaming as `run_streaming` describes.
+    pub async fn process_text_streaming(
+        &self,
+        mut job: TextJob,
+        on_text: Option<&mut OnText<'_>>,
+    ) -> Result<Outcome, PipelineError> {
         let raw = match job.mode {
             Mode::Transform => job.instruction.clone().unwrap_or_default(),
             _ => job.content.clone(),
@@ -344,8 +371,23 @@ impl Pipeline {
             json_schema: None,
         };
 
+        let source = [job.content.as_str(), instruction, selection].join("\n");
         let started = Instant::now();
-        let result = llm.complete(&request).await;
+        let streams = matches!(job.mode, Mode::Dictate | Mode::DictateInstruct) && used.is_empty();
+        let result = match on_text.filter(|_| streams) {
+            Some(on_text) => {
+                // Stops passing the reply on once the guard would reject it.
+                let mut passing = true;
+                let mut forward = |so_far: &str| {
+                    passing = passing && guard::may_pass(task.mode(), &source, so_far);
+                    if passing {
+                        on_text(so_far);
+                    }
+                };
+                llm.complete_streaming(&request, &mut forward).await
+            }
+            None => llm.complete(&request).await,
+        };
         outcome.llm_time = started.elapsed();
 
         let output = match result {
@@ -363,7 +405,6 @@ impl Pipeline {
             Err(err) => return Err(PipelineError::Llm(err)),
         };
 
-        let source = [job.content.as_str(), instruction, selection].join("\n");
         match guard::check(task.mode(), &source, &output) {
             Verdict::Accept(text) => match spoken::fill_snippets(&text, &used, &snippets) {
                 Some(filled) => outcome.text = filled,
@@ -705,6 +746,92 @@ mod tests {
             Some(Fallback::Guard(GuardReason::LostSnippet))
         );
         assert_eq!(out.text, "write to ben@example.com today");
+    }
+
+    /// Streams its reply in two pieces.
+    struct StreamingLlm(&'static str);
+
+    #[async_trait]
+    impl TextModel for StreamingLlm {
+        fn name(&self) -> String {
+            "streaming-llm".into()
+        }
+        async fn complete(&self, _: &TextRequest) -> ProviderResult<Completion> {
+            Ok(Completion {
+                text: self.0.to_string(),
+                usage: Usage::FREE,
+            })
+        }
+        async fn complete_streaming(
+            &self,
+            req: &TextRequest,
+            on_text: &mut OnText<'_>,
+        ) -> ProviderResult<Completion> {
+            let half = self
+                .0
+                .char_indices()
+                .nth(self.0.chars().count() / 2)
+                .unwrap()
+                .0;
+            on_text(&self.0[..half]);
+            on_text(self.0);
+            self.complete(req).await
+        }
+        fn supports_json_schema(&self) -> bool {
+            false
+        }
+        fn context_window(&self) -> usize {
+            8192
+        }
+    }
+
+    fn streamed(llm: &'static str, job: TextJob) -> (Outcome, Vec<String>) {
+        let p = Pipeline::new(
+            Arc::new(FakeStt(vec![], Mutex::new(0))),
+            Some(Arc::new(StreamingLlm(llm))),
+        );
+        let mut seen = Vec::new();
+        let mut on_text = |s: &str| seen.push(s.to_string());
+        let out = block_on(p.process_text_streaming(job, Some(&mut on_text))).unwrap();
+        (out, seen)
+    }
+
+    fn text_job(mode: Mode, content: &str) -> TextJob {
+        TextJob {
+            mode,
+            content: content.into(),
+            instruction: (mode != Mode::Dictate).then(|| "shorter".into()),
+            selection: (mode == Mode::Transform).then(|| "a long text".into()),
+            context: PromptContext::default(),
+        }
+    }
+
+    #[test]
+    fn dictation_streams_until_the_guard_would_reject_it() {
+        let (out, seen) = streamed("Hello there.", text_job(Mode::Dictate, "um hello there"));
+        assert_eq!(seen, ["Hello ", "Hello there."]);
+        assert_eq!(out.text, "Hello there.");
+
+        // Too long for a cleanup: the stream stops, and the guard rejects it.
+        let poem = "Roses are red, violets are blue, sugar is sweet, and so are you.";
+        let (out, seen) = streamed(poem, text_job(Mode::Dictate, "a poem"));
+        assert!(seen.len() <= 1, "{seen:?}");
+        assert!(out.fallback.is_some());
+        assert_eq!(out.text, "a poem");
+
+        // A transform replaces a selection: nothing to stream.
+        let (_, seen) = streamed("Short.", text_job(Mode::Transform, ""));
+        assert!(seen.is_empty());
+
+        // A snippet: the model writes placeholders, never shown as they are.
+        let mut job = text_job(Mode::Dictate, "write to my email today");
+        job.context.snippets = vec![crate::spoken::Snippet {
+            trigger: "my email".into(),
+            text: "ben@example.com".into(),
+        }];
+        let (out, seen) = streamed("Write to [[s1]] today.", job);
+        assert!(seen.is_empty());
+        assert_eq!(out.text, "Write to ben@example.com today.");
     }
 
     #[test]

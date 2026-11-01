@@ -60,6 +60,7 @@ function renderGeneral() {
   setValue($("gen-volume"), Math.round(volume * 100));
   $("gen-volume").disabled = !$("gen-sounds").checked;
   $("gen-live").checked = s.general.live_preview !== false;
+  $("gen-stream").checked = s.general.stream_typing !== false;
   const note = $("gen-live-note");
   // Only the model the user chose is ever loaded, so the preview needs
   // speech-to-text on this computer.

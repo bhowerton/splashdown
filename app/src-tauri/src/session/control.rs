@@ -213,7 +213,7 @@ impl Controller {
         self.last_notice = None;
         let outcome = self
             .prepare(&mut active)
-            .and_then(|job| self.run_pipeline(job, &active.preset));
+            .and_then(|job| self.run_pipeline(job, &active.preset, None));
         // Return can't send anything here; hand it back to apps.
         let _ = self.lock().take_send();
         let result = match outcome {

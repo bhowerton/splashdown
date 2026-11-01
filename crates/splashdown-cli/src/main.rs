@@ -116,6 +116,10 @@ enum Command {
         /// Transform this text with `text` as the instruction.
         #[arg(long)]
         selection: Option<String>,
+        /// Show the AI's text as it streams in (on stderr), with the time
+        /// each piece arrived.
+        #[arg(long)]
+        stream: bool,
         #[command(flatten)]
         providers: ProviderOpts,
         #[command(flatten)]
@@ -519,6 +523,7 @@ fn run() -> Result<()> {
             text,
             instruction,
             selection,
+            stream,
             providers,
             context,
         } => {
@@ -543,7 +548,12 @@ fn run() -> Result<()> {
                     context: context.prompt_context(&setup.settings),
                 },
             };
-            let outcome = rt.block_on(setup.pipeline.process_text(job))?;
+            let started = std::time::Instant::now();
+            let mut show = |so_far: &str| {
+                eprintln!("{:>6.2}s  {so_far}", started.elapsed().as_secs_f32());
+            };
+            let on_text = stream.then_some(&mut show as &mut splashdown_core::OnText<'_>);
+            let outcome = rt.block_on(setup.pipeline.process_text_streaming(job, on_text))?;
             report::print(&outcome);
         }
         Command::Devices => {

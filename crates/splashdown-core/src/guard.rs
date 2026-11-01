@@ -59,7 +59,7 @@ pub fn check(mode: Mode, source: &str, output: &str) -> Verdict {
         let out_len = text.chars().count() as f32;
         // A model that writes the poem it was dictated is caught here even
         // for short transcripts.
-        let too_long = out_len > src_len * CLEANUP_LENGTH_RANGE.end() + CLEANUP_GROWTH_SLACK;
+        let too_long = out_len > longest_cleanup(source);
         let too_short = src_len >= MIN_CHARS_FOR_LENGTH_CHECK as f32
             && out_len < src_len * CLEANUP_LENGTH_RANGE.start();
         if too_long || too_short {
@@ -73,6 +73,23 @@ pub fn check(mode: Mode, source: &str, output: &str) -> Verdict {
     }
 
     Verdict::Accept(text)
+}
+
+/// Characters a cleanup may have before it counts as too long.
+fn longest_cleanup(source: &str) -> f32 {
+    source.chars().count() as f32 * CLEANUP_LENGTH_RANGE.end() + CLEANUP_GROWTH_SLACK
+}
+
+/// Whether a reply that is still arriving could yet be accepted as it
+/// reads so far: false once it's already too long, or when it starts with
+/// wrapping `check` strips (tags, thinking, a code fence, quotes), which
+/// can't be shown until the whole reply is in.
+pub fn may_pass(mode: Mode, source: &str, partial: &str) -> bool {
+    let text = partial.trim_start();
+    if text.starts_with(['<', '`', '"', '“']) {
+        return false;
+    }
+    mode != Mode::Dictate || text.chars().count() as f32 <= longest_cleanup(source)
 }
 
 /// Question marks in the scripts we support: Latin, full-width (Chinese,
@@ -133,6 +150,23 @@ fn normalize(output: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn partial_replies_that_cant_pass_are_caught_early() {
+        assert!(may_pass(Mode::Dictate, "um hello there", "Hello"));
+        assert!(may_pass(Mode::Dictate, "um hello there", ""));
+        assert!(!may_pass(
+            Mode::Dictate,
+            "um hello there",
+            "<transcript>Hel"
+        ));
+        assert!(!may_pass(Mode::Dictate, "um hello there", "```"));
+        assert!(!may_pass(Mode::Dictate, "um hello there", " \"Hello"));
+        let poem = "Roses are red, violets are blue, ".repeat(3);
+        assert!(!may_pass(Mode::Dictate, "write a poem", &poem));
+        // An instruction can make it as long as it asks.
+        assert!(may_pass(Mode::DictateInstruct, "write a poem", &poem));
+    }
 
     #[test]
     fn accepts_normal_cleanup() {

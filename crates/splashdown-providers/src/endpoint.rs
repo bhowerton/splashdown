@@ -152,6 +152,48 @@ impl Endpoint {
             .send()
             .await
             .map_err(|e| Failure::Fatal(network_error(e)))?;
+        Self::read_reply(resp).await
+    }
+
+    /// Sends a request that asked for a streamed reply (`"stream": true`).
+    /// Errors, and servers that answer all at once anyway, come back as
+    /// `Streamed::Whole`, read like `send_json` (with its one retry).
+    pub(crate) async fn send_streaming(
+        &self,
+        req: reqwest::RequestBuilder,
+    ) -> Result<Streamed, ProviderError> {
+        let retry = req.try_clone();
+        match (Self::stream_once(req).await, retry) {
+            (Err(Failure::Transient(_)), Some(retry)) => {
+                tokio::time::sleep(RETRY_DELAY).await;
+                Self::stream_once(retry).await.map_err(Failure::into_error)
+            }
+            (result, _) => result.map_err(Failure::into_error),
+        }
+    }
+
+    async fn stream_once(req: reqwest::RequestBuilder) -> Result<Streamed, Failure> {
+        let resp = req
+            .send()
+            .await
+            .map_err(|e| Failure::Fatal(network_error(e)))?;
+        let events = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with("text/event-stream"));
+        if resp.status().is_success() && events {
+            return Ok(Streamed::Events(Events {
+                resp,
+                buf: Vec::new(),
+                lines: EventLines::default(),
+            }));
+        }
+        Self::read_reply(resp).await.map(Streamed::Whole)
+    }
+
+    /// A reply's JSON body, or the error it reports.
+    async fn read_reply(resp: reqwest::Response) -> Result<Value, Failure> {
         let status = resp.status();
         let body = resp
             .text()
@@ -191,6 +233,69 @@ impl Endpoint {
 }
 
 const RETRY_DELAY: Duration = Duration::from_millis(400);
+
+/// A reply to a request for a streamed answer.
+pub(crate) enum Streamed {
+    Events(Events),
+    /// The whole answer at once.
+    Whole(Value),
+}
+
+/// A server-sent event stream: each event's `data`, in order.
+pub(crate) struct Events {
+    resp: reqwest::Response,
+    /// Received bytes not yet split into lines.
+    buf: Vec<u8>,
+    lines: EventLines,
+}
+
+impl Events {
+    /// The next event's data, or `None` when the stream ends.
+    pub(crate) async fn next(&mut self) -> Result<Option<String>, ProviderError> {
+        loop {
+            while let Some(end) = self.buf.iter().position(|&b| b == b'\n') {
+                let line: Vec<u8> = self.buf.drain(..=end).collect();
+                if let Some(data) = self.lines.push(&String::from_utf8_lossy(&line)) {
+                    return Ok(Some(data));
+                }
+            }
+            match self.resp.chunk().await.map_err(network_error)? {
+                Some(bytes) => self.buf.extend_from_slice(&bytes),
+                None => {
+                    // A last line without its line break, then what's left.
+                    let rest = std::mem::take(&mut self.buf);
+                    let last = self.lines.push(&String::from_utf8_lossy(&rest));
+                    return Ok(last.or_else(|| self.lines.push("")));
+                }
+            }
+        }
+    }
+}
+
+/// Puts an event stream's lines back together into events.
+#[derive(Default)]
+struct EventLines {
+    /// The current event's data so far.
+    data: String,
+}
+
+impl EventLines {
+    /// Takes one line; returns an event's data when a blank line ends it.
+    /// Comments, `event:` and `id:` lines are skipped.
+    fn push(&mut self, line: &str) -> Option<String> {
+        let line = line.trim_end_matches(['\n', '\r']);
+        if line.is_empty() {
+            return (!self.data.is_empty()).then(|| std::mem::take(&mut self.data));
+        }
+        if let Some(data) = line.strip_prefix("data:") {
+            if !self.data.is_empty() {
+                self.data.push('\n');
+            }
+            self.data.push_str(data.strip_prefix(' ').unwrap_or(data));
+        }
+        None
+    }
+}
 
 enum Failure {
     /// Worth one retry: rate limit or upstream hiccup.
@@ -259,6 +364,27 @@ mod tests {
     fn debug_redacts_key() {
         let e = Endpoint::openai("sk-secret");
         assert!(!format!("{e:?}").contains("sk-secret"));
+    }
+
+    #[test]
+    fn event_lines_make_events() {
+        let mut lines = EventLines::default();
+        let mut events = Vec::new();
+        for line in [
+            ": OPENROUTER PROCESSING\n",
+            "\n",
+            "event: content_block_delta\r\n",
+            "data: {\"a\":1}\r\n",
+            "\r\n",
+            "data:two\n",
+            "data: lines\n",
+            "\n",
+            "data: [DONE]\n",
+            "",
+        ] {
+            events.extend(lines.push(line));
+        }
+        assert_eq!(events, ["{\"a\":1}", "two\nlines", "[DONE]"]);
     }
 
     #[test]

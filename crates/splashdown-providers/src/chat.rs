@@ -2,9 +2,9 @@
 
 use async_trait::async_trait;
 use serde_json::{Value, json};
-use splashdown_core::{Completion, ProviderResult, TextModel, TextRequest};
+use splashdown_core::{Completion, OnText, ProviderError, ProviderResult, TextModel, TextRequest};
 
-use crate::endpoint::{Endpoint, Flavor, chat_content};
+use crate::endpoint::{Endpoint, Flavor, Streamed, chat_content, truncate};
 
 pub struct ChatModel {
     endpoint: Endpoint,
@@ -45,6 +45,16 @@ impl ChatModel {
                 || m.starts_with("o1")
                 || m.starts_with("o3")
                 || m.starts_with("o4"))
+    }
+
+    /// What a reply cost, from its JSON (or the last chunk of a stream).
+    fn usage(&self, json: &Value) -> splashdown_core::Usage {
+        crate::pricing::text_usage(
+            self.endpoint.flavor(),
+            self.endpoint.is_local(),
+            &self.model,
+            json,
+        )
     }
 
     pub(crate) fn body(&self, req: &TextRequest) -> Value {
@@ -98,12 +108,43 @@ impl TextModel for ChatModel {
         let json = self.endpoint.send_json(request).await?;
         Ok(Completion {
             text: chat_content(&json)?,
-            usage: crate::pricing::text_usage(
-                self.endpoint.flavor(),
-                self.endpoint.is_local(),
-                &self.model,
-                &json,
-            ),
+            usage: self.usage(&json),
+        })
+    }
+
+    async fn complete_streaming(
+        &self,
+        req: &TextRequest,
+        on_text: &mut OnText<'_>,
+    ) -> ProviderResult<Completion> {
+        let mut body = self.body(req);
+        body["stream"] = json!(true);
+        if self.endpoint.flavor() == Flavor::OpenAi {
+            // OpenRouter sends usage at the end already (`usage.include`).
+            body["stream_options"] = json!({ "include_usage": true });
+        }
+        let request = self.endpoint.post("chat/completions").json(&body);
+        let mut events = match self.endpoint.send_streaming(request).await? {
+            Streamed::Events(events) => events,
+            Streamed::Whole(json) => {
+                return Ok(Completion {
+                    text: chat_content(&json)?,
+                    usage: self.usage(&json),
+                });
+            }
+        };
+        let mut reply = StreamedReply::default();
+        while let Some(data) = events.next().await? {
+            if data == "[DONE]" {
+                break;
+            }
+            if reply.take(&data)? {
+                on_text(&reply.text);
+            }
+        }
+        Ok(Completion {
+            usage: self.usage(&reply.usage),
+            text: reply.text,
         })
     }
 
@@ -114,6 +155,39 @@ impl TextModel for ChatModel {
 
     fn context_window(&self) -> usize {
         self.context_window
+    }
+}
+
+/// A chat completion put together from its streamed chunks.
+#[derive(Default)]
+struct StreamedReply {
+    text: String,
+    /// The chunk that reported usage (the last one).
+    usage: Value,
+}
+
+impl StreamedReply {
+    /// Adds one chunk; true if the text grew.
+    fn take(&mut self, data: &str) -> ProviderResult<bool> {
+        let chunk: Value = serde_json::from_str(data)
+            .map_err(|_| ProviderError::InvalidResponse(truncate(data, 200)))?;
+        // OpenRouter reports an upstream failure mid-stream this way.
+        if let Some(error) = chunk.get("error") {
+            let message = error["message"]
+                .as_str()
+                .map_or_else(|| error.to_string(), str::to_string);
+            return Err(ProviderError::Api(message));
+        }
+        if chunk.get("usage").is_some_and(|u| !u.is_null()) {
+            self.usage = chunk.clone();
+        }
+        match chunk["choices"][0]["delta"]["content"].as_str() {
+            Some(delta) if !delta.is_empty() => {
+                self.text.push_str(delta);
+                Ok(true)
+            }
+            _ => Ok(false),
+        }
     }
 }
 
@@ -157,6 +231,26 @@ mod tests {
         let m =
             ChatModel::new(Endpoint::openai("k"), "gpt-4.1-nano").with_fallbacks(vec!["x".into()]);
         assert!(m.body(&req()).get("models").is_none());
+    }
+
+    #[test]
+    fn streamed_chunks_make_the_reply() {
+        let mut reply = StreamedReply::default();
+        let grew = [
+            r#"{"choices":[{"delta":{"role":"assistant","content":""}}]}"#,
+            r#"{"choices":[{"delta":{"content":"Hello"}}]}"#,
+            r#"{"choices":[{"delta":{"content":" there."}}]}"#,
+            r#"{"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":10,"completion_tokens":3,"cost":0.0001}}"#,
+        ]
+        .map(|c| reply.take(c).unwrap());
+        assert_eq!(grew, [false, true, true, false]);
+        assert_eq!(reply.text, "Hello there.");
+        assert_eq!(reply.usage["usage"]["completion_tokens"], 3);
+        assert!(
+            reply
+                .take(r#"{"error":{"code":502,"message":"upstream failed"}}"#)
+                .is_err()
+        );
     }
 
     #[test]

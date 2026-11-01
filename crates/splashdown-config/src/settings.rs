@@ -236,6 +236,9 @@ pub struct GeneralSettings {
     /// Show words in the overlay while speaking (needs a local Whisper
     /// model). Unset means on.
     pub live_preview: Option<bool>,
+    /// Type the AI's text into the app as it's written, rather than all at
+    /// once when it's done. Unset means on.
+    pub stream_typing: Option<bool>,
     /// Keep a local history of dictations. Unset means off: it's a record
     /// of everything said, so it's opt-in.
     pub keep_history: Option<bool>,
@@ -355,6 +358,10 @@ impl GeneralSettings {
 
     pub fn share_recent(&self) -> bool {
         self.share_recent.unwrap_or(true)
+    }
+
+    pub fn stream_typing(&self) -> bool {
+        self.stream_typing.unwrap_or(true)
     }
 
     pub fn sounds(&self) -> bool {

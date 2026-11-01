@@ -372,16 +372,14 @@ pub(crate) fn type_text(text: &str, soft_breaks: bool) -> Result<()> {
         if i > 0 {
             post_key(KEY_RETURN, line_break)?;
         }
-        let units: Vec<u16> = line.encode_utf16().collect();
         // CGEventKeyboardSetUnicodeString handles at most 20 UTF-16 units
-        // per event. (A surrogate pair split across chunks is rare enough
-        // to accept for this fallback path.)
-        for chunk in units.chunks(20) {
+        // per event.
+        for chunk in utf16_chunks(line, 20) {
             for down in [true, false] {
                 let ev = CGEvent::new_keyboard_event(source()?, 0, down)
                     .map_err(|_| PlatformError::Failed("couldn't create key event".into()))?;
                 ev.set_flags(CGEventFlags::CGEventFlagNull);
-                ev.set_string_from_utf16_unchecked(chunk);
+                ev.set_string_from_utf16_unchecked(&chunk);
                 ev.set_integer_value_field(EventField::EVENT_SOURCE_USER_DATA, INJECTED_TAG);
                 ev.post(CGEventTapLocation::HID);
             }
@@ -390,6 +388,21 @@ pub(crate) fn type_text(text: &str, soft_breaks: bool) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// `text` as UTF-16, in pieces of at most `max` units that never split a
+/// character (an emoji's surrogate pair).
+fn utf16_chunks(text: &str, max: usize) -> Vec<Vec<u16>> {
+    let mut chunks: Vec<Vec<u16>> = Vec::new();
+    let mut buf = [0u16; 2];
+    for c in text.chars() {
+        let units = c.encode_utf16(&mut buf);
+        match chunks.last_mut() {
+            Some(last) if last.len() + units.len() <= max => last.extend_from_slice(units),
+            _ => chunks.push(units.to_vec()),
+        }
+    }
+    chunks
 }
 
 pub(crate) fn copy_to_clipboard(text: &str) -> Result<()> {
@@ -430,6 +443,15 @@ pub(crate) fn copy_selection() -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn typed_chunks_keep_emoji_whole() {
+        let text = format!("{}😀b", "a".repeat(19));
+        let chunks = utf16_chunks(&text, 20);
+        assert_eq!(chunks.iter().map(Vec::len).collect::<Vec<_>>(), [19, 3]);
+        assert_eq!(String::from_utf16(&chunks.concat()).unwrap(), text);
+        assert!(utf16_chunks("", 20).is_empty());
+    }
 
     /// Uses a private pasteboard so the user's clipboard is never touched.
     #[test]

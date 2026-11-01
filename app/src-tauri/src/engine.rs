@@ -53,6 +53,8 @@ pub struct Engine {
     pub share_app_name: bool,
     /// Send recent dictations into the same app along with the next one.
     pub share_recent: bool,
+    /// Type the AI's text as it streams in.
+    pub stream_typing: bool,
     /// Quiet other sounds while recording.
     pub quiet_others: Option<splashdown_platform::Quieten>,
     /// Play sounds when recording starts and stops.
@@ -251,6 +253,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
             && ai_choice
                 .as_ref()
                 .is_none_or(|c| c.provider != AiProvider::Apple),
+        stream_typing: settings.general.stream_typing(),
         sounds: settings.general.sounds(),
         sound_volume: settings.general.sound_volume(),
         microphone: settings.general.microphone.clone(),

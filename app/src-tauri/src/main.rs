@@ -21,6 +21,7 @@ mod replacements;
 mod session;
 mod shortcuts;
 mod spend;
+mod stream_typing;
 mod tray;
 mod triggers;
 mod ui;

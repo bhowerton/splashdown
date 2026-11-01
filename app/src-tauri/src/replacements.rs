@@ -7,7 +7,7 @@ use splashdown_config::Replacement;
 use splashdown_core::spoken::Snippet;
 
 /// Replacement rules, compiled once per engine.
-#[derive(Default)]
+#[derive(Default, Clone)]
 pub struct Replacements(Vec<(Regex, String)>);
 
 impl Replacements {
