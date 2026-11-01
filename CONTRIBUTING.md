@@ -36,6 +36,16 @@ The built-in local text model runs in a separate helper, `splashdown-llm` (see t
 
 **API keys for development.** Copy `.env.local.example` to `.env.local` (gitignored) and fill in what you have. The `splashdown-cli` CLI reads it from the current directory, and `run-mac-app.sh` passes it to the app. Never commit keys; the app itself stores keys in the OS keychain.
 
+### The Notes editor
+
+The Notes window's editor (CodeMirror) is bundled into `app/ui/vendor/editor.js`, which is committed, so building the app needs no JavaScript tools. After changing `app/editor/src/` or its dependencies, rebuild it with [pnpm](https://pnpm.io):
+
+```sh
+cd app/editor && pnpm install && pnpm build
+```
+
+That also rewrites `app/ui/vendor/editor.LICENSES.txt`, the licences of what's in the bundle.
+
 ## Checks every change must pass
 
 CI runs these on macOS and Windows; please run them before opening a pull request:

@@ -402,7 +402,7 @@ fn sentence(e: &str) -> &str {
     e.trim().trim_end_matches('.')
 }
 
-/// "Transcribe a file…": a file picker; the files chosen are transcribed.
+/// Transcribe → A file…: a file picker; the files chosen are transcribed.
 #[tauri::command]
 pub async fn notes_transcribe_pick(app: AppHandle) -> Result<(), String> {
     let handle = app.clone();
@@ -430,7 +430,7 @@ pub async fn notes_transcribe_pick(app: AppHandle) -> Result<(), String> {
 /// The longest download a link may be.
 const MAX_DOWNLOAD: u64 = 2 << 30;
 
-/// "Transcribe a link…": a link to an audio or video file is downloaded;
+/// Transcribe → A link…: a link to an audio or video file is downloaded;
 /// a page (YouTube, a podcast's page) goes through yt-dlp if it's
 /// installed. The download is transcribed like a dropped file, then
 /// deleted.

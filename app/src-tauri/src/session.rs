@@ -130,6 +130,14 @@ enum Msg {
     TransformShortcut(String),
     /// The speech-to-text for transcribing a file.
     FileSpeech(mpsc::Sender<Result<FileSpeech, String>>),
+    /// The model that answers questions, for Ask in Notes.
+    AnswerModel(mpsc::Sender<Result<AnswerModel, String>>),
+}
+
+/// What a question asked in Notes needs from the engine.
+pub struct AnswerModel {
+    pub model: Arc<dyn splashdown_core::TextModel>,
+    pub user_name: Option<String>,
 }
 
 /// What a file transcription needs from the engine: dictation's
@@ -143,6 +151,9 @@ pub struct FileSpeech {
 pub struct TransformRequest {
     pub id: String,
     pub text: String,
+    /// What the user asked for on top of the transform (or instead of one,
+    /// with no `id`): "warmer", "in French".
+    pub extra: Option<String>,
     pub reply: mpsc::Sender<Result<TransformOutcome, String>>,
 }
 
@@ -235,9 +246,25 @@ impl Handle {
     /// Runs a transform on `text` and waits for it (behind any dictation in
     /// progress), so call it from `spawn_blocking`.
     pub fn transform(&self, id: String, text: String) -> Result<TransformOutcome, String> {
+        self.transform_with(id, text, None)
+    }
+
+    /// `transform`, with what the user asked for on top (or, with no `id`,
+    /// only that).
+    pub fn transform_with(
+        &self,
+        id: String,
+        text: String,
+        extra: Option<String>,
+    ) -> Result<TransformOutcome, String> {
         let (reply, rx) = mpsc::channel();
         self.tx
-            .send(Msg::Transform(TransformRequest { id, text, reply }))
+            .send(Msg::Transform(TransformRequest {
+                id,
+                text,
+                extra,
+                reply,
+            }))
             .map_err(|_| "dictation isn't running".to_string())?;
         rx.recv()
             .map_err(|_| "dictation isn't running".to_string())?
@@ -252,6 +279,21 @@ impl Handle {
             .map_err(|_| "dictation isn't running".to_string())?;
         rx.recv()
             .map_err(|_| "dictation isn't running".to_string())?
+    }
+
+    /// The model that answers questions, or `None` without one. Waits
+    /// behind any dictation in progress, so call it off the UI thread.
+    pub fn answer_model(&self) -> Result<Option<AnswerModel>, String> {
+        let (reply, rx) = mpsc::channel();
+        self.tx
+            .send(Msg::AnswerModel(reply))
+            .map_err(|_| "dictation isn't running".to_string())?;
+        match rx.recv() {
+            Ok(Ok(model)) => Ok(Some(model)),
+            Ok(Err(e)) if e.is_empty() => Ok(None),
+            Ok(Err(e)) => Err(e),
+            Err(_) => Err("dictation isn't running".to_string()),
+        }
     }
 
     /// Ignore hotkeys (while Settings listens for a new key) or resume.
@@ -484,7 +526,9 @@ impl Controller {
                 Ok(Msg::UndoAiEdit) => self.undo_ai_edit(),
                 Ok(Msg::RetryLast) => self.retry_last(),
                 Ok(Msg::Transform(t)) => {
-                    let result = self.run_transform(&t.id, &t.text).map(|(_, out)| out);
+                    let result = self
+                        .run_transform(&t.id, &t.text, t.extra.as_deref())
+                        .map(|(_, out)| out);
                     let _ = t.reply.send(result);
                 }
                 Ok(Msg::TransformShortcut(id)) => self.transform_shortcut(&id),
@@ -499,6 +543,21 @@ impl Controller {
                                 cleanup: engine.audio_cleanup(),
                             });
                     let _ = reply.send(speech);
+                }
+                Ok(Msg::AnswerModel(reply)) => {
+                    let model = self
+                        .engine
+                        .as_ref()
+                        .map_err(Clone::clone)
+                        .and_then(|engine| {
+                            // An empty error: there's no model, which isn't a failure.
+                            let model = engine.pipeline.answer_model().ok_or_else(String::new)?;
+                            Ok(AnswerModel {
+                                model,
+                                user_name: engine.context.user_name.clone(),
+                            })
+                        });
+                    let _ = reply.send(model);
                 }
                 Err(RecvTimeoutError::Timeout) => self.on_tick(),
                 Err(RecvTimeoutError::Disconnected) => break,
@@ -1744,6 +1803,7 @@ impl Controller {
             user_name: engine.context.user_name.clone(),
             today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
             earlier: Vec::new(),
+            cite_numbers: false,
         };
         tracing::info!("asking, with {} matching note(s)", context.notes.len());
         crate::ask::ask(
@@ -1804,15 +1864,35 @@ impl Controller {
         }
     }
 
-    /// Runs transform `id` on `text` with the AI. Returns its
-    /// name and the result.
-    fn run_transform(&self, id: &str, text: &str) -> Result<(String, TransformOutcome), String> {
+    /// Runs transform `id` on `text` with the AI, with `extra` (what the
+    /// user asked for) on top; with no `id`, `extra` is the instruction.
+    /// Returns its name and the result.
+    fn run_transform(
+        &self,
+        id: &str,
+        text: &str,
+        extra: Option<&str>,
+    ) -> Result<(String, TransformOutcome), String> {
         let engine = self.engine.as_ref().map_err(Clone::clone)?;
+        let extra = extra.map(str::trim).filter(|e| !e.is_empty());
         // A built-in the user's list doesn't have (it was edited before the
         // built-in existed): the meeting summary still works.
         let builtin;
-        let transform = match engine.transforms.iter().find(|t| t.id == id) {
+        let mut transform = match engine.transforms.iter().find(|t| t.id == id) {
             Some(t) => t,
+            None if id.is_empty() => {
+                let instruction = extra.ok_or("Say how to change it.")?;
+                builtin = splashdown_config::Transform {
+                    id: String::new(),
+                    name: "Rewrite".into(),
+                    instruction: format!(
+                        "{instruction}\n\nKeep every fact, name and number unless that asks otherwise, and don't add anything it doesn't ask for."
+                    ),
+                    place: splashdown_config::Place::Replace,
+                    shortcut: None,
+                };
+                &builtin
+            }
             None => {
                 builtin = splashdown_config::builtin_transforms()
                     .into_iter()
@@ -1821,6 +1901,17 @@ impl Controller {
                 &builtin
             }
         };
+        let asked;
+        if let Some(extra) = extra.filter(|_| !id.is_empty()) {
+            asked = splashdown_config::Transform {
+                instruction: format!(
+                    "{}\n\nThe user also asks for this, which comes first where the two disagree: {extra}",
+                    transform.instruction
+                ),
+                ..transform.clone()
+            };
+            transform = &asked;
+        }
         if text.trim().is_empty() {
             return Err("There's no text to change.".into());
         }
@@ -1907,7 +1998,7 @@ impl Controller {
         self.ui.show(OverlayState::Working {
             label: format!("{name}…"),
         });
-        let out = match self.run_transform(id, &text) {
+        let out = match self.run_transform(id, &text, None) {
             Ok((_, out)) => out,
             Err(e) => return self.notice(Tone::Warning, &short(&e)),
         };

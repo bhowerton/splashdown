@@ -22,6 +22,9 @@ pub struct AskContext {
     pub today: String,
     /// Earlier questions and answers in this conversation, oldest first.
     pub earlier: Vec<(String, String)>,
+    /// Number the notes and cite them by number, `[2]`, so the answer can
+    /// link to them (Ask in the Notes window).
+    pub cite_numbers: bool,
 }
 
 /// Part of a note that matches the question.
@@ -59,6 +62,9 @@ pub fn request(question: &str, ctx: &AskContext) -> TextRequest {
     if let Some(app) = ctx.app_name.as_deref().filter(|a| !a.is_empty()) {
         system.push_str(&format!(" They're in the app {app}."));
     }
+    if ctx.cite_numbers && !ctx.notes.is_empty() {
+        system.push_str("\n\nEach note in <notes> starts with its number in square brackets. Where part of the answer comes from a note, put that number in square brackets right after it, like [2], instead of naming the note.");
+    }
 
     let mut user = String::new();
     let mut block = |tag: &str, text: &str| {
@@ -82,7 +88,15 @@ pub fn request(question: &str, ctx: &AskContext) -> TextRequest {
         let notes = ctx
             .notes
             .iter()
-            .map(|n| format!("## {} ({})\n{}", n.title, n.date, n.text.trim()))
+            .enumerate()
+            .map(|(i, n)| {
+                let number = if ctx.cite_numbers {
+                    format!("[{}] ", i + 1)
+                } else {
+                    String::new()
+                };
+                format!("## {number}{} ({})\n{}", n.title, n.date, n.text.trim())
+            })
             .collect::<Vec<_>>()
             .join("\n\n");
         block("notes", &notes);
@@ -115,6 +129,27 @@ fn escape(text: &str, tag: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn notes_are_numbered_when_the_answer_cites_them() {
+        let note = |title: &str| NoteExcerpt {
+            title: title.into(),
+            date: "2026-10-30".into(),
+            text: "Text.".into(),
+        };
+        let mut ctx = AskContext {
+            notes: vec![note("Launch plan"), note("Pricing")],
+            ..AskContext::default()
+        };
+        let plain = request("when?", &ctx);
+        assert!(plain.user.contains("## Launch plan (2026-10-30)"));
+        assert!(!plain.system.contains("[2]"));
+        ctx.cite_numbers = true;
+        let cited = request("when?", &ctx);
+        assert!(cited.user.contains("## [1] Launch plan (2026-10-30)"));
+        assert!(cited.user.contains("## [2] Pricing (2026-10-30)"));
+        assert!(cited.system.contains("like [2]"));
+    }
 
     #[test]
     fn the_question_and_its_material_go_in_blocks() {

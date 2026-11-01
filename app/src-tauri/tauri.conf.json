@@ -9,7 +9,7 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:"
+      "csp": "default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' notes-media: http://notes-media.localhost https://notes-media.localhost"
     },
     "withGlobalTauri": true
   },

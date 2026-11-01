@@ -37,6 +37,9 @@ pub struct Summary {
     pub pinned: bool,
     /// The subfolder it's in ("" at the top).
     pub folder: String,
+    /// How it was made, from its front matter: "meeting", "file",
+    /// "capture"… ("" when it doesn't say).
+    pub source: String,
 }
 
 /// A note opened in the editor.
@@ -46,6 +49,8 @@ pub struct Note {
     /// The text without front matter (that's kept as it is on save).
     pub body: String,
     pub modified: u64,
+    /// As in `Summary`.
+    pub source: String,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -189,8 +194,9 @@ impl Store {
 
     fn summarize(&self, path: &Path, text: &str, modified: u64) -> Option<Summary> {
         let rel = self.relative(path)?;
-        let (_, body) = split_front_matter(text);
+        let (front, body) = split_front_matter(text);
         Some(Summary {
+            source: front_matter_value(front, "source").unwrap_or_default(),
             title: title_of(body),
             text: body.to_string(),
             modified,
@@ -266,8 +272,9 @@ impl Store {
     pub fn read(&self, rel: &str) -> io::Result<Note> {
         let path = self.resolve(rel)?;
         let text = std::fs::read_to_string(&path)?;
-        let (_, body) = split_front_matter(&text);
+        let (front, body) = split_front_matter(&text);
         Ok(Note {
+            source: front_matter_value(front, "source").unwrap_or_default(),
             path: rel.to_string(),
             body: body.replace("\r\n", "\n"),
             modified: mtime_ms(&std::fs::metadata(&path)?),
@@ -708,14 +715,22 @@ impl Store {
         let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
         let path = self.resolve(rel)?;
         let text = std::fs::read_to_string(&path)?;
-        let at = text
-            .match_indices("\n**[")
-            .next()
-            .map_or(text.len(), |(i, _)| i + 1);
+        let at = transcript_start(&text).unwrap_or(text.len());
         let (before, after) = text.split_at(at);
         let before = before.trim_end();
         let block = format!("\n\n## Summary\n\n{}\n\n## Transcript\n\n", summary.trim());
         self.write(&path, &format!("{before}{block}{after}"))
+    }
+
+    /// Puts `text` under `## {heading}` in note `rel` (a meeting's own
+    /// notes, written while the transcript grows below them).
+    pub fn set_section(&self, rel: &str, heading: &str, text: &str) -> io::Result<()> {
+        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let path = self.resolve(rel)?;
+        let file = std::fs::read_to_string(&path)?;
+        let (front, body) = split_front_matter(&file);
+        let body = with_section(&body.replace("\r\n", "\n"), heading, text);
+        self.write(&path, &format!("{front}{body}"))
     }
 
     /// Saves a recording in `Attachments/` and returns its path in the
@@ -874,6 +889,127 @@ pub fn split_front_matter(text: &str) -> (&str, &str) {
         }
     }
     ("", text)
+}
+
+/// `key: value` from front matter, unquoted.
+fn front_matter_value(front: &str, key: &str) -> Option<String> {
+    front.lines().find_map(|line| {
+        let value = line.strip_prefix(key)?.strip_prefix(':')?.trim();
+        let value = value
+            .strip_prefix('"')
+            .and_then(|v| v.strip_suffix('"'))
+            .unwrap_or(value);
+        (!value.is_empty()).then(|| value.to_string())
+    })
+}
+
+/// Whether `line` starts a part of a meeting note: a heading of its own
+/// level or a transcript turn.
+fn starts_part(line: &str) -> bool {
+    let line = line.trim_end();
+    is_turn(line)
+        || line.strip_prefix("## ").is_some_and(|h| {
+            ["My notes", "Summary", "Transcript"]
+                .iter()
+                .any(|known| h.trim().eq_ignore_ascii_case(known))
+        })
+}
+
+/// A transcript turn: `**[0:04] You:** …` (a meeting) or `**[0:04]** …`
+/// (a file). Not any line that happens to start with `**[`, which the
+/// user may type in their own notes.
+pub fn is_turn(line: &str) -> bool {
+    let Some((stamp, rest)) = line.strip_prefix("**[").and_then(|l| l.split_once(']')) else {
+        return false;
+    };
+    let parts: Vec<&str> = stamp.split(':').collect();
+    let stamp_ok = (2..=3).contains(&parts.len())
+        && parts
+            .iter()
+            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+        && parts[1..].iter().all(|p| p.len() == 2);
+    stamp_ok
+        && (rest.starts_with("**")
+            || rest
+                .strip_prefix(' ')
+                .and_then(|r| r.split_once(":**"))
+                .is_some_and(|(who, _)| !who.is_empty() && !who.contains('*')))
+}
+
+/// Where the transcript's first turn starts in `text`, if it has one.
+pub fn transcript_start(text: &str) -> Option<usize> {
+    let mut at = 0;
+    for line in text.split_inclusive('\n') {
+        if is_turn(line) {
+            return Some(at);
+        }
+        at += line.len();
+    }
+    None
+}
+
+/// What's under `## {heading}` in `body`, if it has that section.
+pub fn section(body: &str, heading: &str) -> Option<String> {
+    let lines: Vec<&str> = body.split_inclusive('\n').collect();
+    let start = lines.iter().position(|l| {
+        l.trim_end()
+            .strip_prefix("## ")
+            .is_some_and(|h| h.trim().eq_ignore_ascii_case(heading))
+    })?;
+    let end = lines[start + 1..]
+        .iter()
+        .position(|l| starts_part(l))
+        .map_or(lines.len(), |i| start + 1 + i);
+    Some(lines[start + 1..end].concat().trim().to_string())
+}
+
+/// `body` with `text` under `## {heading}`, replacing what was there (up
+/// to the next `## ` heading or transcript turn). A new section goes
+/// before the summary or transcript, or at the end; empty `text` takes the
+/// section out.
+pub fn with_section(body: &str, heading: &str, text: &str) -> String {
+    let lines: Vec<&str> = body.split_inclusive('\n').collect();
+    let is_heading = |l: &str| {
+        l.trim_end()
+            .strip_prefix("## ")
+            .is_some_and(|h| h.trim().eq_ignore_ascii_case(heading))
+    };
+    let text = text.trim();
+    let block = if text.is_empty() {
+        String::new()
+    } else {
+        format!("## {heading}\n\n{text}\n\n")
+    };
+    if let Some(start) = lines.iter().position(|l| is_heading(l)) {
+        let end = lines[start + 1..]
+            .iter()
+            .position(|l| starts_part(l))
+            .map_or(lines.len(), |i| start + 1 + i);
+        let before = lines[..start].concat();
+        let after = lines[end..].concat();
+        let block = if after.is_empty() && !block.is_empty() {
+            format!("{}\n", block.trim_end())
+        } else {
+            block
+        };
+        return format!("{before}{block}{after}");
+    }
+    if block.is_empty() {
+        return body.to_string();
+    }
+    match lines.iter().position(|l| starts_part(l)) {
+        Some(at) => {
+            let before = lines[..at].concat();
+            let before = before.trim_end();
+            let gap = if before.is_empty() { "" } else { "\n\n" };
+            format!("{before}{gap}{block}{}", lines[at..].concat())
+        }
+        None => {
+            let before = body.trim_end();
+            let gap = if before.is_empty() { "" } else { "\n\n" };
+            format!("{before}{gap}{}\n", block.trim_end())
+        }
+    }
 }
 
 fn front_matter_id(text: &str) -> Option<String> {
@@ -1060,6 +1196,85 @@ mod tests {
             "# Zoom meeting\n\nRecorded on this computer.\n\n## Summary\n\n### Overview\nA hello.\n\n## Transcript\n\n**[0:00] Them:** Hi.\n\n*Ended at 0:05.*\n"
         );
         let _ = std::fs::remove_dir_all(store.root());
+    }
+
+    #[test]
+    fn a_meetings_own_notes_sit_above_its_transcript() {
+        let store = temp_store("sections");
+        let meeting = store
+            .create_in(
+                "Meetings",
+                "# Zoom meeting\n\nRecorded on this computer.\n",
+                at("2026-10-31T09:15:00-05:00"),
+                &Origin {
+                    source: Some("meeting"),
+                    ..Origin::default()
+                },
+            )
+            .unwrap();
+        assert_eq!(meeting.source, "meeting");
+        assert_eq!(store.list()[0].source, "meeting");
+        // Written before anyone speaks, then the transcript grows below.
+        store
+            .set_section(&meeting.path, "My notes", "- pricing?")
+            .unwrap();
+        store
+            .add_paragraph(&meeting.path, "**[0:00] Them:** Hi.")
+            .unwrap();
+        store
+            .set_section(
+                &meeting.path,
+                "My notes",
+                "- pricing?\n- Sam: numbers by Thu",
+            )
+            .unwrap();
+        store
+            .add_paragraph(&meeting.path, "**[0:04] You:** Hello.")
+            .unwrap();
+        store
+            .insert_summary(&meeting.path, "### Overview\nA hello.")
+            .unwrap();
+        assert_eq!(
+            store.read(&meeting.path).unwrap().body,
+            "# Zoom meeting\n\nRecorded on this computer.\n\n## My notes\n\n- pricing?\n- Sam: numbers by Thu\n\n## Summary\n\n### Overview\nA hello.\n\n## Transcript\n\n**[0:00] Them:** Hi.\n\n**[0:04] You:** Hello.\n"
+        );
+        let _ = std::fs::remove_dir_all(store.root());
+    }
+
+    #[test]
+    fn sections_are_added_replaced_and_taken_out() {
+        let body = "# Call\n\n**[0:00] You:** Hi.\n";
+        let with = with_section(body, "My notes", "one");
+        assert_eq!(
+            with,
+            "# Call\n\n## My notes\n\none\n\n**[0:00] You:** Hi.\n"
+        );
+        assert_eq!(
+            with_section(&with, "My notes", "two"),
+            "# Call\n\n## My notes\n\ntwo\n\n**[0:00] You:** Hi.\n"
+        );
+        assert_eq!(with_section(&with, "My notes", "  "), body);
+        assert_eq!(section(&with, "My notes").as_deref(), Some("one"));
+        // What the user types can look like a heading or a turn.
+        let mine = "Agenda:\n## Pricing\n**[x] call Sam";
+        let typed = with_section(body, "My notes", mine);
+        assert_eq!(with_section(&typed, "My notes", mine), typed);
+        assert_eq!(section(&typed, "My notes").as_deref(), Some(mine));
+        assert_eq!(transcript_start(&typed), typed.find("**[0:00]"));
+        assert!(is_turn("**[1:02:30] Them:** Hi") && is_turn("**[0:04]** Hi"));
+        assert!(!is_turn("**[x] call Sam") && !is_turn("**[0:4] You:** no"));
+        assert_eq!(section(body, "My notes"), None);
+        // Last in the note.
+        let last = with_section("# Call\n", "My notes", "one");
+        assert_eq!(last, "# Call\n\n## My notes\n\none\n");
+        assert_eq!(
+            with_section(&last, "My notes", "two"),
+            "# Call\n\n## My notes\n\ntwo\n"
+        );
+        assert_eq!(
+            front_matter_value("---\nsource: meeting\napp: \"Zoom\"\n---\n", "app").as_deref(),
+            Some("Zoom")
+        );
     }
 
     #[test]

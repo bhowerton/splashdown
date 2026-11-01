@@ -8,49 +8,124 @@
 <link rel="stylesheet" href="notes.css">
 </head>
 <body class="nt-body">
+<!-- Icons, used with <svg><use href="#i-…"></use></svg>. -->
+<svg class="nt-sprite" aria-hidden="true">
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-side" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M9 13h6M9 17h4"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></symbol>
+  <symbol id="i-people" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A5 5 0 0 1 21 19"/></symbol>
+  <symbol id="i-file" viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-ask" viewBox="0 0 24 24"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 17v5M8 3h8l-1 6 3 4H6l3-4z"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.2"/><circle cx="12" cy="12" r="1.2"/><circle cx="19" cy="12" r="1.2"/></symbol>
+  <symbol id="i-pen" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></symbol>
+  <symbol id="i-undo" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+  <symbol id="i-retry" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#e5484d" stroke="none"/></symbol>
+</svg>
+
 <main class="nt">
-  <aside id="nt-side" class="nt-side" aria-label="Notes list">
-    <input id="nt-search" type="search" placeholder="Search notes" aria-label="Search notes" autocomplete="off" spellcheck="false">
+  <aside id="nt-side" class="nt-side" aria-label="Notes">
+    <div class="nt-side-top">
+      <button class="nt-find" id="nt-find" aria-keyshortcuts="Meta+K">
+        <svg class="ic"><use href="#i-search"></use></svg>
+        <span class="nt-grow">Search or jump to…</span>
+        <kbd class="nt-kbd" data-keys="⌘K"></kbd>
+      </button>
+      <button class="nt-iconbtn nt-boxed" id="nt-new" aria-label="New note" title="New note">
+        <svg class="ic"><use href="#i-plus"></use></svg>
+      </button>
+    </div>
+    <div class="nt-filters" role="group" aria-label="Show">
+      <button class="nt-chip" data-filter="all" aria-pressed="true">All</button>
+      <button class="nt-chip" data-filter="pinned" aria-pressed="false">Pinned</button>
+      <button class="nt-chip" data-filter="meetings" aria-pressed="false">Meetings</button>
+      <button class="nt-chip" data-filter="imported" aria-pressed="false">Imported</button>
+    </div>
     <ul id="nt-list" class="nt-list" aria-label="Notes"></ul>
     <p id="nt-list-empty" class="nt-empty" hidden></p>
     <footer class="nt-side-foot">
-      <button class="link" id="nt-folder" title="Show the notes folder"></button>
+      <button class="nt-folder" id="nt-folder" title="Show the notes folder">
+        <svg class="ic"><use href="#i-folder"></use></svg>
+        <span id="nt-folder-label"></span>
+      </button>
     </footer>
   </aside>
 
   <section class="nt-main">
-    <header class="nt-bar nt-head">
-      <button class="nt-icon" id="nt-toggle" aria-label="Show or hide the list" aria-expanded="true">☰</button>
-      <span id="nt-title" class="nt-title"></span>
-      <form id="nt-rename" class="nt-rename" hidden>
-        <input id="nt-rename-input" aria-label="File name" spellcheck="false">
-        <button class="btn" type="submit">Rename</button>
-        <button class="link" type="button" id="nt-rename-cancel">Cancel</button>
-      </form>
-      <span class="nt-grow"></span>
-      <div class="nt-menu-wrap">
-        <button class="btn" id="nt-transform" aria-haspopup="menu" aria-expanded="false" title="Run a saved instruction on the note, or on the selected text">Transform ▾</button>
-        <div id="nt-transform-menu" class="nt-menu" role="menu" hidden></div>
+    <header class="nt-head">
+      <button class="nt-iconbtn" id="nt-toggle" aria-label="Show or hide the list" aria-expanded="true" title="Show or hide the list">
+        <svg class="ic"><use href="#i-side"></use></svg>
+      </button>
+      <div class="nt-titles">
+        <button id="nt-title" class="nt-title" title="Rename the file"></button>
+        <form id="nt-rename" class="nt-rename" hidden>
+          <input id="nt-rename-input" aria-label="File name" spellcheck="false">
+          <button class="btn" type="submit">Rename</button>
+          <button class="link" type="button" id="nt-rename-cancel">Cancel</button>
+        </form>
+        <span id="nt-meta" class="nt-meta"></span>
       </div>
-      <button class="btn" id="nt-new">New</button>
-      <button class="btn" id="nt-pin" aria-pressed="false">Pin</button>
+      <div class="nt-tools">
+        <button class="btn nt-tool" id="nt-record" title="Record both sides of a call into a note">
+          <svg class="ic" id="nt-record-icon"><use href="#i-rec"></use></svg>
+          <span class="nt-lbl" id="nt-record-label">Record meeting</span>
+        </button>
+        <div class="nt-menu-wrap">
+          <button class="btn nt-tool" id="nt-transcribe" aria-haspopup="menu" aria-expanded="false" title="Transcribe a recording or a link into a note">
+            <svg class="ic"><use href="#i-file"></use></svg>
+            <span class="nt-lbl">Transcribe</span>
+            <svg class="ic sm"><use href="#i-down"></use></svg>
+          </button>
+          <div id="nt-transcribe-menu" class="nt-menu" role="menu" hidden>
+            <button role="menuitem" data-act="transcribe"><span>A file…</span><kbd class="nt-kbd" data-keys="⌘O"></kbd></button>
+            <button role="menuitem" data-act="transcribe-link"><span>A link…</span><kbd class="nt-kbd" data-keys="⌘L"></kbd></button>
+          </div>
+        </div>
+        <button class="btn nt-tool" id="nt-ask" aria-pressed="false" title="Ask about this note or all your notes">
+          <svg class="ic"><use href="#i-ask"></use></svg>
+          <span class="nt-lbl">Ask</span>
+          <kbd class="nt-kbd nt-lbl" data-keys="⌘J"></kbd>
+        </button>
+      </div>
+      <span class="nt-sep" aria-hidden="true"></span>
+      <button class="nt-iconbtn" id="nt-pin" aria-pressed="false" aria-label="Pin" title="Pin to the top of the list">
+        <svg class="ic"><use href="#i-pin"></use></svg>
+      </button>
+      <button class="nt-iconbtn" id="nt-versions" aria-label="Versions" title="Earlier versions of this note">
+        <svg class="ic"><use href="#i-clock"></use></svg>
+      </button>
       <div class="nt-menu-wrap">
-        <button class="btn" id="nt-more" aria-haspopup="menu" aria-expanded="false" aria-label="More">⋯</button>
-        <div id="nt-menu" class="nt-menu" role="menu" hidden>
-          <button role="menuitem" data-act="meeting" id="nt-meeting-item">Record a meeting</button>
-          <button role="menuitem" data-act="transcribe">Transcribe a file…</button>
-          <button role="menuitem" data-act="transcribe-link">Transcribe a link…</button>
-          <hr>
+        <button class="nt-iconbtn" id="nt-more" aria-haspopup="menu" aria-expanded="false" aria-label="More" title="More">
+          <svg class="ic"><use href="#i-more"></use></svg>
+        </button>
+        <div id="nt-menu" class="nt-menu nt-menu-right" role="menu" hidden>
           <button role="menuitem" data-act="rename">Rename…</button>
-          <button role="menuitem" data-act="history">History</button>
           <button role="menuitem" data-act="reveal" id="nt-reveal">Show in Finder</button>
+          <button role="menuitem" data-act="edit-rewrites">Edit rewrites…</button>
           <button role="menuitem" data-act="folder">Change notes folder…</button>
+          <hr>
           <button role="menuitem" data-act="delete" class="danger">Move to Trash</button>
         </div>
       </div>
     </header>
 
-    <div id="nt-notice" class="nt-notice" role="status" hidden></div>
+    <div id="nt-notice" class="nt-notice" role="status" hidden>
+      <span id="nt-notice-text"></span>
+      <button class="link" id="nt-notice-act" hidden></button>
+    </div>
 
     <div id="nt-meeting" class="nt-job nt-meeting" hidden>
       <span class="nt-rec" aria-hidden="true">●</span>
@@ -71,32 +146,183 @@
       <button class="link" id="nt-job-stop">Stop</button>
     </div>
 
-    <section id="nt-editor" class="nt-view">
-      <textarea id="nt-note" aria-label="Note" placeholder="Hold your dictation key and speak, or type."></textarea>
-      <footer class="nt-bar">
-        <span id="nt-status" class="nt-muted" aria-live="polite"></span>
-        <span class="nt-grow"></span>
-        <button class="btn" id="nt-copy">Copy</button>
-        <button class="btn primary nt-send" id="nt-send">Send</button>
-      </footer>
-    </section>
+    <div class="nt-row">
+      <div class="nt-content">
+        <!-- A note, or a meeting with its tabs. -->
+        <section id="nt-editor" class="nt-view">
+          <div id="nt-live" class="nt-live" hidden>
+            <div class="nt-live-bar">
+              <span class="nt-recpill"><span class="nt-dot" aria-hidden="true"></span><span id="nt-live-time">Recording</span></span>
+              <span id="nt-live-place" class="nt-muted nt-grow"></span>
+              <span class="nt-dev"><span class="nt-level"><i id="nt-live-you"></i></span>You</span>
+              <span class="nt-dev" id="nt-live-them-wrap"><span class="nt-level"><i id="nt-live-them"></i></span>Them</span>
+              <button class="btn primary" id="nt-live-stop"><svg class="ic sm"><use href="#i-stop"></use></svg>Stop and summarize</button>
+            </div>
+            <div id="nt-live-warning" class="nt-notice" hidden>
+              <span id="nt-live-warning-text"></span>
+              <button class="link" id="nt-live-keep">Keep recording</button>
+            </div>
+            <div class="nt-live-cols">
+              <section class="nt-live-col" aria-label="Transcript">
+                <h2 class="nt-cap">Transcript <span class="nt-muted">· live</span></h2>
+                <div id="nt-live-transcript" class="nt-turns" aria-live="off"></div>
+                <div class="nt-live-acts">
+                  <button class="btn" id="nt-missed"><svg class="ic"><use href="#i-ask"></use></svg>What did I miss?</button>
+                  <button class="btn" id="nt-live-ask">Ask about this meeting…</button>
+                </div>
+              </section>
+              <section class="nt-live-col nt-live-mine" aria-label="My notes">
+                <h2 class="nt-cap">My notes</h2>
+                <div id="nt-live-notes" class="nt-edit nt-edit-small"></div>
+                <p class="nt-hint">Type here, or hold <span class="dict-key">your dictation key</span> and say it. What you write down is what the summary covers first.</p>
+              </section>
+            </div>
+          </div>
 
-    <section id="nt-history" class="nt-view" hidden>
-      <header class="nt-bar">
-        <button class="link" id="nt-history-back">‹ Back to the note</button>
-        <span class="nt-grow"></span>
-        <small class="nt-muted">The last 50 versions, kept with your notes</small>
-      </header>
-      <ul id="nt-versions" class="nt-versions" aria-label="Earlier versions"></ul>
-      <p id="nt-versions-empty" class="nt-empty" hidden>No earlier versions yet. One is kept each time you start changing a note.</p>
-    </section>
+          <nav id="nt-tabs" class="nt-tabs" role="tablist" aria-label="Meeting" hidden>
+            <button role="tab" data-tab="summary" aria-selected="true">Summary</button>
+            <button role="tab" data-tab="transcript" aria-selected="false">Transcript <span class="nt-muted" id="nt-tab-length"></span></button>
+            <button role="tab" data-tab="notes" aria-selected="false">My notes</button>
+            <span class="nt-grow"></span>
+            <button class="link nt-tab-act" id="nt-resummarize" hidden>Summarize again</button>
+            <button role="tab" data-tab="whole" aria-selected="false" class="nt-tab-quiet">Whole note</button>
+          </nav>
+
+          <div id="nt-player" class="nt-player" hidden>
+            <button class="nt-iconbtn nt-play" id="nt-play" aria-label="Play the recording">
+              <svg class="ic"><use href="#i-play"></use></svg>
+            </button>
+            <span id="nt-play-at" class="nt-time">0:00</span>
+            <input type="range" id="nt-seek" min="0" max="1" step="0.1" value="0" aria-label="Position in the recording">
+            <span id="nt-play-length" class="nt-time">0:00</span>
+            <button class="btn nt-speed" id="nt-speed" aria-label="Playback speed">1×</button>
+            <audio id="nt-audio" preload="metadata"></audio>
+          </div>
+
+          <div id="nt-transcript" class="nt-transcript" hidden>
+            <label class="nt-findline">
+              <svg class="ic"><use href="#i-search"></use></svg>
+              <input id="nt-transcript-find" type="search" placeholder="Find in the transcript" aria-label="Find in the transcript">
+            </label>
+            <div id="nt-turns" class="nt-turns"></div>
+          </div>
+
+          <div id="nt-tab-empty" class="nt-tab-empty" hidden>
+            <p id="nt-tab-empty-text"></p>
+            <button class="btn primary" id="nt-summarize">Summarize</button>
+          </div>
+
+          <div class="nt-edit-wrap" id="nt-edit-wrap">
+            <div id="nt-edit" class="nt-edit"></div>
+            <div id="nt-start" class="nt-start" hidden>
+              <div class="nt-start-key"><kbd id="nt-start-key" class="dict-key">fn</kbd></div>
+              <p class="nt-start-title">Hold <span class="dict-key">your dictation key</span> and talk. It lands here.</p>
+              <p class="nt-muted">Or start typing. Everything saves as you go.</p>
+              <div class="nt-cards">
+                <button class="nt-card" data-act="meeting"><span class="nt-card-ic"><svg class="ic"><use href="#i-rec"></use></svg></span><b>Record a meeting</b><span>Both sides of a call, with your own notes beside it.</span></button>
+                <button class="nt-card" data-act="transcribe"><span class="nt-card-ic"><svg class="ic"><use href="#i-file"></use></svg></span><b>Transcribe a file</b><span>Audio or video. Or drop it anywhere in this window.</span></button>
+                <button class="nt-card" data-act="transcribe-link"><span class="nt-card-ic"><svg class="ic"><use href="#i-link"></use></svg></span><b>Transcribe a link</b><span>YouTube and other pages. Pasting a link here works too.</span></button>
+                <button class="nt-card" data-act="ask"><span class="nt-card-ic"><svg class="ic"><use href="#i-ask"></use></svg></span><b>Ask your notes</b><span>A question about anything you’ve said or recorded.</span></button>
+              </div>
+              <p class="nt-muted">Everything else is under <kbd class="nt-kbd" data-keys="⌘K"></kbd></p>
+            </div>
+          </div>
+
+          <div id="nt-rewrite" class="nt-rewrite" role="group" aria-label="Rewrite">
+            <span class="nt-rewrite-lbl"><svg class="ic sm"><use href="#i-pen"></use></svg>Rewrite</span>
+            <span id="nt-rewrite-chips" class="nt-rewrite-chips"></span>
+            <button class="nt-chip nt-chip-accent" id="nt-sayhow">Say how…</button>
+          </div>
+
+          <footer class="nt-foot">
+            <span id="nt-status" class="nt-status" aria-live="polite"></span>
+            <button class="btn" id="nt-copy"><svg class="ic sm"><use href="#i-copy"></use></svg>Copy</button>
+            <button class="btn primary nt-send" id="nt-send"></button>
+          </footer>
+        </section>
+
+        <!-- A rewrite, to keep or not. -->
+        <section id="nt-review" class="nt-view" hidden>
+          <div class="nt-review-bar">
+            <svg class="ic"><use href="#i-pen"></use></svg>
+            <b id="nt-review-name"></b>
+            <span id="nt-review-info" class="nt-muted"></span>
+            <div id="nt-review-versions" class="nt-seg" role="group" aria-label="Versions"></div>
+            <span class="nt-grow"></span>
+            <label class="nt-check" id="nt-review-diff-wrap"><input type="checkbox" id="nt-review-diff" checked>Show changes</label>
+            <button class="btn" id="nt-review-back"><svg class="ic sm"><use href="#i-undo"></use></svg>Keep the original</button>
+            <button class="btn primary" id="nt-review-keep">Keep this</button>
+          </div>
+          <div class="nt-review-body">
+            <div id="nt-review-text" class="nt-review-text" tabindex="0" aria-label="The rewrite"></div>
+          </div>
+          <form id="nt-review-again" class="nt-again">
+            <label for="nt-review-extra" class="nt-muted">Not quite right? Say what to change, and it tries again from the original.</label>
+            <div class="nt-askbox">
+              <input id="nt-review-extra" autocomplete="off" placeholder="Warmer, and keep the bit about Mail as its own line">
+              <button class="btn" type="submit" id="nt-review-retry"><svg class="ic sm"><use href="#i-retry"></use></svg>Try again</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="nt-history" class="nt-view" hidden>
+          <header class="nt-bar">
+            <button class="link" id="nt-history-back">‹ Back to the note</button>
+            <span class="nt-grow"></span>
+            <small class="nt-muted">The last 50 versions, kept with your notes</small>
+          </header>
+          <ul id="nt-versions-list" class="nt-versions" aria-label="Earlier versions"></ul>
+          <p id="nt-versions-empty" class="nt-empty" hidden>No earlier versions yet. One is kept each time you start changing a note.</p>
+        </section>
+      </div>
+
+      <aside id="nt-askpanel" class="nt-askpanel" aria-label="Ask" hidden>
+        <header class="nt-ask-head">
+          <b>Ask</b>
+          <div class="nt-seg" role="group" aria-label="What to ask about">
+            <button data-scope="note" aria-pressed="false">This note</button>
+            <button data-scope="all" aria-pressed="true">All notes</button>
+          </div>
+          <span class="nt-grow"></span>
+          <button class="nt-iconbtn" id="nt-ask-clear" aria-label="Start over" title="Start over"><svg class="ic"><use href="#i-retry"></use></svg></button>
+          <button class="nt-iconbtn" id="nt-ask-close" aria-label="Close" title="Close"><svg class="ic"><use href="#i-x"></use></svg></button>
+        </header>
+        <div id="nt-ask-log" class="nt-ask-log" aria-live="polite">
+          <p id="nt-ask-hint" class="nt-hint">Ask about this note or all your notes. Answers say which notes they came from.</p>
+        </div>
+        <form id="nt-ask-form" class="nt-ask-foot">
+          <div class="nt-askbox">
+            <input id="nt-ask-input" autocomplete="off" aria-label="Your question" placeholder="Ask a question">
+            <button class="nt-iconbtn nt-send-q" type="submit" aria-label="Ask"><svg class="ic"><use href="#i-up"></use></svg></button>
+          </div>
+          <p class="nt-hint">Type it, or hold <span class="dict-key">your dictation key</span> and say it. Answers come only from your notes.</p>
+        </form>
+      </aside>
+    </div>
   </section>
   <div id="nt-drop" class="nt-drop" hidden>
     <p>Drop audio or video to transcribe it into a note</p>
   </div>
 </main>
 
+<div id="nt-palette" class="nt-overlay" hidden>
+  <div class="nt-palette" role="dialog" aria-modal="true" aria-label="Search notes and actions">
+    <label class="nt-pal-input">
+      <svg class="ic"><use href="#i-search"></use></svg>
+      <input id="nt-pal-q" autocomplete="off" spellcheck="false" placeholder="Search notes, or type what to do" aria-label="Search notes and actions" role="combobox" aria-expanded="true" aria-controls="nt-pal-list" aria-autocomplete="list">
+      <kbd class="nt-kbd">esc</kbd>
+    </label>
+    <div id="nt-pal-list" class="nt-pal-list" role="listbox" aria-label="Results"></div>
+    <footer class="nt-pal-foot">
+      <span><kbd class="nt-kbd">↑</kbd> <kbd class="nt-kbd">↓</kbd> move</span>
+      <span><kbd class="nt-kbd">↩</kbd> open</span>
+      <span><kbd class="nt-kbd" data-keys="⌘↩"></kbd> ask your notes</span>
+    </footer>
+  </div>
+</div>
+
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="vendor/editor.js"></script>
 <script src="common.js"></script>
 <script src="notes.js"></script>
 </body>

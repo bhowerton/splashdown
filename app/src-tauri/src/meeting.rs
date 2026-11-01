@@ -41,6 +41,8 @@ const LONGEST: Duration = Duration::from_secs(4 * 3600);
 const RATE: usize = splashdown_audio::TARGET_SAMPLE_RATE as usize;
 /// How often to look for a change of output device.
 const OUTPUT_CHECK: Duration = Duration::from_secs(2);
+/// The heading of what the user writes during the meeting, in its note.
+pub const MY_NOTES: &str = "My notes";
 
 /// The meeting in progress, for the Notes window and the CLI.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -783,15 +785,19 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
     let Ok(body) = store.read(note).map(|n| n.body) else {
         return;
     };
-    let Some(at) = body.find("\n**[") else {
+    let Some(at) = crate::notes::store::transcript_start(&body) else {
         return;
     };
-    let transcript = body[at..].trim().to_string();
+    let transcript = body[at..].trim();
+    // What the user wrote down shows what mattered to them.
+    let input = match crate::notes::store::section(&body[..at], MY_NOTES) {
+        Some(mine) if !mine.is_empty() => {
+            format!("My notes, written during the meeting:\n{mine}\n\nTranscript:\n{transcript}")
+        }
+        _ => transcript.to_string(),
+    };
     let state = app.state::<AppState>();
-    match state
-        .session
-        .transform("meeting-summary".into(), transcript)
-    {
+    match state.session.transform("meeting-summary".into(), input) {
         Ok(out) if out.unchanged.is_none() => {
             if let Err(e) = store.insert_summary(note, &out.text) {
                 tracing::warn!("couldn't add the summary: {e}");
@@ -1000,6 +1006,21 @@ pub fn meeting_keep_going() {
 #[tauri::command]
 pub fn meeting_status() -> Option<Status> {
     status()
+}
+
+/// What the user writes beside a meeting while it records: kept under
+/// `## My notes` in its note, above the transcript (which only this side
+/// writes to until the meeting ends).
+#[tauri::command]
+pub fn meeting_set_notes(
+    note: String,
+    text: String,
+    state: tauri::State<'_, AppState>,
+) -> Result<(), String> {
+    let (store, _) = crate::notes::store_for(state.settings().notes.folder)?;
+    store
+        .set_section(&note, MY_NOTES, &text)
+        .map_err(|e| e.to_string())
 }
 
 #[cfg(test)]

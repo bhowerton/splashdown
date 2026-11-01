@@ -1,10 +1,11 @@
 //! The Notes window, which replaced the scratchpad: notes are
 //! Markdown files in a folder the user picks (`store`), listed and edited
 //! here. ⌃⌥N or the menu bar opens it and remembers the app that was in
-//! front, so "Send to {app}" can hand focus back and paste the note there.
+//! front, so "Paste into {app}" can hand focus back and paste the note there.
 
 pub mod files;
 mod link_helper;
+pub mod media;
 pub mod store;
 
 use std::path::{Path, PathBuf};
@@ -27,10 +28,10 @@ use store::{Appended, Note, Origin, Saved, Store, Summary, Target, Version};
 pub const WINDOW: &str = "notes";
 /// Shown in the menu; registered in `shortcuts.rs`.
 pub const ACCELERATOR: &str = "Ctrl+Alt+N";
-/// App event telling the page it was shown again, with the app "Send to"
+/// App event telling the page it was shown again, with the app "Paste into"
 /// would paste into (or null).
 const SHOWN: &str = "notes-shown";
-/// App event with a new app for "Send to" (you used another app).
+/// App event with a new app for "Paste into" (you used another app).
 const TARGET: &str = "notes-send-target";
 /// App event asking the page to run a transform (its shortcut was pressed
 /// while Notes had focus), with the transform's id.
@@ -444,21 +445,60 @@ pub fn excerpts_for(
     let Ok((store, _)) = store_for(settings.folder.clone()) else {
         return Vec::new();
     };
-    let notes = store.list();
-    best_matches(&notes, question, ASK_NOTES)
+    matching(&store.list(), question, ASK_NOTES, ASK_EXCERPT)
         .into_iter()
-        .map(|(note, word)| splashdown_core::ask::NoteExcerpt {
-            title: note.title.clone(),
-            date: chrono::DateTime::from_timestamp_millis(note.modified as i64)
-                .map(|t| {
-                    t.with_timezone(&chrono::Local)
-                        .format("%Y-%m-%d")
-                        .to_string()
-                })
-                .unwrap_or_default(),
-            text: around(&note.text, &word, ASK_EXCERPT),
+        .map(|(_, excerpt)| excerpt)
+        .collect()
+}
+
+/// The `limit` notes that best match `question`: each one's path, and up
+/// to `chars` of it around its best word.
+fn matching(
+    notes: &[Summary],
+    question: &str,
+    limit: usize,
+    chars: usize,
+) -> Vec<(String, splashdown_core::ask::NoteExcerpt)> {
+    best_matches(notes, question, limit)
+        .into_iter()
+        .map(|(note, word)| {
+            (
+                note.path.clone(),
+                splashdown_core::ask::NoteExcerpt {
+                    title: note.title.clone(),
+                    date: day_of(note.modified),
+                    text: around(&note.text, &word, chars),
+                },
+            )
         })
         .collect()
+}
+
+/// "2026-10-30", for a time in Unix ms.
+fn day_of(ms: u64) -> String {
+    chrono::DateTime::from_timestamp_millis(ms as i64)
+        .map(|t| {
+            t.with_timezone(&chrono::Local)
+                .format("%Y-%m-%d")
+                .to_string()
+        })
+        .unwrap_or_default()
+}
+
+/// The first `max` characters of `text`, or the last ones when `recent`
+/// (a meeting still going: what was said lately).
+fn clip(text: &str, max: usize, recent: bool) -> String {
+    let count = text.chars().count();
+    if count <= max {
+        return text.to_string();
+    }
+    if recent {
+        let rest: String = text.chars().skip(count - max).collect();
+        format!("…{rest}")
+    } else {
+        let start: String = text.chars().take(max).collect();
+        format!("{start}…")
+    }
 }
 
 /// Words too common to tell notes apart, in the languages most used: with
@@ -787,8 +827,8 @@ pub fn open(app: &AppHandle) {
     }
     let result = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App("notes.html".into()))
         .title("Notes")
-        .inner_size(640.0, 420.0)
-        .min_inner_size(360.0, 240.0)
+        .inner_size(880.0, 600.0)
+        .min_inner_size(420.0, 300.0)
         .resizable(true)
         .always_on_top(true)
         // Comes up on the Space (desktop) the user is on, not the one it was
@@ -904,7 +944,7 @@ pub struct View {
     notes: Vec<Summary>,
     /// The note to show, unless it's time for a fresh one.
     open: Option<Note>,
-    /// The app "Send to" pastes into.
+    /// The app "Paste into" pastes into.
     target: Option<String>,
 }
 
@@ -1140,10 +1180,11 @@ pub async fn notes_transform(
     path: Option<String>,
     id: String,
     text: String,
+    extra: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<crate::session::TransformOutcome, String> {
     let session = state.session.clone();
-    let out = tauri::async_runtime::spawn_blocking(move || session.transform(id, text))
+    let out = tauri::async_runtime::spawn_blocking(move || session.transform_with(id, text, extra))
         .await
         .map_err(|e| e.to_string())??;
     if out.unchanged.is_none()
@@ -1155,6 +1196,137 @@ pub async fn notes_transform(
         }
     }
     Ok(out)
+}
+
+// ---------------------------------------------------------------- ask
+
+/// App event to the page with a question's answer so far (`AskUpdate`).
+const ASKED: &str = "notes-ask";
+/// Most notes a question about all of them is answered from, and how much
+/// of each.
+const NOTES_ASK_NOTES: usize = 5;
+const NOTES_ASK_EXCERPT: usize = 2000;
+/// How much of one note a question about it may use.
+const ONE_NOTE_CHARS: usize = 24_000;
+
+/// A note an answer may cite, as `[n]`: `n` is its place in the list, from 1.
+#[derive(Debug, Clone, Serialize)]
+pub struct Source {
+    title: String,
+    path: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct AskUpdate {
+    /// The page's number for the question, so an older answer still coming
+    /// in is told apart.
+    asked: u64,
+    answer: String,
+    done: bool,
+    error: Option<String>,
+    sources: Vec<Source>,
+}
+
+/// A question asked in the Notes window, about the note at `path` or (with
+/// none) the notes that match it. The answer streams to the page as
+/// `notes-ask` events. `recent` asks about the end of a long note (a
+/// meeting still going); `earlier` holds this conversation's questions and
+/// answers so far.
+#[tauri::command]
+pub async fn notes_ask(
+    question: String,
+    path: Option<String>,
+    recent: bool,
+    earlier: Vec<(String, String)>,
+    asked: u64,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let question = question.trim().to_string();
+    if question.is_empty() {
+        return Ok(());
+    }
+    let session = state.session.clone();
+    let setup = tauri::async_runtime::spawn_blocking(move || session.answer_model())
+        .await
+        .map_err(|e| e.to_string())??
+        .ok_or("Asking needs an AI model: choose one in Settings → Providers.")?;
+    let (store, _) = store(&state)?;
+    let (notes, sources): (Vec<_>, Vec<_>) = match &path {
+        Some(path) => {
+            let note = store.read(path).map_err(|e| e.to_string())?;
+            let title = store::title_of(&note.body);
+            let excerpt = splashdown_core::ask::NoteExcerpt {
+                title: title.clone(),
+                date: day_of(note.modified),
+                text: clip(&note.body, ONE_NOTE_CHARS, recent),
+            };
+            let source = Source {
+                title,
+                path: path.clone(),
+            };
+            (vec![excerpt], vec![source])
+        }
+        None => matching(&store.list(), &question, NOTES_ASK_NOTES, NOTES_ASK_EXCERPT)
+            .into_iter()
+            .map(|(path, excerpt)| {
+                let source = Source {
+                    title: excerpt.title.clone(),
+                    path,
+                };
+                (excerpt, source)
+            })
+            .unzip(),
+    };
+    tracing::info!("asking in Notes, with {} note(s)", notes.len());
+    let context = splashdown_core::ask::AskContext {
+        notes,
+        user_name: setup.user_name,
+        today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+        earlier,
+        cite_numbers: true,
+        ..Default::default()
+    };
+    let request = splashdown_core::ask::request(&question, &context);
+    let model = setup.model;
+    tauri::async_runtime::spawn(async move {
+        let emit = |answer: &str, done: bool, error: Option<String>| {
+            let _ = app.emit_to(
+                WINDOW,
+                ASKED,
+                AskUpdate {
+                    asked,
+                    answer: answer.to_string(),
+                    done,
+                    error,
+                    sources: sources.clone(),
+                },
+            );
+        };
+        let mut on_text = |so_far: &str| emit(so_far, false, None);
+        let result = model.complete_streaming(&request, &mut on_text).await;
+        let usage = match &result {
+            Ok(completion) => Some(completion.usage),
+            Err(splashdown_core::ProviderError::Interrupted { usage, .. }) => Some(*usage),
+            Err(_) => None,
+        };
+        if let Some(usage) = usage {
+            crate::spend::shared().record(&[(model.name(), usage)], chrono::Local::now());
+        }
+        match result {
+            Ok(completion) => emit(completion.text.trim(), true, None),
+            Err(e) => {
+                tracing::warn!("asking in Notes failed: {e}");
+                let message = crate::errors::pipeline(
+                    &splashdown_core::PipelineError::Llm(e),
+                    None,
+                    Some(&model.name()),
+                );
+                emit("", true, Some(message));
+            }
+        }
+    });
+    Ok(())
 }
 
 /// Pastes can block for a few hundred ms, so this runs off the main thread.
@@ -1196,6 +1368,7 @@ mod tests {
             modified,
             pinned: false,
             folder: String::new(),
+            source: String::new(),
         }
     }
 

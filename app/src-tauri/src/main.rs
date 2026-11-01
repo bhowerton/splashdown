@@ -61,6 +61,16 @@ fn main() {
         ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_dialog::init())
+        // Meeting recordings, for the Notes window's player.
+        .register_asynchronous_uri_scheme_protocol(
+            notes::media::SCHEME,
+            |ctx, request, responder| {
+                let app = ctx.app_handle().clone();
+                std::thread::spawn(move || {
+                    responder.respond(notes::media::serve(&app, &request));
+                });
+            },
+        )
         .invoke_handler(tauri::generate_handler![
             commands::get_state,
             commands::save_settings,
@@ -116,6 +126,7 @@ fn main() {
             notes::notes_send,
             notes::notes_transforms,
             notes::notes_transform,
+            notes::notes_ask,
             notes::notes_edit_transforms,
             notes::notes_add,
             notes::files::notes_transcribe_pick,
@@ -125,6 +136,7 @@ fn main() {
             notes::files::notes_transcribing,
             meeting::meeting_toggle,
             meeting::meeting_keep_going,
+            meeting::meeting_set_notes,
             meeting::meeting_status,
             notes::open_notes,
             export::export_history,
