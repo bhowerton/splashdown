@@ -99,19 +99,16 @@ fn is_empty_item(line: &str) -> bool {
         .trim()
         .trim_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace())
         .to_lowercase();
-    matches!(
-        text.as_str(),
-        "" | "none"
-            | "n/a"
-            | "na"
-            | "nothing"
-            | "none specified"
-            | "none noted"
-            | "none yet"
-            | "none mentioned"
-            | "none raised"
-            | "none discussed"
-    )
+    let words = text.split_whitespace().count();
+    // "None", "None asked or left unanswered", "No open questions", "No
+    // decisions were made": short, and saying there's nothing. (Not "No
+    // meetings on Fridays", which is a decision.)
+    let about_nothing = ["question", "decision", "action", "item", "task"]
+        .iter()
+        .any(|w| text.contains(w));
+    matches!(text.as_str(), "" | "n/a" | "na" | "nothing")
+        || (words <= 6 && text.split_whitespace().next() == Some("none"))
+        || (words <= 6 && text.starts_with("no ") && about_nothing)
 }
 
 /// The transforms a new install has. Each can be edited or removed.
@@ -180,6 +177,14 @@ mod tests {
                 "### Overview\nShort.\n\n### Action items\n- [ ] None\n"
             ),
             "### Overview\nShort."
+        );
+        // Other ways of saying there's nothing; a real "No …" stays.
+        assert_eq!(
+            tidy_answer(
+                "meeting-summary",
+                "### Overview\nShort.\n\n### Decisions\n- No meetings on Fridays\n\n### Action items\n- No action items were assigned\n\n### Open questions\n- None asked or left unanswered\n"
+            ),
+            "### Overview\nShort.\n\n### Decisions\n- No meetings on Fridays"
         );
         // A detail under an action item stays a detail.
         assert_eq!(
