@@ -11,6 +11,8 @@ mod local_llm;
 mod local_speech;
 pub mod models;
 pub mod pricing;
+#[cfg(feature = "local-speech")]
+mod silero;
 mod transcribe;
 
 pub use anthropic::AnthropicModel;
@@ -20,4 +22,6 @@ pub use local_llm::LocalLlm;
 #[cfg(feature = "local-speech")]
 pub use local_speech::{LocalSpeech, Profile as SpeechProfile, loading as speech_model_loading};
 pub use models::{LocalModel, SpeechModel};
+#[cfg(feature = "local-speech")]
+pub use silero::Silero;
 pub use transcribe::{ChatAudioTranscriber, TranscriptionApi};

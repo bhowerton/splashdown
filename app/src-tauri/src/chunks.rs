@@ -75,7 +75,15 @@ impl Chunker {
             .then(|| splashdown_audio::gain::boost_quiet(&clip));
         let probe = boosted.as_ref().unwrap_or(&clip);
         let rate = clip.sample_rate.max(1) as usize;
-        let Some(pause) = vad::find_pause(probe, MIN_PIECE_SECS * rate, MIN_PAUSE_MS, GUARD_MS)
+        // The speech detector works on 16 kHz audio; the cut is then put
+        // back at the recording's own rate.
+        let target = splashdown_audio::TARGET_SAMPLE_RATE as usize;
+        let probe = AudioClip::new(
+            splashdown_audio::resample::resample(&probe.samples, probe.sample_rate, target as u32),
+            target as u32,
+        );
+        let Some(pause) = vad::find_pause(&probe, MIN_PIECE_SECS * target, MIN_PAUSE_MS, GUARD_MS)
+            .map(|at| (at * rate / target).min(clip.samples.len()))
         else {
             return;
         };

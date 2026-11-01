@@ -150,6 +150,9 @@ fn main() {
             splashdown_platform::refresh_shortcut_keys();
             shortcuts::install(app, history.clone());
 
+            if let Ok(paths) = engine::paths() {
+                splashdown_providers::factory::use_speech_detector(&paths.models_dir);
+            }
             let settings = engine::load_settings();
             minibar::init(app.handle(), settings.general.mini_bar());
             // A meeting the app closed on: offer to finish its note.

@@ -164,6 +164,8 @@ Every default was chosen by measurement. The cleanup prompt is tested on 54 case
 - OpenAI Whisper: MIT.
 - Qwen3: Apache-2.0.
 
+Built in: Silero VAD (finds the speech in a recording), MIT.
+
 The speech models are the GGUF conversions published by the transcribe.cpp project.
 
 ## When something misbehaves

@@ -333,6 +333,9 @@ fn main() -> std::process::ExitCode {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
+    if let Ok(paths) = opts::paths() {
+        splashdown_providers::factory::use_speech_detector(&paths.models_dir);
+    }
     // Remote control: no keys, models or runtime needed.
     let request = match &cli.command {
         Command::Toggle => Some(Request::Toggle),
@@ -434,16 +437,18 @@ fn run() -> Result<()> {
             providers,
             context,
         } => {
-            let setup = Setup::new(&providers)?;
             let cleanup = splashdown_audio::Cleanup {
                 denoise,
                 quiet: whisper,
             };
+            // Before loading models: no point (and a local one would still
+            // be loading as the program ends).
             let speech = load_speech(&file, cleanup)?.context("no speech found in the file")?;
             let instruction_speech = match &instruction_file {
                 Some(f) => load_speech(f, cleanup)?,
                 None => None,
             };
+            let setup = Setup::new(&providers)?;
             let mode = mode_for(raw, selection.is_some(), instruction_speech.is_some());
             let job = AudioJob {
                 mode,

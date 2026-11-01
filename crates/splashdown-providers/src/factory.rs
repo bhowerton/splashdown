@@ -117,6 +117,22 @@ fn local_model(model: &str) -> ProviderResult<Arc<dyn TextModel>> {
     Ok(Arc::new(crate::LocalLlm::new(&path, cpu_only)?))
 }
 
+/// Finds speech with Silero from now on (trimming silence, finding pauses,
+/// telling a voice from noise) instead of by loudness. Takes a few
+/// milliseconds. `SPLASHDOWN_VAD=loudness` keeps the old way, to compare.
+pub fn use_speech_detector(models_dir: &Path) {
+    if std::env::var_os("SPLASHDOWN_VAD").is_some_and(|v| v == "loudness") {
+        return;
+    }
+    #[cfg(feature = "local-speech")]
+    match crate::Silero::load(models_dir) {
+        Ok(silero) => splashdown_audio::vad::set_detector(Some(Arc::new(silero))),
+        Err(e) => tracing::warn!("speech detection by loudness: Silero didn't load: {e}"),
+    }
+    #[cfg(not(feature = "local-speech"))]
+    let _ = models_dir;
+}
+
 /// A downloaded catalog model. It loads in the background.
 #[cfg(feature = "local-speech")]
 pub fn load_local_speech(

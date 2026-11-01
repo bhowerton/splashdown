@@ -27,21 +27,17 @@ const MIN_PAUSE_MS: u32 = 300;
 const BLOCK_SECS: usize = 10;
 
 // Cutting by turns (one side of a meeting): a piece per stretch of speech.
-/// 20 ms frames at 16 kHz.
-const FRAME: usize = 320;
 /// A pause this long ends a turn...
-const TURN_PAUSE_FRAMES: usize = 35;
+const TURN_PAUSE_MS: u32 = 700;
 /// ...once there's been this much speech.
-const MIN_TURN_FRAMES: usize = 15;
+const MIN_TURN_MS: u32 = 300;
 /// A turn longer than this is cut at a short pause (or here).
 const MAX_TURN: Duration = Duration::from_secs(30);
 /// Silence kept around speech so words aren't clipped.
-const PAD_FRAMES: usize = 10;
+const PAD_MS: usize = 200;
 /// With no speech, silence is handed on in steps this long, so the other
 /// side's turns aren't held up waiting for this one.
 const SILENCE_STEP: Duration = Duration::from_secs(5);
-/// Frames quieter than this are never speech.
-const MIN_RMS: f32 = 0.008;
 
 #[derive(Debug, thiserror::Error)]
 pub enum FileError {
@@ -312,31 +308,32 @@ impl Cutter {
             return None;
         }
         let rate = TARGET_SAMPLE_RATE as usize;
-        let energies: Vec<f32> = self.buffer.chunks(FRAME).map(rms).collect();
-        let mut sorted = energies.clone();
-        sorted.sort_by(f32::total_cmp);
-        let threshold = (sorted[sorted.len() / 10] * 3.0).max(MIN_RMS);
-        let Some(first) = energies.iter().position(|e| *e > threshold) else {
+        let voicing = vad::voicing(&AudioClip::new(self.buffer.clone(), TARGET_SAMPLE_RATE));
+        let frame = voicing.frame;
+        let frames = |ms: usize| (rate * ms / 1000).div_ceil(frame);
+        let pad = frames(PAD_MS);
+        let Some(first) = voicing.voiced.iter().position(|&v| v) else {
             // Nothing said yet. The newest audio could be the start of a
             // word, so a little is kept back.
             let step = SILENCE_STEP.as_secs() as usize * rate;
             if !ended && self.buffer.len() < step {
                 return None;
             }
-            let keep = if ended { 0 } else { PAD_FRAMES * FRAME };
-            return Some(self.take(0, self.buffer.len() - keep));
+            let keep = if ended { 0 } else { pad * frame };
+            return Some(self.take(0, self.buffer.len().saturating_sub(keep)));
         };
-        let lead = first.saturating_sub(PAD_FRAMES) * FRAME;
+        let lead = first.saturating_sub(pad) * frame;
         let mut quiet = 0;
         let mut pause = None;
-        for (i, e) in energies.iter().enumerate().skip(first + MIN_TURN_FRAMES) {
-            if *e > threshold {
+        let skip = first + frames(MIN_TURN_MS as usize);
+        for (i, &voiced) in voicing.voiced.iter().enumerate().skip(skip) {
+            if voiced {
                 quiet = 0;
                 continue;
             }
             quiet += 1;
-            if quiet >= TURN_PAUSE_FRAMES {
-                pause = Some((i + 1 - quiet + PAD_FRAMES) * FRAME);
+            if quiet >= frames(TURN_PAUSE_MS as usize) {
+                pause = Some((i + 1 - quiet + pad) * frame);
                 break;
             }
         }
@@ -369,13 +366,6 @@ impl Cutter {
             clip: AudioClip::new(samples, TARGET_SAMPLE_RATE),
         }
     }
-}
-
-fn rms(samples: &[f32]) -> f32 {
-    if samples.is_empty() {
-        return 0.0;
-    }
-    (samples.iter().map(|s| s * s).sum::<f32>() / samples.len() as f32).sqrt()
 }
 
 /// A time in the file as the transcript shows it: `12:30`, or `1:02:30`
