@@ -23,7 +23,7 @@ async function mockInvoke(cmd, args) {
     ],
     permissions: { accessibility: true, microphone: "granted" },
     speech_models: [
-      { id: "nemotron-en", mb: 475, downloaded: true, label: "Nemotron · English · fastest, text as you speak", license: "NVIDIA Open Model License", english_only: true },
+      { id: "nemotron", mb: 495, downloaded: true, label: "Nemotron 3.5 · 32 languages · text as you speak", license: "OpenMDW-1.1", english_only: false },
       { id: "parakeet-v3", mb: 485, downloaded: false, label: "Parakeet v3 · 25 European languages", license: "CC-BY-4.0 (NVIDIA)", english_only: false },
       { id: "large-v3-turbo", mb: 619, downloaded: false, label: "Whisper large-v3-turbo · about 100 languages", license: "MIT (OpenAI)", english_only: false },
     ],
@@ -63,7 +63,7 @@ async function mockInvoke(cmd, args) {
     defaults: {
       openai_stt: "gpt-4o-mini-transcribe",
       openrouter_stt: "google/gemini-3.1-flash-lite",
-      local_speech: "nemotron-en",
+      local_speech: "nemotron",
       openai_ai: "gpt-4.1-mini",
       openrouter_ai: "google/gemini-2.5-flash-lite",
       anthropic_ai: "claude-haiku-5-5",

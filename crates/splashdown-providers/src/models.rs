@@ -14,9 +14,9 @@ use splashdown_core::ProviderError;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SpeechModel {
     /// NVIDIA Nemotron streaming, English: transcribes while you speak, so
-    /// the text is ready moments after you stop. The default.
+    /// the text is ready moments after you stop.
     NemotronEn,
-    /// NVIDIA Nemotron 3.5 streaming: the same, in 32 languages.
+    /// NVIDIA Nemotron 3.5 streaming: the same, in 32 languages. The default.
     Nemotron,
     /// NVIDIA Parakeet TDT v2, English, transcribed when you stop.
     ParakeetV2,
@@ -31,9 +31,10 @@ pub enum SpeechModel {
 }
 
 impl SpeechModel {
+    /// In order of preference, so the default comes first.
     pub const ALL: [SpeechModel; 7] = [
-        SpeechModel::NemotronEn,
         SpeechModel::Nemotron,
+        SpeechModel::NemotronEn,
         SpeechModel::ParakeetV2,
         SpeechModel::ParakeetV3,
         SpeechModel::WhisperBaseEn,
@@ -136,7 +137,7 @@ impl SpeechModel {
     /// A short description, for UI.
     pub fn label(self) -> &'static str {
         match self {
-            SpeechModel::NemotronEn => "Nemotron · English · fastest, text as you speak",
+            SpeechModel::NemotronEn => "Nemotron · English · text as you speak",
             SpeechModel::Nemotron => "Nemotron 3.5 · 32 languages · text as you speak",
             SpeechModel::ParakeetV2 => "Parakeet v2 · English",
             SpeechModel::ParakeetV3 => "Parakeet v3 · 25 European languages",

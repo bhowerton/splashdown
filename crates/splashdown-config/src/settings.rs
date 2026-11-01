@@ -447,9 +447,11 @@ pub mod defaults {
     /// Gemini 2.5 Flash Lite was rate-limited on most requests; Voxtral
     /// followed spoken instructions instead of transcribing them.
     pub const OPENROUTER_STT: &str = "google/gemini-3.1-flash-lite";
-    /// Streams as the user speaks: the text is ready about 0.03 s after
-    /// release, at Parakeet's accuracy (eval/README.md, 2026-10-31).
-    pub const LOCAL_SPEECH: &str = "nemotron-en";
+    /// Streams as the user speaks, so the text is ready about 0.03 s after
+    /// release even on a CPU (Windows has no GPU build), with the best
+    /// English of the local models and 32 languages (eval/README.md,
+    /// 2026-11-01).
+    pub const LOCAL_SPEECH: &str = "nemotron";
     /// 95% on the cleanup eval (via OpenRouter); gpt-4.1-nano scored 84% and
     /// the GPT-5 reasoning models took 3–7 s per cleanup.
     pub const OPENAI_AI: &str = "gpt-4.1-mini";
@@ -894,7 +896,7 @@ mod tests {
             s.resolve_speech(&none).unwrap(),
             SpeechChoice {
                 provider: SpeechProvider::WhisperLocal,
-                model: "nemotron-en".into()
+                model: "nemotron".into()
             }
         );
         assert_eq!(s.resolve_ai(&none).unwrap(), None);
