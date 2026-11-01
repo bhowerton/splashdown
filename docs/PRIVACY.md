@@ -18,6 +18,8 @@ Only these, and only when you can see why:
 | Model downloads | Hugging Face (speech models such as Nemotron, Parakeet and Whisper, and the built-in model) or Apple | Only when you choose to download one |
 | Feedback | A GitHub issue page in your browser | Only when you choose "Send feedback". It's pre-filled with versions and provider names; you see it before submitting |
 
+To offer to record a call, Splashdown checks every two seconds which apps are using the microphone (Settings → Notes → Meetings). Only the apps' names are read, nothing leaves your computer, and nothing is recorded until you click Record.
+
 If you allow coding agents to read your notes (Settings → Privacy, off by default), what an agent reads goes to that agent's own AI provider.
 
 Each provider handles what it receives under its own privacy policy. Local-only mode (Settings → Privacy) refuses every cloud provider, even when a key is saved.

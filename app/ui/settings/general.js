@@ -35,6 +35,7 @@ function renderGeneral() {
   setValue($("mt-summary"), notes.meeting_summary === "ask" ? "" : notes.meeting_summary ?? "");
   $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
+  $("mt-offer").checked = notes.offer_on_calls ?? true;
   $("hk-double-tap").checked = s.hotkeys.double_tap === true;
   setValue($("gen-name"), s.general.user_name);
   setValue($("gen-language"), s.general.language ?? "");

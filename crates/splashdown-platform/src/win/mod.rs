@@ -38,8 +38,8 @@ pub(crate) use sound::{play_sound, reduce_motion};
 #[cfg(windows)]
 pub(crate) use uia::{
     FocusElement, activate_app, app_display, capture_focus, cursor_offset, field_text,
-    frontmost_app, is_chromium, is_current, is_secure_field, os_version, permissions,
-    request_accessibility, secure_input_active, select_range, selection,
+    frontmost_app, is_chromium, is_current, is_secure_field, microphone_users, os_version,
+    permissions, request_accessibility, secure_input_active, select_range, selection,
 };
 
 #[cfg(windows)]

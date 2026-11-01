@@ -528,6 +528,13 @@ fn quieted() -> std::sync::MutexGuard<'static, Option<(u64, imp::QuietOutput)>> 
     QUIETED.lock().unwrap_or_else(|e| e.into_inner())
 }
 
+/// Other apps recording from a microphone right now, by bundle ID on
+/// macOS (14 or later; none on earlier versions) or by executable name or
+/// package family name on Windows. Our own process isn't included.
+pub fn microphone_users() -> Vec<String> {
+    imp::microphone_users()
+}
+
 /// Lowers or mutes the default output device. `None` when there's nothing
 /// to do: no device or volume control, or it's already silent or muted.
 pub fn quiet_output(how: Quieten) -> Option<QuietOutput> {

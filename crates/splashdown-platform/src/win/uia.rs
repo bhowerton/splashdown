@@ -1,6 +1,7 @@
 //! UI Automation: the focused app and field, selected text, password
 //! fields and page URLs; plus the permission answers for Windows.
 
+use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
 use windows::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HWND, LPARAM};
 use windows::Win32::Storage::FileSystem::{
     GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
@@ -9,7 +10,8 @@ use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
 };
 use windows::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, RRF_RT_REG_SZ, RegGetValueW,
+    HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, RRF_RT_REG_QWORD, RRF_RT_REG_SZ,
+    RegCloseKey, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW,
 };
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
@@ -594,6 +596,102 @@ fn microphone_access() -> Access {
 
 fn consent_denied(root: HKEY, subkey: &str) -> bool {
     reg_string(root, subkey, Some("Value")).is_some_and(|v| v.eq_ignore_ascii_case("Deny"))
+}
+
+/// Apps using a microphone now. Windows' privacy records keep, per app,
+/// when it last started and stopped using one; a stop time of 0 means it
+/// still is. Packaged apps are listed by package family name
+/// (`MSTeams_8wekyb3d8bbwe`), others by their executable's file name
+/// (`Zoom.exe`).
+pub(crate) fn microphone_users() -> Vec<String> {
+    const STORE: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone";
+    let me = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned()))
+        .unwrap_or_default();
+    let mut users = Vec::new();
+    for name in reg_subkeys(HKEY_CURRENT_USER, STORE) {
+        if name.eq_ignore_ascii_case("NonPackaged") {
+            let apps = format!("{STORE}\\NonPackaged");
+            for app in reg_subkeys(HKEY_CURRENT_USER, &apps) {
+                // The path, with # for each backslash.
+                let file = app.rsplit('#').next().unwrap_or(&app).to_string();
+                if !file.eq_ignore_ascii_case(&me) && in_use(&format!("{apps}\\{app}")) {
+                    users.push(file);
+                }
+            }
+        } else if in_use(&format!("{STORE}\\{name}")) {
+            users.push(name);
+        }
+    }
+    users
+}
+
+/// Whether the app with this consent record is using the microphone now.
+fn in_use(subkey: &str) -> bool {
+    reg_qword(HKEY_CURRENT_USER, subkey, "LastUsedTimeStop") == Some(0)
+        && reg_qword(HKEY_CURRENT_USER, subkey, "LastUsedTimeStart").is_some_and(|t| t > 0)
+}
+
+fn reg_qword(root: HKEY, subkey: &str, value: &str) -> Option<u64> {
+    let subkey = wide(subkey);
+    let value = wide(value);
+    let mut data = 0u64;
+    let mut size = std::mem::size_of::<u64>() as u32;
+    // SAFETY: NUL-terminated strings that outlive the call; `data` is
+    // writable for the `size` bytes passed.
+    let err = unsafe {
+        RegGetValueW(
+            root,
+            PCWSTR(subkey.as_ptr()),
+            PCWSTR(value.as_ptr()),
+            RRF_RT_REG_QWORD,
+            None,
+            Some((&raw mut data).cast()),
+            Some(&mut size),
+        )
+    };
+    (err == ERROR_SUCCESS).then_some(data)
+}
+
+/// The names of a registry key's subkeys (none if it can't be opened).
+fn reg_subkeys(root: HKEY, subkey: &str) -> Vec<String> {
+    let subkey = wide(subkey);
+    let mut key = HKEY::default();
+    // SAFETY: a NUL-terminated name that outlives the call and a writable
+    // key handle, closed below.
+    let opened =
+        unsafe { RegOpenKeyExW(root, PCWSTR(subkey.as_ptr()), Some(0), KEY_READ, &mut key) };
+    if opened != ERROR_SUCCESS {
+        return Vec::new();
+    }
+    let mut names = Vec::new();
+    let mut buf = [0u16; 512];
+    for index in 0.. {
+        let mut len = buf.len() as u32;
+        // SAFETY: `buf` is writable for `len` characters; the rest is unused.
+        let err = unsafe {
+            RegEnumKeyExW(
+                key,
+                index,
+                Some(PWSTR(buf.as_mut_ptr())),
+                &mut len,
+                None,
+                None,
+                None,
+                None,
+            )
+        };
+        if err == ERROR_NO_MORE_ITEMS {
+            break;
+        }
+        if err == ERROR_SUCCESS {
+            names.push(String::from_utf16_lossy(&buf[..len as usize]));
+        }
+    }
+    // SAFETY: opened above.
+    let _ = unsafe { RegCloseKey(key) };
+    names
 }
 
 /// A string value from the registry (`None` for the key's default value).

@@ -122,6 +122,7 @@ function collect() {
   s.notes.keep_meeting_audio = $("mt-keep-audio").checked;
   // On is the default, saved as unset.
   s.notes.stop_when_quiet = $("mt-stop-quiet").checked ? null : false;
+  s.notes.offer_on_calls = $("mt-offer").checked ? null : false;
   s.notes.agents_read = $("pv-agents-read").checked;
   s.notes.ask_uses_notes = $("pv-ask-notes").checked ? null : false;
   s.notes.agents_write = $("pv-agents-read").checked && $("pv-agents-write").checked;

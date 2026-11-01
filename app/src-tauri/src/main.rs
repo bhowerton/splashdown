@@ -4,6 +4,7 @@
 mod actions;
 mod ask;
 mod audio;
+mod calls;
 mod chunks;
 mod commands;
 mod engine;
@@ -129,6 +130,8 @@ fn main() {
             ask::ask_insert,
             ask::ask_copy,
             ask::ask_close,
+            calls::call_offer_state,
+            calls::call_offer_answer,
         ])
         .setup(|app| {
             // Menu bar app: no Dock icon, no app menu.
@@ -151,6 +154,7 @@ fn main() {
             minibar::init(app.handle(), settings.general.mini_bar());
             // A meeting the app closed on: offer to finish its note.
             meeting::recover(app.handle());
+            calls::watch(app.handle());
             history.set_keep_days(settings.general.history_days());
             let onboarded = settings.general.onboarded;
             let built = engine::build(&settings);

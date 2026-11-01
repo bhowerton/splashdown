@@ -155,3 +155,7 @@ pub(crate) struct QuietOutput;
 pub(crate) fn quiet_output(_how: crate::Quieten) -> Option<QuietOutput> {
     None
 }
+
+pub(crate) fn microphone_users() -> Vec<String> {
+    Vec::new()
+}

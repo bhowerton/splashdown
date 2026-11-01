@@ -80,6 +80,9 @@ pub struct NotesSettings {
     pub keep_meeting_audio: bool,
     /// Stop a meeting after 10 minutes with nobody speaking. Unset means on.
     pub stop_when_quiet: Option<bool>,
+    /// Offer to record a meeting when a call app starts using the
+    /// microphone. Unset means on.
+    pub offer_on_calls: Option<bool>,
     /// Questions asked with the ask key may use excerpts of matching notes.
     /// Unset means on.
     pub ask_uses_notes: Option<bool>,
@@ -107,6 +110,10 @@ impl NotesSettings {
 
     pub fn stop_when_quiet(&self) -> bool {
         self.stop_when_quiet.unwrap_or(true)
+    }
+
+    pub fn offer_on_calls(&self) -> bool {
+        self.offer_on_calls.unwrap_or(true)
     }
 
     pub fn ask_uses_notes(&self) -> bool {

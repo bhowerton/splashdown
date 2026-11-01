@@ -5,14 +5,14 @@ use std::ffi::c_void;
 
 use crate::Quieten;
 
-const fn code(s: &[u8; 4]) -> u32 {
+pub(super) const fn code(s: &[u8; 4]) -> u32 {
     u32::from_be_bytes(*s)
 }
 
 /// `kAudioObjectSystemObject`.
-const SYSTEM_OBJECT: u32 = 1;
+pub(super) const SYSTEM_OBJECT: u32 = 1;
 const DEFAULT_OUTPUT: u32 = code(b"dOut");
-const SCOPE_GLOBAL: u32 = code(b"glob");
+pub(super) const SCOPE_GLOBAL: u32 = code(b"glob");
 const SCOPE_OUTPUT: u32 = code(b"outp");
 /// `kAudioDevicePropertyVolumeScalar` (0.0–1.0).
 const VOLUME: u32 = code(b"volm");
@@ -25,16 +25,23 @@ const CHANNELS: [u32; 2] = [1, 2];
 const LOWER_TO: f32 = 0.25;
 
 #[repr(C)]
-struct Address {
-    selector: u32,
-    scope: u32,
-    element: u32,
+pub(super) struct Address {
+    pub(super) selector: u32,
+    pub(super) scope: u32,
+    pub(super) element: u32,
 }
 
 #[link(name = "CoreAudio", kind = "framework")]
 unsafe extern "C" {
     fn AudioObjectHasProperty(id: u32, address: *const Address) -> u8;
     fn AudioObjectIsPropertySettable(id: u32, address: *const Address, settable: *mut u8) -> i32;
+    fn AudioObjectGetPropertyDataSize(
+        id: u32,
+        address: *const Address,
+        qualifier_size: u32,
+        qualifier: *const c_void,
+        size: *mut u32,
+    ) -> i32;
     fn AudioObjectGetPropertyData(
         id: u32,
         address: *const Address,
@@ -53,8 +60,9 @@ unsafe extern "C" {
     ) -> i32;
 }
 
-/// A 4-byte property value: `u32` (device IDs, mute) or `f32` (volume).
-fn get<T: Copy + Default>(id: u32, address: &Address) -> Option<T> {
+/// A property value of a fixed size: `u32` (device IDs, mute), `f32`
+/// (volume), a pointer.
+pub(super) fn get<T: Copy + Default>(id: u32, address: &Address) -> Option<T> {
     let mut value = T::default();
     let mut size = size_of::<T>() as u32;
     // SAFETY: `value` is writable and `size` is its size; no qualifier.
@@ -69,6 +77,35 @@ fn get<T: Copy + Default>(id: u32, address: &Address) -> Option<T> {
         )
     };
     (status == 0 && size as usize == size_of::<T>()).then_some(value)
+}
+
+/// A property that's a list of object IDs (empty if there's no such
+/// property, as on an older macOS).
+pub(super) fn get_list(id: u32, address: &Address) -> Vec<u32> {
+    let mut size = 0u32;
+    // SAFETY: plain values and a writable size; no qualifier.
+    let status =
+        unsafe { AudioObjectGetPropertyDataSize(id, address, 0, std::ptr::null(), &mut size) };
+    if status != 0 || size == 0 {
+        return Vec::new();
+    }
+    let mut ids = vec![0u32; size as usize / size_of::<u32>()];
+    // SAFETY: `ids` is writable for `size` bytes; no qualifier.
+    let status = unsafe {
+        AudioObjectGetPropertyData(
+            id,
+            address,
+            0,
+            std::ptr::null(),
+            &mut size,
+            ids.as_mut_ptr().cast(),
+        )
+    };
+    if status != 0 {
+        return Vec::new();
+    }
+    ids.truncate(size as usize / size_of::<u32>());
+    ids
 }
 
 fn set<T: Copy>(id: u32, address: &Address, value: T) -> bool {
