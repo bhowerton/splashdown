@@ -137,6 +137,11 @@ enum Command {
         #[command(subcommand)]
         command: eval::EvalCommand,
     },
+    /// Your vocabulary, corrections and snippets.
+    Words {
+        #[command(subcommand)]
+        command: WordsCommand,
+    },
     /// Meeting recordings: You and Them on separate channels.
     Meeting {
         #[command(subcommand)]
@@ -163,6 +168,25 @@ enum Command {
     Note {
         /// The text to add, e.g. `splashdown-cli note buy oat milk`.
         text: Vec<String>,
+    },
+}
+
+#[derive(Subcommand)]
+enum WordsCommand {
+    /// Add vocabulary, corrections and snippets from another dictation
+    /// app's file: a dictionary export (JSON with vocabulary and
+    /// replacements), a settings file with custom_words, snippets as JSON
+    /// ([{"name", "text"}]), or a word list (text or CSV; "misspelling,
+    /// correction" lines become corrections). Nothing already there is
+    /// changed.
+    Import {
+        file: PathBuf,
+        /// Show what would be added without saving it.
+        #[arg(long)]
+        dry_run: bool,
+        /// Config file (default: the app's config.toml).
+        #[arg(long)]
+        config: Option<PathBuf>,
     },
 }
 
@@ -301,6 +325,14 @@ fn main() -> Result<()> {
                 cleanup,
             )?;
         }
+        Command::Words {
+            command:
+                WordsCommand::Import {
+                    file,
+                    dry_run,
+                    config,
+                },
+        } => import_words(&file, dry_run, config)?,
         Command::Meeting {
             command:
                 MeetingCommand::Transcribe {
@@ -484,6 +516,54 @@ fn transcribe_file(
         start.elapsed().as_secs_f64(),
         stt.name()
     );
+    Ok(())
+}
+
+/// Merges another app's words into the config file and tells the running
+/// app to read it again.
+fn import_words(file: &std::path::Path, dry_run: bool, config: Option<PathBuf>) -> Result<()> {
+    use splashdown_config::import;
+
+    let imported = import::read(file).with_context(|| format!("importing {}", file.display()))?;
+    let own_config = config.is_none();
+    let path = match config {
+        Some(p) => p,
+        None => opts::paths()?.config_file(),
+    };
+    let mut settings = splashdown_config::Settings::load(&path)?;
+    let merged = import::merge(&mut settings, &imported);
+    let added = merged.vocabulary + merged.replacements + merged.snippets;
+    println!(
+        "{}: {} vocabulary word(s), {} correction(s), {} snippet(s) to add",
+        imported.kind, merged.vocabulary, merged.replacements, merged.snippets
+    );
+    if merged.duplicates > 0 {
+        println!("{} already there", merged.duplicates);
+    }
+    if merged.conflicts > 0 {
+        println!(
+            "{} kept as you have them (the file says something different)",
+            merged.conflicts
+        );
+    }
+    if imported.skipped > 0 {
+        println!("{} line(s) or entries couldn't be used", imported.skipped);
+    }
+    if dry_run || added == 0 {
+        if dry_run {
+            println!("Nothing saved (--dry-run).");
+        }
+        return Ok(());
+    }
+    settings.save(&path).map_err(anyhow::Error::msg)?;
+    if !own_config {
+        println!("Saved to {}.", path.display());
+        return Ok(());
+    }
+    match splashdown_control::send(&Request::ReloadSettings) {
+        Ok(_) => println!("Saved; Splashdown is using them now."),
+        Err(_) => println!("Saved; Splashdown will use them when it starts."),
+    }
     Ok(())
 }
 

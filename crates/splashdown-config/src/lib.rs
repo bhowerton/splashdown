@@ -1,5 +1,6 @@
 //! Configuration file, secrets and on-disk locations.
 
+pub mod import;
 mod presets;
 mod secrets;
 mod settings;

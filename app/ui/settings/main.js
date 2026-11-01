@@ -193,6 +193,9 @@ $("run-setup").addEventListener("click", () => invoke("open_onboarding"));
 // The log never contains dictated text, so it's safe to attach to a bug report.
 $("show-log").addEventListener("click", () => invoke("show_log_file").catch((e) => toast(String(e), true)));
 
+// The settings file changed outside the app (`splashdown-cli words import`).
+listen("settings-reloaded", () => refresh().catch((e) => toast(String(e), true)));
+
 // Updates: the Rust side sends the new status whenever it changes.
 listen("update-status", (event) => {
   if (!state) return;

@@ -54,6 +54,25 @@ impl Ui {
         }
     }
 
+    /// Reads the settings file again (changed by the CLI) and applies it.
+    /// An open Settings window is told, so it shows the new settings rather
+    /// than saving its old copy over them.
+    pub fn reload_settings(&self) {
+        use tauri::{Emitter, Manager};
+        let Some(state) = self.app.try_state::<crate::commands::AppState>() else {
+            return;
+        };
+        *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = crate::engine::load_settings();
+        let app = self.app.clone();
+        tauri::async_runtime::spawn(async move {
+            let state = app.state::<crate::commands::AppState>();
+            if let Some(e) = state.apply().await {
+                tracing::warn!("settings reloaded, but: {e}");
+            }
+            let _ = app.emit_to("settings", "settings-reloaded", ());
+        });
+    }
+
     /// The settings as last saved, for things that don't depend on the
     /// engine being usable (notes).
     pub fn settings(&self) -> Option<splashdown_config::Settings> {

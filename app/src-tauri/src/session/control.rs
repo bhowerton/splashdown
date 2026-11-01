@@ -59,6 +59,10 @@ impl Controller {
                 .notes_settings()
                 .and_then(|n| crate::notes::agent_search(&n, &query, limit))
                 .map(Some),
+            Request::ReloadSettings => {
+                self.ui.reload_settings();
+                Ok(None)
+            }
             Request::ReadNote { path } => self
                 .notes_settings()
                 .and_then(|n| crate::notes::agent_read(&n, &path))

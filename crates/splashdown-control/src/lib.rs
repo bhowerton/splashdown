@@ -74,6 +74,10 @@ pub enum Request {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         to: Option<String>,
     },
+    /// The settings file was changed outside the app (`splashdown-cli
+    /// words import`): read it again.
+    #[serde(rename = "reload_settings")]
+    ReloadSettings,
 }
 
 impl Request {

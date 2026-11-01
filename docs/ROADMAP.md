@@ -185,7 +185,7 @@ The working list of improvements after 0.1.1, in rough order. Mark items here as
 - ⬜ **"Ask" panel:** a spoken question, about a selection or on its own, is answered in a panel by the pill (Copy, Insert) instead of being typed. With nothing selected, "help me write" drafts new text.
 - ⬜ **Run cloud and local speech recognition together** when a local model is installed, and use the first good result, instead of waiting for the cloud to fail.
 - ⬜ **A complete CLI:** `status --json`, reading and changing settings, choosing and downloading models, searching history, and stable exit codes.
-- ⬜ **Import vocabulary and snippets** exported from other dictation apps.
+- 🟡 **Import vocabulary and snippets** from other dictation apps (2026-10-31): `splashdown-cli words import <file>` reads a dictionary export (vocabulary and replacements), a settings file's `custom_words`, snippets as JSON (`[{name, text}]`) and word lists (text or CSV, with `misspelling,correction` lines), merges without changing anything already there, and tells the running app to reload. ⬜ An Import button in Settings → Words.
 - ✅ **File transcription** (2026-10-31; ⬜ still to try in the running app and on Windows): drop audio or video files onto Notes, or pick them from its ⋯ menu, and each becomes a transcript note with a timestamp per paragraph, written as it goes, with progress and Stop. Reads WAV, AIFF, MP3, M4A, MP4/MOV, FLAC, OGG Vorbis and WebM/MKV with a pure-Rust decoder; `splashdown-cli transcribe-file`. ⬜ Opus, speaker labels, subtitle files.
 
 **Later:**
