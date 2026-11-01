@@ -43,7 +43,7 @@ pub(crate) use overlay::Overlay;
 pub(crate) use sound::{play_sound, reduce_motion};
 #[cfg(windows)]
 pub(crate) use uia::{
-    FocusElement, activate_app, app_display, capture_focus, cursor_offset, field_text,
+    FocusElement, activate_app, app_display, capture_focus, caret_rect, cursor_offset, field_text,
     frontmost_app, is_chromium, is_current, is_secure_field, microphone_users, os_version,
     permissions, request_accessibility, secure_input_active, select_range, selection,
 };
@@ -60,13 +60,6 @@ const INJECTED_TAG: usize = 0x5350_4C44;
 mod unsupported;
 #[cfg(not(windows))]
 pub(crate) use unsupported::*;
-
-/// The caret's screen rectangle. Not read on Windows yet (the overlay
-/// doesn't follow the caret there), so it stays in its usual place.
-#[cfg(windows)]
-pub(crate) fn caret_rect(_el: &FocusElement) -> Option<crate::CaretRect> {
-    None
-}
 
 /// UTF-16 with a trailing NUL, for Win32 string parameters.
 #[cfg(windows)]

@@ -2,10 +2,10 @@
 //! fields and page URLs; plus the permission answers for Windows.
 
 use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
-use windows::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HWND, LPARAM};
+use windows::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HWND, LPARAM, POINT};
 use windows::Win32::Graphics::Gdi::{
-    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC,
-    DeleteObject, GetDIBits,
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, ClientToScreen, CreateCompatibleDC, DIB_RGB_COLORS,
+    DeleteDC, DeleteObject, GetDIBits,
 };
 use windows::Win32::Storage::FileSystem::{
     GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
@@ -13,6 +13,7 @@ use windows::Win32::Storage::FileSystem::{
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
 };
+use windows::Win32::System::Ole::{SafeArrayAccessData, SafeArrayDestroy, SafeArrayUnaccessData};
 use windows::Win32::System::Registry::{
     HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, RRF_RT_REG_QWORD, RRF_RT_REG_SZ,
     RegCloseKey, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW,
@@ -22,14 +23,14 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomation2, IUIAutomationElement, IUIAutomationTextPattern,
-    IUIAutomationTextRange, IUIAutomationValuePattern, TextPatternRangeEndpoint_End,
-    TextPatternRangeEndpoint_Start, TextUnit_Character, UIA_DocumentControlTypeId,
-    UIA_TextPatternId, UIA_ValuePatternId,
+    IUIAutomationTextPattern2, IUIAutomationTextRange, IUIAutomationValuePattern,
+    TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start, TextUnit_Character,
+    UIA_DocumentControlTypeId, UIA_TextPattern2Id, UIA_TextPatternId, UIA_ValuePatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    DestroyIcon, EnumWindows, GetForegroundWindow, GetIconInfo, GetWindowTextW,
-    GetWindowThreadProcessId, HICON, ICONINFO, IsIconic, IsWindowVisible, PrivateExtractIconsW,
-    SW_RESTORE, SetForegroundWindow, ShowWindow,
+    DestroyIcon, EnumWindows, GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetIconInfo,
+    GetWindowTextW, GetWindowThreadProcessId, HICON, ICONINFO, IsIconic, IsWindowVisible,
+    PrivateExtractIconsW, SW_RESTORE, SetForegroundWindow, ShowWindow,
 };
 use windows::core::{BOOL, Interface, PCWSTR, PWSTR};
 
@@ -467,6 +468,141 @@ pub(crate) fn field_text(focus: &FocusElement) -> Option<String> {
     .ok()?
     .to_string();
     (text.chars().count() <= MAX_FIELD_CHARS).then_some(text)
+}
+
+/// Where the text cursor is on screen, in physical pixels: the system
+/// caret that classic Win32 fields show, or else the insertion point UI
+/// Automation reports (browsers, Office, modern apps). `None` when neither
+/// says.
+pub(crate) fn caret_rect(focus: &FocusElement) -> Option<crate::CaretRect> {
+    system_caret(focus.window).or_else(|| automation_caret(focus))
+}
+
+/// The caret of the foreground window's thread, from Win32.
+fn system_caret(window: isize) -> Option<crate::CaretRect> {
+    let window = HWND(window as *mut _);
+    if window.is_invalid() {
+        return None;
+    }
+    // SAFETY: a stale window handle just fails; `info` is a sized
+    // out-pointer and `at` a valid point.
+    unsafe {
+        let thread = GetWindowThreadProcessId(window, None);
+        if thread == 0 {
+            return None;
+        }
+        let mut info = GUITHREADINFO {
+            cbSize: std::mem::size_of::<GUITHREADINFO>() as u32,
+            ..Default::default()
+        };
+        GetGUIThreadInfo(thread, &mut info).ok()?;
+        let rc = info.rcCaret;
+        if info.hwndCaret.is_invalid() || rc.bottom <= rc.top {
+            return None;
+        }
+        let mut at = POINT {
+            x: rc.left,
+            y: rc.top,
+        };
+        if !ClientToScreen(info.hwndCaret, &mut at).as_bool() {
+            return None;
+        }
+        Some(crate::CaretRect {
+            x: f64::from(at.x),
+            y: f64::from(at.y),
+            width: f64::from(rc.right - rc.left),
+            height: f64::from(rc.bottom - rc.top),
+        })
+    }
+}
+
+/// The insertion point from UI Automation: the caret range where the field
+/// offers one, else the start of its selection.
+fn automation_caret(focus: &FocusElement) -> Option<crate::CaretRect> {
+    let el = usable(focus)?;
+    // SAFETY: pattern and range calls on a live element and the ranges it
+    // returns, on an MTA thread; index 0 is checked against the array's
+    // length first.
+    unsafe {
+        let caret = el
+            .GetCurrentPatternAs::<IUIAutomationTextPattern2>(UIA_TextPattern2Id)
+            .ok()
+            .and_then(|p| {
+                let mut active = BOOL::default();
+                p.GetCaretRange(&mut active).ok()
+            });
+        let range = match caret {
+            Some(range) => range,
+            None => {
+                let selection = el
+                    .GetCurrentPatternAs::<IUIAutomationTextPattern>(UIA_TextPatternId)
+                    .and_then(|p| p.GetSelection())
+                    .ok()?;
+                if selection.Length().ok()? < 1 {
+                    return None;
+                }
+                selection.GetElement(0).ok()?
+            }
+        };
+        // A selection's first line, at its start.
+        if let Some(r) = first_rect(&range) {
+            return Some(crate::CaretRect { width: 1.0, ..r });
+        }
+        // An empty range has no rectangle: the character after it (the
+        // caret is at its left edge), or else the one before (its right).
+        let after = range.Clone().ok()?;
+        if after.ExpandToEnclosingUnit(TextUnit_Character).is_ok()
+            && let Some(r) = first_rect(&after)
+        {
+            return Some(crate::CaretRect { width: 1.0, ..r });
+        }
+        let before = range.Clone().ok()?;
+        before
+            .MoveEndpointByUnit(TextPatternRangeEndpoint_Start, TextUnit_Character, -1)
+            .ok()?;
+        let r = first_rect(&before)?;
+        Some(crate::CaretRect {
+            x: r.x + r.width,
+            width: 1.0,
+            ..r
+        })
+    }
+}
+
+/// The first of a range's rectangles (one per line), if it has any.
+///
+/// # Safety
+///
+/// `range` must be a live range used on an MTA thread.
+unsafe fn first_rect(range: &IUIAutomationTextRange) -> Option<crate::CaretRect> {
+    // SAFETY: the caller's guarantee for the range. The array is ours to
+    // destroy; its data is read only between access and unaccess, and only
+    // as many doubles as its single dimension holds.
+    unsafe {
+        let array = range.GetBoundingRectangles().ok()?;
+        if array.is_null() {
+            return None;
+        }
+        let mut data = std::ptr::null_mut();
+        let mut rect = None;
+        if (*array).cDims == 1 && SafeArrayAccessData(array, &mut data).is_ok() {
+            let count = (*array).rgsabound[0].cElements as usize;
+            if count >= 4 && !data.is_null() {
+                let v = std::slice::from_raw_parts(data as *const f64, 4);
+                if v[3] > 0.0 {
+                    rect = Some(crate::CaretRect {
+                        x: v[0],
+                        y: v[1],
+                        width: v[2],
+                        height: v[3],
+                    });
+                }
+            }
+            let _ = SafeArrayUnaccessData(array);
+        }
+        let _ = SafeArrayDestroy(array);
+        rect
+    }
 }
 
 /// The field's text pattern, when it has one and this thread may use it.

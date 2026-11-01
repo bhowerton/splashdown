@@ -58,7 +58,7 @@ How fast and how reliably words land is the core of a dictation app; most of wha
   - ✅ Fade in and out (opacity steps, canceled by newer state changes), and a spinner while working.
   - ✅ Respects Reduce Motion; announces states to VoiceOver.
   - ✅ It already appears on the screen with the focused window: `NSScreen.mainScreen` is that screen, not the primary display.
-  - ✅ Placed just below the text cursor (above it when there's no room), read with `AXBoundsForRange`; bottom center when the app doesn't report a caret. Switchable in General. Mac only for now.
+  - ✅ Placed just below the text cursor (above it when there's no room), read with `AXBoundsForRange` on macOS and, on Windows (2026-11-01), the thread's Win32 caret or else UI Automation's caret range; bottom center when the app doesn't report a caret. Switchable in General.
   - ⬜ Scale animation (needs AppKit's animator; opacity-only for now).
 - ✅ **Menu bar:**
   - Icon states: red while recording; an attention dot while setup is incomplete.
@@ -100,7 +100,7 @@ Cheap features that close visible gaps.
 
 ### 4. M3 — Windows
 - ✅ **First run** (2026-10-30): built and launched on a Windows PC with `scripts/run-win-app.ps1`, and dictation works. CI builds, tests and packages it on `windows-latest`. Shipped as a preview installer in v0.1.0 (unsigned; no update files, so 0.1.0 Windows installs update by hand once).
-- ✅ **Filled in before the first run** (2026-10-30): cursor position and selecting a range through UI Automation's TextPattern (spoken commands, smart spacing and field context), checked against the expected text so a field that counts characters differently gets nothing selected rather than the wrong text; the Chromium paste check (by executable name); the Windows version in feedback reports; app names in Presets from the executable's description (via App Paths or a running copy), and their icons (2026-11-01). ⬜ The pill following the caret.
+- ✅ **Filled in before the first run** (2026-10-30): cursor position and selecting a range through UI Automation's TextPattern (spoken commands, smart spacing and field context), checked against the expected text so a field that counts characters differently gets nothing selected rather than the wrong text; the Chromium paste check (by executable name); the Windows version in feedback reports; app names in Presets from the executable's description (via App Paths or a running copy), and their icons (2026-11-01). ✅ The pill following the caret (2026-11-01; not yet tried on a Windows PC).
 - 🟡 **Still to check one by one on Windows** (each was written blind, before the first run):
   - Hotkeys with `WH_KEYBOARD_LL` (held modifiers' auto-repeats are filtered; AltGr's fake Ctrl is ignored).
   - Selection, focus, password fields and page URLs with UI Automation (URL: the enclosing document's value, best effort).

@@ -2,18 +2,18 @@
 //! activates and lets the mouse through, so the user's focused field keeps
 //! focus. Painted with GDI; the pill shape is a window region.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 
-use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, RECT, SIZE, WPARAM};
+use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, SIZE, WPARAM};
 use windows::Win32::Graphics::Gdi::{
     BeginPaint, BitBlt, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleBitmap,
     CreateCompatibleDC, CreateFontW, CreateRoundRectRgn, CreateSolidBrush, DEFAULT_CHARSET,
     DeleteDC, DeleteObject, Ellipse, EndPaint, FW_SEMIBOLD, FillRect, GetDC, GetMonitorInfoW,
     GetStockObject, GetTextExtentPoint32W, HDC, HFONT, HGDIOBJ, InvalidateRect,
-    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromWindow, NULL_PEN, OUT_DEFAULT_PRECIS,
-    PAINTSTRUCT, ReleaseDC, RoundRect, SRCCOPY, SelectObject, SetBkMode, SetTextColor,
-    SetWindowRgn, TRANSPARENT, TextOutW, UpdateWindow,
+    MONITOR_DEFAULTTONULL, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint,
+    MonitorFromWindow, NULL_PEN, OUT_DEFAULT_PRECIS, PAINTSTRUCT, ReleaseDC, RoundRect, SRCCOPY,
+    SelectObject, SetBkMode, SetTextColor, SetWindowRgn, TRANSPARENT, TextOutW, UpdateWindow,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
@@ -27,9 +27,15 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::w;
 
-use crate::{OverlayState, PlatformError, Result, Tone};
+use crate::{CaretRect, OverlayState, PlatformError, Result, Tone};
 
 // Sizes in device-independent pixels (scaled by the monitor's DPI).
+/// Space between the text cursor and the pill.
+const CARET_GAP: f64 = 12.0;
+/// The least a caret's line is taken to be: some fields report the caret as
+/// a sliver at the top of its line, and the pill would cover the line being
+/// typed.
+const MIN_LINE: f64 = 24.0;
 const HEIGHT: f64 = 38.0;
 const PAD_X: f64 = 14.0;
 const DOT: f64 = 10.0;
@@ -367,6 +373,9 @@ pub(crate) struct Overlay {
     /// Also makes `Overlay` neither `Send` nor `Sync`: it belongs to the
     /// thread that created it.
     hwnd: HWND,
+    /// The text cursor to show the pill by, in physical pixels; `None`
+    /// for the usual place.
+    anchor: Cell<Option<CaretRect>>,
 }
 
 impl Overlay {
@@ -416,7 +425,10 @@ impl Overlay {
             .map_err(|e| failed("opacity", e))?;
 
         MODEL.with(|m| *m.borrow_mut() = Some(Model::new()));
-        Ok(Self { hwnd })
+        Ok(Self {
+            hwnd,
+            anchor: Cell::new(None),
+        })
     }
 
     fn update(&self, f: impl FnOnce(&mut Model)) {
@@ -552,9 +564,11 @@ impl Overlay {
     /// from a provider on this window (`UiaRaiseNotificationEvent`), which
     /// this window doesn't implement yet, so nothing is announced on
     /// Windows; the pill's text is visual only.
-    /// Placing the overlay by the caret isn't done on Windows yet (there's
-    /// no caret position; see `caret_rect`).
-    pub(crate) fn set_anchor(&self, _caret: Option<crate::CaretRect>) {}
+    /// Shows the pill by the text cursor from now on (`None`: the usual
+    /// place, at the bottom of the screen).
+    pub(crate) fn set_anchor(&self, caret: Option<CaretRect>) {
+        self.anchor.set(caret);
+    }
 
     pub(crate) fn announce(&self, _text: &str) {}
 
@@ -571,20 +585,33 @@ impl Overlay {
         }
     }
 
-    /// Resizes the pill for its label and keeps it at the bottom center of
-    /// the monitor with the focused window. `reposition` also moves it to
-    /// that monitor (when it's shown); otherwise it stays centered where it
-    /// is.
+    /// Resizes the pill for its label and puts it just below the text
+    /// cursor when that's known, else at the bottom center of the monitor
+    /// with the focused window. `reposition` also moves it to that monitor
+    /// (when it's shown); otherwise it stays centered where it is.
     fn layout(&self, reposition: bool) {
+        let caret = self.anchor.get();
         // SAFETY: plain calls; a null foreground window falls back to the
         // primary monitor, and `info` is a valid, sized out-pointer.
-        let (work, scale) = unsafe {
+        let (work, scale, caret) = unsafe {
+            // The caret's monitor, if it's on one.
+            let by_caret = caret.and_then(|c| {
+                let point = POINT {
+                    x: c.x.round() as i32,
+                    y: (c.y + c.height / 2.0).round() as i32,
+                };
+                let monitor = MonitorFromPoint(point, MONITOR_DEFAULTTONULL);
+                (!monitor.is_invalid()).then_some((monitor, c))
+            });
             let anchor = if reposition {
                 GetForegroundWindow()
             } else {
                 self.hwnd
             };
-            let monitor = MonitorFromWindow(anchor, MONITOR_DEFAULTTOPRIMARY);
+            let monitor = by_caret.map_or_else(
+                || MonitorFromWindow(anchor, MONITOR_DEFAULTTOPRIMARY),
+                |(m, _)| m,
+            );
             let mut info = MONITORINFO {
                 cbSize: std::mem::size_of::<MONITORINFO>() as u32,
                 ..Default::default()
@@ -592,7 +619,11 @@ impl Overlay {
             let _ = GetMonitorInfoW(monitor, &mut info);
             let (mut dpi_x, mut dpi_y) = (96u32, 96u32);
             let _ = GetDpiForMonitor(monitor, MDT_EFFECTIVE_DPI, &mut dpi_x, &mut dpi_y);
-            (info.rcWork, f64::from(dpi_x.max(96)) / 96.0)
+            (
+                info.rcWork,
+                f64::from(dpi_x.max(96)) / 96.0,
+                by_caret.map(|(_, c)| c),
+            )
         };
 
         let Some((width, height)) = self.update_and_read(|m| {
@@ -602,8 +633,13 @@ impl Overlay {
         }) else {
             return;
         };
-        let x = work.left + (work.right - work.left - width) / 2;
-        let y = work.bottom - (BOTTOM_OFFSET * scale).round() as i32 - height;
+        let (x, y) = match caret {
+            Some(caret) => near_caret(caret, work, width, height, scale),
+            None => (
+                work.left + (work.right - work.left - width) / 2,
+                work.bottom - (BOTTOM_OFFSET * scale).round() as i32 - height,
+            ),
+        };
         // SAFETY: `self.hwnd` is our live window. The region is handed to
         // the system on success (it then owns and frees it).
         unsafe {
@@ -637,6 +673,27 @@ impl Overlay {
             let _ = UpdateWindow(self.hwnd);
         }
     }
+}
+
+/// Where the pill goes for a caret: just below its line, or above it when
+/// there's no room below, kept inside the monitor's work area. Physical
+/// pixels throughout; `scale` is the monitor's DPI over 96.
+fn near_caret(caret: CaretRect, work: RECT, width: i32, height: i32, scale: f64) -> (i32, i32) {
+    let line = caret.height.max(MIN_LINE * scale);
+    let gap = CARET_GAP * scale;
+    let below = caret.y + line + gap;
+    let y = if below + f64::from(height) <= f64::from(work.bottom) {
+        below
+    } else {
+        caret.y - gap - f64::from(height)
+    };
+    let x = (caret.x - PAD_X * scale)
+        .min(f64::from(work.right - width))
+        .max(f64::from(work.left));
+    let y = y
+        .min(f64::from(work.bottom - height))
+        .max(f64::from(work.top));
+    (x.round() as i32, y.round() as i32)
 }
 
 impl Drop for Overlay {
@@ -679,7 +736,35 @@ fn tail_chars(text: &str, max: usize) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::tail_chars;
+    use super::{CaretRect, RECT, near_caret, tail_chars};
+
+    #[test]
+    fn the_pill_goes_below_the_caret_or_above_it() {
+        let work = RECT {
+            left: 0,
+            top: 0,
+            right: 1920,
+            bottom: 1040,
+        };
+        let caret = |x, y| CaretRect {
+            x,
+            y,
+            width: 1.0,
+            height: 18.0,
+        };
+        // Below the line (at least 24 px of it), 12 px down, at 150%.
+        assert_eq!(
+            near_caret(caret(500.0, 300.0), work, 300, 57, 1.5),
+            (479, 354)
+        );
+        // No room below: above.
+        assert_eq!(
+            near_caret(caret(500.0, 1000.0), work, 300, 57, 1.5),
+            (479, 925)
+        );
+        // Kept on the screen at the right edge.
+        assert_eq!(near_caret(caret(1900.0, 300.0), work, 300, 57, 1.5).0, 1620);
+    }
 
     #[test]
     fn tail_keeps_whole_words() {
