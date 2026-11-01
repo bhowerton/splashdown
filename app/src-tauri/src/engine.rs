@@ -122,6 +122,7 @@ pub fn keys(settings: &Settings) -> Keys {
         hands_free: settings.hotkeys.hands_free_key(),
         double_tap: settings.hotkeys.double_tap(),
         note: settings.hotkeys.note_key(),
+        ask: settings.hotkeys.ask_key(),
     }
 }
 

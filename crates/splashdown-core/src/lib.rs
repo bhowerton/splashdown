@@ -3,6 +3,7 @@
 //! crate calls the OS; the only platform differences are compile-time
 //! defaults and key names (`gesture::PhysicalKey`).
 
+pub mod ask;
 mod audio;
 pub mod command;
 pub mod fallback;

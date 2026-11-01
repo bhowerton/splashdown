@@ -39,6 +39,7 @@ function renderPrivacy() {
   $("pv-local").checked = !!s.general.local_only;
   $("pv-appname").checked = s.general.share_app_name !== false;
   $("pv-recent").checked = s.general.share_recent !== false;
+  $("pv-ask-notes").checked = s.notes?.ask_uses_notes !== false;
   $("pv-agents-read").checked = !!s.notes?.agents_read;
   $("pv-agents-write").checked = !!s.notes?.agents_write;
   $("pv-agents-write").disabled = !s.notes?.agents_read;

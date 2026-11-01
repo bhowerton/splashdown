@@ -102,6 +102,9 @@ pub struct Keys {
     /// Pressed while holding the dictation key: the dictation goes into a
     /// note.
     pub note: PhysicalKey,
+    /// Pressed while holding the dictation key: the dictation is a question
+    /// for the Ask panel.
+    pub ask: PhysicalKey,
 }
 
 enum Msg {
@@ -323,6 +326,8 @@ struct Active {
     mic_warned: bool,
     /// The note key was pressed: the text goes into a note, not the field.
     capture: bool,
+    /// The ask key was pressed: it's a question for the Ask panel.
+    ask: bool,
     /// When to quiet other sounds (after the start sound has played).
     quiet_due: Option<Instant>,
     /// Other sounds, quieted while recording; dropping it restores them.
@@ -404,7 +409,8 @@ impl Controller {
             recognizer: Arc::new(Mutex::new(
                 Recognizer::new(keys.dictation, keys.instruction, Timing::default())
                     .with_hands_free(keys.hands_free, keys.double_tap)
-                    .with_capture(keys.note),
+                    .with_capture(keys.note)
+                    .with_ask(keys.ask),
             )),
             ui,
             engine,
@@ -571,7 +577,8 @@ impl Controller {
         }
         *self.lock() = Recognizer::new(keys.dictation, keys.instruction, Timing::default())
             .with_hands_free(keys.hands_free, keys.double_tap)
-            .with_capture(keys.note);
+            .with_capture(keys.note)
+            .with_ask(keys.ask);
         self.preview = preview_worker(&engine, &self.tx);
         self.engine = engine;
         self.keys = keys;
@@ -711,6 +718,7 @@ impl Controller {
                 }
             }
             Action::Capture => self.start_capture(),
+            Action::Ask => self.start_ask(),
             Action::HandsFree => {
                 if let Some(active) = &mut self.active {
                     active.hands_free = true;
@@ -884,6 +892,7 @@ impl Controller {
             loudest: 0.0,
             mic_warned: false,
             capture: false,
+            ask: false,
             quiet_due: self
                 .engine
                 .as_ref()
@@ -948,6 +957,10 @@ impl Controller {
     fn finish(&mut self, mut active: Active) {
         if let Some(reply) = active.reply_to.take() {
             self.answer(active, reply);
+            return;
+        }
+        if active.ask {
+            self.ask(active);
             return;
         }
         let spoke = active.started.elapsed();
@@ -1527,6 +1540,7 @@ impl Controller {
             return;
         };
         active.capture = true;
+        active.ask = false;
         match &mut active.shown {
             OverlayState::Listening { preset } | OverlayState::HandsFree { preset } => {
                 *preset = Some(label);
@@ -1550,6 +1564,104 @@ impl Controller {
         // Nothing is typed, so there's nothing to send.
         self.lock().set_send(false);
         self.ui.set_send(false);
+    }
+
+    /// The ask key: what's said is a question, answered in the Ask panel.
+    fn start_ask(&mut self) {
+        let Some(active) = &mut self.active else {
+            return;
+        };
+        active.ask = true;
+        active.capture = false;
+        let label = Some("Ask".to_string());
+        active.shown = if active.hands_free {
+            OverlayState::HandsFree { preset: label }
+        } else {
+            OverlayState::Listening { preset: label }
+        };
+        self.ui.show(active.shown.clone());
+        // Nothing is typed, so there's nothing to send.
+        self.lock().set_send(false);
+        self.ui.set_send(false);
+    }
+
+    /// `finish` for a question: transcribes it and opens the Ask panel,
+    /// which answers it in the background.
+    fn ask(&mut self, mut active: Active) {
+        let job = self.prepare(&mut active);
+        let _ = self.lock().take_send();
+        self.pending_command = None;
+        let Some(mut job) = job else {
+            return;
+        };
+        // Only the words: the question goes to the AI as it was said.
+        let selection = job.selection.take();
+        job.mode = Mode::Raw;
+        if let Some(instruction) = job.instruction_speech.take() {
+            job.speech = concat(job.speech, instruction);
+        }
+        let Some((outcome, _)) = self.run_pipeline(job, &active.preset, None) else {
+            return;
+        };
+        crate::spend::record_outcome(&outcome);
+        let question = outcome.raw.trim().to_string();
+        if question.is_empty() {
+            return self.notice(Tone::Info, "Didn't catch that");
+        }
+        self.show_answer(&active, question, selection);
+        self.check_budget();
+    }
+
+    /// Opens the Ask panel on `question`, asked from `active`'s app.
+    fn show_answer(&mut self, active: &Active, question: String, selection: Option<String>) {
+        let Ok(engine) = &self.engine else {
+            return;
+        };
+        let Some(model) = engine.pipeline_for(&active.preset).answer_model() else {
+            return self.notice(
+                Tone::Warning,
+                "Asking needs an AI model: choose one in Settings → Providers",
+            );
+        };
+        let notes = self
+            .notes_settings()
+            .map(|n| crate::notes::excerpts_for(&n, &question))
+            .unwrap_or_default();
+        let context = splashdown_core::ask::AskContext {
+            selection,
+            field_text: active
+                .field_text
+                .clone()
+                .filter(|_| active.preset.field_context),
+            clipboard: active
+                .clipboard
+                .clone()
+                .filter(|_| active.preset.clipboard_context),
+            notes,
+            app_name: active
+                .focus
+                .as_ref()
+                .filter(|_| engine.share_app_name)
+                .map(|f| f.app.name.clone()),
+            user_name: engine.context.user_name.clone(),
+            today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+        };
+        let notes = context.notes.len();
+        tracing::info!("asking, with {notes} matching note(s)");
+        crate::ask::ask(
+            self.ui.app(),
+            crate::ask::Question {
+                request: splashdown_core::ask::request(&question, &context),
+                question,
+                model,
+                target: active
+                    .focus
+                    .as_ref()
+                    .map(|f| (f.app.pid, f.app.name.clone())),
+                notes,
+            },
+        );
+        self.ui.hide();
     }
 
     /// A captured dictation: added to the note instead of the field.
@@ -1901,7 +2013,9 @@ impl Controller {
             chrono::Local::now(),
         );
         let still_focused = active.focus.as_ref().is_none_or(Focus::is_current);
-        if !still_focused {
+        if let Command::Ask(question) = outcome.command {
+            self.show_answer(active, question, None);
+        } else if !still_focused {
             self.notice(Tone::Warning, "Focus changed — didn't do that");
         } else {
             self.carry_out(outcome.command, active.focus.as_ref(), target_pid);
@@ -1914,6 +2028,8 @@ impl Controller {
         let paste = |text: &str| splashdown_platform::insert_text(text, InsertMethod::Paste);
         match command {
             Command::Unclear => return self.notice(Tone::Info, "Didn't understand that command"),
+            // Answered in the Ask panel instead (`run_command`).
+            Command::Ask(_) => return,
             Command::PressEnter => {
                 return self.finish_command(splashdown_platform::press(KeyAction::Return), "Sent");
             }

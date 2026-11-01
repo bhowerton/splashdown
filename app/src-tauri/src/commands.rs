@@ -515,6 +515,10 @@ pub async fn save_settings(
     if settings.hotkeys.note_key() == settings.hotkeys.hands_free_key() {
         return Err("The hands-free and note letters must be different.".into());
     }
+    let ask = settings.hotkeys.ask_key();
+    if ask == settings.hotkeys.hands_free_key() || ask == settings.hotkeys.note_key() {
+        return Err("The ask letter must differ from the hands-free and note letters.".into());
+    }
     if let Some(problem) = crate::replacements::check(&settings.replacements) {
         return Err(problem);
     }

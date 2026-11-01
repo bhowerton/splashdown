@@ -1,0 +1,202 @@
+//! The Ask panel: a spoken question (dictation key + A, or a spoken
+//! command that's a question) answered in a small window instead of typed.
+//! The answer streams in; Insert pastes it into the app the question was
+//! asked from, Copy puts it on the clipboard.
+
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex, OnceLock};
+
+use serde::Serialize;
+use splashdown_core::{TextModel, TextRequest};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+
+pub const WINDOW: &str = "ask";
+/// App event with the panel's new state (`Shown`).
+const CHANGED: &str = "ask-changed";
+
+/// A question to answer.
+pub struct Question {
+    /// As it was said.
+    pub question: String,
+    pub request: TextRequest,
+    pub model: Arc<dyn TextModel>,
+    /// The app it was asked from (pid and name), for Insert.
+    pub target: Option<(i32, String)>,
+    /// How many notes the answer may draw on.
+    pub notes: usize,
+}
+
+/// What the panel shows.
+#[derive(Debug, Clone, Default, Serialize)]
+pub struct Shown {
+    pub question: String,
+    /// The answer so far.
+    pub answer: String,
+    /// The answer is complete (or failed).
+    pub done: bool,
+    pub error: Option<String>,
+    /// The app Insert pastes into.
+    pub app: Option<String>,
+    pub notes: usize,
+}
+
+#[derive(Default)]
+struct Panel {
+    shown: Shown,
+    target: Option<(i32, String)>,
+}
+
+fn panel() -> std::sync::MutexGuard<'static, Panel> {
+    static PANEL: OnceLock<Mutex<Panel>> = OnceLock::new();
+    PANEL
+        .get_or_init(Mutex::default)
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
+
+/// Which question is being answered; an older answer still streaming in
+/// stops showing once a new question is asked.
+static ASKED: AtomicU64 = AtomicU64::new(0);
+
+/// Shows the panel with `q` and answers it in the background.
+pub fn ask(app: &AppHandle, q: Question) {
+    let asked = ASKED.fetch_add(1, Ordering::SeqCst) + 1;
+    {
+        let mut panel = panel();
+        panel.shown = Shown {
+            question: q.question.clone(),
+            app: q.target.as_ref().map(|(_, name)| name.clone()),
+            notes: q.notes,
+            ..Shown::default()
+        };
+        panel.target = q.target.clone();
+    }
+    open(app);
+    changed(app);
+
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let mut on_text = |so_far: &str| {
+            if ASKED.load(Ordering::SeqCst) == asked {
+                panel().shown.answer = so_far.to_string();
+                changed(&app);
+            }
+        };
+        let result = q.model.complete_streaming(&q.request, &mut on_text).await;
+        if let Ok(completion) = &result {
+            crate::spend::shared()
+                .record(&[(q.model.name(), completion.usage)], chrono::Local::now());
+        }
+        if ASKED.load(Ordering::SeqCst) != asked {
+            return;
+        }
+        {
+            let mut panel = panel();
+            panel.shown.done = true;
+            match result {
+                Ok(completion) => panel.shown.answer = completion.text.trim().to_string(),
+                Err(e) => {
+                    tracing::warn!("ask failed: {e}");
+                    panel.shown.error = Some(crate::errors::pipeline(
+                        &splashdown_core::PipelineError::Llm(e),
+                        None,
+                        Some(&q.model.name()),
+                    ));
+                }
+            }
+        }
+        changed(&app);
+    });
+}
+
+fn changed(app: &AppHandle) {
+    let shown = panel().shown.clone();
+    let _ = app.emit_to(WINDOW, CHANGED, shown);
+}
+
+/// Shows the panel, creating it the first time.
+fn open(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(WINDOW) {
+        let _ = window.show();
+        let _ = window.set_focus();
+        return;
+    }
+    let result = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App("ask.html".into()))
+        .title("Ask")
+        .inner_size(460.0, 300.0)
+        .min_inner_size(320.0, 180.0)
+        .resizable(true)
+        .always_on_top(true)
+        .visible_on_all_workspaces(true)
+        .center()
+        .focused(true)
+        .build();
+    match result {
+        Ok(window) => {
+            // Closing only hides it, ready for the next question.
+            let handle = window.clone();
+            window.on_window_event(move |event| {
+                if let WindowEvent::CloseRequested { api, .. } = event {
+                    api.prevent_close();
+                    let _ = handle.hide();
+                }
+            });
+        }
+        Err(e) => tracing::warn!("couldn't open the Ask panel: {e}"),
+    }
+}
+
+/// Hides the panel and gives focus back to the app the question came from.
+fn hide(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(WINDOW) {
+        let _ = window.hide();
+    }
+}
+
+// ---------------------------------------------------------------- commands
+
+/// What the panel shows now (for a page that just loaded).
+#[tauri::command]
+pub fn ask_state() -> Shown {
+    panel().shown.clone()
+}
+
+/// Insert: pastes the answer into the app the question was asked from.
+/// On failure it's left on the clipboard and the panel stays.
+#[tauri::command]
+pub async fn ask_insert(text: String, app: AppHandle) -> Result<(), String> {
+    let target = panel().target.clone();
+    let Some((pid, name)) = target else {
+        return Err("No app to insert into. Copy the answer instead.".into());
+    };
+    hide(&app);
+    let pasted = tauri::async_runtime::spawn_blocking(move || {
+        crate::notes::paste_into(pid, &text).inspect_err(|_| {
+            let _ = splashdown_platform::copy_to_clipboard(&text);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())?;
+    if let Err(e) = pasted {
+        tracing::warn!("ask insert failed: {e}");
+        open(&app);
+        return Err(format!(
+            "Couldn't paste into {name}. It's on the clipboard."
+        ));
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn ask_copy(text: String) -> Result<(), String> {
+    splashdown_platform::copy_to_clipboard(&text).map_err(|e| e.to_string())
+}
+
+/// Esc or Close: hides the panel and gives focus back.
+#[tauri::command]
+pub fn ask_close(app: AppHandle) {
+    hide(&app);
+    if let Some((pid, _)) = panel().target.clone() {
+        let _ = splashdown_platform::activate_app(pid);
+    }
+}

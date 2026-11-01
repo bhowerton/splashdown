@@ -110,6 +110,9 @@ function collect() {
   const note = $("hk-note").value.trim().toLowerCase();
   const noteDefault = letter === "n" ? "m" : "n";
   s.hotkeys.note = /^[a-z]$/.test(note) && note !== noteDefault ? note : null;
+  // A letter; the default (A, or K when A is taken) is saved as unset.
+  const ask = $("hk-ask").value.trim().toLowerCase();
+  s.hotkeys.ask = /^[a-z]$/.test(ask) && ask !== askDefault(s.hotkeys) ? ask : null;
   s.notes = { ...(s.notes ?? {}) };
   s.notes.capture_to = $("nt-capture-to").value;
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;
@@ -120,6 +123,7 @@ function collect() {
   // On is the default, saved as unset.
   s.notes.stop_when_quiet = $("mt-stop-quiet").checked ? null : false;
   s.notes.agents_read = $("pv-agents-read").checked;
+  s.notes.ask_uses_notes = $("pv-ask-notes").checked ? null : false;
   s.notes.agents_write = $("pv-agents-read").checked && $("pv-agents-write").checked;
   s.general.user_name = $("gen-name").value.trim() || null;
   s.general.language = $("gen-language").value || null;

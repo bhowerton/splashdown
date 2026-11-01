@@ -122,6 +122,9 @@ pub enum Action {
     /// The note key while holding the dictation key: this recording goes
     /// into a note instead of the field.
     Capture,
+    /// The ask key while holding the dictation key: this recording is a
+    /// question, answered in a panel instead of typed.
+    Ask,
     /// Stop recording and process it.
     Finish,
     /// Stop recording and throw it away. `silent` cancels (accidental tap,
@@ -206,6 +209,11 @@ pub struct Recognizer {
     capture: PhysicalKey,
     /// We swallowed the note key's key-down: its repeats and key-up too.
     swallow_capture: bool,
+    /// Pressed while holding the dictation key: the recording is a
+    /// question.
+    ask: PhysicalKey,
+    /// We swallowed the ask key's key-down: its repeats and key-up too.
+    swallow_ask: bool,
     timing: Timing,
     state: State,
     /// We swallowed an Esc key-down, so swallow its key-up too.
@@ -234,6 +242,8 @@ impl Recognizer {
             swallow_hands_free: false,
             capture: PhysicalKey::Letter('n'),
             swallow_capture: false,
+            ask: PhysicalKey::Letter('a'),
+            swallow_ask: false,
             timing,
             state: State::Idle,
             swallow_escape_up: false,
@@ -258,6 +268,13 @@ impl Recognizer {
     /// recording into a note.
     pub fn with_capture(mut self, key: PhysicalKey) -> Self {
         self.capture = key;
+        self
+    }
+
+    /// Sets the key that, pressed while holding the dictation key, makes
+    /// the recording a question for the Ask panel.
+    pub fn with_ask(mut self, key: PhysicalKey) -> Self {
+        self.ask = key;
         self
     }
 
@@ -421,6 +438,23 @@ impl Recognizer {
             if let (State::Pressed { .. }, true) = (self.state, ev.down) {
                 self.swallow_capture = true;
                 return (true, Some(Action::Capture));
+            }
+        }
+
+        // The ask key while holding the dictation key: the recording is a
+        // question. Swallowed like the note key.
+        if ev.key == self.ask
+            && ev.key != self.hands_free
+            && ev.key != self.capture
+            && ev.key != PhysicalKey::Other
+        {
+            if self.swallow_ask {
+                self.swallow_ask = ev.down;
+                return (true, None);
+            }
+            if let (State::Pressed { .. }, true) = (self.state, ev.down) {
+                self.swallow_ask = true;
+                return (true, Some(Action::Ask));
             }
         }
 
@@ -726,6 +760,27 @@ mod tests {
         // Typing N later is untouched.
         assert_eq!(
             c.r.on_event(KeyEvent::down(Letter('n')), c.now),
+            (false, None)
+        );
+    }
+
+    #[test]
+    fn ask_key_while_holding_asks_and_is_swallowed() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default())
+            .with_capture(Letter('n'))
+            .with_ask(Letter('a'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('a')), c.now),
+            (true, Some(Action::Ask))
+        );
+        assert_eq!(c.r.on_event(KeyEvent::up(Letter('a')), c.now), (true, None));
+        assert!(c.r.is_recording());
+        assert_eq!(c.at(2000).up(DICT), Some(Action::Finish));
+        // Typing A later is untouched.
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('a')), c.now),
             (false, None)
         );
     }

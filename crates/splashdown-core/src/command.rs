@@ -27,6 +27,8 @@ pub enum Command {
     UndoLast,
     /// Insert new text at the cursor.
     Write(String),
+    /// A question for the AI: answered in the Ask panel, not typed.
+    Ask(String),
     /// The AI couldn't tell what was meant.
     Unclear,
 }
@@ -41,6 +43,7 @@ const ACTIONS: &[&str] = &[
     "press_enter",
     "undo_last",
     "write",
+    "ask",
     "unclear",
 ];
 
@@ -58,7 +61,8 @@ Choose exactly one action and reply with JSON only: {\"action\": \"...\", \"text
 - press_enter: press Return, i.e. send or submit.
 - undo_last: remove the last dictation entirely.
 - write: the command asks you to write or compose something new at the cursor (\"write a short no\", \"add a sign-off\"). \"text\" is what to insert.
-- unclear: you can't tell what the user wants, or it isn't a command at all (just text, or a question to someone).
+- ask: the command is a question for you to answer, or asks you to explain or look something up, rather than to change or write text (\"what's the German word for deadline\", \"how many days until Christmas\"). \"text\" is the question as said. The answer is shown to the user, not typed.
+- unclear: you can't tell what the user wants, or it isn't a command at all (just text, or a question meant for someone else, to be typed).
 
 \"That\", \"this\" or \"it\" (in any language) means the last dictation. Keep the last dictation's language unless the command asks for a translation. \"text\" is \"\" for actions that don't use it.
 
@@ -142,6 +146,9 @@ pub fn parse(output: &str) -> Command {
     match reply.action.as_str() {
         "replace_last" if !text.is_empty() => Command::ReplaceLast(text),
         "write" if !text.is_empty() => Command::Write(text),
+        // An empty question is filled in with what was said (see
+        // `Pipeline::command`).
+        "ask" => Command::Ask(text),
         "delete_last_word" => Command::DeleteLastWord,
         "delete_last_sentence" => Command::DeleteLastSentence,
         "select_last" => Command::SelectLast,
@@ -156,6 +163,15 @@ pub fn parse(output: &str) -> Command {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn questions_are_asked() {
+        assert_eq!(
+            parse(r#"{"action":"ask","text":"What's the German word for deadline?"}"#),
+            Command::Ask("What's the German word for deadline?".into())
+        );
+        assert_eq!(parse(r#"{"action":"ask"}"#), Command::Ask(String::new()));
+    }
 
     #[test]
     fn parses_replies() {

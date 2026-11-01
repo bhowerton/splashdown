@@ -162,6 +162,11 @@ impl Pipeline {
         }
     }
 
+    /// The model for questions (Ask): the one for instructions, if set.
+    pub fn answer_model(&self) -> Option<Arc<dyn TextModel>> {
+        self.instruction_llm.clone().or_else(|| self.llm.clone())
+    }
+
     pub fn instruction_llm_name(&self) -> Option<String> {
         self.instruction_llm.as_ref().map(|l| l.name())
     }
@@ -258,6 +263,9 @@ impl Pipeline {
             // Nothing to replace: it can only mean new text.
             crate::command::Command::ReplaceLast(text) if last.is_none() => {
                 crate::command::Command::Write(text)
+            }
+            crate::command::Command::Ask(question) if question.is_empty() => {
+                crate::command::Command::Ask(spoken.to_string())
             }
             other => other,
         };

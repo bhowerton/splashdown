@@ -108,6 +108,16 @@ enum Command {
         #[command(flatten)]
         context: ContextOpts,
     },
+    /// Answer a question as the Ask panel does (dictation key + A),
+    /// streaming the answer. Notes aren't searched.
+    Ask {
+        question: String,
+        /// Text it's about, as if selected.
+        #[arg(long)]
+        selection: Option<String>,
+        #[command(flatten)]
+        providers: ProviderOpts,
+    },
     /// Run only the AI pass on text, as if it had been dictated.
     Clean {
         text: String,
@@ -518,6 +528,38 @@ fn run() -> Result<()> {
                 out.llm_name
             );
             println!("{:?}", out.command);
+        }
+        Command::Ask {
+            question,
+            selection,
+            providers,
+        } => {
+            let setup = Setup::new_text_only(&providers)?;
+            let model = setup
+                .pipeline
+                .answer_model()
+                .context("asking needs an AI model (--ai)")?;
+            let context = splashdown_core::ask::AskContext {
+                selection,
+                user_name: setup.settings.general.user_name.clone(),
+                today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+                ..Default::default()
+            };
+            let request = splashdown_core::ask::request(&question, &context);
+            let mut shown = 0;
+            let mut show = |so_far: &str| {
+                // Only what's new since the last piece.
+                if let Some(new) = so_far.get(shown..) {
+                    print!("{new}");
+                    let _ = std::io::Write::flush(&mut std::io::stdout());
+                }
+                shown = so_far.len();
+            };
+            let completion = rt.block_on(model.complete_streaming(&request, &mut show))?;
+            if shown == 0 {
+                print!("{}", completion.text);
+            }
+            println!();
         }
         Command::Clean {
             text,

@@ -4,6 +4,13 @@
 // microphone, live preview, sounds. Also the Words & language tab's name,
 // language and vocabulary (its snippets live in snippets.js).
 
+/** The ask letter when none is set: A, or K if hands-free or notes use A. */
+function askDefault(hotkeys) {
+  const hands = (hotkeys.hands_free || "h").toLowerCase();
+  const note = (hotkeys.note || (hands === "n" ? "m" : "n")).toLowerCase();
+  return hands === "a" || note === "a" ? "k" : "a";
+}
+
 /** Fallback for a backend that doesn't send `defaults.sound_volume` yet.
  *  Matches splashdown_config's DEFAULT_SOUND_VOLUME. */
 const DEFAULT_SOUND_VOLUME = 0.12;
@@ -18,6 +25,7 @@ function renderGeneral() {
   setValue($("hk-hands-free"), (s.hotkeys.hands_free || "h").toUpperCase());
   const noteDefault = (s.hotkeys.hands_free || "h").toLowerCase() === "n" ? "m" : "n";
   setValue($("hk-note"), (s.hotkeys.note || noteDefault).toUpperCase());
+  setValue($("hk-ask"), (s.hotkeys.ask || askDefault(s.hotkeys)).toUpperCase());
   const notes = s.notes ?? {};
   setValue($("nt-capture-to"), notes.capture_to ?? "inbox");
   $("nt-daily-row").hidden = (notes.capture_to ?? "inbox") !== "daily";

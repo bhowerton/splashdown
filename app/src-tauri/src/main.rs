@@ -2,6 +2,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod actions;
+mod ask;
 mod audio;
 mod chunks;
 mod commands;
@@ -124,6 +125,10 @@ fn main() {
             export::check_settings_file,
             export::import_settings,
             export::import_words,
+            ask::ask_state,
+            ask::ask_insert,
+            ask::ask_copy,
+            ask::ask_close,
         ])
         .setup(|app| {
             // Menu bar app: no Dock icon, no app menu.

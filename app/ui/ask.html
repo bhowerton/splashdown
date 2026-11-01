@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ask</title>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="ask.css">
+</head>
+<body class="ak-body">
+<main class="ak">
+  <p id="ak-question" class="ak-question"></p>
+  <div id="ak-answer" class="ak-answer" aria-live="polite" tabindex="0"></div>
+  <footer class="ak-bar">
+    <span id="ak-note" class="ak-note"></span>
+    <span class="ak-grow"></span>
+    <button class="btn" id="ak-copy" disabled>Copy</button>
+    <button class="btn primary" id="ak-insert" disabled>Insert</button>
+  </footer>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="common.js"></script>
+<script src="ask.js"></script>
+</body>
+</html>

@@ -420,6 +420,130 @@ pub fn agent_search(
     serde_json::to_string(&results).map_err(|e| e.to_string())
 }
 
+// ---------------------------------------------------------------- ask
+
+/// Most notes a question gets excerpts from.
+const ASK_NOTES: usize = 3;
+/// Characters of each note an answer may use.
+const ASK_EXCERPT: usize = 1200;
+
+/// Excerpts of the notes that best match `question`, for the Ask panel, if
+/// Settings allows it. Matching is by the question's words, weighted by how
+/// rare each is across the notes, so "the", "der" or "le" count for little
+/// in any language.
+pub fn excerpts_for(
+    settings: &NotesSettings,
+    question: &str,
+) -> Vec<splashdown_core::ask::NoteExcerpt> {
+    if !settings.ask_uses_notes() {
+        return Vec::new();
+    }
+    let Ok((store, _)) = store_for(settings.folder.clone()) else {
+        return Vec::new();
+    };
+    let notes = store.list();
+    best_matches(&notes, question, ASK_NOTES)
+        .into_iter()
+        .map(|(note, word)| splashdown_core::ask::NoteExcerpt {
+            title: note.title.clone(),
+            date: chrono::DateTime::from_timestamp_millis(note.modified as i64)
+                .map(|t| {
+                    t.with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d")
+                        .to_string()
+                })
+                .unwrap_or_default(),
+            text: around(&note.text, &word, ASK_EXCERPT),
+        })
+        .collect()
+}
+
+/// The words in `text`, lowercased, three letters or more.
+fn words_of(text: &str) -> std::collections::HashSet<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.chars().count() >= 3)
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// The `limit` notes that match `question` best, each with its rarest
+/// matching word (to excerpt around). A note matches on words found in its
+/// title or text; a word in most of the notes counts for nothing.
+fn best_matches<'a>(
+    notes: &'a [Summary],
+    question: &str,
+    limit: usize,
+) -> Vec<(&'a Summary, String)> {
+    let mut words: Vec<String> = words_of(question).into_iter().collect();
+    words.sort();
+    let texts: Vec<std::collections::HashSet<String>> = notes
+        .iter()
+        .map(|n| words_of(&format!("{}\n{}", n.title, n.text)))
+        .collect();
+    let total = notes.len() as f64;
+    // How telling each word is: rare across the notes is telling, and a
+    // word in most of a handful of notes or more is just a common word.
+    let weights: Vec<f64> = words
+        .iter()
+        .map(|w| {
+            let found = texts.iter().filter(|t| t.contains(w)).count() as f64;
+            if found == 0.0 || (total >= 4.0 && found > total / 2.0) {
+                0.0
+            } else {
+                (total / found).ln() + 1.0
+            }
+        })
+        .collect();
+    let mut scored: Vec<(f64, usize, Option<usize>)> = texts
+        .iter()
+        .enumerate()
+        .map(|(i, text)| {
+            let mut score = 0.0;
+            let mut rarest: Option<usize> = None;
+            for (w, word) in words.iter().enumerate() {
+                if weights[w] > 0.0 && text.contains(word) {
+                    score += weights[w];
+                    if rarest.is_none_or(|r| weights[w] > weights[r]) {
+                        rarest = Some(w);
+                    }
+                }
+            }
+            (score, i, rarest)
+        })
+        .filter(|(score, ..)| *score > 0.0)
+        .collect();
+    scored.sort_by(|a, b| {
+        b.0.total_cmp(&a.0)
+            .then(notes[b.1].modified.cmp(&notes[a.1].modified))
+    });
+    scored
+        .into_iter()
+        .take(limit)
+        .filter_map(|(_, i, rarest)| Some((&notes[i], words[rarest?].clone())))
+        .collect()
+}
+
+/// Up to `max` characters of `text` around the first `word` (any case).
+fn around(text: &str, word: &str, max: usize) -> String {
+    let chars: Vec<char> = text.chars().collect();
+    if chars.len() <= max {
+        return text.to_string();
+    }
+    let lower = text.to_lowercase();
+    let at = lower
+        .find(word)
+        .map_or(0, |byte| lower[..byte].chars().count());
+    let start = at.saturating_sub(max / 3).min(chars.len() - max);
+    let mut out: String = chars[start..start + max].iter().collect();
+    if start > 0 {
+        out.insert(0, '…');
+    }
+    if start + max < chars.len() {
+        out.push('…');
+    }
+    out
+}
+
 /// About 240 characters of `text` around the first match.
 fn excerpt(text: &str, needle: &str) -> String {
     let lower = text.to_lowercase();
@@ -605,14 +729,7 @@ fn send(app: &AppHandle, text: &str) -> Result<(), String> {
     if let Some(window) = app.get_webview_window(WINDOW) {
         let _ = window.hide();
     }
-    let result = splashdown_platform::activate_app(pid)
-        .map_err(|e| e.to_string())
-        .and_then(|()| wait_for_front(pid))
-        .and_then(|()| {
-            std::thread::sleep(SETTLE);
-            splashdown_platform::insert_text(text, InsertMethod::Paste).map_err(|e| e.to_string())
-        });
-    if let Err(e) = result {
+    if let Err(e) = paste_into(pid, text) {
         tracing::warn!("notes send failed: {e}");
         let _ = splashdown_platform::copy_to_clipboard(text);
         if let Some(window) = app.get_webview_window(WINDOW) {
@@ -624,6 +741,18 @@ fn send(app: &AppHandle, text: &str) -> Result<(), String> {
         ));
     }
     Ok(())
+}
+
+/// Brings the app `pid` to the front and pastes `text` there. Blocks for
+/// up to a couple of seconds.
+pub(crate) fn paste_into(pid: i32, text: &str) -> Result<(), String> {
+    splashdown_platform::activate_app(pid)
+        .map_err(|e| e.to_string())
+        .and_then(|()| wait_for_front(pid))
+        .and_then(|()| {
+            std::thread::sleep(SETTLE);
+            splashdown_platform::insert_text(text, InsertMethod::Paste).map_err(|e| e.to_string())
+        })
 }
 
 fn wait_for_front(pid: i32) -> Result<(), String> {
@@ -938,6 +1067,60 @@ pub fn open_notes(app: AppHandle) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn summary(title: &str, text: &str, modified: u64) -> Summary {
+        Summary {
+            path: format!("{title}.md"),
+            title: title.into(),
+            text: text.into(),
+            modified,
+            pinned: false,
+            folder: String::new(),
+        }
+    }
+
+    #[test]
+    fn questions_find_the_notes_that_match() {
+        let notes = [
+            summary(
+                "Launch plan",
+                "We moved the launch to Thursday. The docs are late.",
+                1,
+            ),
+            summary("Groceries", "Milk, eggs and the bread from the bakery.", 2),
+            summary(
+                "Standup",
+                "The onboarding bug is fixed. The launch is close.",
+                3,
+            ),
+            summary("Ideas", "The app could read the clipboard.", 4),
+            summary("Recipes", "The best bread needs time.", 5),
+        ];
+        let found = best_matches(&notes, "When is the launch? What about the docs?", 3);
+        let titles: Vec<&str> = found.iter().map(|(n, _)| n.title.as_str()).collect();
+        // "the" is in every note and counts for nothing; "docs" is rarest.
+        assert_eq!(titles, ["Launch plan", "Standup"]);
+        assert_eq!(found[0].1, "docs");
+        assert!(best_matches(&notes, "the", 3).is_empty());
+        // Whole words: "and" isn't in "Standup".
+        let found = best_matches(&notes, "and", 3);
+        assert_eq!(found.len(), 1);
+        assert_eq!(found[0].0.title, "Groceries");
+        assert!(best_matches(&notes, "", 3).is_empty());
+        // A single note still matches.
+        let one = [summary("Launch plan", "Thursday.", 1)];
+        assert_eq!(best_matches(&one, "launch day", 3).len(), 1);
+    }
+
+    #[test]
+    fn excerpts_are_cut_around_the_word() {
+        let text = format!("{} needle {}", "a".repeat(2000), "b".repeat(2000));
+        let cut = around(&text, "needle", 300);
+        assert!(cut.starts_with('…') && cut.ends_with('…'));
+        assert!(cut.contains("needle"));
+        assert_eq!(cut.chars().count(), 302);
+        assert_eq!(around("short", "x", 300), "short");
+    }
 
     #[test]
     fn moving_notes_never_overwrites() {

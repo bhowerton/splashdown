@@ -1,11 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "settings",
-  "description": "The Settings, setup and Notes windows: app commands plus core events (download progress).",
+  "description": "The Settings, setup, Notes and Ask windows: app commands plus core events (download progress).",
   "windows": [
     "settings",
     "onboarding",
-    "notes"
+    "notes",
+    "ask"
   ],
   "permissions": [
     "core:default"

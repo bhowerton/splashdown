@@ -80,6 +80,9 @@ pub struct NotesSettings {
     pub keep_meeting_audio: bool,
     /// Stop a meeting after 10 minutes with nobody speaking. Unset means on.
     pub stop_when_quiet: Option<bool>,
+    /// Questions asked with the ask key may use excerpts of matching notes.
+    /// Unset means on.
+    pub ask_uses_notes: Option<bool>,
     /// The first meeting's reminder about telling people has been shown.
     pub meeting_reminded: bool,
 }
@@ -104,6 +107,10 @@ impl NotesSettings {
 
     pub fn stop_when_quiet(&self) -> bool {
         self.stop_when_quiet.unwrap_or(true)
+    }
+
+    pub fn ask_uses_notes(&self) -> bool {
+        self.ask_uses_notes.unwrap_or(true)
     }
 
     pub fn daily_folder(&self) -> &str {
@@ -160,6 +167,10 @@ pub struct HotkeySettings {
     /// dictation into a note instead of the field. Unset means N, or M if
     /// hands-free already uses N (settings from before notes).
     pub note: Option<char>,
+    /// The letter that, pressed while holding the dictation key, makes the
+    /// dictation a question answered in the Ask panel. Unset means A (K if
+    /// hands-free or the note letter is A).
+    pub ask: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
     /// Claude and others use a double-tap of Option.
     pub double_tap: Option<bool>,
@@ -197,6 +208,21 @@ impl HotkeySettings {
         };
         let letter = self
             .note
+            .map(|c| c.to_ascii_lowercase())
+            .filter(char::is_ascii_lowercase)
+            .unwrap_or(fallback);
+        PhysicalKey::Letter(letter)
+    }
+
+    pub fn ask_key(&self) -> PhysicalKey {
+        let taken = [self.hands_free_key(), self.note_key()];
+        let fallback = if taken.contains(&PhysicalKey::Letter('a')) {
+            'k'
+        } else {
+            'a'
+        };
+        let letter = self
+            .ask
             .map(|c| c.to_ascii_lowercase())
             .filter(char::is_ascii_lowercase)
             .unwrap_or(fallback);
