@@ -195,7 +195,7 @@ The working list of improvements after 0.1.1, in rough order. Mark items here as
 - ⬜ **Vocabulary that only suggests a word after confirming the user's edit replaced Splashdown's own insertion,** plus starter word lists by field.
 - ⬜ **Mic choice:** follow the system default live, never pick virtual or aggregate inputs automatically, and notice a closed laptop lid.
 - ⬜ **Phone as a microphone** over the local network.
-- ⬜ **Shareable presets** as files.
+- ✅ **Shareable presets** as files (2026-11-01): Share… on a preset saves `Splashdown preset <name>.toml` to Downloads (without its shortcut); New preset → Import a preset file… adds one, renamed if the name is taken. ⬜ A gallery in GitHub Discussions.
 - ✅ **Pin history entries** (2026-11-01): Pin in Settings → History keeps an entry at the top and out of "Delete after" and the 300-entry limit.
 - ✅ **Never lose a dictation** (2026-11-01): each recording is on disk while it's processed and deleted once the text is in. If speech-to-text or the AI fails, or the app closes first, it's kept (the latest failure only; a dictation that works doesn't replace it), the error says so, and **Retry last dictation** in the menu bar runs it again with its preset and copies the text. ⬜ A crash during the recording itself (before release) still loses it.
 - ⬜ **A shareable Insights card.**

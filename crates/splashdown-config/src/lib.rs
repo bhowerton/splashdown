@@ -8,7 +8,7 @@ mod transforms;
 
 pub use presets::{
     AppContext, AppRule, CleanupLevel, DEFAULT_PRESET_ID, InsertMode, Preset, PresetModel, Tone,
-    builtin_presets, match_preset,
+    builtin_presets, match_preset, preset_from_file, preset_to_file,
 };
 pub use secrets::{
     KeyName, KeySource, Secrets, delete_key, key_source, migrate_legacy_keys, store_key,

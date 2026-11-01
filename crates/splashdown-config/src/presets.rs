@@ -338,9 +338,60 @@ pub fn builtin_presets() -> Vec<Preset> {
     ]
 }
 
+/// A preset on its own, as a file to share (`[preset]` in TOML).
+#[derive(Serialize, Deserialize)]
+struct PresetFile {
+    preset: Preset,
+}
+
+/// `preset` as a file someone else can import. Its id and shortcut stay
+/// behind: they're this computer's.
+pub fn preset_to_file(preset: &Preset) -> Result<String, String> {
+    let preset = Preset {
+        id: String::new(),
+        shortcut: None,
+        ..preset.clone()
+    };
+    let text = toml::to_string_pretty(&PresetFile { preset }).map_err(|e| e.to_string())?;
+    Ok(format!(
+        "# A Splashdown preset. To use it: Settings → Presets → New preset → Import a preset file.\n\n{text}"
+    ))
+}
+
+/// A preset from a shared file, without an id (the caller gives it one).
+pub fn preset_from_file(text: &str) -> Result<Preset, String> {
+    let file: PresetFile =
+        toml::from_str(text).map_err(|e| format!("That isn't a Splashdown preset file: {e}"))?;
+    Ok(Preset {
+        id: String::new(),
+        shortcut: None,
+        ..file.preset
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn presets_go_to_files_and_back() {
+        let mut email = builtin_presets()
+            .into_iter()
+            .find(|p| p.id != DEFAULT_PRESET_ID)
+            .unwrap();
+        email.shortcut = Some("Ctrl+Alt+KeyE".into());
+        email.translate_to = Some("Spanish".into());
+        let file = preset_to_file(&email).unwrap();
+        assert!(file.starts_with("# A Splashdown preset."));
+        assert!(file.contains("[preset]") && !file.contains("KeyE"));
+        let back = preset_from_file(&file).unwrap();
+        assert_eq!(back.name, email.name);
+        assert_eq!(back.rules, email.rules);
+        assert_eq!(back.translate_to.as_deref(), Some("Spanish"));
+        assert_eq!((back.id.as_str(), back.shortcut), ("", None));
+        assert!(preset_from_file("name = \"x\"").is_err());
+        assert!(preset_from_file("[general]\nlanguage = \"en\"").is_err());
+    }
 
     fn ctx<'a>(id: &'a str, url: Option<&'a str>) -> AppContext<'a> {
         AppContext {

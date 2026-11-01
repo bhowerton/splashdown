@@ -234,6 +234,16 @@ function presetEditor(p) {
   name.setAttribute("aria-label", "Preset name");
   name.onchange = () => updatePreset(p.id, (x) => (x.name = name.value.trim() || x.name));
   head.append(name);
+  head.append(
+    button("Share…", async () => {
+      try {
+        const path = await invoke("export_preset", { preset: p });
+        toast(`Saved to ${path.split(/[\\/]/).pop()} in Downloads`);
+      } catch (e) {
+        toast(String(e), true);
+      }
+    })
+  );
   if (!isDefault) {
     head.append(
       button("Delete", async () => {
@@ -792,12 +802,36 @@ async function chooseTemplate() {
   }
   const acts = document.createElement("div");
   acts.className = "confirm-acts";
-  acts.append(button("Cancel", () => dialog.close()));
+  const file = document.createElement("input");
+  file.type = "file";
+  file.accept = ".toml";
+  file.hidden = true;
+  file.onchange = async () => {
+    const chosen = file.files[0];
+    if (!chosen) return;
+    dialog.close();
+    try {
+      importPreset(await invoke("read_preset_file", { text: await chosen.text() }));
+    } catch (e) {
+      toast(String(e), true);
+    }
+  };
+  acts.append(file, button("Import a preset file…", () => file.click(), "link"), button("Cancel", () => dialog.close()));
   dialog.append(title, grid, acts);
   dialog.addEventListener("close", () => dialog.remove());
   document.body.append(dialog);
   dialog.showModal();
   grid.querySelector("button")?.focus();
+}
+
+/** Adds a preset from a shared file, renamed if the name is taken. */
+function importPreset(p) {
+  const id = `custom-${Date.now().toString(36)}`;
+  let name = p.name || "Imported preset";
+  for (let n = 2; state.presets.some((x) => x.name === name); n++) name = `${p.name} ${n}`;
+  selectedPreset = id;
+  savePresets([...state.presets, { ...p, id, name, shortcut: null }]);
+  toast(`Added the “${name}” preset`);
 }
 
 function addPreset(t) {

@@ -89,6 +89,25 @@ pub fn check_settings_file(text: String) -> Result<ImportSummary, String> {
     })
 }
 
+/// Saves one preset to Downloads as a file to share. Returns the path.
+#[tauri::command]
+pub fn export_preset(preset: splashdown_config::Preset) -> Result<String, String> {
+    let text = splashdown_config::preset_to_file(&preset)?;
+    let name: String = preset
+        .name
+        .chars()
+        .filter(|c| c.is_alphanumeric() || matches!(c, ' ' | '-' | '_'))
+        .collect();
+    save_to_downloads(&format!("Splashdown preset {}", name.trim()), "toml", &text)
+}
+
+/// Reads a shared preset file (from the Settings window's file input).
+/// The page gives it an id and adds it.
+#[tauri::command]
+pub fn read_preset_file(text: String) -> Result<splashdown_config::Preset, String> {
+    splashdown_config::preset_from_file(&text)
+}
+
 /// What importing words from another app's file would add.
 #[derive(Serialize)]
 pub struct WordsImport {

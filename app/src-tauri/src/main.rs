@@ -129,6 +129,8 @@ fn main() {
             export::check_settings_file,
             export::import_settings,
             export::import_words,
+            export::export_preset,
+            export::read_preset_file,
             ask::ask_state,
             ask::ask_insert,
             ask::ask_copy,
