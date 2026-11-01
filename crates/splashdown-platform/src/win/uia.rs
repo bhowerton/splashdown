@@ -3,6 +3,10 @@
 
 use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
 use windows::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HWND, LPARAM};
+use windows::Win32::Graphics::Gdi::{
+    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, CreateCompatibleDC, DIB_RGB_COLORS, DeleteDC,
+    DeleteObject, GetDIBits,
+};
 use windows::Win32::Storage::FileSystem::{
     GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
 };
@@ -23,8 +27,9 @@ use windows::Win32::UI::Accessibility::{
     UIA_TextPatternId, UIA_ValuePatternId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    EnumWindows, GetForegroundWindow, GetWindowTextW, GetWindowThreadProcessId, IsIconic,
-    IsWindowVisible, SW_RESTORE, SetForegroundWindow, ShowWindow,
+    DestroyIcon, EnumWindows, GetForegroundWindow, GetIconInfo, GetWindowTextW,
+    GetWindowThreadProcessId, HICON, ICONINFO, IsIconic, IsWindowVisible, PrivateExtractIconsW,
+    SW_RESTORE, SetForegroundWindow, ShowWindow,
 };
 use windows::core::{BOOL, Interface, PCWSTR, PWSTR};
 
@@ -769,8 +774,93 @@ pub(crate) fn app_display(app_id: &str) -> Option<crate::AppDisplay> {
         .or_else(|| running_exe(app_id))?;
     Some(crate::AppDisplay {
         name: file_description(&path)?,
-        icon_png: None,
+        icon_png: icon_png(&path),
     })
+}
+
+/// Pixels per side of an app icon in Settings: sharp on high-DPI screens.
+const ICON_PX: i32 = 64;
+
+/// The executable's own icon as a PNG.
+fn icon_png(exe: &str) -> Option<Vec<u8>> {
+    let mut name = [0u16; 260];
+    let wide: Vec<u16> = exe.encode_utf16().collect();
+    name.get_mut(..wide.len())?.copy_from_slice(&wide);
+    if wide.len() == name.len() {
+        return None;
+    }
+    let mut icon = [HICON::default()];
+    // SAFETY: `name` is a NUL-terminated path; one handle is written into
+    // `icon`, destroyed below.
+    let found =
+        unsafe { PrivateExtractIconsW(&name, 0, ICON_PX, ICON_PX, Some(&mut icon), None, 0) };
+    if found == 0 || found == u32::MAX || icon[0].is_invalid() {
+        return None;
+    }
+    let pixels = icon_pixels(icon[0]);
+    // SAFETY: extracted above, not used after this.
+    let _ = unsafe { DestroyIcon(icon[0]) };
+    encode_png(&pixels?, ICON_PX as u32)
+}
+
+/// An icon's pixels, RGBA, top row first.
+fn icon_pixels(icon: HICON) -> Option<Vec<u8>> {
+    let mut info = ICONINFO::default();
+    // SAFETY: `info` is writable; the bitmaps it gets are deleted below.
+    unsafe { GetIconInfo(icon, &mut info) }.ok()?;
+    let mut pixels = vec![0u8; (ICON_PX * ICON_PX * 4) as usize];
+    let mut bmi = BITMAPINFO {
+        bmiHeader: BITMAPINFOHEADER {
+            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
+            biWidth: ICON_PX,
+            // Negative: top row first.
+            biHeight: -ICON_PX,
+            biPlanes: 1,
+            biBitCount: 32,
+            biCompression: BI_RGB.0,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    // SAFETY: a memory DC for the copy, deleted right after; `pixels`
+    // holds the 32-bit rows `bmi` describes.
+    let lines = unsafe {
+        let dc = CreateCompatibleDC(None);
+        let lines = GetDIBits(
+            dc,
+            info.hbmColor,
+            0,
+            ICON_PX as u32,
+            Some(pixels.as_mut_ptr().cast()),
+            &mut bmi,
+            DIB_RGB_COLORS,
+        );
+        let _ = DeleteDC(dc);
+        let _ = DeleteObject(info.hbmColor.into());
+        let _ = DeleteObject(info.hbmMask.into());
+        lines
+    };
+    if lines != ICON_PX {
+        return None;
+    }
+    // BGRA to RGBA; an icon with no alpha at all is opaque.
+    let has_alpha = pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0);
+    for p in pixels.as_chunks_mut::<4>().0 {
+        p.swap(0, 2);
+        if !has_alpha {
+            p[3] = 255;
+        }
+    }
+    Some(pixels)
+}
+
+fn encode_png(rgba: &[u8], side: u32) -> Option<Vec<u8>> {
+    let mut out = Vec::new();
+    let mut encoder = png::Encoder::new(&mut out, side, side);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header().ok()?.write_image_data(rgba).ok()?;
+    Some(out)
 }
 
 /// The full path of a running app with this executable name, found through

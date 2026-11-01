@@ -4164,6 +4164,7 @@ dependencies = [
  "objc2-av-foundation",
  "objc2-core-foundation",
  "objc2-foundation",
+ "png",
  "splashdown-core",
  "thiserror 2.0.21",
  "tracing",
