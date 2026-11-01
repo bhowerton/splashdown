@@ -49,6 +49,10 @@ pub struct Entry {
     /// The preset used (entries from before presets have none).
     #[serde(default)]
     pub preset: Option<String>,
+    /// Pinned: listed first, and never deleted by "Delete after" or the
+    /// 300-entry limit (only by hand).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pinned: bool,
 }
 
 impl Entry {
@@ -135,7 +139,7 @@ impl History {
         let cutoff = now.saturating_sub(u64::from(days) * DAY_MS);
         let before = entries.len();
         entries.retain(|e| {
-            let keep = e.at >= cutoff;
+            let keep = e.pinned || e.at >= cutoff;
             if !keep {
                 self.remove_audio(e.at);
             }
@@ -200,10 +204,18 @@ impl History {
         let mut entries = self.lock();
         entries.push(entry.clone());
         let expired = self.drop_expired(&mut entries, entry.at);
-        let excess = entries.len().saturating_sub(MAX_ENTRIES);
-        for old in entries.drain(..excess) {
-            self.remove_audio(old.at);
-        }
+        // The oldest unpinned entries make way.
+        let mut excess = entries.len().saturating_sub(MAX_ENTRIES);
+        let dropped = excess;
+        entries.retain(|e| {
+            if excess == 0 || e.pinned {
+                return true;
+            }
+            excess -= 1;
+            self.remove_audio(e.at);
+            false
+        });
+        let excess = dropped - excess;
         let result = if expired + excess > 0 {
             rewrite(&self.path, &entries)
         } else {
@@ -221,15 +233,17 @@ impl History {
             .clone()
     }
 
-    /// Newest first, optionally filtered by a case-insensitive search.
-    /// Expired entries are deleted first, so an app left running for days
-    /// doesn't show them.
+    /// Pinned entries first, then newest first, optionally filtered by a
+    /// case-insensitive search. Expired entries are deleted first, so an
+    /// app left running for days doesn't show them.
     pub fn list(&self, query: &str) -> Vec<Entry> {
         self.expire(Entry::now_ms());
         let q = query.trim().to_lowercase();
-        self.lock()
-            .iter()
-            .rev()
+        let entries = self.lock();
+        let pinned = entries.iter().rev().filter(|e| e.pinned);
+        let rest = entries.iter().rev().filter(|e| !e.pinned);
+        pinned
+            .chain(rest)
             .filter(|e| {
                 q.is_empty()
                     || e.text.to_lowercase().contains(&q)
@@ -240,6 +254,15 @@ impl History {
             })
             .cloned()
             .collect()
+    }
+
+    /// Pins or unpins an entry.
+    pub fn pin(&self, at: u64, pinned: bool) -> std::io::Result<()> {
+        let mut entries = self.lock();
+        if let Some(entry) = entries.iter_mut().find(|e| e.at == at) {
+            entry.pinned = pinned;
+        }
+        rewrite(&self.path, &entries)
     }
 
     pub fn delete(&self, at: u64) -> std::io::Result<()> {
@@ -499,6 +522,7 @@ mod tests {
             cost_usd: None,
             audio: false,
             preset: None,
+            pinned: false,
         }
     }
 
@@ -622,6 +646,38 @@ mod tests {
         let all = reopened.list("");
         assert_eq!(all.len(), MAX_ENTRIES);
         assert_eq!(all.last().unwrap().at, 5, "oldest entries dropped");
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn pinned_entries_come_first_and_stay() {
+        let path = temp_path("pin");
+        let h = History::open(path.clone());
+        h.add(entry(1, "keep me"));
+        h.pin(1, true).unwrap();
+        for i in 2..(MAX_ENTRIES as u64 + 10) {
+            h.add(entry(i, "x"));
+        }
+        let reopened = History::open(path.clone());
+        let all = reopened.list("");
+        assert_eq!(all.len(), MAX_ENTRIES);
+        assert_eq!(
+            (all[0].at, all[0].pinned),
+            (1, true),
+            "pinned first, and kept"
+        );
+        assert_eq!(all[1].at, MAX_ENTRIES as u64 + 9, "then newest first");
+
+        // Old enough to expire, but pinned.
+        reopened.set_keep_days(Some(1));
+        let now = Entry::now_ms();
+        reopened.add(entry(now, "today"));
+        let left: Vec<u64> = reopened.list("").iter().map(|e| e.at).collect();
+        assert_eq!(left, [1, now]);
+
+        reopened.pin(1, false).unwrap();
+        reopened.set_keep_days(Some(1));
+        assert_eq!(reopened.list("").len(), 1);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

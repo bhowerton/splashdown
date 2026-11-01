@@ -856,6 +856,11 @@ pub fn delete_history(at: u64, state: State<'_, AppState>) -> Result<(), String>
 }
 
 #[tauri::command]
+pub fn pin_history(at: u64, pinned: bool, state: State<'_, AppState>) -> Result<(), String> {
+    state.history.pin(at, pinned).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
     state.history.clear().map_err(|e| e.to_string())
 }

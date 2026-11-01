@@ -1494,6 +1494,7 @@ impl Controller {
             cost_usd: (outcome.usage.cost_usd > 0.0).then_some(outcome.usage.cost_usd),
             audio: false,
             preset: Some(preset.name.clone()),
+            pinned: false,
         };
         if engine.keep_history {
             // Kept only for a note, the recording stays out of History.

@@ -33,6 +33,13 @@ function historyRow(e) {
   mode.textContent = MODE_LABEL[e.mode] ?? e.mode;
   const cost = e.cost_usd ? ` · ${money(e.cost_usd)}` : "";
   meta.append(app, mode, document.createTextNode(`${when} · ${(e.millis / 1000).toFixed(1)} s${cost}`));
+  if (e.pinned) {
+    const pin = document.createElement("span");
+    pin.className = "badge ok";
+    pin.textContent = "pinned";
+    pin.title = "Kept until you delete it";
+    meta.append(pin);
+  }
   if (e.note) {
     const note = document.createElement("span");
     note.className = "badge warn";
@@ -106,6 +113,10 @@ function historyRow(e) {
         toast(String(err), true);
       }
     }),
+    button(e.pinned ? "Unpin" : "Pin", async () => {
+      await invoke("pin_history", { at: e.at, pinned: !e.pinned }).catch((err) => toast(String(err), true));
+      loadHistory();
+    }),
     button("Delete", async () => {
       await invoke("delete_history", { at: e.at }).catch((err) => toast(String(err), true));
       loadHistory();
@@ -162,7 +173,7 @@ $("hist-search").addEventListener("input", () => {
 $("hist-clear").addEventListener("click", async () => {
   const sure = await askConfirm("Delete all dictation history?", {
     action: "Delete all",
-    detail: "Every saved dictation and recording on this computer is removed. This can't be undone.",
+    detail: "Every saved dictation and recording on this computer is removed, pinned ones too. This can't be undone.",
   });
   if (!sure) return;
   await invoke("clear_history").catch((e) => toast(String(e), true));

@@ -77,6 +77,7 @@ fn main() {
             commands::delete_history,
             commands::retranscribe_history,
             commands::clear_history,
+            commands::pin_history,
             commands::try_preset,
             commands::get_insights,
             commands::clear_insights,
