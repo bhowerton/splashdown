@@ -103,7 +103,7 @@ pub(crate) fn app_display(_app_id: &str) -> Option<crate::AppDisplay> {
     None
 }
 
-pub(crate) fn frontmost_app() -> Option<(i32, String)> {
+pub(crate) fn frontmost_app() -> Option<(i32, String, String)> {
     None
 }
 

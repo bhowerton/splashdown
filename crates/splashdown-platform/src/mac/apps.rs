@@ -11,14 +11,17 @@ use objc2_foundation::{NSDictionary, NSFileManager, NSPoint, NSRect, NSSize, NSS
 
 use crate::{AppDisplay, PlatformError, Result};
 
-pub(crate) fn frontmost_app() -> Option<(i32, String)> {
+pub(crate) fn frontmost_app() -> Option<(i32, String, String)> {
     let front = NSWorkspace::sharedWorkspace().frontmostApplication()?;
-    let name = front
-        .localizedName()
-        .or_else(|| front.bundleIdentifier())
+    let id = front
+        .bundleIdentifier()
         .map(|s| s.to_string())
         .unwrap_or_default();
-    Some((front.processIdentifier(), name))
+    let name = front
+        .localizedName()
+        .map(|s| s.to_string())
+        .unwrap_or_else(|| id.clone());
+    Some((front.processIdentifier(), name, id))
 }
 
 pub(crate) fn activate_app(pid: i32) -> Result<()> {

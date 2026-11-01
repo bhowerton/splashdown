@@ -171,6 +171,7 @@ fn main() {
             // A meeting the app closed on: offer to finish its note.
             meeting::recover(app.handle());
             calls::watch(app.handle());
+            notes::watch_front_app(app.handle());
             history.set_keep_days(settings.general.history_days());
             let onboarded = settings.general.onboarded;
             let built = engine::build(&settings);

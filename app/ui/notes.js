@@ -247,12 +247,13 @@ function updateHeader() {
   $("nt-meeting-item").textContent = meeting ? "Stop the meeting" : "Record a meeting";
   const empty = text.trim() === "";
   $("nt-copy").disabled = empty;
+  // Only when there's an app to send to: the last one you used that takes
+  // text (not Finder, not Splashdown).
   const send = $("nt-send");
-  send.textContent = sendTarget ? `Send to ${sendTarget}` : "Send";
-  send.disabled = empty || !sendTarget;
-  send.title = sendTarget
-    ? `Paste the note into ${sendTarget} (${isMac ? "⌘" : "Ctrl+"}Return)`
-    : "Open Notes from another app to send the note there";
+  send.hidden = !sendTarget;
+  send.textContent = `Send to ${sendTarget}`;
+  send.disabled = empty;
+  send.title = `Paste the note into ${sendTarget} (${isMac ? "⌘" : "Ctrl+"}Return)`;
 }
 
 function focusNote() {
@@ -797,6 +798,12 @@ $("nt-rename-cancel").addEventListener("click", endRename);
 $("nt-history-back").addEventListener("click", () => showHistory(false));
 $("nt-folder").addEventListener("click", () => invoke("notes_reveal", { path: null }).catch((e) => toast(String(e), true)));
 $("nt-reveal").textContent = isMac ? "Show in Finder" : "Show in File Explorer";
+
+// You used another app while Notes stayed open: Send goes there now.
+listen("notes-send-target", (event) => {
+  sendTarget = event.payload ?? null;
+  updateHeader();
+});
 
 // Shown again (⌃⌥N or the menu bar), maybe from a different app.
 listen("notes-shown", (event) => {

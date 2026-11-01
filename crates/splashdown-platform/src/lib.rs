@@ -470,9 +470,10 @@ pub fn app_display(app_id: &str) -> Option<AppDisplay> {
     imp::app_display(app_id)
 }
 
-/// The app in front: its process id and name. Doesn't ask Accessibility,
-/// so it's cheap and safe on the main thread, even when we are in front.
-pub fn frontmost_app() -> Option<(i32, String)> {
+/// The app in front: its process id, name, and id (bundle ID on macOS,
+/// executable name on Windows). Doesn't ask Accessibility, so it's cheap
+/// and safe on the main thread, even when we are in front.
+pub fn frontmost_app() -> Option<(i32, String, String)> {
     imp::frontmost_app()
 }
 

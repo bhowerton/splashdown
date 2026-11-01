@@ -30,6 +30,8 @@ pub const ACCELERATOR: &str = "Ctrl+Alt+N";
 /// App event telling the page it was shown again, with the app "Send to"
 /// would paste into (or null).
 const SHOWN: &str = "notes-shown";
+/// App event with a new app for "Send to" (you used another app).
+const TARGET: &str = "notes-send-target";
 /// App event asking the page to run a transform (its shortcut was pressed
 /// while Notes had focus), with the transform's id.
 pub const RUN_TRANSFORM: &str = "notes-run-transform";
@@ -684,13 +686,63 @@ fn target_lock() -> std::sync::MutexGuard<'static, Option<(i32, String)>> {
     target().lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Remembers the app in front, unless it's us (Settings, or Notes itself):
-/// then the previous one stays.
-fn remember_front_app() {
-    if let Some((pid, name)) = splashdown_platform::frontmost_app()
-        && u32::try_from(pid).ok() != Some(std::process::id())
+/// Apps that take no text, so Send never goes to them: the file manager,
+/// the system's settings, the desktop and the like (bundle IDs on macOS,
+/// executable names on Windows).
+const NO_TEXT: &[&str] = &[
+    "com.apple.finder",
+    "com.apple.systempreferences",
+    "com.apple.dock",
+    "com.apple.loginwindow",
+    "com.apple.controlcenter",
+    "com.apple.notificationcenterui",
+    "com.apple.Spotlight",
+    "explorer.exe",
+    "SystemSettings.exe",
+    "SearchHost.exe",
+    "StartMenuExperienceHost.exe",
+    "ShellExperienceHost.exe",
+    "LockApp.exe",
+];
+
+/// Remembers the app in front as where Send goes, unless it's us
+/// (Settings, Notes, Ask) or takes no text: then the one before stays.
+/// Returns whether it changed.
+fn remember_front_app() -> bool {
+    let Some((pid, name, id)) = splashdown_platform::frontmost_app() else {
+        return false;
+    };
+    if u32::try_from(pid).ok() == Some(std::process::id())
+        || NO_TEXT.iter().any(|n| n.eq_ignore_ascii_case(&id))
     {
-        *target_lock() = Some((pid, name));
+        return false;
+    }
+    let mut target = target_lock();
+    let changed = target.as_ref().is_none_or(|(p, _)| *p != pid);
+    *target = Some((pid, name));
+    changed
+}
+
+/// Keeps track of the last app used, so Send goes where you just were even
+/// when Notes stayed open while you worked elsewhere. Twice a second; it's
+/// only asking which app is in front.
+pub fn watch_front_app(app: &AppHandle) {
+    let app = app.clone();
+    let spawned = std::thread::Builder::new()
+        .name("front-app".into())
+        .spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_millis(500));
+                if remember_front_app()
+                    && let Some(window) = app.get_webview_window(WINDOW)
+                    && window.is_visible().unwrap_or(false)
+                {
+                    let _ = app.emit_to(WINDOW, TARGET, target_name());
+                }
+            }
+        });
+    if let Err(e) = spawned {
+        tracing::warn!("couldn't follow the app in front: {e}");
     }
 }
 
@@ -814,7 +866,7 @@ pub(crate) fn paste_into(pid: i32, text: &str) -> Result<(), String> {
 fn wait_for_front(pid: i32) -> Result<(), String> {
     let start = Instant::now();
     while start.elapsed() < ACTIVATE_TIMEOUT {
-        if splashdown_platform::frontmost_app().is_some_and(|(p, _)| p == pid) {
+        if splashdown_platform::frontmost_app().is_some_and(|(p, _, _)| p == pid) {
             return Ok(());
         }
         std::thread::sleep(Duration::from_millis(30));

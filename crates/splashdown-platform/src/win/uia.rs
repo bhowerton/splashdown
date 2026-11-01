@@ -318,14 +318,19 @@ fn looks_like_url(s: &str) -> bool {
 }
 
 /// The foreground window's app, named like `capture_focus` names it.
-pub(crate) fn frontmost_app() -> Option<(i32, String)> {
+pub(crate) fn frontmost_app() -> Option<(i32, String, String)> {
     // SAFETY: takes no arguments; may return a null window.
     let window = unsafe { GetForegroundWindow() };
     if window.is_invalid() {
         return None;
     }
     let pid = window_pid(window)?;
-    let name = exe_path(pid)
+    let path = exe_path(pid);
+    let id = path
+        .as_deref()
+        .map(|p| file_name(p).to_string())
+        .unwrap_or_default();
+    let name = path
         .map(|path| {
             file_description(&path).unwrap_or_else(|| {
                 let file = file_name(&path);
@@ -333,7 +338,7 @@ pub(crate) fn frontmost_app() -> Option<(i32, String)> {
             })
         })
         .unwrap_or_default();
-    Some((pid as i32, name))
+    Some((pid as i32, name, id))
 }
 
 /// Brings the app's frontmost visible window forward. Windows allows this
