@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.2.0 — 2026-11-01
 
 - **A redesigned Notes window.** Record a meeting, Transcribe (a file or a link) and Ask sit in the toolbar instead of a menu, and ⌘K finds any note or anything the window can do. Notes show their formatting as you write: headings, bullets, and checkboxes you can click, while the file stays plain Markdown. The list shows what each note is (a meeting, a transcript, a dictation) and filters to pinned notes, meetings or transcripts; each note's ⋯ (or a right-click) pins, renames, shows or trashes it. A new, empty note shows the ways to fill it, and pasting a link into one offers to transcribe it. **Paste into {app}** (⌘↩) replaces Send to, and follows whichever app you used last. Notes is now an ordinary window; ⋯ → Keep on top floats it over other apps, as the scratchpad did.
 - **Folders and tags in Notes.** A column beside the list has All notes, Pinned, Meetings & recordings and Transcripts, then your folders, nested as deep as you like, and your tags. Folders are real folders in your notes folder (Obsidian and Finder see the same ones): create, rename, nest and trash them from their ⋯ menu, and move a note by dragging it onto a folder or with Move to…. A new note goes into the folder you're looking at. Tags work the way Obsidian's do: write `#tag` anywhere in a note, or add one above it, nested with `/` (`#work/acme`); the tags column shows them as a tree with counts, and ⌘-click on a tag in a note shows its notes. ⌘K finds folders and tags too, and ⌘⇧E shows or hides the column.
