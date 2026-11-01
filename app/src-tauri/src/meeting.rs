@@ -1309,6 +1309,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs eval/audio (splashdown-cli eval make-audio, on a Mac)"]
     fn a_call_becomes_turns_in_the_note() {
         let root = std::env::temp_dir().join(format!("splashdown-meeting-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);

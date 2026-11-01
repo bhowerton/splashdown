@@ -228,6 +228,9 @@ enum WordsCommand {
     },
 }
 
+// `record`'s paths are bigger on Windows, which is all that sets the
+// variants apart; it's parsed once.
+#[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum MeetingCommand {
     /// Start recording a meeting in the running app.
