@@ -294,7 +294,7 @@ impl Cutter {
         } else {
             let window = AudioClip::new(self.buffer[..max].to_vec(), TARGET_SAMPLE_RATE);
             let from = MIN_PIECE.as_secs() as usize * rate;
-            vad::find_pause(&window, from, MIN_PAUSE_MS, 0)
+            vad::find_cut(&window, from, MIN_PAUSE_MS)
                 .filter(|&cut| cut > 0)
                 .unwrap_or(max)
         };
@@ -344,7 +344,7 @@ impl Cutter {
             _ if self.buffer.len() >= max => {
                 let window = AudioClip::new(self.buffer[lead..max].to_vec(), TARGET_SAMPLE_RATE);
                 let from = MIN_PIECE.as_secs() as usize * rate / 2;
-                lead + vad::find_pause(&window, from, MIN_PAUSE_MS, 0)
+                lead + vad::find_cut(&window, from, MIN_PAUSE_MS)
                     .filter(|&cut| cut > 0)
                     .unwrap_or(max - lead)
             }

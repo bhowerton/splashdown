@@ -35,6 +35,7 @@ impl Silero {
             std::fs::write(&tmp, WEIGHTS).map_err(|e| e.to_string())?;
             std::fs::rename(&tmp, &path).map_err(|e| e.to_string())?;
         }
+        transcribe_cpp::disable_logging();
         // It's tiny: the CPU is quickest, and keeps the GPU for speech.
         let options = ModelOptions {
             backend: Backend::Cpu,

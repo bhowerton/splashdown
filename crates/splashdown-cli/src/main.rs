@@ -333,9 +333,6 @@ fn main() -> std::process::ExitCode {
 
 fn run() -> Result<()> {
     let cli = Cli::parse();
-    if let Ok(paths) = opts::paths() {
-        splashdown_providers::factory::use_speech_detector(&paths.models_dir);
-    }
     // Remote control: no keys, models or runtime needed.
     let request = match &cli.command {
         Command::Toggle => Some(Request::Toggle),
@@ -396,6 +393,8 @@ fn run() -> Result<()> {
     // Settings and models saved under the app's former name.
     if let Some(paths) = splashdown_config::Paths::resolve() {
         paths.migrate_legacy();
+        // The commands from here on may work with audio.
+        splashdown_providers::factory::use_speech_detector(&paths.models_dir);
     }
     let rt = tokio::runtime::Runtime::new()?;
 

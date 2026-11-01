@@ -19,6 +19,7 @@ chrono.workspace = true
 directories.workspace = true
 reqwest.workspace = true
 unicode-segmentation = "1"
+tokio = { workspace = true, features = ["time"] }
 dotenvy.workspace = true
 hound.workspace = true
 regex = "1"

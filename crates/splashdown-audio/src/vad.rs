@@ -158,17 +158,32 @@ fn speech_span(voicing: &Voicing, clip: &AudioClip) -> Option<(usize, usize)> {
 /// The latest pause of at least `min_pause_ms` that starts at or after
 /// sample `from` and ends before the last `guard_ms` of the clip. Returns
 /// the sample index in the middle of the pause, a safe place to split
-/// speech. `None` if there's no such pause (or no speech before it).
-///
-/// The speech detector bridges short gaps, so in fast, continuous speech
-/// it may find no pause that long; then the longest gap between words
-/// (at least `MIN_GAP_MS`) is used, which is still better than cutting
-/// through a word.
+/// speech. `None` if there's no such pause (or no speech before it): wait
+/// for more audio.
 pub fn find_pause(
     clip: &AudioClip,
     from: usize,
     min_pause_ms: u32,
     guard_ms: u32,
+) -> Option<usize> {
+    pause(clip, from, min_pause_ms, guard_ms, false)
+}
+
+/// `find_pause` for audio that must be cut now (it has reached its
+/// longest): the speech detector bridges short gaps, so in fast,
+/// continuous speech there may be no pause that long; then the longest
+/// gap between words (at least `MIN_GAP_MS`) is used, which is still
+/// better than cutting through a word.
+pub fn find_cut(clip: &AudioClip, from: usize, min_pause_ms: u32) -> Option<usize> {
+    pause(clip, from, min_pause_ms, 0, true)
+}
+
+fn pause(
+    clip: &AudioClip,
+    from: usize,
+    min_pause_ms: u32,
+    guard_ms: u32,
+    any_gap: bool,
 ) -> Option<usize> {
     let voicing = voicing(clip);
     // Only split after some speech, or there's nothing to transcribe.
@@ -181,7 +196,7 @@ pub fn find_pause(
     let last = voicing
         .voiced
         .len()
-        .saturating_sub(guard_ms as usize * clip.sample_rate as usize / 1000 / frame);
+        .saturating_sub((guard_ms as usize * clip.sample_rate as usize / 1000).div_ceil(frame));
     let mut best = None;
     let mut run_start = None;
     for (i, &voiced) in voicing.voiced.iter().enumerate().take(last).skip(first) {
@@ -195,6 +210,7 @@ pub fn find_pause(
         }
     }
     if best.is_none()
+        && any_gap
         && let Some(probabilities) = &voicing.probabilities
     {
         best = longest_gap(
@@ -244,8 +260,9 @@ const MIN_VOICE_FRAMES: usize = 6;
 /// you.").
 pub fn has_voice(clip: &AudioClip) -> bool {
     debug_assert_eq!(clip.sample_rate, crate::TARGET_SAMPLE_RATE);
-    if detector().is_some() {
-        let voicing = voicing(clip);
+    // Without the detector (or if it failed on this clip), the small
+    // fallback detector below, never loudness.
+    if let Some(voicing) = by_detector(clip) {
         let needed = voicing.frames(MIN_SPEECH_MS, clip.sample_rate);
         return voicing.voiced.iter().filter(|&&v| v).count() >= needed;
     }

@@ -67,6 +67,18 @@ struct Item {
     link: Option<Link>,
 }
 
+/// A downloaded link is deleted, with the folder it was downloaded into,
+/// once it's transcribed, or dropped from the queue by Stop.
+impl Drop for Item {
+    fn drop(&mut self) {
+        if self.link.is_some()
+            && let Some(dir) = self.path.parent()
+        {
+            let _ = std::fs::remove_dir_all(dir);
+        }
+    }
+}
+
 struct Link {
     url: String,
     /// The page's title, when the downloader reports one.
@@ -208,9 +220,7 @@ fn work(app: AppHandle) {
             ),
             Err(e) => tell(&app, format!("Couldn't transcribe {name}: {e}"), true),
         }
-        if item.link.is_some() {
-            let _ = std::fs::remove_file(path);
-        }
+        // (A link's download goes when `item` does.)
     }
 }
 
@@ -426,7 +436,12 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("That isn't a web link (it should start with https://).".into());
     }
-    let dir = std::env::temp_dir().join("splashdown-links");
+    // A folder of its own, so two downloads never share a file.
+    static DOWNLOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+    let n = DOWNLOADS.fetch_add(1, Ordering::Relaxed);
+    let dir = std::env::temp_dir()
+        .join("splashdown-links")
+        .join(format!("{}-{n}", std::process::id()));
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     tell(&app, "Downloading…".into(), false);
     let direct = url_extension(&url).is_some_and(|ext| EXTENSIONS.contains(&ext.as_str()));
@@ -435,12 +450,40 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
             let (url, dir) = (url.clone(), dir.clone());
             tauri::async_runtime::spawn_blocking(move || download_page(&program, &url, &dir))
                 .await
-                .map_err(|e| e.to_string())??
+                .map_err(|e| e.to_string())
+                .and_then(|r| r)
         }
-        None => download_file(&url, &dir).await?,
+        None => download_file(&url, &dir).await,
     };
-    add_items(&app, vec![item]);
-    Ok(())
+    match item {
+        Ok(item) => {
+            add_items(&app, vec![item]);
+            Ok(())
+        }
+        Err(e) => {
+            let _ = std::fs::remove_dir_all(&dir);
+            Err(e)
+        }
+    }
+}
+
+/// How long a download may wait for the next piece.
+const DOWNLOAD_IDLE: Duration = Duration::from_secs(60);
+
+/// A file extension for a download of this content type, from those the
+/// decoder reads ("audio/mpeg" is "mp3").
+fn extension_for(kind: &str) -> &'static str {
+    let subtype = kind.split(['/', ';']).nth(1).unwrap_or("").trim();
+    match subtype {
+        "mpeg" | "mp3" => "mp3",
+        "mp4" | "x-m4a" | "m4a" | "aac" => "m4a",
+        "wav" | "x-wav" | "wave" => "wav",
+        "flac" | "x-flac" => "flac",
+        "ogg" => "ogg",
+        "webm" => "webm",
+        "quicktime" => "mov",
+        _ => "bin",
+    }
 }
 
 /// The extension of the link's file name, lowercased.
@@ -453,7 +496,13 @@ fn url_extension(url: &str) -> Option<String> {
 
 /// Downloads a link that is itself an audio or video file.
 async fn download_file(url: &str, dir: &Path) -> Result<Item, String> {
-    let resp = reqwest::get(url)
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(15))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let resp = client
+        .get(url)
+        .send()
         .await
         .and_then(reqwest::Response::error_for_status)
         .map_err(|e| format!("Couldn't download it: {e}"))?;
@@ -477,39 +526,32 @@ async fn download_file(url: &str, dir: &Path) -> Result<Item, String> {
     if resp.content_length().is_some_and(|n| n > MAX_DOWNLOAD) {
         return Err("That file is over 2 GB.".into());
     }
-    let name = url
+    // The link's own name is only the note's title; the file gets a fixed
+    // one, so nothing in the link (or the server's reply) picks the path.
+    let title = url
         .split(['?', '#'])
         .next()
         .and_then(|p| p.rsplit('/').next())
+        .map(|n| n.rsplit_once('.').map_or(n, |(stem, _)| stem))
         .filter(|n| !n.is_empty())
-        .unwrap_or("download");
-    let name: String = name
-        .chars()
-        .map(|c| {
-            if c.is_alphanumeric() || matches!(c, '.' | '-' | '_') {
-                c
-            } else {
-                '_'
-            }
-        })
-        .collect();
-    let name = match ext {
-        Some(_) => name,
-        // Symphonia goes by the content, but give it a hint.
-        None => format!("{name}.{}", kind.split(['/', ';']).nth(1).unwrap_or("bin")),
-    };
-    let path = dir.join(name);
+        .map(str::to_string);
+    let path = dir.join(format!(
+        "download.{}",
+        ext.as_deref()
+            .and_then(|e| EXTENSIONS.iter().find(|x| **x == e))
+            .copied()
+            .unwrap_or_else(|| extension_for(&kind))
+    ));
     let mut out = std::fs::File::create(&path).map_err(|e| e.to_string())?;
     let mut resp = resp;
     let mut written = 0u64;
-    while let Some(chunk) = resp
-        .chunk()
+    while let Some(chunk) = tokio::time::timeout(DOWNLOAD_IDLE, resp.chunk())
         .await
+        .map_err(|_| "The download stopped coming.".to_string())?
         .map_err(|e| format!("The download stopped: {e}"))?
     {
         written += chunk.len() as u64;
         if written > MAX_DOWNLOAD {
-            let _ = std::fs::remove_file(&path);
             return Err("That file is over 2 GB.".into());
         }
         std::io::Write::write_all(&mut out, &chunk).map_err(|e| e.to_string())?;
@@ -518,7 +560,7 @@ async fn download_file(url: &str, dir: &Path) -> Result<Item, String> {
         path,
         link: Some(Link {
             url: url.to_string(),
-            title: None,
+            title,
         }),
     })
 }
@@ -529,9 +571,15 @@ fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> 
         // `--print` would otherwise skip the download.
         .args([
             "--no-playlist",
+            "--playlist-items",
+            "1",
+            "--match-filter",
+            "!is_live",
             "--no-progress",
             "--no-warnings",
             "--no-simulate",
+            "--encoding",
+            "utf-8",
         ])
         // AAC first: the decoder can't read Opus, YouTube's other audio.
         .args([
@@ -539,7 +587,8 @@ fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> 
             "bestaudio[ext=m4a]/bestaudio[acodec^=mp4a]/best[ext=mp4]/bestaudio/best",
         ])
         .arg("-o")
-        .arg(dir.join("%(title).100B [%(id)s].%(ext)s"))
+        // A plain name: the title comes separately (`--print title`).
+        .arg(dir.join("%(id)s.%(ext)s"))
         .args(["--print", "after_move:filepath", "--print", "title"])
         .args(["--max-filesize", "2G", "--"])
         .arg(url)
@@ -625,6 +674,10 @@ mod tests {
         assert_eq!(ext("https://www.youtube.com/watch?v=abc"), None);
         assert_eq!(ext("https://x.org/"), None);
         assert!(yt_dlp().is_none_or(|p| p.is_file()));
+        // The server's content type never becomes part of a path.
+        assert_eq!(extension_for("audio/mpeg"), "mp3");
+        assert_eq!(extension_for("audio/x-m4a; charset=binary"), "m4a");
+        assert_eq!(extension_for("audio/x\\..\\..\\thesis.docx"), "bin");
     }
 
     #[test]

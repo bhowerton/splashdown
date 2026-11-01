@@ -4043,6 +4043,7 @@ dependencies = [
  "tauri-plugin-dialog",
  "tauri-plugin-global-shortcut",
  "tauri-plugin-updater",
+ "tokio",
  "tracing",
  "tracing-subscriber",
  "trash",
