@@ -189,7 +189,30 @@ function build(view) {
       },
     });
   }
+  // `#tags`, as Obsidian reads them: after a space or at the start, with
+  // something other than digits. A heading's `# ` isn't one.
+  for (const { from, to } of view.visibleRanges) {
+    for (let pos = from; pos <= to; ) {
+      const line = doc.lineAt(pos);
+      for (const m of line.text.matchAll(TAG)) {
+        const start = line.from + m.index + m[1].length;
+        if (!inCode(view.state, start)) all.push(tagMark.range(start, start + 1 + m[2].length));
+      }
+      pos = line.to + 1;
+    }
+  }
   return { all: Decoration.set(all, true), atomic: Decoration.set(atomic, true) };
+}
+
+const TAG = /(^|\s)#([\p{L}\p{N}_\-/]*[\p{L}_\-/][\p{L}\p{N}_\-/]*)/gu;
+const tagMark = Decoration.mark({ class: "cm-hashtag" });
+
+/** Whether `pos` is in inline code or a code block. */
+function inCode(state, pos) {
+  for (let node = syntaxTree(state).resolveInner(pos, 1); node; node = node.parent) {
+    if (/Code/.test(node.name)) return true;
+  }
+  return false;
 }
 
 const preview = ViewPlugin.fromClass(
@@ -289,6 +312,7 @@ const theme = EditorView.theme({
   ".cm-quote": { borderLeft: "3px solid var(--border)", paddingLeft: "12px !important", color: "var(--muted)" },
   ".cm-hr": { borderBottom: "1px solid var(--border)", lineHeight: "0.8" },
   ".cm-link": { color: "var(--accent)" },
+  ".cm-hashtag": { color: "var(--accent)", backgroundColor: "var(--accent-soft)", borderRadius: "4px", padding: "0 2px" },
 });
 
 // ---------------------------------------------------------------- keys
@@ -322,7 +346,8 @@ function wrap(mark) {
 /**
  * Makes an editor in `parent`.
  * options: placeholder, label (its accessible name), onChange(), onSend(),
- * onPaste(text) (true when it handled the paste).
+ * onPaste(text) (true when it handled the paste), onTag(tag) (a #tag was
+ * ⌘-clicked).
  */
 export function create(parent, options = {}) {
   const readOnly = new Compartment();
@@ -357,6 +382,14 @@ export function create(parent, options = {}) {
       if (u.docChanged && !u.transactions.some((t) => t.annotation(fromFile))) options.onChange?.();
     }),
     EditorView.domEventHandlers({
+      // ⌘-click (Ctrl-click) on a #tag shows the notes with it.
+      mousedown(e) {
+        const tag = e.target instanceof Element && e.target.closest(".cm-hashtag");
+        if (!tag || !(e.metaKey || e.ctrlKey) || !options.onTag) return false;
+        e.preventDefault();
+        options.onTag(tag.textContent.replace(/^#/, ""));
+        return true;
+      },
       paste(e) {
         const text = e.clipboardData?.getData("text/plain");
         return !!(text && options.onPaste?.(text));

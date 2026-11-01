@@ -42,7 +42,7 @@ pub struct Status {
     /// The file's name.
     file: String,
     /// The transcript note.
-    note: String,
+    pub(super) note: String,
     /// Seconds of the file transcribed.
     done: f64,
     /// The file's length in seconds, when its header says.

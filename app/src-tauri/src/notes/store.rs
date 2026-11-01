@@ -40,6 +40,9 @@ pub struct Summary {
     /// How it was made, from its front matter: "meeting", "file",
     /// "capture"… ("" when it doesn't say).
     pub source: String,
+    /// Its tags, from its front matter and `#tags` in its text, without
+    /// the `#` (`work/acme`).
+    pub tags: Vec<String>,
 }
 
 /// A note opened in the editor.
@@ -51,6 +54,9 @@ pub struct Note {
     pub modified: u64,
     /// As in `Summary`.
     pub source: String,
+    /// The tags in its front matter, which the page can change (the ones
+    /// in its text are changed by editing it).
+    pub front_tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -197,6 +203,7 @@ impl Store {
         let (front, body) = split_front_matter(text);
         Some(Summary {
             source: front_matter_value(front, "source").unwrap_or_default(),
+            tags: tags_of(front, body),
             title: title_of(body),
             text: body.to_string(),
             modified,
@@ -275,6 +282,7 @@ impl Store {
         let (front, body) = split_front_matter(&text);
         Ok(Note {
             source: front_matter_value(front, "source").unwrap_or_default(),
+            front_tags: front_tags(front),
             path: rel.to_string(),
             body: body.replace("\r\n", "\n"),
             modified: mtime_ms(&std::fs::metadata(&path)?),
@@ -454,16 +462,7 @@ impl Store {
     /// Its versions stay in `.splashdown/`.
     pub fn delete(&self, rel: &str) -> Result<(), String> {
         let path = self.resolve(rel).map_err(|e| e.to_string())?;
-        #[allow(unused_mut)]
-        let mut trash = trash::TrashContext::default();
-        // The default asks Finder through AppleScript, which a signed app
-        // can't do without an Automation permission it doesn't ask for.
-        #[cfg(target_os = "macos")]
-        {
-            use trash::macos::{DeleteMethod, TrashContextExtMacos};
-            trash.set_delete_method(DeleteMethod::NsFileManager);
-        }
-        trash
+        trash_context()
             .delete(&path)
             .map_err(|e| format!("Couldn't move it to the Trash: {e}"))?;
         let mut state = self.state();
@@ -558,6 +557,167 @@ impl Store {
             versions.join(format!("path-{:016x}", fnv1a(old_rel))),
             versions.join(format!("path-{:016x}", fnv1a(new_rel))),
         );
+    }
+
+    // ------------------------------------------------------------ folders and moving
+
+    /// Every subfolder (`Work`, `Work/Acme`), sorted, whether or not it has
+    /// notes yet; hidden folders and `Attachments/` left out.
+    pub fn folders(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        folders_in(&self.root, "", 0, &mut out);
+        out.sort_by_key(|f| f.to_lowercase());
+        out
+    }
+
+    /// The folder `rel` ("" is the notes folder itself), refusing anything
+    /// outside it, hidden, or `Attachments/`.
+    fn folder_path(&self, rel: &str) -> io::Result<PathBuf> {
+        let ok = Path::new(rel).components().all(|c| match c {
+            Component::Normal(name) => !name.to_string_lossy().starts_with('.'),
+            _ => false,
+        }) && rel.split('/').next() != Some(ATTACHMENTS_DIR);
+        if !ok {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "not a notes folder",
+            ));
+        }
+        let full = self.root.join(rel);
+        if let (Ok(real), Ok(root)) = (full.canonicalize(), self.root.canonicalize())
+            && !real.starts_with(&root)
+        {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "outside the notes folder",
+            ));
+        }
+        Ok(full)
+    }
+
+    /// Makes folder `name` in `parent` ("" for the top). Returns its path.
+    pub fn create_folder(&self, parent: &str, name: &str) -> io::Result<String> {
+        let name = folder_name(name)?;
+        let dir = self.folder_path(parent)?;
+        let path = dir.join(&name);
+        if path.exists() {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("There's already a folder called “{name}” there."),
+            ));
+        }
+        std::fs::create_dir_all(&path)?;
+        Ok(self.relative(&path).expect("inside the folder"))
+    }
+
+    /// Moves folder `rel` into `parent` ("" for the top) as `name`, with
+    /// everything in it. Returns its new path.
+    pub fn move_folder(&self, rel: &str, parent: &str, name: &str) -> io::Result<String> {
+        let from = self.folder_path(rel)?;
+        if rel.is_empty() || !from.is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "That folder isn't there.",
+            ));
+        }
+        let name = folder_name(name)?;
+        if parent == rel || parent.starts_with(&format!("{rel}/")) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "A folder can't go inside itself.",
+            ));
+        }
+        let to = self.folder_path(parent)?.join(&name);
+        let same = to.to_string_lossy().to_lowercase() == from.to_string_lossy().to_lowercase();
+        if to.exists() && !same {
+            return Err(io::Error::new(
+                io::ErrorKind::AlreadyExists,
+                format!("There's already a folder called “{name}” there."),
+            ));
+        }
+        if to == from {
+            return Ok(rel.to_string());
+        }
+        std::fs::rename(&from, &to)?;
+        let new_rel = self.relative(&to).expect("inside the folder");
+        // Pins, the last note and versions kept by path follow the notes.
+        let mut moved = Vec::new();
+        walk(&to, 1, &mut moved);
+        for path in moved {
+            if let Some(now) = self.relative(&path) {
+                let before = format!("{rel}{}", &now[new_rel.len()..]);
+                self.move_versions(&before, &now, &path);
+            }
+        }
+        self.remap(rel, &new_rel, true);
+        Ok(new_rel)
+    }
+
+    /// Moves folder `rel`, with its notes, to the Trash.
+    pub fn delete_folder(&self, rel: &str) -> Result<(), String> {
+        let path = self.folder_path(rel).map_err(|e| e.to_string())?;
+        if rel.is_empty() || !path.is_dir() {
+            return Err("That folder isn't there.".into());
+        }
+        trash_context()
+            .delete(&path)
+            .map_err(|e| format!("Couldn't move it to the Trash: {e}"))?;
+        let mut state = self.state();
+        let inside = |p: &String| p.starts_with(&format!("{rel}/"));
+        state.pinned.retain(|p| !inside(p));
+        if state.last.as_ref().is_some_and(inside) {
+            state.last = None;
+        }
+        self.save_state(&state);
+        Ok(())
+    }
+
+    /// Moves note `rel` into `folder` ("" for the top), keeping its file
+    /// name (numbered if it's taken there). Returns its new path.
+    pub fn move_note(&self, rel: &str, folder: &str) -> io::Result<String> {
+        let path = self.resolve(rel)?;
+        let dir = self.folder_path(folder)?;
+        if path.parent() == Some(dir.as_path()) {
+            return Ok(rel.to_string());
+        }
+        std::fs::create_dir_all(&dir)?;
+        let stem = path
+            .file_stem()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let target = unique(&dir, &stem);
+        std::fs::rename(&path, &target)?;
+        let new_rel = self.relative(&target).expect("inside the folder");
+        self.remap(rel, &new_rel, false);
+        self.move_versions(rel, &new_rel, &target);
+        Ok(new_rel)
+    }
+
+    /// Pins and the last note, after `from` (a note, or a folder with
+    /// everything in it) became `to`.
+    fn remap(&self, from: &str, to: &str, folder: bool) {
+        let mut state = self.state();
+        for p in state.pinned.iter_mut().chain(state.last.iter_mut()) {
+            if p == from {
+                *p = to.to_string();
+            } else if folder && let Some(rest) = p.strip_prefix(&format!("{from}/")) {
+                *p = format!("{to}/{rest}");
+            }
+        }
+        self.save_state(&state);
+    }
+
+    // ------------------------------------------------------------ tags
+
+    /// Sets the tags in note `rel`'s front matter (`tags:`), making front
+    /// matter if it has none. The ones in its text stay as they are.
+    pub fn set_front_tags(&self, rel: &str, tags: &[String]) -> io::Result<Note> {
+        let path = self.resolve(rel)?;
+        let text = std::fs::read_to_string(&path)?;
+        let (front, body) = split_front_matter(&text);
+        let front = with_front_tags(front, tags);
+        self.write(&path, &format!("{front}{body}"))?;
+        self.read(rel)
     }
 
     // ------------------------------------------------------------ pins and state
@@ -848,6 +1008,58 @@ fn walk(dir: &Path, depth: usize, out: &mut Vec<PathBuf>) {
     }
 }
 
+/// Subfolders of `dir` (at `rel` in the notes folder), into `out`.
+fn folders_in(dir: &Path, rel: &str, depth: usize, out: &mut Vec<String>) {
+    if depth > MAX_DEPTH || out.len() >= MAX_NOTES {
+        return;
+    }
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if name.starts_with('.') || (depth == 0 && name == ATTACHMENTS_DIR) {
+            continue;
+        }
+        if entry.file_type().is_ok_and(|t| t.is_dir()) {
+            let path = if rel.is_empty() {
+                name
+            } else {
+                format!("{rel}/{name}")
+            };
+            folders_in(&entry.path(), &path, depth + 1, out);
+            out.push(path);
+        }
+    }
+}
+
+/// A folder name made safe, as `file_name_part`; an error when nothing's
+/// left.
+fn folder_name(name: &str) -> io::Result<String> {
+    let name = file_name_part(name);
+    if name.is_empty() || name.starts_with('.') {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Type a name first.",
+        ));
+    }
+    Ok(name)
+}
+
+/// Moves files to the Trash (the Recycle Bin on Windows).
+fn trash_context() -> trash::TrashContext {
+    #[allow(unused_mut)]
+    let mut trash = trash::TrashContext::default();
+    // The default asks Finder through AppleScript, which a signed app
+    // can't do without an Automation permission it doesn't ask for.
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        trash.set_delete_method(DeleteMethod::NsFileManager);
+    }
+    trash
+}
+
 fn mtime_ms(meta: &std::fs::Metadata) -> u64 {
     meta.modified()
         .ok()
@@ -889,6 +1101,143 @@ pub fn split_front_matter(text: &str) -> (&str, &str) {
         }
     }
     ("", text)
+}
+
+/// A note's tags: its front matter's, then `#tags` in its text, without
+/// the `#`, each once (whatever its case), in order.
+pub fn tags_of(front: &str, body: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for tag in front_tags(front).into_iter().chain(text_tags(body)) {
+        if !out.iter().any(|t| t.eq_ignore_ascii_case(&tag)) {
+            out.push(tag);
+        }
+    }
+    out
+}
+
+/// `tags:` (or `tag:`) in front matter: `[a, b]`, `a, b` or a list of
+/// `- a` lines.
+pub fn front_tags(front: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut lines = front.lines().peekable();
+    while let Some(line) = lines.next() {
+        let Some(value) = line
+            .strip_prefix("tags:")
+            .or_else(|| line.strip_prefix("tag:"))
+        else {
+            continue;
+        };
+        let value = value.trim();
+        if value.is_empty() {
+            while let Some(item) = lines.peek().and_then(|l| l.trim_start().strip_prefix("- ")) {
+                out.push(item.to_string());
+                lines.next();
+            }
+        } else {
+            let value = value.trim_start_matches('[').trim_end_matches(']');
+            out.extend(value.split(',').map(str::to_string));
+        }
+    }
+    out.into_iter()
+        .map(|t| clean_tag(&t))
+        .filter(|t| !t.is_empty())
+        .collect()
+}
+
+/// A tag as written in front matter: no `#` or quotes, spaces as `-`.
+fn clean_tag(tag: &str) -> String {
+    tag.trim()
+        .trim_matches(['"', '\''])
+        .trim_start_matches('#')
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join("-")
+}
+
+/// `#tags` in Markdown text, as Obsidian reads them: `#` at the start or
+/// after a space, then letters, digits, `_`, `-` or `/` with at least one
+/// that isn't a digit. Not in code, and not a heading's `# `.
+pub fn text_tags(body: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut fenced = false;
+    for line in body.lines() {
+        if line.trim_start().starts_with("```") {
+            fenced = !fenced;
+            continue;
+        }
+        if fenced {
+            continue;
+        }
+        let mut in_code = false;
+        let mut previous = ' ';
+        let chars: Vec<char> = line.chars().collect();
+        let mut i = 0;
+        while i < chars.len() {
+            let c = chars[i];
+            if c == '`' {
+                in_code = !in_code;
+            } else if c == '#' && !in_code && previous.is_whitespace() {
+                let tag: String = chars[i + 1..]
+                    .iter()
+                    .take_while(|c| c.is_alphanumeric() || matches!(c, '_' | '-' | '/'))
+                    .collect();
+                let tag = tag.trim_end_matches('/');
+                if !tag.is_empty() && !tag.chars().all(|c| c.is_ascii_digit()) {
+                    out.push(tag.to_string());
+                    i += 1 + tag.chars().count();
+                    previous = 'x';
+                    continue;
+                }
+            }
+            previous = c;
+            i += 1;
+        }
+    }
+    out
+}
+
+/// `front` (front matter with its `---` lines, or "") with `tags:` set to
+/// `tags`, or taken out when there are none.
+fn with_front_tags(front: &str, tags: &[String]) -> String {
+    let tags: Vec<String> = tags
+        .iter()
+        .map(|t| clean_tag(t))
+        .filter(|t| !t.is_empty())
+        .collect();
+    let line = (!tags.is_empty()).then(|| format!("tags: [{}]", tags.join(", ")));
+    if front.is_empty() {
+        return line.map_or_else(String::new, |l| format!("---\n{l}\n---\n"));
+    }
+    let mut out: Vec<String> = Vec::new();
+    let mut lines = front.lines().peekable();
+    let mut placed = false;
+    while let Some(l) = lines.next() {
+        if l.starts_with("tags:") || l.starts_with("tag:") {
+            // A list below it goes too.
+            while lines
+                .peek()
+                .is_some_and(|n| n.trim_start().starts_with("- "))
+            {
+                lines.next();
+            }
+            if let Some(line) = &line
+                && !placed
+            {
+                out.push(line.clone());
+                placed = true;
+            }
+            continue;
+        }
+        // Before the closing `---`.
+        if l.trim_end() == "---" && !out.is_empty() && !placed {
+            if let Some(line) = &line {
+                out.push(line.clone());
+            }
+            placed = true;
+        }
+        out.push(l.to_string());
+    }
+    format!("{}\n", out.join("\n"))
 }
 
 /// `key: value` from front matter, unquoted.
@@ -1290,6 +1639,85 @@ mod tests {
             front_matter_value("---\nsource: meeting\napp: \"Zoom\"\n---\n", "app").as_deref(),
             Some("Zoom")
         );
+    }
+
+    #[test]
+    fn tags_come_from_front_matter_and_text() {
+        let body = "# Plan\n\nCall #Acme about #work/hiring, not #42 or a#b.\n`#code` stays\n```\n#fenced\n```\nSee [x](#anchor) #acme\n";
+        assert_eq!(text_tags(body), ["Acme", "work/hiring", "acme"]);
+        assert_eq!(
+            front_tags("---\ntags: [one, \"two words\", #three]\n---\n"),
+            ["one", "two-words", "three"]
+        );
+        assert_eq!(
+            front_tags("---\ntags:\n  - a\n  - b/c\nother: x\n---\n"),
+            ["a", "b/c"]
+        );
+        assert_eq!(front_tags("---\ntags: solo\n---\n"), ["solo"]);
+        assert_eq!(
+            tags_of("---\ntags: [acme]\n---\n", body),
+            ["acme", "work/hiring"]
+        );
+        // Setting them.
+        let front = "---\nsplashdown-id: 1-ab\ntags:\n  - old\ncreated: x\n---\n";
+        assert_eq!(
+            with_front_tags(front, &["new".into(), "two words".into()]),
+            "---\nsplashdown-id: 1-ab\ntags: [new, two-words]\ncreated: x\n---\n"
+        );
+        assert_eq!(
+            with_front_tags("---\nid: 1\n---\n", &["a".into()]),
+            "---\nid: 1\ntags: [a]\n---\n"
+        );
+        assert_eq!(
+            with_front_tags(front, &[]),
+            "---\nsplashdown-id: 1-ab\ncreated: x\n---\n"
+        );
+        assert_eq!(with_front_tags("", &["a".into()]), "---\ntags: [a]\n---\n");
+    }
+
+    #[test]
+    fn folders_are_made_moved_and_notes_moved_into_them() {
+        let store = temp_store("folders");
+        store.ensure().unwrap();
+        assert_eq!(store.create_folder("", "Work").unwrap(), "Work");
+        assert_eq!(store.create_folder("Work", "Acme").unwrap(), "Work/Acme");
+        assert!(store.create_folder("", "Work").is_err());
+        assert!(
+            store
+                .create_folder("", "../out")
+                .is_ok_and(|f| !f.contains(".."))
+        );
+        // Never a hidden folder.
+        assert!(
+            store
+                .create_folder("", ".hidden")
+                .is_ok_and(|f| !f.starts_with('.'))
+        );
+        assert!(store.create_folder("", "  ").is_err());
+        let note = store
+            .create("Plan", at("2026-10-31T09:15:00-05:00"), &Origin::default())
+            .unwrap();
+        store.set_pinned(&note.path, true);
+        let moved = store.move_note(&note.path, "Work/Acme").unwrap();
+        assert!(moved.starts_with("Work/Acme/"), "{moved}");
+        assert!(store.list().iter().any(|n| n.path == moved && n.pinned));
+        // The folder moves with its notes, and the pin follows.
+        let renamed = store.move_folder("Work", "", "Jobs").unwrap();
+        assert_eq!(renamed, "Jobs");
+        let now = moved.replacen("Work/", "Jobs/", 1);
+        assert!(store.list().iter().any(|n| n.path == now && n.pinned));
+        assert!(store.move_folder("Jobs", "Jobs/Acme", "Jobs").is_err());
+        assert_eq!(store.move_folder("Jobs/Acme", "", "Acme").unwrap(), "Acme");
+        let folders = store.folders();
+        assert!(folders.contains(&"Acme".to_string()) && folders.contains(&"Jobs".to_string()));
+        assert!(store.folder_path("Attachments").is_err());
+        // Tags written into front matter.
+        let note = store
+            .set_front_tags(&store.list()[0].path, &["acme".into()])
+            .unwrap();
+        assert_eq!(note.front_tags, ["acme"]);
+        assert_eq!(store.list()[0].tags, ["acme"]);
+        let _ = std::fs::remove_dir_all(store.root());
     }
 
     #[test]

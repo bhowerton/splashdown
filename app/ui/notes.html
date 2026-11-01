@@ -33,36 +33,62 @@
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-pause" viewBox="0 0 24 24"><path d="M7 5h3v14H7zM14 5h3v14h-3z" fill="currentColor" stroke="none"/></symbol>
   <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-tag" viewBox="0 0 24 24"><path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9z"/><circle cx="7.5" cy="7.5" r="1.3"/></symbol>
+  <symbol id="i-chev" viewBox="0 0 24 24"><path d="m9 6 6 6-6 6"/></symbol>
+  <symbol id="i-inbox" viewBox="0 0 24 24"><path d="M4 13h4l2 3h4l2-3h4"/><path d="M5.5 5h13L21 13v5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-5z"/></symbol>
   <symbol id="i-sound" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13"/></symbol>
   <symbol id="i-rec" viewBox="0 0 24 24"><circle cx="12" cy="12" r="6" fill="#e5484d" stroke="none"/></symbol>
 </svg>
 
 <main class="nt">
-  <aside id="nt-side" class="nt-side" aria-label="Notes">
-    <div class="nt-side-top">
-      <button class="nt-find" id="nt-find" aria-keyshortcuts="Meta+K">
-        <svg class="ic"><use href="#i-search"></use></svg>
-        <span class="nt-grow">Search or jump to…</span>
-        <kbd class="nt-kbd" data-keys="⌘K"></kbd>
-      </button>
-      <button class="nt-iconbtn nt-boxed" id="nt-new" aria-label="New note" title="New note">
-        <svg class="ic"><use href="#i-plus"></use></svg>
-      </button>
+  <!-- Where notes are: the library's views, folders and tags. -->
+  <nav id="nt-nav" class="nt-nav" aria-label="Folders and tags">
+    <div class="nt-nav-scroll">
+      <div class="nt-nav-group" role="group" aria-label="Library">
+        <button class="nt-nav-row" data-view="all"><svg class="ic"><use href="#i-inbox"></use></svg><span class="nt-nav-name">All notes</span><span class="nt-count" data-count="all"></span></button>
+        <button class="nt-nav-row" data-view="pinned"><svg class="ic"><use href="#i-pin"></use></svg><span class="nt-nav-name">Pinned</span><span class="nt-count" data-count="pinned"></span></button>
+        <button class="nt-nav-row" data-view="meetings"><svg class="ic"><use href="#i-people"></use></svg><span class="nt-nav-name">Meetings &amp; recordings</span><span class="nt-count" data-count="meetings"></span></button>
+        <button class="nt-nav-row" data-view="imported"><svg class="ic"><use href="#i-file"></use></svg><span class="nt-nav-name">Transcripts</span><span class="nt-count" data-count="imported"></span></button>
+      </div>
+      <div class="nt-nav-head" id="nt-folders-head">
+        <span>Folders</span>
+        <button class="nt-iconbtn sm" id="nt-new-folder" aria-label="New folder" title="New folder"><svg class="ic sm"><use href="#i-plus"></use></svg></button>
+      </div>
+      <ul id="nt-folders" class="nt-tree" role="tree" aria-label="Folders"></ul>
+      <div class="nt-nav-head" id="nt-tags-head"><span>Tags</span></div>
+      <ul id="nt-tags" class="nt-tree" role="tree" aria-label="Tags"></ul>
+      <p id="nt-tags-empty" class="nt-hint nt-nav-hint" hidden>Type <b>#</b> and a word in a note, or add a tag above a note.</p>
     </div>
-    <div class="nt-filters" role="group" aria-label="Show">
-      <button class="nt-chip" data-filter="all" aria-pressed="true">All</button>
-      <button class="nt-chip" data-filter="pinned" aria-pressed="false">Pinned</button>
-      <button class="nt-chip" data-filter="meetings" aria-pressed="false">Meetings</button>
-      <button class="nt-chip" data-filter="imported" aria-pressed="false">Imported</button>
-    </div>
-    <ul id="nt-list" class="nt-list" aria-label="Notes"></ul>
-    <p id="nt-list-empty" class="nt-empty" hidden></p>
     <footer class="nt-side-foot">
       <button class="nt-folder" id="nt-folder" title="Show the notes folder">
         <svg class="ic"><use href="#i-folder"></use></svg>
         <span id="nt-folder-label"></span>
       </button>
     </footer>
+  </nav>
+
+  <aside id="nt-side" class="nt-side" aria-label="Notes">
+    <div class="nt-list-head">
+      <button class="nt-iconbtn" id="nt-nav-toggle" aria-label="Show or hide folders and tags" aria-expanded="true" aria-controls="nt-nav" title="Folders and tags">
+        <svg class="ic"><use href="#i-folder"></use></svg>
+      </button>
+      <div class="nt-list-title">
+        <b id="nt-view-name">All notes</b>
+        <span id="nt-view-count" class="nt-muted"></span>
+      </div>
+      <button class="nt-iconbtn nt-boxed" id="nt-new" aria-label="New note" title="New note">
+        <svg class="ic"><use href="#i-plus"></use></svg>
+      </button>
+    </div>
+    <div class="nt-side-top">
+      <button class="nt-find" id="nt-find" aria-keyshortcuts="Meta+K">
+        <svg class="ic"><use href="#i-search"></use></svg>
+        <span class="nt-grow">Search or jump to…</span>
+        <kbd class="nt-kbd" data-keys="⌘K"></kbd>
+      </button>
+    </div>
+    <ul id="nt-list" class="nt-list" aria-label="Notes"></ul>
+    <p id="nt-list-empty" class="nt-empty" hidden></p>
   </aside>
 
   <section class="nt-main">
@@ -154,6 +180,15 @@
       <div class="nt-content">
         <!-- A note, or a meeting with its tabs. -->
         <section id="nt-editor" class="nt-view">
+          <div id="nt-tagbar" class="nt-tagbar" aria-label="Tags" hidden>
+            <span id="nt-tagchips" class="nt-tagchips"></span>
+            <button class="nt-addtag" id="nt-addtag"><svg class="ic sm"><use href="#i-tag"></use></svg>Add a tag</button>
+            <form id="nt-tagform" class="nt-tagform" hidden>
+              <input id="nt-taginput" list="nt-taglist" autocomplete="off" spellcheck="false" placeholder="tag" aria-label="New tag">
+              <datalist id="nt-taglist"></datalist>
+            </form>
+          </div>
+
           <div id="nt-live" class="nt-live" hidden>
             <div class="nt-live-bar">
               <span class="nt-recpill"><span class="nt-dot" aria-hidden="true"></span><span id="nt-live-time">Recording</span></span>
@@ -315,6 +350,16 @@
 </main>
 
 <div id="nt-item-menu" class="nt-menu nt-item-menu" role="menu" aria-label="Note" hidden></div>
+
+<dialog id="nt-moveto" class="confirm nt-apps" aria-labelledby="nt-moveto-title">
+  <p class="confirm-title" id="nt-moveto-title">Move to a folder</p>
+  <div id="nt-moveto-list" class="nt-apps-list" role="listbox" aria-label="Folders"></div>
+  <div class="confirm-acts">
+    <button class="btn" id="nt-moveto-new"><svg class="ic sm"><use href="#i-plus"></use></svg>New folder…</button>
+    <span class="nt-grow"></span>
+    <button class="btn" id="nt-moveto-cancel">Cancel</button>
+  </div>
+</dialog>
 
 <div id="nt-palette" class="nt-overlay" hidden>
   <div class="nt-palette" role="dialog" aria-modal="true" aria-label="Search notes and actions">

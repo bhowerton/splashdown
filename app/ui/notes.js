@@ -38,8 +38,15 @@ let notes = [];
 let folder = null;
 /** The app "Paste into" pastes into, or null. */
 let sendTarget = null;
-/** Which notes the list shows: all, pinned, meetings, imported. */
-let filter = "all";
+/** What the list shows: a view of the library ("all", "pinned",
+ *  "meetings", "imported"), a folder with the folders in it, or a tag
+ *  with the tags under it. */
+let view = { kind: "all", value: "" };
+/** The notes folder's subfolders (`Work`, `Work/Acme`). */
+let folders = [];
+/** Where a new note goes: the folder being looked at, and the tag being
+ *  looked at, which it's given. */
+let newIn = { folder: "", tag: null };
 /** The window stays above other apps' windows. */
 let onTop = false;
 /** A meeting note's tab: summary, transcript, notes or whole. */
@@ -57,6 +64,10 @@ const editor = NoteEditor.create($("nt-edit"), {
   onChange: edited,
   onSend: sendNote,
   onPaste: pasted,
+  onTag: (tag) => {
+    toggleNav(true);
+    showView({ kind: "tag", value: tag });
+  },
 });
 const liveEditor = NoteEditor.create($("nt-live-notes"), {
   label: "My notes",
@@ -92,11 +103,25 @@ function saveNow() {
     if (text === savedText) return;
     if (!current.path && text.trim() === "") return;
     try {
-      const saved = await invoke("notes_save", { path: current.path, text, base: current.modified });
+      const created = !current.path;
+      const saved = await invoke("notes_save", {
+        path: current.path,
+        text,
+        base: current.modified,
+        folder: created ? newIn.folder : null,
+      });
       savedText = text;
       if (!saved) return;
-      const created = !current.path;
-      current = { path: saved.note.path, modified: saved.note.modified, source: saved.note.source ?? current.source };
+      if (created && newIn.tag) {
+        const tagged = await invoke("notes_set_tags", { path: saved.note.path, tags: [newIn.tag] }).catch(() => null);
+        if (tagged) saved.note = tagged;
+      }
+      current = {
+        path: saved.note.path,
+        modified: saved.note.modified,
+        source: saved.note.source ?? current.source,
+        frontTags: saved.note.front_tags ?? current.frontTags,
+      };
       if (saved.conflict) {
         showNotice("This note was changed in another app. Your version is saved; the other one is in Versions.");
       }
@@ -187,16 +212,45 @@ function snippetOf(text) {
     .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1");
 }
 
-function shownInList(n) {
+/** Whether `path` is `folder` or inside it. */
+function within(path, folder) {
+  return path === folder || path.startsWith(`${folder}/`);
+}
+
+/** Whether note `n` has tag `tag` or one under it (any case). */
+function hasTag(n, tag) {
+  const t = tag.toLowerCase();
+  return (n.tags ?? []).some((x) => within(x.toLowerCase(), t));
+}
+
+function shownInList(n, v = view) {
   const kind = kindOf(n.source, n.text);
-  if (filter === "pinned") return n.pinned;
-  if (filter === "meetings") return kind === "meeting" || kind === "recording";
-  if (filter === "imported") return kind === "file" || kind === "link" || kind === "audio";
-  return true;
+  switch (v.kind) {
+    case "pinned":
+      return n.pinned;
+    case "meetings":
+      return kind === "meeting" || kind === "recording";
+    case "imported":
+      return kind === "file" || kind === "link" || kind === "audio";
+    case "folder":
+      return within(n.folder, v.value);
+    case "tag":
+      return hasTag(n, v.value);
+    default:
+      return true;
+  }
+}
+
+const VIEW_NAMES = { all: "All notes", pinned: "Pinned", meetings: "Meetings & recordings", imported: "Transcripts" };
+
+function viewName(v = view) {
+  if (v.kind === "folder") return v.value.split("/").pop();
+  if (v.kind === "tag") return `#${v.value}`;
+  return VIEW_NAMES[v.kind] ?? "All notes";
 }
 
 function renderList() {
-  const shown = notes.filter(shownInList);
+  const shown = notes.filter((n) => shownInList(n));
   const items = [];
   let last = null;
   for (const n of shown) {
@@ -216,13 +270,18 @@ function renderList() {
   empty.hidden = shown.length > 0;
   empty.textContent = notes.length === 0
     ? `No notes yet. Each one is saved as a file in ${folder?.label ?? "your notes folder"}.`
-    : { pinned: "No pinned notes.", meetings: "No meetings yet.", imported: "Nothing transcribed yet." }[filter] ?? "";
-  $("nt-folder-label").textContent = folder
-    ? `${folder.label} · ${notes.length} ${notes.length === 1 ? "note" : "notes"}`
-    : "";
-  for (const b of document.querySelectorAll(".nt-filters [data-filter]")) {
-    b.setAttribute("aria-pressed", String(b.dataset.filter === filter));
-  }
+    : {
+      pinned: "No pinned notes. Pin one from its ⋯ menu.",
+      meetings: "No meetings or recordings yet.",
+      imported: "Nothing transcribed yet.",
+      folder: "No notes in this folder. Drag one here, or press + to start one.",
+      tag: "No notes with this tag.",
+    }[view.kind] ?? "";
+  $("nt-folder-label").textContent = folder?.label ?? "";
+  $("nt-view-name").textContent = viewName();
+  $("nt-view-count").textContent = shown.length ? String(shown.length) : "";
+  $("nt-new").title = view.kind === "folder" ? `New note in ${viewName()}` : view.kind === "tag" ? `New note tagged ${viewName()}` : "New note";
+  renderNav();
 }
 
 function listItem(n) {
@@ -240,10 +299,18 @@ function listItem(n) {
   meta.className = "nt-item-meta";
   const todo = kind === "meeting" ? (n.text.match(/^\s*- \[ \]/gm) ?? []).length : 0;
   const detail = todo ? `${todo} to do` : snippetOf(n.text);
-  meta.textContent = [when(n.modified), n.folder && n.folder !== "Meetings" ? n.folder : "", detail]
-    .filter(Boolean)
-    .join(" · ");
+  // Its folder, unless that's the one being looked at.
+  const where = view.kind === "folder"
+    ? n.folder.slice(view.value.length + 1)
+    : n.folder && n.folder !== "Meetings" ? n.folder : "";
+  meta.textContent = [when(n.modified), where, detail].filter(Boolean).join(" · ");
   text.append(title, meta);
+  if (n.tags?.length) {
+    const tags = document.createElement("span");
+    tags.className = "nt-item-meta nt-item-tags";
+    tags.textContent = n.tags.slice(0, 3).map((t) => `#${t}`).join(" ");
+    text.append(tags);
+  }
   b.append(icon(KIND_ICON[kind]), text);
   b.addEventListener("click", () => openNote(n.path));
   b.addEventListener("contextmenu", (e) => {
@@ -263,49 +330,59 @@ function listItem(n) {
   });
   li.className = "nt-item-row";
   if (n.pinned) li.dataset.pinned = "true";
+  // Dragged onto a folder, it moves there.
+  dragToFolder(b, { note: n.path }, n.title || "Untitled");
   li.append(b, more);
   return li;
 }
 
 /** A note's own menu in the list (its ⋯, or a right-click): what the
  *  header does for the open note, for any note. */
-function showItemMenu(n, at) {
+/** A menu item for `showMenu`. */
+function menuItem(label, run, { disabled = false, danger = false } = {}) {
+  const b = document.createElement("button");
+  b.setAttribute("role", "menuitem");
+  b.textContent = label;
+  b.disabled = disabled;
+  if (danger) b.className = "danger";
+  b.addEventListener("click", () => {
+    hideItemMenu();
+    run();
+  });
+  return b;
+}
+
+/** Shows a menu of `items` at `at` (kept on screen). */
+function showMenu(items, at) {
   setMenus(null);
   const menu = $("nt-item-menu");
-  const busy = (!!job && job.note === n.path) || (!!meeting && meeting.note === n.path);
-  const item = (label, run, { disabled = false, danger = false } = {}) => {
-    const b = document.createElement("button");
-    b.setAttribute("role", "menuitem");
-    b.textContent = label;
-    b.disabled = disabled;
-    if (danger) b.className = "danger";
-    b.addEventListener("click", async () => {
-      hideItemMenu();
-      run();
-    });
-    return b;
-  };
-  // Acting on another note opens it first, as the header acts on the open one.
-  const onIt = (run) => async () => {
-    if (n.path !== current.path) await openNote(n.path);
-    if (current.path === n.path) run();
-  };
-  menu.replaceChildren(
-    item(n.pinned ? "Unpin" : "Pin to the top", () => setPinned(n.path, !n.pinned)),
-    item("Rename…", onIt(startRename), { disabled: busy }),
-    item(isMac ? "Show in Finder" : "Show in File Explorer", () =>
-      invoke("notes_reveal", { path: n.path }).catch((err) => toast(String(err), true)),
-    ),
-    document.createElement("hr"),
-    item("Move to Trash", onIt(deleteNote), { disabled: busy, danger: true }),
-  );
+  menu.replaceChildren(...items);
   menu.hidden = false;
-  // Kept on screen.
   const w = menu.offsetWidth;
   const h = menu.offsetHeight;
   menu.style.left = `${Math.max(4, Math.min(at.x, innerWidth - w - 4))}px`;
   menu.style.top = `${Math.max(4, Math.min(at.y, innerHeight - h - 4))}px`;
   menu.querySelector("button:not(:disabled)")?.focus();
+}
+
+function showItemMenu(n, at) {
+  const busy = (!!job && job.note === n.path) || (!!meeting && meeting.note === n.path);
+  const item = menuItem;
+  // Acting on another note opens it first, as the header acts on the open one.
+  const onIt = (run) => async () => {
+    if (n.path !== current.path) await openNote(n.path);
+    if (current.path === n.path) run();
+  };
+  showMenu([
+    item(n.pinned ? "Unpin" : "Pin to the top", () => setPinned(n.path, !n.pinned)),
+    item("Rename…", onIt(startRename), { disabled: busy }),
+    item("Move to…", () => moveNoteTo(n.path), { disabled: busy }),
+    item(isMac ? "Show in Finder" : "Show in File Explorer", () =>
+      invoke("notes_reveal", { path: n.path }).catch((err) => toast(String(err), true)),
+    ),
+    document.createElement("hr"),
+    item("Move to Trash", onIt(deleteNote), { disabled: busy, danger: true }),
+  ], at);
 }
 
 function hideItemMenu() {
@@ -324,7 +401,8 @@ function updateListEntry(text) {
 
 async function refresh() {
   try {
-    notes = await invoke("notes_list");
+    [notes, folders] = await Promise.all([invoke("notes_list"), invoke("notes_folders")]);
+    folders ??= [];
   } catch (e) {
     toast(String(e), true);
     return;
@@ -337,6 +415,7 @@ async function refresh() {
       const n = await invoke("notes_open", { path: current.path });
       if (n && n.path === current.path && body === savedText) {
         current.modified = n.modified;
+        current.frontTags = n.front_tags ?? current.frontTags;
         setBody(n.body, { reload: true });
       }
     } catch (e) {
@@ -346,6 +425,504 @@ async function refresh() {
   renderList();
   updateHeader();
 }
+
+// ---------------------------------------------------------------- folders and tags
+
+/** Folders and tags folded shut, as "folder:work" or "tag:acme". */
+const folded = new Set(loadList("notes.folded"));
+
+function loadList(key) {
+  try {
+    return JSON.parse(localStorage.getItem(key) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveList(key, items) {
+  try {
+    localStorage.setItem(key, JSON.stringify([...items]));
+  } catch {
+    // Not remembered; fine.
+  }
+}
+
+/** Shows view `v` in the list, and remembers it. */
+function showView(v) {
+  view = v;
+  try {
+    localStorage.setItem("notes.view", JSON.stringify(v));
+  } catch {
+    // Not remembered; fine.
+  }
+  renderList();
+  // A narrow window has folders and tags over the list: out of the way.
+  if (matchMedia("(max-width: 900px)").matches) toggleNav(false);
+}
+
+function toggleNav(show = $("nt-nav").hidden) {
+  $("nt-nav").hidden = !show;
+  $("nt-nav-toggle").setAttribute("aria-expanded", String(show));
+  try {
+    localStorage.setItem("notes.nav", show ? "shown" : "hidden");
+  } catch {
+    // Not remembered; fine.
+  }
+}
+
+function parentOf(path) {
+  return path.includes("/") ? path.slice(0, path.lastIndexOf("/")) : "";
+}
+
+function renderNav() {
+  for (const b of document.querySelectorAll(".nt-nav-group [data-view]")) {
+    b.setAttribute("aria-current", String(view.kind === b.dataset.view));
+  }
+  for (const c of document.querySelectorAll(".nt-nav-group [data-count]")) {
+    const n = notes.filter((x) => shownInList(x, { kind: c.dataset.count, value: "" })).length;
+    c.textContent = n ? String(n) : "";
+  }
+  $("nt-folders").replaceChildren(...treeRows(folderTree(), "folder"));
+  const tags = tagTree();
+  $("nt-tags").replaceChildren(...treeRows(tags, "tag"));
+  $("nt-tags-empty").hidden = tags.length > 0;
+  const known = new Map();
+  for (const n of notes) for (const t of n.tags ?? []) known.set(t.toLowerCase(), t);
+  $("nt-taglist").replaceChildren(
+    ...[...known.values()].sort().map((t) => Object.assign(document.createElement("option"), { value: t })),
+  );
+}
+
+/** Every folder, with the ones notes are in (which the folder list may
+ *  have missed), as a tree. */
+function folderTree() {
+  const all = new Set(folders);
+  for (const n of notes) {
+    for (let f = n.folder; f; f = parentOf(f)) all.add(f);
+  }
+  return buildTree([...all], (path) => notes.filter((n) => within(n.folder, path)).length);
+}
+
+/** Every tag, and the tags above nested ones (`work` for `work/acme`). */
+function tagTree() {
+  const all = new Map();
+  for (const n of notes) {
+    for (const t of n.tags ?? []) {
+      const parts = t.split("/");
+      for (let i = 1; i <= parts.length; i++) {
+        const p = parts.slice(0, i).join("/");
+        if (!all.has(p.toLowerCase())) all.set(p.toLowerCase(), p);
+      }
+    }
+  }
+  return buildTree([...all.values()], (path) => notes.filter((n) => hasTag(n, path)).length);
+}
+
+/** Paths ("a", "a/b") as a sorted tree of { name, path, count, children }. */
+function buildTree(paths, count) {
+  const roots = [];
+  const byPath = new Map();
+  const sorted = [...paths].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true }));
+  for (const path of sorted) {
+    const node = { name: path.split("/").pop(), path, count: count(path), children: [] };
+    byPath.set(path.toLowerCase(), node);
+    const parent = byPath.get(parentOf(path).toLowerCase());
+    (parent && parentOf(path) ? parent.children : roots).push(node);
+  }
+  return roots;
+}
+
+/** The rows of a folder or tag tree. */
+function treeRows(nodes, kind, depth = 0) {
+  return nodes.map((node) => {
+    const li = document.createElement("li");
+    li.setAttribute("role", "treeitem");
+    const key = `${kind}:${node.path.toLowerCase()}`;
+    const hasChildren = node.children.length > 0;
+    if (hasChildren) li.setAttribute("aria-expanded", String(!folded.has(key)));
+    const here = view.kind === kind && view.value.toLowerCase() === node.path.toLowerCase();
+
+    const row = document.createElement("div");
+    row.className = "nt-nav-row";
+    row.style.setProperty("--depth", String(depth));
+    row.setAttribute("aria-current", String(here));
+    const twisty = document.createElement("button");
+    twisty.className = `nt-twisty${hasChildren ? "" : " none"}`;
+    twisty.tabIndex = hasChildren ? 0 : -1;
+    twisty.setAttribute("aria-label", folded.has(key) ? `Open ${node.name}` : `Close ${node.name}`);
+    twisty.append(icon("chev"));
+    twisty.addEventListener("click", () => {
+      if (folded.has(key)) folded.delete(key);
+      else folded.add(key);
+      saveList("notes.folded", folded);
+      renderNav();
+    });
+    const main = document.createElement("button");
+    main.className = "nt-nav-main";
+    if (here) main.setAttribute("aria-current", "true");
+    const name = document.createElement("span");
+    name.className = "nt-nav-name";
+    name.textContent = node.name;
+    main.append(icon(kind === "folder" ? "folder" : "tag"), name);
+    main.title = kind === "folder" ? node.path : `#${node.path}`;
+    main.addEventListener("click", () => showView({ kind, value: node.path }));
+    row.append(twisty, main);
+    if (kind === "folder") {
+      const more = document.createElement("button");
+      more.className = "nt-iconbtn nt-tree-more";
+      more.setAttribute("aria-label", `Actions for ${node.name}`);
+      more.setAttribute("aria-haspopup", "menu");
+      more.append(icon("more"));
+      more.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const r = more.getBoundingClientRect();
+        folderMenu(node.path, { x: r.left, y: r.bottom + 4 });
+      });
+      main.addEventListener("contextmenu", (e) => {
+        e.preventDefault();
+        folderMenu(node.path, { x: e.clientX, y: e.clientY });
+      });
+      // Dragged onto another folder (or "Folders"), it moves there.
+      dragToFolder(main, { folder: node.path }, node.name);
+      dropTarget(row, node.path);
+      row.append(more);
+    }
+    const count = document.createElement("span");
+    count.className = "nt-count";
+    count.textContent = node.count ? String(node.count) : "";
+    row.append(count);
+    li.append(row);
+    if (hasChildren) {
+      const ul = document.createElement("ul");
+      ul.setAttribute("role", "group");
+      ul.append(...treeRows(node.children, kind, depth + 1));
+      li.append(ul);
+    }
+    return li;
+  });
+}
+
+/** Lets a note or a folder be dropped on `el`, to move it into
+ *  `folderPath` ("" for the top). */
+function dropTarget(el, folderPath) {
+  el.dataset.drop = folderPath;
+}
+
+/** Drags `what` ({ note } or { folder }) by `el` to a folder, with the
+ *  pointer. The window's own drag and drop is for files from Finder: it
+ *  takes every system drag, so this never starts one. */
+function dragToFolder(el, what, label) {
+  el.addEventListener("pointerdown", (e) => {
+    if (e.button !== 0) return;
+    const start = { x: e.clientX, y: e.clientY };
+    let ghost = null;
+    let over = null;
+    const move = (ev) => {
+      if (!ghost) {
+        if (Math.hypot(ev.clientX - start.x, ev.clientY - start.y) < 6) return;
+        ghost = document.createElement("div");
+        ghost.className = "nt-ghost";
+        ghost.textContent = label;
+        document.body.append(ghost);
+        document.body.classList.add("nt-dragging");
+      }
+      ghost.style.left = `${ev.clientX + 12}px`;
+      ghost.style.top = `${ev.clientY + 10}px`;
+      const target = document.elementFromPoint(ev.clientX, ev.clientY)?.closest("[data-drop]") ?? null;
+      if (over !== target) {
+        over?.classList.remove("nt-drop-here");
+        over = target;
+        over?.classList.add("nt-drop-here");
+      }
+    };
+    const up = () => {
+      removeEventListener("pointermove", move);
+      removeEventListener("pointerup", up);
+      removeEventListener("pointercancel", up);
+      if (!ghost) return;
+      ghost.remove();
+      document.body.classList.remove("nt-dragging");
+      over?.classList.remove("nt-drop-here");
+      // The click that ends a drag isn't one.
+      const swallow = (c) => {
+        c.stopPropagation();
+        c.preventDefault();
+      };
+      addEventListener("click", swallow, { capture: true, once: true });
+      setTimeout(() => removeEventListener("click", swallow, { capture: true }), 0);
+      if (!over) return;
+      const to = over.dataset.drop;
+      if (what.note) moveNote(what.note, to);
+      else moveFolder(what.folder, to);
+    };
+    addEventListener("pointermove", move);
+    addEventListener("pointerup", up);
+    addEventListener("pointercancel", up);
+  });
+}
+
+function folderMenu(path, at) {
+  const busy = (!!meeting && within(meeting.note, path)) || (!!job && within(job.note ?? "", path));
+  showMenu([
+    menuItem("New note here", async () => {
+      showView({ kind: "folder", value: path });
+      await newNote();
+    }),
+    menuItem("New folder inside…", () => newFolder(path)),
+    document.createElement("hr"),
+    menuItem("Rename…", () => renameFolder(path), { disabled: busy }),
+    menuItem("Move to…", () => moveFolderTo(path), { disabled: busy }),
+    document.createElement("hr"),
+    menuItem("Move to Trash", () => deleteFolder(path), { disabled: busy, danger: true }),
+  ], at);
+}
+
+async function newFolder(parent) {
+  const name = await askText("New folder", {
+    detail: parent ? `Inside ${parent.split("/").join(" › ")}.` : "A folder in your notes folder, which other apps see too.",
+    placeholder: "Name",
+    action: "Create",
+  });
+  if (!name) return null;
+  try {
+    const path = await invoke("notes_create_folder", { parent, name });
+    folded.delete(`folder:${parent.toLowerCase()}`);
+    saveList("notes.folded", folded);
+    await refresh();
+    showView({ kind: "folder", value: path });
+    return path;
+  } catch (e) {
+    toast(String(e), true);
+    return null;
+  }
+}
+
+/** Keeps the open note and the list's view with a folder that moved. */
+function followFolder(from, to) {
+  if (current.path && within(current.path, from)) current.path = to + current.path.slice(from.length);
+  if (view.kind === "folder" && within(view.value, from)) {
+    showView({ kind: "folder", value: to + view.value.slice(from.length) });
+  }
+}
+
+async function renameFolder(path) {
+  const old = path.split("/").pop();
+  const name = await askText("Rename the folder", { value: old, action: "Rename" });
+  if (!name || name === old) return;
+  await saveNow();
+  try {
+    const moved = await invoke("notes_move_folder", { path, parent: parentOf(path), name });
+    followFolder(path, moved);
+    await refresh();
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+async function moveFolder(path, parent) {
+  if (parentOf(path) === parent || within(parent, path)) return;
+  await saveNow();
+  try {
+    const moved = await invoke("notes_move_folder", { path, parent, name: path.split("/").pop() });
+    followFolder(path, moved);
+    folded.delete(`folder:${parent.toLowerCase()}`);
+    await refresh();
+    toast(`Moved to ${parent ? parent.split("/").pop() : "the top level"}`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+async function deleteFolder(path) {
+  const name = path.split("/").pop();
+  const count = notes.filter((n) => within(n.folder, path)).length;
+  const ok = await askConfirm(`Move “${name}” to the Trash?`, {
+    action: "Move to Trash",
+    detail: `${count ? `The ${count === 1 ? "note" : `${count} notes`} in it go too. ` : ""}${isMac ? "You can get it back from the Trash in Finder." : "You can get it back from the Recycle Bin."}`,
+  });
+  if (!ok) return;
+  await saveNow();
+  try {
+    await invoke("notes_delete_folder", { path });
+    if (view.kind === "folder" && within(view.value, path)) showView({ kind: "all", value: "" });
+    const leaving = current.path && within(current.path, path);
+    await refresh();
+    if (leaving) {
+      const next = notes[0];
+      if (next) showNote(await invoke("notes_open", { path: next.path }));
+      else newNote();
+    }
+    toast(isMac ? "Moved to the Trash" : "Moved to the Recycle Bin");
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+async function moveNote(path, folderPath) {
+  const n = notes.find((x) => x.path === path);
+  if (n && n.folder === folderPath) return;
+  if (path === current.path) await saveNow();
+  try {
+    const moved = await invoke("notes_move", { path, folder: folderPath });
+    if (current.path === path) current.path = moved;
+    await refresh();
+    toast(`Moved to ${folderPath ? folderPath.split("/").pop() : "the top level"}`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+/** Asks where to move a note or folder: the folders, as a list. */
+function pickFolder(title, { except = null, here = null } = {}) {
+  return new Promise((resolve) => {
+    const dialog = $("nt-moveto");
+    $("nt-moveto-title").textContent = title;
+    const rows = [{ path: "", name: "Top level", depth: 0 }];
+    const walk = (nodes, depth) => {
+      for (const node of nodes) {
+        if (except != null && within(node.path, except)) continue;
+        rows.push({ path: node.path, name: node.name, depth });
+        walk(node.children, depth + 1);
+      }
+    };
+    walk(folderTree(), 1);
+    let picked = null;
+    let creating = false;
+    $("nt-moveto-list").replaceChildren(...rows.map((r) => {
+      const b = document.createElement("button");
+      b.className = "nt-app";
+      b.setAttribute("role", "option");
+      b.style.paddingLeft = `${8 + r.depth * 16}px`;
+      const ic = document.createElement("span");
+      ic.className = "nt-app-ic";
+      ic.append(icon(r.path ? "folder" : "inbox"));
+      const name = document.createElement("span");
+      name.className = "nt-app-name";
+      name.textContent = r.name;
+      b.append(ic, name);
+      if (r.path === here) {
+        b.disabled = true;
+        b.append(Object.assign(document.createElement("span"), { className: "nt-app-state", textContent: "It's here" }));
+      }
+      b.addEventListener("click", () => {
+        picked = r.path;
+        dialog.close();
+      });
+      return b;
+    }));
+    $("nt-moveto-new").onclick = async () => {
+      creating = true;
+      dialog.close();
+      resolve(await newFolder(""));
+    };
+    dialog.onclose = () => {
+      dialog.onclose = null;
+      if (creating) return;
+      resolve(picked);
+    };
+    dialog.showModal();
+    $("nt-moveto-list").querySelector("button:not(:disabled)")?.focus();
+  });
+}
+
+$("nt-moveto-cancel").addEventListener("click", () => $("nt-moveto").close());
+
+async function moveNoteTo(path) {
+  const n = notes.find((x) => x.path === path);
+  const to = await pickFolder(`Move “${n?.title || "this note"}” to…`, { here: n?.folder ?? null });
+  if (to != null) await moveNote(path, to);
+}
+
+async function moveFolderTo(path) {
+  const to = await pickFolder(`Move “${path.split("/").pop()}” to…`, { except: path, here: parentOf(path) });
+  if (to != null) await moveFolder(path, to);
+}
+
+// ---------------------------------------------------------------- a note's tags
+
+/** Shows the open note's tags: the ones in its front matter can be taken
+ *  off; the ones in its text are changed by editing it. */
+function renderTagBar() {
+  const bar = $("nt-tagbar");
+  const entry = notes.find((n) => n.path === current.path);
+  bar.hidden = !current.path || liveHere() || !$("nt-history").hidden;
+  if (bar.hidden) return;
+  const front = current.frontTags ?? [];
+  const isFront = (t) => front.some((f) => f.toLowerCase() === t.toLowerCase());
+  const tags = [...(entry?.tags ?? [])];
+  for (const t of front) if (!tags.some((x) => x.toLowerCase() === t.toLowerCase())) tags.push(t);
+  $("nt-tagchips").replaceChildren(...tags.map((t) => {
+    const chip = document.createElement("span");
+    chip.className = `nt-tagchip${isFront(t) ? "" : " inline"}`;
+    const name = document.createElement("button");
+    name.className = "nt-tagname";
+    name.textContent = `#${t}`;
+    name.title = isFront(t) ? `Show the notes tagged #${t}` : `In the note's text. Show the notes tagged #${t}`;
+    name.addEventListener("click", () => {
+      toggleNav(true);
+      showView({ kind: "tag", value: t });
+    });
+    chip.append(name);
+    if (isFront(t)) {
+      const x = document.createElement("button");
+      x.textContent = "×";
+      x.setAttribute("aria-label", `Remove the tag ${t}`);
+      x.addEventListener("click", () => setTags(front.filter((f) => f.toLowerCase() !== t.toLowerCase())));
+      chip.append(x);
+    }
+    return chip;
+  }));
+  $("nt-addtag").textContent = "";
+  $("nt-addtag").append(icon("tag", "ic sm"), document.createTextNode(tags.length ? "" : "Add a tag"));
+  $("nt-addtag").setAttribute("aria-label", "Add a tag");
+  $("nt-addtag").title = "Add a tag";
+}
+
+async function setTags(tags) {
+  if (!current.path) return;
+  await saveNow();
+  try {
+    const note = await invoke("notes_set_tags", { path: current.path, tags });
+    current.frontTags = note.front_tags;
+    current.modified = note.modified;
+    await refresh();
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+function startTag() {
+  if (!current.path) return toast("Type something first: a note is saved once it has text.");
+  $("nt-addtag").hidden = true;
+  $("nt-tagform").hidden = false;
+  $("nt-taginput").value = "";
+  $("nt-taginput").focus();
+}
+
+function endTag() {
+  $("nt-tagform").hidden = true;
+  $("nt-addtag").hidden = false;
+}
+
+$("nt-addtag").addEventListener("click", startTag);
+$("nt-tagform").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const tag = $("nt-taginput").value.trim().replace(/^#+/, "").split(/\s+/).join("-");
+  endTag();
+  if (!tag) return;
+  const front = current.frontTags ?? [];
+  if (front.some((f) => f.toLowerCase() === tag.toLowerCase())) return;
+  await setTags([...front, tag]);
+  focusNote();
+});
+$("nt-taginput").addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    e.stopPropagation();
+    endTag();
+    focusNote();
+  }
+});
+$("nt-taginput").addEventListener("blur", () => setTimeout(endTag, 150));
 
 // ---------------------------------------------------------------- the note
 
@@ -373,7 +950,7 @@ function showNote(n, { keepFocus = false } = {}) {
   // A rename in progress was for the note being left.
   endRename();
   closeReview();
-  current = { path: n.path, modified: n.modified, source: n.source ?? "" };
+  current = { path: n.path, modified: n.modified, source: n.source ?? "", frontTags: n.front_tags ?? [] };
   showHistory(false);
   hideNotice();
   setBody(n.body);
@@ -400,6 +977,10 @@ async function newNote() {
   await flushLiveNotes();
   closeReview();
   endRename();
+  newIn = {
+    folder: view.kind === "folder" ? view.value : "",
+    tag: view.kind === "tag" ? view.value : null,
+  };
   current = { path: null, modified: null, source: "" };
   showHistory(false);
   hideNotice();
@@ -542,6 +1123,7 @@ function updateHeader() {
   send.replaceChildren(document.createTextNode(`Paste into ${sendTarget} `), keysLabel("⌘↩"));
   send.disabled = empty;
   send.title = `Paste the note into ${sendTarget}`;
+  renderTagBar();
 }
 
 function focusNote() {
@@ -1753,8 +2335,11 @@ function actions() {
     list.push({ title: "Rewrite: say how…", icon: "pen", sub: "In your own words: shorter, warmer, in French…", run: () => runTransform("", {}) });
   }
   if (asMeeting && !locked()) list.push({ title: "Summarize the meeting again", icon: "pen", run: summarize });
+  list.push({ title: "New folder…", icon: "folder", run: () => newFolder(view.kind === "folder" ? view.value : "") });
   if (have) {
     list.push(
+      { title: "Move this note to…", icon: "folder", run: () => moveNoteTo(current.path), off: locked() },
+      { title: "Add a tag to this note…", icon: "tag", run: startTag },
       { title: open?.pinned ? "Unpin this note" : "Pin this note", icon: "pin", run: togglePin },
       { title: "Versions of this note", icon: "clock", run: () => showHistory(true), off: locked() },
       { title: "Rename this note…", icon: "note", run: startRename, off: locked() },
@@ -1765,6 +2350,7 @@ function actions() {
   if (have) list.push({ title: isMac ? "Show in Finder" : "Show in File Explorer", icon: "folder", run: reveal });
   list.push(
     { title: $("nt-side").hidden ? "Show the list" : "Hide the list", icon: "side", keys: "⌘E", run: () => toggleList() },
+    { title: $("nt-nav").hidden ? "Show folders and tags" : "Hide folders and tags", icon: "folder", keys: "⌘⇧E", run: () => toggleNav() },
     { title: onTop ? "Stop keeping Notes on top" : "Keep Notes on top of other apps", icon: "pin", run: () => setOnTop(!onTop) },
     { title: "Change notes folder…", icon: "folder", run: changeFolder, off: !!job || !!meeting },
     { title: "Edit rewrites…", icon: "pen", sub: "Settings → Words", run: editRewrites },
@@ -1838,7 +2424,7 @@ function renderPalette() {
   if (words.length) {
     found = notes
       .map((n) => ({ n, inTitle: has(n.title) }))
-      .filter((x) => x.inTitle || has(`${x.n.title}\n${x.n.text}`))
+      .filter((x) => x.inTitle || has(`${x.n.title}\n${x.n.text}\n${(x.n.tags ?? []).join(" ")}`))
       .sort((a, b) => b.inTitle - a.inTitle)
       .slice(0, 8)
       .map((x) => x.n);
@@ -1853,7 +2439,28 @@ function renderPalette() {
     run: () => openNote(n.path),
   });
   if (words.length) {
+    // Folders and tags by name: "acme" finds the Acme folder and #acme.
+    const places = [];
+    const walk = (nodes, kind) => {
+      for (const node of nodes) {
+        if (has(node.path)) {
+          places.push({
+            title: kind === "folder" ? node.name : `#${node.path}`,
+            sub: kind === "folder" ? `${node.path.split("/").join(" › ")} · ${node.count} ${node.count === 1 ? "note" : "notes"}` : `${node.count} ${node.count === 1 ? "note" : "notes"}`,
+            icon: kind === "folder" ? "folder" : "tag",
+            run: () => {
+              toggleNav(true);
+              showView({ kind, value: node.path });
+            },
+          });
+        }
+        walk(node.children, kind);
+      }
+    };
+    walk(folderTree(), "folder");
+    walk(tagTree(), "tag");
     if (acts.length) groups.push(["Actions", acts.slice(0, 6)]);
+    if (places.length) groups.push(["Folders & tags", places.slice(0, 6)]);
     if (found.length) groups.push(["Notes", found.map(note)]);
     groups.push(["Ask", [{ title: `Ask your notes about “${query}”`, icon: "ask", keys: "⌘↩", sub: "An answer from your notes, with the notes it came from", run: () => openAsk({ scope: "all", question: query }) }]]);
   } else {
@@ -2274,6 +2881,14 @@ for (const menu of [$("nt-menu"), $("nt-transcribe-menu"), $("nt-item-menu")]) {
 
 function toggleList(show = $("nt-side").hidden) {
   $("nt-side").hidden = !show;
+  // Just the note: folders and tags go too, and come back as they were.
+  let navShown = true;
+  try {
+    navShown = localStorage.getItem("notes.nav") !== "hidden";
+  } catch {
+    // Shown.
+  }
+  $("nt-nav").hidden = !show || !navShown || matchMedia("(max-width: 900px)").matches;
   $("nt-toggle").setAttribute("aria-expanded", String(show));
   try {
     localStorage.setItem("notes.list", show ? "shown" : "hidden");
@@ -2324,7 +2939,10 @@ document.addEventListener("keydown", (e) => {
     o: pickFile,
     l: askForLink,
   }[key];
-  if (run && !e.shiftKey) {
+  if (key === "e" && e.shiftKey) {
+    e.preventDefault();
+    toggleNav();
+  } else if (run && !e.shiftKey) {
     e.preventDefault();
     run();
   } else if (e.key === "Enter" && review) {
@@ -2333,12 +2951,12 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
-for (const b of document.querySelectorAll(".nt-filters [data-filter]")) {
-  b.addEventListener("click", () => {
-    filter = b.dataset.filter;
-    renderList();
-  });
+for (const b of document.querySelectorAll(".nt-nav-group [data-view]")) {
+  b.addEventListener("click", () => showView({ kind: b.dataset.view, value: "" }));
 }
+$("nt-new-folder").addEventListener("click", () => newFolder(""));
+$("nt-nav-toggle").addEventListener("click", () => toggleNav());
+dropTarget($("nt-folders-head"), "");
 $("nt-toggle").addEventListener("click", () => toggleList());
 $("nt-new").addEventListener("click", newNote);
 $("nt-record").addEventListener("click", toggleMeeting);
@@ -2371,6 +2989,10 @@ listen("notes-shown", (event) => {
 });
 
 function applyView(view) {
+  invoke("notes_folders").then((f) => {
+    folders = f ?? [];
+    renderNav();
+  }).catch(() => {});
   sendTarget = view.target ?? null;
   onTop = !!view.on_top;
   $("nt-on-top").setAttribute("aria-checked", String(onTop));
@@ -2400,6 +3022,9 @@ async function showKey() {
 (async () => {
   try {
     if (localStorage.getItem("notes.list") === "hidden") toggleList(false);
+    if (localStorage.getItem("notes.nav") === "hidden" || matchMedia("(max-width: 900px)").matches) toggleNav(false);
+    const saved = JSON.parse(localStorage.getItem("notes.view") ?? "null");
+    if (saved?.kind) view = saved;
   } catch {
     // Shown by default.
   }
@@ -2428,15 +3053,16 @@ async function mockInvoke(cmd, args) {
   const hour = 3600 * 1000;
   const meetingBody = "# Weekly product sync · Oct 28, 9:00 AM\n\nRecorded on this computer · transcribed on this computer.\n\n## My notes\n\n- Comparison table → 3 rows\n- Annual: 2 months free?\n\n## Summary\n\n### Overview\nThe team agreed to shorten the pricing page's comparison table and to look at an annual plan.\n\n### Decisions\n- Cut the comparison table to three rows; the rest moves to a details page.\n\n### Action items\n- [ ] Model per-seat pricing with and without the annual discount, by Thursday (Them)\n- [x] Reply to Dana with the plan (You)\n\n## Transcript\n\n**[16:58] Them:** So for the pricing page I think the comparison table is doing more harm than good.\n\n**[17:20] You:** Agreed. Dana said the same in the beta notes.\n\n**[17:41] Them:** And the annual plan. If we do two months free, does that change the team price per seat?\n\n**[18:15] You:** It shouldn't. Can you model both and bring it Thursday?\n\n*Ended at 34:10.*\n\n[Recording](Attachments/2026-10-28%20Weekly%20product%20sync.wav)\n";
   const list = [
-    { path: "2026-10-31 Launch post.md", title: "Launch post", text: "Launch post\n- lead with the hold-to-talk demo\n- mention it's **free** and open source\n- [ ] ask Dana about the table", modified: Date.now() - 0.2 * hour, pinned: true, folder: "", source: "" },
+    { path: "Work/Launch/2026-10-31 Launch post.md", title: "Launch post", text: "Launch post\n- lead with the hold-to-talk demo #marketing\n- mention it's **free** and open source\n- [ ] ask Dana about the table", modified: Date.now() - 0.2 * hour, pinned: true, folder: "Work/Launch", source: "", tags: ["launch", "marketing"] },
     { path: "Meetings/2026-10-28 Weekly product sync.md", title: "Weekly product sync · Oct 28, 9:00 AM", text: meetingBody, modified: Date.now() - 1 * hour, pinned: false, folder: "Meetings", source: "meeting" },
     { path: "2026-10-31 Call the dentist.md", title: "Call the dentist", text: "Call the dentist\nabout moving Thursday's appointment.", modified: Date.now() - 2 * hour, pinned: false, folder: "", source: "capture" },
     { path: "2026-10-30 Writing for the ear.md", title: "Writing for the ear", text: "# Writing for the ear\n\nTranscribed from <https://www.youtube.com/watch?v=x> (12:04) on this computer.\n\n**[0:00]** Welcome back.", modified: Date.now() - 30 * hour, pinned: false, folder: "", source: "file" },
-    { path: "Work/Standup.md", title: "Standup", text: "Standup\nWindows build compiles; testing Monday.", modified: Date.now() - 80 * hour, pinned: false, folder: "Work", source: "" },
+    { path: "Work/Standup.md", title: "Standup", text: "Standup\nWindows build compiles; testing Monday. #work/acme", modified: Date.now() - 80 * hour, pinned: false, folder: "Work", source: "", tags: ["work/acme"] },
+    { path: "Personal/Recipes/Bread.md", title: "Bread", text: "Bread\nflour, water, salt", modified: Date.now() - 300 * hour, pinned: false, folder: "Personal/Recipes", source: "", tags: [] },
   ];
   const open = (path) => {
     const n = list.find((x) => x.path === path) ?? list[0];
-    return { path: n.path, body: n.text, modified: n.modified, source: n.source };
+    return { path: n.path, body: n.text, modified: n.modified, source: n.source, front_tags: n.path.includes("Launch") ? ["launch"] : [] };
   };
   switch (cmd) {
     case "notes_load":
@@ -2448,6 +3074,8 @@ async function mockInvoke(cmd, args) {
       };
     case "notes_list":
       return list;
+    case "notes_folders":
+      return ["Meetings", "Personal", "Personal/Recipes", "Work", "Work/Launch", "Archive"];
     case "notes_open":
       return open(args.path);
     case "notes_save":

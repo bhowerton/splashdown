@@ -82,7 +82,7 @@
 
 ### Everything else
 
-- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), **Notes** for when there's no text field: plain Markdown files in a folder you choose (Obsidian, iCloud Drive and Dropbox work), with ⌘K search, pins, earlier versions, Ask your notes, transcripts of an app's audio as it plays, meeting notes with your own notes beside the transcript, and **transforms** you can check before keeping (Clean up, Summary, To-dos, Email, Prompt for an AI, or your own; give one a shortcut to use it on selected text in any app), and an always-on-screen **mini bar** for clicking instead of holding a key.
+- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), **Notes** for when there's no text field: plain Markdown files in a folder you choose (Obsidian, iCloud Drive and Dropbox work), with nested folders and tags, ⌘K search, pins, earlier versions, Ask your notes, transcripts of an app's audio as it plays, meeting notes with your own notes beside the transcript, and **transforms** you can check before keeping (Clean up, Summary, To-dos, Email, Prompt for an AI, or your own; give one a shortcut to use it on selected text in any app), and an always-on-screen **mini bar** for clicking instead of holding a key.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
 

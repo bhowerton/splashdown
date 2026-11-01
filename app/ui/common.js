@@ -65,7 +65,7 @@ function askConfirm(message, { action = "Delete", detail = "", danger = true } =
 }
 
 /** Asks for a line of text in a small modal; resolves to it, or null. */
-function askText(message, { detail = "", placeholder = "", action = "OK" } = {}) {
+function askText(message, { detail = "", placeholder = "", action = "OK", value = "" } = {}) {
   return new Promise((resolve) => {
     const dialog = document.createElement("dialog");
     dialog.className = "confirm";
@@ -84,6 +84,7 @@ function askText(message, { detail = "", placeholder = "", action = "OK" } = {})
     const input = document.createElement("input");
     input.type = "text";
     input.placeholder = placeholder;
+    input.value = value;
     input.spellcheck = false;
     input.style.width = "100%";
     input.style.boxSizing = "border-box";
@@ -105,6 +106,7 @@ function askText(message, { detail = "", placeholder = "", action = "OK" } = {})
     document.body.append(dialog);
     dialog.showModal();
     input.focus();
+    input.select();
   });
 }
 

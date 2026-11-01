@@ -827,7 +827,7 @@ pub fn open(app: &AppHandle) {
     }
     let result = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App("notes.html".into()))
         .title("Notes")
-        .inner_size(880.0, 600.0)
+        .inner_size(1100.0, 680.0)
         .min_inner_size(420.0, 300.0)
         .resizable(true)
         // A window of its own, unless the user keeps it on top to dictate
@@ -855,7 +855,8 @@ pub fn open(app: &AppHandle) {
                 }
                 // Audio and video files dropped on the window are
                 // transcribed.
-                WindowEvent::DragDrop(DragDropEvent::Enter { .. }) => {
+                // Files only: dragging text or a link isn't a transcription.
+                WindowEvent::DragDrop(DragDropEvent::Enter { paths, .. }) if !paths.is_empty() => {
                     let _ = app.emit_to(WINDOW, files::DRAGGING, true);
                 }
                 WindowEvent::DragDrop(DragDropEvent::Leave) => {
@@ -1017,6 +1018,7 @@ pub fn notes_save(
     path: Option<String>,
     text: String,
     base: Option<u64>,
+    folder: Option<String>,
     state: State<'_, AppState>,
 ) -> Result<Option<Saved>, String> {
     let store = store(&state)?.0;
@@ -1025,8 +1027,10 @@ pub fn notes_save(
         None if text.trim().is_empty() => return Ok(None),
         None => {
             let app = target_name();
+            // A new note goes in the folder being looked at.
             store
-                .create(
+                .create_in(
+                    folder.as_deref().unwrap_or(""),
                     &text,
                     chrono::Local::now(),
                     &Origin {
@@ -1054,6 +1058,93 @@ pub fn notes_new(state: State<'_, AppState>) -> Result<(), String> {
 pub fn notes_delete(path: String, state: State<'_, AppState>) -> Result<(), String> {
     not_recording(&path)?;
     store(&state)?.0.delete(&path)
+}
+
+/// Neither a meeting nor a file's transcript is being written into a note
+/// in `folder`, so it can be moved or trashed.
+fn nothing_written_in(folder: &str) -> Result<(), String> {
+    let inside = |note: &str| note.starts_with(&format!("{folder}/"));
+    if crate::meeting::status().is_some_and(|m| inside(&m.note)) {
+        return Err(
+            "A recording is being written into a note in this folder. Stop it first.".into(),
+        );
+    }
+    if files::notes_transcribing().is_some_and(|j| inside(&j.note)) {
+        return Err("A file is being transcribed into a note in this folder. Wait for it, or stop it first.".into());
+    }
+    Ok(())
+}
+
+/// The subfolders of the notes folder, for the sidebar.
+#[tauri::command]
+pub async fn notes_folders(state: State<'_, AppState>) -> Result<Vec<String>, String> {
+    let (store, _) = store(&state)?;
+    tauri::async_runtime::spawn_blocking(move || store.folders())
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn notes_create_folder(
+    parent: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    store(&state)?
+        .0
+        .create_folder(&parent, &name)
+        .map_err(|e| e.to_string())
+}
+
+/// Renames a folder (`parent` unchanged) or moves it into another.
+#[tauri::command]
+pub fn notes_move_folder(
+    path: String,
+    parent: String,
+    name: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    nothing_written_in(&path)?;
+    store(&state)?
+        .0
+        .move_folder(&path, &parent, &name)
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn notes_delete_folder(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    nothing_written_in(&path)?;
+    store(&state)?.0.delete_folder(&path)
+}
+
+/// Moves a note into `folder` ("" for the top). Returns its new path.
+#[tauri::command]
+pub fn notes_move(
+    path: String,
+    folder: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    not_recording(&path)?;
+    if files::notes_transcribing().is_some_and(|j| j.note == path) {
+        return Err("This note is being transcribed into. Wait for it, or stop it first.".into());
+    }
+    store(&state)?
+        .0
+        .move_note(&path, &folder)
+        .map_err(|e| e.to_string())
+}
+
+/// Sets the tags in a note's front matter.
+#[tauri::command]
+pub fn notes_set_tags(
+    path: String,
+    tags: Vec<String>,
+    state: State<'_, AppState>,
+) -> Result<Note, String> {
+    store(&state)?
+        .0
+        .set_front_tags(&path, &tags)
+        .map_err(|e| e.to_string())
 }
 
 /// A meeting writes into its note as it goes: it can't be moved meanwhile.
@@ -1395,6 +1486,7 @@ mod tests {
             pinned: false,
             folder: String::new(),
             source: String::new(),
+            tags: Vec::new(),
         }
     }
 
