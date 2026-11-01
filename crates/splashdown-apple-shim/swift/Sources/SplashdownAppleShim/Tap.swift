@@ -131,14 +131,23 @@ public func splashdown_tap_start(
     status = AudioObjectGetPropertyData(recorder.tap, &where_, 0, nil, &size, &format)
     guard status == noErr else { return fail(status, recorder) }
     let rate = format.mSampleRate
+    let tapChannels = Int(max(format.mChannelsPerFrame, 1))
 
-    // 4. Read it: mix every channel of every buffer down to mono.
+    // 4. Read it: mix the tap's channels down to mono. The tap's buffers
+    // come last; any before them are the output device's own inputs (a
+    // headset's microphone), which aren't the other side.
     status = AudioDeviceCreateIOProcIDWithBlock(&recorder.proc, recorder.aggregate, nil) {
         _, input, _, _, _ in
-        let buffers = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
+        let all = UnsafeMutableAudioBufferListPointer(UnsafeMutablePointer(mutating: input))
+        var tapBuffers: [AudioBuffer] = []
+        var counted = 0
+        for buffer in all.reversed() where counted < tapChannels {
+            tapBuffers.append(buffer)
+            counted += Int(max(buffer.mNumberChannels, 1))
+        }
         var mono: [Float] = []
         var sources = 0
-        for buffer in buffers {
+        for buffer in tapBuffers {
             guard let data = buffer.mData else { continue }
             let channels = Int(max(buffer.mNumberChannels, 1))
             let count = Int(buffer.mDataByteSize) / MemoryLayout<Float>.size

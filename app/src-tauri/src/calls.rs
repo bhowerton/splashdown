@@ -208,6 +208,8 @@ fn show(app: &AppHandle, offer: Offer) {
                     .always_on_top(true)
                     .visible_on_all_workspaces(true)
                     .skip_taskbar(true)
+                    // Never takes the keyboard from the call.
+                    .focusable(false)
                     .focused(false)
                     .visible(false)
                     .build();

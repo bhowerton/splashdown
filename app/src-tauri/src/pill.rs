@@ -48,6 +48,7 @@ fn create(app: &AppHandle) -> Option<tauri::WebviewWindow> {
         .always_on_top(true)
         .visible_on_all_workspaces(true)
         .skip_taskbar(true)
+        .focusable(false)
         .focused(false)
         .visible(false)
         .build();

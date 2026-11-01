@@ -933,7 +933,18 @@ pub fn notes_new(state: State<'_, AppState>) -> Result<(), String> {
 
 #[tauri::command]
 pub fn notes_delete(path: String, state: State<'_, AppState>) -> Result<(), String> {
+    not_recording(&path)?;
     store(&state)?.0.delete(&path)
+}
+
+/// A meeting writes into its note as it goes: it can't be moved meanwhile.
+fn not_recording(path: &str) -> Result<(), String> {
+    match crate::meeting::status() {
+        Some(meeting) if meeting.note == path => {
+            Err("A meeting is being written into this note. Stop the meeting first.".into())
+        }
+        _ => Ok(()),
+    }
 }
 
 #[tauri::command]
@@ -948,6 +959,7 @@ pub fn notes_rename(
     name: String,
     state: State<'_, AppState>,
 ) -> Result<String, String> {
+    not_recording(&path)?;
     store(&state)?
         .0
         .rename(&path, &name)

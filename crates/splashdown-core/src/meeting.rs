@@ -107,6 +107,22 @@ impl Meeting {
         out
     }
 
+    /// Everything that started before this has been handed out by `ready`
+    /// (so it's in the note): the paragraph still taking pieces, and the
+    /// pieces waiting for the other side, come after it.
+    pub fn settled(&self) -> Duration {
+        let both = self.reached[0].min(self.reached[1]);
+        [
+            Some(both),
+            self.open.as_ref().map(|(p, _)| p.start),
+            self.pending.first().map(|s| s.start),
+        ]
+        .into_iter()
+        .flatten()
+        .min()
+        .unwrap_or_default()
+    }
+
     /// Everything left, once both sides have ended.
     pub fn finish(mut self) -> Vec<Paragraph> {
         let mut out = Vec::new();
@@ -204,6 +220,24 @@ mod tests {
             .iter()
             .map(|p| format!("{} {}: {}", p.start.as_secs(), p.side.label(), p.text))
             .collect()
+    }
+
+    #[test]
+    fn settled_is_where_the_unwritten_part_starts() {
+        let mut m = Meeting::new();
+        m.push(seg(Side::Them, 0, 9, "Can we move the launch?"));
+        m.push(seg(Side::You, 10, 20, "Thursday works for me."));
+        m.reached(Side::Them, Duration::from_secs(30));
+        let written = m.ready();
+        // Them's paragraph is written; You's is still open (it may grow).
+        assert_eq!(lines(&written), ["0 Them: Can we move the launch?"]);
+        assert_eq!(m.settled(), Duration::from_secs(10));
+        // A piece waiting for the other side keeps it there too.
+        m.push(seg(Side::Them, 32, 40, "Great."));
+        m.push(seg(Side::You, 45, 50, "Bye."));
+        m.reached(Side::Them, Duration::from_secs(41));
+        m.ready();
+        assert_eq!(m.settled(), Duration::from_secs(32));
     }
 
     #[test]

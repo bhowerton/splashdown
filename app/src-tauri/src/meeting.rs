@@ -112,7 +112,12 @@ pub fn start(app: &AppHandle) -> Result<String, String> {
     let thread = std::thread::Builder::new()
         .name("meeting".into())
         .spawn(move || {
-            if let Err(e) = record(&handle, &stop, &keep) {
+            // A panic mustn't leave a meeting marked as recording for good.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                record(&handle, &stop, &keep)
+            }))
+            .unwrap_or_else(|_| Err("the recording stopped unexpectedly".into()));
+            if let Err(e) = result {
                 tracing::warn!("meeting: {e}");
                 tell(&handle, e, true);
             }
@@ -211,6 +216,9 @@ struct Spool {
     folder: PathBuf,
     /// When the meeting started (RFC 3339).
     started: String,
+    /// Seconds of the recording whose turns are in the note.
+    #[serde(default)]
+    written: f64,
 }
 
 fn spool_dir() -> Result<PathBuf, String> {
@@ -316,9 +324,11 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
         note: note.path.clone(),
         folder: store.root().to_path_buf(),
         started: now.to_rfc3339(),
+        written: 0.0,
     };
+    let meta_path = dir.join(format!("{id}.json"));
     std::fs::write(
-        dir.join(format!("{id}.json")),
+        &meta_path,
         serde_json::to_string(&spool).map_err(|e| e.to_string())?,
     )
     .map_err(|e| e.to_string())?;
@@ -327,6 +337,8 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
 
     crate::notes::open(app);
     let mut job = Job::new(&store, &note.path, &speech);
+    job.spool = Some((meta_path.clone(), spool));
+    let mut step = InStep::default();
     let mut status = Status {
         note: note.path.clone(),
         them_problem: them_problem.clone(),
@@ -341,11 +353,12 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
     loop {
         std::thread::sleep(TICK);
         let mine = you.take();
-        let mut theirs = them.as_mut().map(LiveAudio::take).unwrap_or_default();
-        // Without the other side, silence keeps it in step.
-        if them.is_none() {
-            theirs = vec![0.0; mine.len()];
-        }
+        let theirs = match them.as_mut() {
+            Some(them) => them.take(),
+            // Without the other side, silence keeps it in step.
+            None => vec![0.0; mine.len()],
+        };
+        let (mine, theirs) = step.push(&mine, &theirs);
         write_stereo(&mut raw, &mine, &theirs);
         job.push(&mine, &theirs);
         job.transcribe(false);
@@ -361,6 +374,11 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
         }
         let quiet = job.recorded().saturating_sub(job.heard_at);
         let too_long = started.elapsed() >= LONGEST - GRACE;
+        // Someone spoke after "Still in a meeting?": it is one.
+        if asked.is_some() && !too_long && quiet < QUIET {
+            asked = None;
+            status.warning = None;
+        }
         if asked.is_none() && ((settings.notes.stop_when_quiet() && quiet >= QUIET) || too_long) {
             asked = Some(Instant::now());
             status.warning = Some(if too_long {
@@ -396,6 +414,8 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
         None => vec![0.0; mine.len()],
     };
     drop((you, them));
+    let _ = step.push(&mine, &theirs);
+    let (mine, theirs) = step.rest();
     write_stereo(&mut raw, &mine, &theirs);
     let _ = raw.flush();
     drop(raw);
@@ -414,11 +434,64 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
             false,
         );
     }
+    if job.lost_writes {
+        // The note couldn't take the turns (renamed, moved or deleted
+        // meanwhile): the recording stays, to finish at the next launch.
+        tell(
+            app,
+            "Part of the meeting couldn't be written into its note. Its recording is kept: Splashdown offers to finish it when it next starts.".into(),
+            true,
+        );
+        return Ok(());
+    }
     finish(app, &store, &note.path, &raw_path, &settings);
     let _ = std::fs::remove_file(&raw_path);
-    let _ = std::fs::remove_file(dir.join(format!("{id}.json")));
+    let _ = std::fs::remove_file(&meta_path);
     tracing::info!("meeting ended after {:.0} s", job.recorded().as_secs_f64());
     Ok(())
+}
+
+/// Keeps You and Them in step. Each tick brings a slightly different
+/// amount from each side; the surplus waits for the other side rather
+/// than being padded with silence (which would put gaps in the recording
+/// and stretch its timeline). A side that sends nothing for a while (the
+/// computer's sound while nothing plays, on Windows) is filled with
+/// silence once it's a second behind.
+#[derive(Default)]
+struct InStep {
+    you: Vec<f32>,
+    them: Vec<f32>,
+}
+
+impl InStep {
+    /// Takes a tick's audio; returns what both sides have, in step.
+    fn push(&mut self, you: &[f32], them: &[f32]) -> (Vec<f32>, Vec<f32>) {
+        self.you.extend_from_slice(you);
+        self.them.extend_from_slice(them);
+        let ahead = self.you.len().max(self.them.len());
+        let behind = ahead.saturating_sub(RATE);
+        for side in [&mut self.you, &mut self.them] {
+            if side.len() < behind {
+                side.resize(behind, 0.0);
+            }
+        }
+        let n = self.you.len().min(self.them.len());
+        (
+            self.you.drain(..n).collect(),
+            self.them.drain(..n).collect(),
+        )
+    }
+
+    /// Everything left, the shorter side padded to the longer.
+    fn rest(&mut self) -> (Vec<f32>, Vec<f32>) {
+        let n = self.you.len().max(self.them.len());
+        self.you.resize(n, 0.0);
+        self.them.resize(n, 0.0);
+        (
+            std::mem::take(&mut self.you),
+            std::mem::take(&mut self.them),
+        )
+    }
 }
 
 /// What the computer plays, as a live recording.
@@ -474,6 +547,10 @@ struct Job<'a> {
     /// Turns that ended before this (an earlier, unfinished run of the
     /// same meeting) are already in the note.
     resume_at: Duration,
+    /// The spool's sidecar, kept up to date with how much is written.
+    spool: Option<(PathBuf, Spool)>,
+    /// A turn couldn't be written into the note.
+    lost_writes: bool,
 }
 
 impl<'a> Job<'a> {
@@ -489,6 +566,8 @@ impl<'a> Job<'a> {
             taken: [0, 0],
             heard_at: Duration::ZERO,
             resume_at: Duration::ZERO,
+            spool: None,
+            lost_writes: false,
         }
     }
 
@@ -548,11 +627,15 @@ impl<'a> Job<'a> {
         self.transcribe(true);
         let meeting = std::mem::take(&mut self.meeting);
         let echoes = meeting.echoes;
-        self.write(meeting.finish());
+        let rest = meeting.finish();
+        self.write(rest);
         echoes
     }
 
-    fn write(&self, paragraphs: Vec<Paragraph>) {
+    fn write(&mut self, paragraphs: Vec<Paragraph>) {
+        if paragraphs.is_empty() {
+            return;
+        }
         for p in paragraphs {
             let line = format!(
                 "**[{}] {}:** {}",
@@ -562,6 +645,16 @@ impl<'a> Job<'a> {
             );
             if let Err(e) = self.store.add_paragraph(self.note, &line) {
                 tracing::warn!("couldn't add to the meeting note: {e}");
+                self.lost_writes = true;
+            }
+        }
+        // How far the note goes, for finishing it after a crash.
+        if !self.lost_writes
+            && let Some((path, spool)) = &mut self.spool
+        {
+            spool.written = self.meeting.settled().as_secs_f64();
+            if let Ok(json) = serde_json::to_string(spool) {
+                let _ = std::fs::write(path, json);
             }
         }
     }
@@ -783,22 +876,40 @@ fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
     let speech = state.session.file_speech()?;
     let (store, _) = crate::notes::store_for(Some(spool.folder.clone()))?;
     let note = &spool.note;
-    // The note already has the turns up to its last time stamp.
-    let resume_at = store
-        .read(note)
-        .ok()
-        .and_then(|n| last_timestamp(&n.body))
-        .unwrap_or_default();
+    // The note already has the turns up to where the spool says (older
+    // spools: its last time stamp).
+    let resume_at = if spool.written > 0.0 {
+        Duration::from_secs_f64(spool.written)
+    } else {
+        store
+            .read(note)
+            .ok()
+            .and_then(|n| last_timestamp(&n.body))
+            .unwrap_or_default()
+    };
     let mut job = Job::new(&store, note, &speech);
     job.resume_at = resume_at;
-    let bytes = std::fs::read(&raw).map_err(|e| e.to_string())?;
-    let (mut you, mut them) = (Vec::new(), Vec::new());
-    for frame in bytes.as_chunks::<4>().0 {
-        you.push(f32::from(i16::from_le_bytes([frame[0], frame[1]])) / f32::from(i16::MAX));
-        them.push(f32::from(i16::from_le_bytes([frame[2], frame[3]])) / f32::from(i16::MAX));
+    // Half a second at a time, as when it was recorded: all at once, every
+    // turn would scan the whole meeting.
+    let mut file = std::io::BufReader::new(std::fs::File::open(&raw).map_err(|e| e.to_string())?);
+    let mut bytes = vec![0u8; RATE / 2 * 4];
+    loop {
+        let n = read_full(&mut file, &mut bytes).map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        let (mut you, mut them) = (Vec::new(), Vec::new());
+        for frame in bytes[..n].as_chunks::<4>().0 {
+            you.push(f32::from(i16::from_le_bytes([frame[0], frame[1]])) / f32::from(i16::MAX));
+            them.push(f32::from(i16::from_le_bytes([frame[2], frame[3]])) / f32::from(i16::MAX));
+        }
+        job.push(&you, &them);
+        job.transcribe(false);
     }
-    job.push(&you, &them);
     job.finish();
+    if job.lost_writes {
+        return Err("the meeting note couldn't be written to; its recording is kept".into());
+    }
     let _ = store.add_paragraph(
         note,
         &format!(
@@ -810,6 +921,18 @@ fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
     let _ = std::fs::remove_file(&raw);
     let _ = std::fs::remove_file(meta);
     Ok(())
+}
+
+/// Fills `buf` from `file` as far as it goes; returns how much was read.
+fn read_full(file: &mut impl std::io::Read, buf: &mut [u8]) -> std::io::Result<usize> {
+    let mut filled = 0;
+    while filled < buf.len() {
+        match file.read(&mut buf[filled..])? {
+            0 => break,
+            n => filled += n,
+        }
+    }
+    Ok(filled)
 }
 
 /// The time of the last `**[m:ss] …:**` paragraph in a meeting note.
@@ -843,6 +966,28 @@ pub fn meeting_status() -> Option<Status> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_two_sides_stay_in_step_without_gaps() {
+        let mut step = InStep::default();
+        // The microphone brings 0.6 s, the computer's sound 0.5 s: the
+        // extra 0.1 s waits rather than being matched with silence.
+        let (you, them) = step.push(&vec![0.1; 9600], &vec![0.2; 8000]);
+        assert_eq!((you.len(), them.len()), (8000, 8000));
+        let (you, them) = step.push(&vec![0.1; 7200], &vec![0.2; 8800]);
+        assert_eq!((you.len(), them.len()), (8800, 8800));
+        assert!(you.iter().all(|&s| s == 0.1), "no silence slipped in");
+        // The computer's sound goes quiet (sends nothing): once it's a
+        // second behind, it's filled with silence so turns keep coming.
+        let mut out = 0;
+        for _ in 0..6 {
+            out += step.push(&vec![0.1; 8000], &[]).0.len();
+        }
+        assert_eq!(out, 6 * 8000 - RATE);
+        // At the end, the rest, padded to the longer side.
+        let (you, them) = step.rest();
+        assert_eq!((you.len(), them.len()), (RATE, RATE));
+    }
 
     /// Answers with the length of what it hears, so turns can be told apart.
     struct Lengths;
