@@ -7,9 +7,7 @@ use std::sync::mpsc;
 use std::sync::{Mutex, MutexGuard};
 
 use serde::Serialize;
-use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder, WindowEvent,
-};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 pub const WINDOW: &str = "prompt";
 /// App event with the question to show (`Prompt`).
@@ -88,14 +86,13 @@ fn show(app: &AppHandle) {
             }
         }
     };
-    if let (Ok(Some(monitor)), Ok(size)) = (window.primary_monitor(), window.outer_size()) {
-        let scale = monitor.scale_factor();
-        let area = monitor.work_area();
-        let x =
-            area.position.x + area.size.width as i32 - size.width as i32 - (16.0 * scale) as i32;
-        let y = area.position.y + (170.0 * scale) as i32;
-        let _ = window.set_position(PhysicalPosition::new(x, y));
-    }
+    crate::placement::place(
+        &window,
+        crate::placement::Spot::TopRight {
+            top: 170.0,
+            right: 16.0,
+        },
+    );
     let _ = window.show();
 }
 

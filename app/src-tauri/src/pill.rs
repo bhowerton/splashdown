@@ -4,7 +4,7 @@
 //! the menu bar shows it (unless the notch hides it), and the pill is a
 //! setting (Settings → Notes → Meetings).
 
-use tauri::{AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 use crate::commands::AppState;
 use crate::meeting::Status;
@@ -73,10 +73,5 @@ fn create(app: &AppHandle) -> Option<tauri::WebviewWindow> {
 
 /// Top center of the main screen, just inside the work area.
 fn place(window: &tauri::WebviewWindow) {
-    if let (Ok(Some(monitor)), Ok(size)) = (window.primary_monitor(), window.outer_size()) {
-        let area = monitor.work_area();
-        let x = area.position.x + (area.size.width as i32 - size.width as i32) / 2;
-        let y = area.position.y + (8.0 * monitor.scale_factor()) as i32;
-        let _ = window.set_position(PhysicalPosition::new(x, y));
-    }
+    crate::placement::place(window, crate::placement::Spot::TopCenter { top: 8.0 });
 }

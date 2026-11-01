@@ -40,6 +40,8 @@ let folder = null;
 let sendTarget = null;
 /** Which notes the list shows: all, pinned, meetings, imported. */
 let filter = "all";
+/** The window stays above other apps' windows. */
+let onTop = false;
 /** A meeting note's tab: summary, transcript, notes or whole. */
 let tab = "summary";
 /** The meeting note's part the editor shows ({ m, key }), or null when it
@@ -935,6 +937,17 @@ async function askForLink() {
   if (url) transcribeLink(url);
 }
 
+async function setOnTop(on) {
+  try {
+    await invoke("notes_keep_on_top", { on });
+    onTop = on;
+    $("nt-on-top").setAttribute("aria-checked", String(on));
+    toast(on ? "Notes stays on top of other apps" : "Notes no longer stays on top");
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
 function editRewrites() {
   invoke("notes_edit_transforms").catch((err) => toast(String(err), true));
 }
@@ -1583,6 +1596,7 @@ function actions() {
   if (have) list.push({ title: isMac ? "Show in Finder" : "Show in File Explorer", icon: "folder", run: reveal });
   list.push(
     { title: $("nt-side").hidden ? "Show the list" : "Hide the list", icon: "side", keys: "⌘E", run: () => toggleList() },
+    { title: onTop ? "Stop keeping Notes on top" : "Keep Notes on top of other apps", icon: "pin", run: () => setOnTop(!onTop) },
     { title: "Change notes folder…", icon: "folder", run: changeFolder, off: !!job || !!meeting },
     { title: "Edit rewrites…", icon: "pen", sub: "Settings → Words", run: editRewrites },
   );
@@ -1904,7 +1918,9 @@ async function showMeeting(next) {
   const before = meeting;
   meeting = next;
   if (meeting) {
-    const text = meeting.finishing
+    const text = meeting.question
+      ? meeting.question.title
+      : meeting.finishing
       ? "Finishing the meeting note…"
       : meeting.warning ?? `Meeting · ${clock(meeting.elapsed)} · transcribed ${meeting.place}${meeting.them_problem ? " · your side only" : ""}`;
     $("nt-meeting-text").textContent = text;
@@ -1923,6 +1939,7 @@ async function showMeeting(next) {
     $("nt-live-them-wrap").hidden = !!meeting.them_problem;
     $("nt-live-stop").disabled = meeting.finishing;
     $("nt-live-warning").hidden = !meeting.warning;
+    showQuestion(meeting.question);
     $("nt-live-warning-text").textContent = meeting.warning ?? "";
   }
   // A new meeting's note opens by itself.
@@ -1947,6 +1964,21 @@ async function showMeeting(next) {
     }
   }
   updateHeader();
+}
+
+/** A question the meeting's note waits on, with its answers. */
+function showQuestion(q) {
+  $("nt-live-question").hidden = !q;
+  $("nt-live-time").textContent = q ? "Waiting for you" : $("nt-live-time").textContent;
+  if (!q) return;
+  if ($("nt-live-question-title").textContent === q.title) return;
+  $("nt-live-question-title").textContent = q.title;
+  $("nt-live-question-text").textContent = q.text;
+  $("nt-live-question-acts").replaceChildren(
+    ...q.buttons.map((label, index) =>
+      button(label, () => invoke("prompt_answer", { index }).catch((e) => toast(String(e), true)), index === 0 ? "btn primary" : "btn"),
+    ),
+  );
 }
 
 listen("meeting-status", (event) => showMeeting(event.payload ?? null));
@@ -1985,6 +2017,7 @@ const ACTS = {
   folder: changeFolder,
   delete: deleteNote,
   "edit-rewrites": editRewrites,
+  "on-top": () => setOnTop(!onTop),
   transcribe: pickFile,
   "transcribe-link": askForLink,
   meeting: toggleMeeting,
@@ -2110,6 +2143,8 @@ listen("notes-shown", (event) => {
 
 function applyView(view) {
   sendTarget = view.target ?? null;
+  onTop = !!view.on_top;
+  $("nt-on-top").setAttribute("aria-checked", String(onTop));
   notes = view.notes;
   showFolder(view.folder);
   if (view.open) {

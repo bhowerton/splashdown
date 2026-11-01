@@ -997,7 +997,17 @@ pub fn with_section(body: &str, heading: &str, text: &str) -> String {
     if block.is_empty() {
         return body.to_string();
     }
-    match lines.iter().position(|l| starts_part(l)) {
+    // Before the transcript, or else before a note about the recording
+    // ("*Ended at 0:07.*") when nobody spoke.
+    let aside = |l: &str| {
+        let l = l.trim();
+        l.len() > 2 && l.starts_with('*') && !l.starts_with("**") && l.ends_with('*')
+    };
+    match lines
+        .iter()
+        .position(|l| starts_part(l))
+        .or_else(|| lines.iter().position(|l| aside(l)))
+    {
         Some(at) => {
             let before = lines[..at].concat();
             let before = before.trim_end();
@@ -1264,6 +1274,11 @@ mod tests {
         assert!(is_turn("**[1:02:30] Them:** Hi") && is_turn("**[0:04]** Hi"));
         assert!(!is_turn("**[x] call Sam") && !is_turn("**[0:4] You:** no"));
         assert_eq!(section(body, "My notes"), None);
+        // Nobody spoke: above the note that says so.
+        assert_eq!(
+            with_section("# Call\n\n*Ended at 0:07.*\n", "My notes", "one"),
+            "# Call\n\n## My notes\n\none\n\n*Ended at 0:07.*\n"
+        );
         // Last in the note.
         let last = with_section("# Call\n", "My notes", "one");
         assert_eq!(last, "# Call\n\n## My notes\n\none\n");

@@ -9,9 +9,7 @@ use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde::Serialize;
-use tauri::{
-    AppHandle, Emitter, Manager, PhysicalPosition, WebviewUrl, WebviewWindowBuilder, WindowEvent,
-};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 use crate::commands::AppState;
 
@@ -231,13 +229,13 @@ fn show(app: &AppHandle, offer: Offer) {
             }
         }
     };
-    if let (Ok(Some(monitor)), Ok(size)) = (window.primary_monitor(), window.outer_size()) {
-        let margin = (16.0 * monitor.scale_factor()) as i32;
-        let top = (40.0 * monitor.scale_factor()) as i32;
-        let area = monitor.work_area();
-        let x = area.position.x + area.size.width as i32 - size.width as i32 - margin;
-        let _ = window.set_position(PhysicalPosition::new(x, area.position.y + top));
-    }
+    crate::placement::place(
+        &window,
+        crate::placement::Spot::TopRight {
+            top: 40.0,
+            right: 16.0,
+        },
+    );
     let _ = window.show();
     let _ = app.emit_to(WINDOW, CHANGED, offer);
 }

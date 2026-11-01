@@ -92,6 +92,8 @@ pub struct NotesSettings {
     pub ask_uses_notes: Option<bool>,
     /// The first meeting's reminder about telling people has been shown.
     pub meeting_reminded: bool,
+    /// Keep the Notes window above other apps' windows.
+    pub keep_on_top: bool,
 }
 
 /// Whether to summarize a meeting when it ends.

@@ -105,6 +105,8 @@
 }
 .nt-notice[hidden] { display: none; }
 .nt-notice > span { flex: 1; min-width: 0; }
+.nt-question { background: var(--accent-soft); flex-wrap: wrap; }
+.nt-question-acts { display: flex; gap: 6px; flex: none !important; }
 
 /* ---------------------------------------------------------------- jobs */
 .nt-job {
@@ -362,6 +364,8 @@
 .nt-menu button:disabled { opacity: .45; background: none; color: inherit; }
 .nt-menu .nt-kbd { margin-left: auto; border: 0; background: none; padding: 0; }
 .nt-menu button:hover .nt-kbd, .nt-menu button:focus-visible .nt-kbd { color: inherit; }
+.nt-tick { margin-left: auto; }
+[aria-checked="true"] > .nt-tick::before { content: "✓"; }
 .nt-menu hr { border: 0; border-top: 1px solid var(--border); margin: 4px 2px; }
 
 /* ---------------------------------------------------------------- history */

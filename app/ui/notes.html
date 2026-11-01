@@ -114,6 +114,7 @@
         <div id="nt-menu" class="nt-menu nt-menu-right" role="menu" hidden>
           <button role="menuitem" data-act="rename">Rename…</button>
           <button role="menuitem" data-act="reveal" id="nt-reveal">Show in Finder</button>
+          <button role="menuitemcheckbox" data-act="on-top" id="nt-on-top" aria-checked="false"><span>Keep on top</span><span class="nt-tick" aria-hidden="true"></span></button>
           <button role="menuitem" data-act="edit-rewrites">Edit rewrites…</button>
           <button role="menuitem" data-act="folder">Change notes folder…</button>
           <hr>
@@ -157,6 +158,10 @@
               <span class="nt-dev"><span class="nt-level"><i id="nt-live-you"></i></span>You</span>
               <span class="nt-dev" id="nt-live-them-wrap"><span class="nt-level"><i id="nt-live-them"></i></span>Them</span>
               <button class="btn primary" id="nt-live-stop"><svg class="ic sm"><use href="#i-stop"></use></svg>Stop and summarize</button>
+            </div>
+            <div id="nt-live-question" class="nt-notice nt-question" role="alertdialog" aria-labelledby="nt-live-question-title" hidden>
+              <span><b id="nt-live-question-title"></b> <span id="nt-live-question-text" class="nt-muted"></span></span>
+              <span id="nt-live-question-acts" class="nt-question-acts"></span>
             </div>
             <div id="nt-live-warning" class="nt-notice" hidden>
               <span id="nt-live-warning-text"></span>

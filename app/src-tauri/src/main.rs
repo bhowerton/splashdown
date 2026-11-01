@@ -17,6 +17,7 @@ mod meeting;
 mod minibar;
 mod notes;
 mod pill;
+mod placement;
 mod preview;
 mod project;
 mod prompt;
@@ -127,6 +128,7 @@ fn main() {
             notes::notes_transforms,
             notes::notes_transform,
             notes::notes_ask,
+            notes::notes_keep_on_top,
             notes::notes_edit_transforms,
             notes::notes_add,
             notes::files::notes_transcribe_pick,

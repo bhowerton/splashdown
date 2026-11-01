@@ -62,6 +62,10 @@ pub struct Status {
     pub warning: Option<String>,
     /// Stopped; the last turns and the summary are being done.
     pub finishing: bool,
+    /// A question the note waits on ("Summarize this meeting with
+    /// OpenRouter?"). It's asked in its own panel; Notes shows it too, so
+    /// it can be answered there.
+    pub question: Option<crate::prompt::Prompt>,
 }
 
 #[derive(Default)]
@@ -773,6 +777,13 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
     let Some((ai, local)) = summary_ai(settings) else {
         return;
     };
+    // Nobody said anything: nothing to summarize, or to ask about.
+    let Ok(body) = store.read(note).map(|n| n.body) else {
+        return;
+    };
+    if crate::notes::store::transcript_start(&body).is_none() {
+        return;
+    }
     let run = match settings.notes.meeting_summary {
         Some(MeetingSummary::Always) => true,
         Some(MeetingSummary::Never) => false,
@@ -782,6 +793,7 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
     if !run {
         return;
     }
+    // Re-read: My notes may have changed while the question was up.
     let Ok(body) = store.read(note).map(|n| n.body) else {
         return;
     };
@@ -810,14 +822,21 @@ fn summarize(app: &AppHandle, store: &Store, note: &str, settings: &Settings) {
 
 /// Asks before the meeting's text goes to a cloud AI. "Always" is kept.
 fn ask_to_summarize(app: &AppHandle, ai: &str) -> bool {
-    let answer = crate::prompt::ask(
-        app,
-        &format!("Summarize this meeting with {ai}?"),
-        &format!(
-            "The transcript goes to {ai} to write a summary of decisions, action items and open questions."
-        ),
-        &["Summarize", "Always summarize", "Not now"],
+    let title = format!("Summarize this meeting with {ai}?");
+    let text = format!(
+        "The transcript goes to {ai} to write a summary of decisions, action items and open questions."
     );
+    let buttons = ["Summarize", "Always summarize", "Not now"];
+    asking(
+        app,
+        Some(crate::prompt::Prompt {
+            title: title.clone(),
+            text: text.clone(),
+            buttons: buttons.map(String::from).to_vec(),
+        }),
+    );
+    let answer = crate::prompt::ask(app, &title, &text, &buttons);
+    asking(app, None);
     if answer == Some(1) {
         let state = app.state::<AppState>();
         let mut settings = state.settings();
@@ -831,6 +850,19 @@ fn ask_to_summarize(app: &AppHandle, ai: &str) -> bool {
         return true;
     }
     answer == Some(0)
+}
+
+/// Shows the meeting waiting on `question` (or no longer), in Notes.
+fn asking(app: &AppHandle, question: Option<crate::prompt::Prompt>) {
+    let status = {
+        let mut slot = running();
+        let Some(run) = slot.as_mut() else {
+            return;
+        };
+        run.status.question = question;
+        run.status.clone()
+    };
+    show(app, Some(&status));
 }
 
 /// The spool as a WAV in `Attachments/`. Returns its path for the link.

@@ -830,7 +830,12 @@ pub fn open(app: &AppHandle) {
         .inner_size(880.0, 600.0)
         .min_inner_size(420.0, 300.0)
         .resizable(true)
-        .always_on_top(true)
+        // A window of its own, unless the user keeps it on top to dictate
+        // into while they look at another app.
+        .always_on_top(
+            app.try_state::<AppState>()
+                .is_some_and(|s| s.settings().notes.keep_on_top),
+        )
         // Comes up on the Space (desktop) the user is on, not the one it was
         // first opened on.
         .visible_on_all_workspaces(true)
@@ -946,6 +951,8 @@ pub struct View {
     open: Option<Note>,
     /// The app "Paste into" pastes into.
     target: Option<String>,
+    /// The window stays above other apps' windows.
+    on_top: bool,
 }
 
 fn view(state: &AppState) -> Result<View, String> {
@@ -961,7 +968,26 @@ fn view(state: &AppState) -> Result<View, String> {
         notes: store.list(),
         open,
         target: target_name(),
+        on_top: state.settings().notes.keep_on_top,
     })
+}
+
+/// Keeps the window above other apps' windows, or not, and remembers it.
+#[tauri::command]
+pub fn notes_keep_on_top(
+    on: bool,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    if let Some(window) = app.get_webview_window(WINDOW) {
+        window.set_always_on_top(on).map_err(|e| e.to_string())?;
+    }
+    let mut settings = state.settings();
+    settings.notes.keep_on_top = on;
+    settings.save(&engine::paths()?.config_file())?;
+    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    crate::commands::settings_changed_elsewhere(&app);
+    Ok(())
 }
 
 #[tauri::command]
