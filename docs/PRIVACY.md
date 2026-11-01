@@ -16,6 +16,7 @@ Only these, and only when you can see why:
 | A question you ask (dictation key + A), plus selected text if any, parts of up to three of your notes that match it unless you turn that off in Settings → Privacy, the app's name unless you turn that off, and, only if the preset turns them on, the text around the cursor or your clipboard | The AI provider you chose | Only when you ask a question. With Apple's model or the built-in local model it stays on your computer |
 | A check for a newer version | GitHub Releases | At launch and once a day. Turn it off in Settings → General. Nothing about you or your dictation is sent |
 | Model downloads | Hugging Face (speech models such as Nemotron, Parakeet and Whisper, and the built-in model) or Apple | Only when you choose to download one |
+| A link you transcribe in Notes | The site it points to (YouTube, a podcast host), which sends the audio | Only when you transcribe a link. For a page such as YouTube, the link helper (yt-dlp and QuickJS) is downloaded from GitHub the first time, after asking, and yt-dlp checks GitHub for an update about once a week when it's used |
 | Feedback | A GitHub issue page in your browser | Only when you choose "Send feedback". It's pre-filled with versions and provider names; you see it before submitting |
 
 To offer to record a call, Splashdown checks every two seconds which apps are using the microphone (Settings → Notes → Meetings). Only the apps' names are read, nothing leaves your computer, and nothing is recorded until you click Record.

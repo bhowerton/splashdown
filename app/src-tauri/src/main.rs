@@ -120,6 +120,7 @@ fn main() {
             notes::notes_add,
             notes::files::notes_transcribe_pick,
             notes::files::notes_transcribe_url,
+            notes::files::notes_install_link_helper,
             notes::files::notes_transcribe_stop,
             notes::files::notes_transcribing,
             meeting::meeting_toggle,

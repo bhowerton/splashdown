@@ -166,6 +166,8 @@ Every default was chosen by measurement. The cleanup prompt is tested on 54 case
 
 Built in: Silero VAD (finds the speech in a recording), MIT.
 
+Downloaded when you first transcribe a page link (YouTube and the like): yt-dlp, public domain (the Unlicense), and QuickJS-NG, MIT.
+
 The speech models are the GGUF conversions published by the transcribe.cpp project.
 
 ## When something misbehaves

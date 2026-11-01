@@ -4,6 +4,7 @@
 //! front, so "Send to {app}" can hand focus back and paste the note there.
 
 pub mod files;
+mod link_helper;
 pub mod store;
 
 use std::path::{Path, PathBuf};

@@ -440,6 +440,16 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err("That isn't a web link (it should start with https://).".into());
     }
+    let models_dir = crate::engine::paths()?.models_dir;
+    let direct = url_extension(&url).is_some_and(|ext| EXTENSIONS.contains(&ext.as_str()));
+    let helper = (!direct)
+        .then(|| super::link_helper::find(&models_dir))
+        .flatten();
+    // A page needs the link helper; the Notes window asks before it's
+    // downloaded (`notes_install_link_helper`), then tries again.
+    if !direct && helper.is_none() && super::link_helper::can_download() {
+        return Err(NEEDS_HELPER.into());
+    }
     // A folder of its own, so two downloads never share a file.
     static DOWNLOADS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let n = DOWNLOADS.fetch_add(1, Ordering::Relaxed);
@@ -466,14 +476,26 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
             }),
         );
     }
-    let direct = url_extension(&url).is_some_and(|ext| EXTENSIONS.contains(&ext.as_str()));
-    let item = match yt_dlp().filter(|_| !direct) {
-        Some(program) => {
+    let item = match helper {
+        Some(helper) => {
             let (url, dir) = (url.clone(), dir.clone());
-            tauri::async_runtime::spawn_blocking(move || download_page(&program, &url, &dir))
-                .await
-                .map_err(|e| e.to_string())
-                .and_then(|r| r)
+            tauri::async_runtime::spawn_blocking(move || {
+                if super::link_helper::update_due(&helper) {
+                    super::link_helper::update(&helper);
+                }
+                match download_page(&helper, &url, &dir) {
+                    // Refused: sites change, and yt-dlp may need its
+                    // latest version. Once more after updating.
+                    Err(e) if e == REFUSED && helper.managed => {
+                        super::link_helper::update(&helper);
+                        download_page(&helper, &url, &dir)
+                    }
+                    other => other,
+                }
+            })
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r)
         }
         None => download_file(&url, &dir).await,
     };
@@ -492,12 +514,53 @@ pub async fn notes_transcribe_url(url: String, app: AppHandle) -> Result<(), Str
     }
 }
 
+/// What `notes_transcribe_url` says when a page needs the link helper.
+const NEEDS_HELPER: &str = "needs-link-helper";
+/// A site refused yt-dlp's download.
+const REFUSED: &str = "The site refused the download. Try again later.";
+
+/// Downloads the link helper (see `link_helper`), after the Notes window
+/// asked. The Notes bar shows it, with Stop.
+#[tauri::command]
+pub async fn notes_install_link_helper(app: AppHandle) -> Result<(), String> {
+    let models_dir = crate::engine::paths()?.models_dir;
+    CANCEL.store(false, Ordering::Relaxed);
+    let shown = !queue().running;
+    if shown {
+        show(
+            &app,
+            Some(Status {
+                file: format!(
+                    "the link helper (about {} MB)",
+                    super::link_helper::APPROX_MB
+                ),
+                note: String::new(),
+                done: 0.0,
+                total: None,
+                waiting: 0,
+                place: String::new(),
+                downloading: true,
+            }),
+        );
+    }
+    let result = super::link_helper::install(&models_dir).await;
+    if shown && !queue().running {
+        show(&app, None);
+    }
+    result
+}
+
+/// Whether Stop was pressed during a download.
+pub(super) fn download_cancelled() -> bool {
+    CANCEL.load(Ordering::Relaxed)
+}
+
 /// Set by Stop: a download in progress ends.
 static CANCEL: AtomicBool = AtomicBool::new(false);
 /// yt-dlp while it runs, for Stop to end it.
 static DOWNLOADER: Mutex<Option<std::process::Child>> = Mutex::new(None);
 
-const STOPPED: &str = "Download stopped.";
+pub(super) const STOPPED: &str = "Download stopped.";
 
 /// A link, short, for the Notes bar: its host and the end of its path.
 fn url_label(url: &str) -> String {
@@ -613,8 +676,18 @@ async fn download_file(url: &str, dir: &Path) -> Result<Item, String> {
 }
 
 /// Downloads a page's audio with yt-dlp.
-fn download_page(program: &Path, url: &str, dir: &Path) -> Result<Item, String> {
-    let mut command = std::process::Command::new(program);
+fn download_page(
+    helper: &super::link_helper::Helper,
+    url: &str,
+    dir: &Path,
+) -> Result<Item, String> {
+    let mut command = std::process::Command::new(&helper.yt_dlp);
+    // The JavaScript engine YouTube needs.
+    if let Some(qjs) = &helper.qjs {
+        command
+            .arg("--js-runtimes")
+            .arg(format!("quickjs:{}", qjs.display()));
+    }
     command
         // `--print` would otherwise skip the download.
         .args([
@@ -675,25 +748,20 @@ fn yt_dlp_error(stderr: &str) -> String {
         .trim()
         .trim_start_matches("ERROR: ");
     // Sites change their pages often, and an older yt-dlp then gets
-    // refused or can't find the video.
+    // refused; the caller updates it and tries again.
     if reason.contains("403")
         || reason.contains("Forbidden")
         || reason.contains("Sign in to confirm")
     {
-        let update = if cfg!(windows) {
-            "winget upgrade yt-dlp"
-        } else {
-            "brew upgrade yt-dlp"
-        };
-        return format!(
-            "The site refused the download. That usually means yt-dlp needs updating ({update}); then try again."
-        );
+        return REFUSED.into();
     }
     format!("yt-dlp couldn't get it: {reason}")
 }
 
 /// Runs `command` to the end, unless Stop ends it first.
-fn run_stoppable(mut command: std::process::Command) -> Result<std::process::Output, String> {
+pub(super) fn run_stoppable(
+    mut command: std::process::Command,
+) -> Result<std::process::Output, String> {
     let mut child = command
         .spawn()
         .map_err(|e| format!("Couldn't run yt-dlp: {e}"))?;
@@ -737,30 +805,6 @@ fn run_stoppable(mut command: std::process::Command) -> Result<std::process::Out
         return Err(STOPPED.into());
     }
     Ok(output)
-}
-
-/// yt-dlp, if it's installed: on the `PATH`, or where Homebrew and winget
-/// put it (an app started from the Dock or Start doesn't get the shell's
-/// `PATH`).
-fn yt_dlp() -> Option<PathBuf> {
-    let exe = if cfg!(windows) {
-        "yt-dlp.exe"
-    } else {
-        "yt-dlp"
-    };
-    let mut dirs: Vec<PathBuf> = std::env::var_os("PATH")
-        .map(|p| std::env::split_paths(&p).collect())
-        .unwrap_or_default();
-    dirs.extend(["/opt/homebrew/bin", "/usr/local/bin"].map(PathBuf::from));
-    if let Some(local) = std::env::var_os("LOCALAPPDATA") {
-        dirs.push(
-            PathBuf::from(local)
-                .join("Microsoft")
-                .join("WinGet")
-                .join("Links"),
-        );
-    }
-    dirs.into_iter().map(|d| d.join(exe)).find(|p| p.is_file())
 }
 
 /// Stop: ends the running job (keeping what's done) and drops the waiting
@@ -818,7 +862,6 @@ mod tests {
         );
         assert_eq!(ext("https://www.youtube.com/watch?v=abc"), None);
         assert_eq!(ext("https://x.org/"), None);
-        assert!(yt_dlp().is_none_or(|p| p.is_file()));
         assert_eq!(
             url_label("https://example.org/ep/42.mp3?x=1"),
             "example.org/ep/42.mp3"
@@ -827,9 +870,9 @@ mod tests {
             url_label(&format!("https://example.org/{}/talk.mp3", "a/".repeat(30))),
             "example.org/…/talk.mp3"
         );
-        assert!(
-            yt_dlp_error("ERROR: unable to download video data: HTTP Error 403: Forbidden\n")
-                .contains("yt-dlp needs updating")
+        assert_eq!(
+            yt_dlp_error("ERROR: unable to download video data: HTTP Error 403: Forbidden\n"),
+            REFUSED
         );
         assert_eq!(
             yt_dlp_error("ERROR: Video unavailable\n"),

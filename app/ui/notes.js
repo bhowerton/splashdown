@@ -628,6 +628,29 @@ listen("notes-dragging", (event) => { $("nt-drop").hidden = !event.payload; });
 $("nt-job-stop").addEventListener("click", () => invoke("notes_transcribe_stop").catch((e) => toast(String(e), true)));
 $("nt-job-show").addEventListener("click", () => job && openNote(job.note));
 
+/** Transcribes a link; a page (YouTube) first needs the link helper,
+ *  downloaded once after asking. */
+async function transcribeLink(url) {
+  try {
+    await invoke("notes_transcribe_url", { url });
+  } catch (err) {
+    if (String(err) !== "needs-link-helper") return toast(String(err), true);
+    const mac = navigator.platform.startsWith("Mac");
+    const ok = await askConfirm("Download the link helper?", {
+      action: "Download",
+      danger: false,
+      detail: `Transcribing pages such as YouTube needs yt-dlp and a small JavaScript engine (QuickJS), about ${mac ? 39 : 26} MB from their official GitHub releases. Splashdown keeps them up to date. Links straight to an audio or video file don't need them.`,
+    });
+    if (!ok) return;
+    try {
+      await invoke("notes_install_link_helper");
+      await invoke("notes_transcribe_url", { url });
+    } catch (e) {
+      toast(String(e), true);
+    }
+  }
+}
+
 // ---------------------------------------------------------------- meetings
 
 /** The meeting recording now, or null. */
@@ -700,7 +723,7 @@ $("nt-menu").addEventListener("click", (e) => {
         placeholder: "https://",
         action: "Transcribe",
       });
-      if (url) invoke("notes_transcribe_url", { url }).catch((err) => toast(String(err), true));
+      if (url) transcribeLink(url);
     },
     meeting: () => invoke("meeting_toggle").catch((err) => toast(String(err), true)),
     reveal: () => invoke("notes_reveal", { path: current.path }).catch((err) => toast(String(err), true)),

@@ -4030,6 +4030,7 @@ dependencies = [
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "splashdown-apple-shim",
  "splashdown-audio",
  "splashdown-config",
