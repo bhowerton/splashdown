@@ -35,6 +35,15 @@ pub fn inputs() -> Vec<InputInfo> {
     imp::inputs()
 }
 
+/// The name of the device the computer plays through now (to notice it
+/// changing, e.g. headphones plugged in during a meeting).
+pub fn default_output() -> Option<String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    cpal::default_host()
+        .default_output_device()
+        .and_then(|d| d.name().ok())
+}
+
 #[cfg(target_os = "macos")]
 mod imp {
     //! Core Audio: device list, names, transport type and default input.

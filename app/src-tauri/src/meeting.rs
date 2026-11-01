@@ -8,7 +8,7 @@
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 
@@ -40,6 +40,8 @@ const GRACE: Duration = Duration::from_secs(60);
 /// The longest a meeting records.
 const LONGEST: Duration = Duration::from_secs(4 * 3600);
 const RATE: usize = splashdown_audio::TARGET_SAMPLE_RATE as usize;
+/// How often to look for a change of output device.
+const OUTPUT_CHECK: Duration = Duration::from_secs(2);
 
 /// The meeting in progress, for the Notes window and the CLI.
 #[derive(Debug, Clone, Default, Serialize)]
@@ -336,8 +338,6 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
         std::io::BufWriter::new(std::fs::File::create(&raw_path).map_err(|e| e.to_string())?);
 
     crate::notes::open(app);
-    let mut job = Job::new(&store, &note.path, &speech);
-    job.spool = Some((meta_path.clone(), spool));
     let mut step = InStep::default();
     let mut status = Status {
         note: note.path.clone(),
@@ -349,81 +349,138 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
     let started = Instant::now();
     let mut asked: Option<Instant> = None;
     let mut ended = None;
+    // Samples recorded on each side (in step), and when someone was last
+    // heard, in milliseconds of recording, from the transcriber.
+    let mut recorded = 0usize;
+    let heard = AtomicU64::new(0);
+    let mut kept_at = Duration::ZERO;
+    let mut output = splashdown_audio::devices::default_output();
+    let mut output_checked = Instant::now();
 
-    loop {
-        std::thread::sleep(TICK);
+    // Transcribing runs beside the recording: a turn waiting for the
+    // speech model (busy with a dictation, say) never holds up capture,
+    // the spool or Stop.
+    let (echoes, lost_writes) = std::thread::scope(|scope| {
+        let (tx, rx) = std::sync::mpsc::channel::<(Vec<f32>, Vec<f32>)>();
+        let (store, note_path, speech, heard) = (&store, &note.path, &speech, &heard);
+        let spool = (meta_path.clone(), spool);
+        let transcriber = scope.spawn(move || {
+            let mut job = Job::new(store, note_path, speech);
+            job.spool = Some(spool);
+            while let Ok((you, them)) = rx.recv() {
+                job.push(&you, &them);
+                // Whatever else arrived meanwhile, then the turns.
+                while let Ok((you, them)) = rx.try_recv() {
+                    job.push(&you, &them);
+                }
+                job.transcribe(false);
+                heard.store(job.heard_at.as_millis() as u64, Ordering::Relaxed);
+            }
+            (job.finish(), job.lost_writes)
+        });
+
+        loop {
+            std::thread::sleep(TICK);
+            // The computer's sound follows the output device: headphones
+            // plugged in or AirPods connected mid-call.
+            if output_checked.elapsed() >= OUTPUT_CHECK {
+                output_checked = Instant::now();
+                let now_output = splashdown_audio::devices::default_output();
+                if now_output != output && them_problem.is_none() {
+                    tracing::info!(
+                        "the output device changed: recording the computer's sound again"
+                    );
+                    output = now_output;
+                    them = match system_audio() {
+                        Ok(again) => Some(again),
+                        Err(e) => {
+                            status.them_problem = Some(e);
+                            None
+                        }
+                    };
+                }
+            }
+            let mine = you.take();
+            let theirs = match them.as_mut() {
+                Some(them) => them.take(),
+                // Without the other side, silence keeps it in step.
+                None => vec![0.0; mine.len()],
+            };
+            let (mine, theirs) = step.push(&mine, &theirs);
+            write_stereo(&mut raw, &mine, &theirs);
+            recorded += mine.len();
+            let _ = tx.send((mine, theirs));
+            let recorded_for = Duration::from_secs_f64(recorded as f64 / RATE as f64);
+
+            status.elapsed = recorded_for.as_secs_f64();
+            status.you = you.level();
+            status.them = them.as_ref().map_or(0.0, LiveAudio::level);
+
+            if keep.swap(false, Ordering::Relaxed) {
+                asked = None;
+                status.warning = None;
+                kept_at = recorded_for;
+            }
+            let heard_at = Duration::from_millis(heard.load(Ordering::Relaxed)).max(kept_at);
+            let quiet = recorded_for.saturating_sub(heard_at);
+            let too_long = started.elapsed() >= LONGEST - GRACE;
+            // Someone spoke after "Still in a meeting?": it is one.
+            if asked.is_some() && !too_long && quiet < QUIET {
+                asked = None;
+                status.warning = None;
+            }
+            if asked.is_none() && ((settings.notes.stop_when_quiet() && quiet >= QUIET) || too_long)
+            {
+                asked = Some(Instant::now());
+                status.warning = Some(if too_long {
+                    "Meetings record for 4 hours at most. Stopping in 1 minute.".into()
+                } else {
+                    "Still in a meeting? Nobody has spoken for 10 minutes. Stopping in 1 minute."
+                        .into()
+                });
+                crate::notes::open(app);
+            }
+            show(app, Some(&status));
+
+            let at = timestamp(recorded_for);
+            if stop.load(Ordering::Relaxed) {
+                ended = Some(format!("*Ended at {at}.*"));
+            } else if you.lost() {
+                ended = Some(format!("*Stopped at {at}: the microphone went away.*"));
+            } else if asked.is_some_and(|t| t.elapsed() >= GRACE) {
+                ended = Some(if too_long {
+                    format!("*Stopped at {at}, the longest a meeting records.*")
+                } else {
+                    format!("*Stopped at {at}: nobody had spoken for 10 minutes.*")
+                });
+            }
+            if ended.is_some() {
+                break;
+            }
+        }
+
+        // The last of it.
         let mine = you.take();
         let theirs = match them.as_mut() {
             Some(them) => them.take(),
-            // Without the other side, silence keeps it in step.
             None => vec![0.0; mine.len()],
         };
-        let (mine, theirs) = step.push(&mine, &theirs);
+        let _ = step.push(&mine, &theirs);
+        let (mine, theirs) = step.rest();
         write_stereo(&mut raw, &mine, &theirs);
-        job.push(&mine, &theirs);
-        job.transcribe(false);
-
-        status.elapsed = job.recorded().as_secs_f64();
-        status.you = you.level();
-        status.them = them.as_ref().map_or(0.0, LiveAudio::level);
-
-        if keep.swap(false, Ordering::Relaxed) {
-            asked = None;
-            status.warning = None;
-            job.heard_at = job.recorded();
-        }
-        let quiet = job.recorded().saturating_sub(job.heard_at);
-        let too_long = started.elapsed() >= LONGEST - GRACE;
-        // Someone spoke after "Still in a meeting?": it is one.
-        if asked.is_some() && !too_long && quiet < QUIET {
-            asked = None;
-            status.warning = None;
-        }
-        if asked.is_none() && ((settings.notes.stop_when_quiet() && quiet >= QUIET) || too_long) {
-            asked = Some(Instant::now());
-            status.warning = Some(if too_long {
-                "Meetings record for 4 hours at most. Stopping in 1 minute.".into()
-            } else {
-                "Still in a meeting? Nobody has spoken for 10 minutes. Stopping in 1 minute.".into()
-            });
-            crate::notes::open(app);
-        }
+        let _ = raw.flush();
+        recorded += mine.len();
+        let _ = tx.send((mine, theirs));
+        drop(tx);
+        status.finishing = true;
+        status.warning = None;
         show(app, Some(&status));
-
-        let at = timestamp(job.recorded());
-        if stop.load(Ordering::Relaxed) {
-            ended = Some(format!("*Ended at {at}.*"));
-        } else if you.lost() {
-            ended = Some(format!("*Stopped at {at}: the microphone went away.*"));
-        } else if asked.is_some_and(|t| t.elapsed() >= GRACE) {
-            ended = Some(if too_long {
-                format!("*Stopped at {at}, the longest a meeting records.*")
-            } else {
-                format!("*Stopped at {at}: nobody had spoken for 10 minutes.*")
-            });
-        }
-        if ended.is_some() {
-            break;
-        }
-    }
-
-    // The last of it.
-    let mine = you.take();
-    let theirs = match them.as_mut() {
-        Some(them) => them.take(),
-        None => vec![0.0; mine.len()],
-    };
-    drop((you, them));
-    let _ = step.push(&mine, &theirs);
-    let (mine, theirs) = step.rest();
-    write_stereo(&mut raw, &mine, &theirs);
-    let _ = raw.flush();
-    drop(raw);
-    status.finishing = true;
-    status.warning = None;
-    show(app, Some(&status));
-    job.push(&mine, &theirs);
-    let echoes = job.finish();
+        transcriber.join().unwrap_or_else(|_| {
+            tracing::error!("transcribing the meeting panicked");
+            (0, true)
+        })
+    });
+    drop((you, them, raw));
     if let Some(ended) = &ended {
         let _ = store.add_paragraph(&note.path, ended);
     }
@@ -434,7 +491,7 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
             false,
         );
     }
-    if job.lost_writes {
+    if lost_writes {
         // The note couldn't take the turns (renamed, moved or deleted
         // meanwhile): the recording stays, to finish at the next launch.
         tell(
@@ -447,7 +504,7 @@ fn record(app: &AppHandle, stop: &AtomicBool, keep: &AtomicBool) -> Result<(), S
     finish(app, &store, &note.path, &raw_path, &settings);
     let _ = std::fs::remove_file(&raw_path);
     let _ = std::fs::remove_file(&meta_path);
-    tracing::info!("meeting ended after {:.0} s", job.recorded().as_secs_f64());
+    tracing::info!("meeting ended after {:.0} s", recorded as f64 / RATE as f64);
     Ok(())
 }
 
