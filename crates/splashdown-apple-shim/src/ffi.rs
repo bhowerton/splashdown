@@ -18,6 +18,9 @@ pub const GUARDRAIL: i32 = 11;
 pub const REFUSED: i32 = 12;
 
 pub type Callback = extern "C" fn(ctx: *mut c_void, status: i32, text: *const c_char);
+/// Mono samples at a sample rate, from the system audio tap.
+pub type AudioCallback =
+    extern "C" fn(ctx: *mut c_void, samples: *const f32, count: i32, rate: f64);
 
 unsafe extern "C" {
     pub fn splashdown_apple_llm_status() -> i32;
@@ -35,6 +38,13 @@ unsafe extern "C" {
         ctx: *mut c_void,
         callback: Callback,
     );
+    pub fn splashdown_tap_start(
+        ctx: *mut c_void,
+        callback: AudioCallback,
+        code: *mut i32,
+        detail: *mut i32,
+    ) -> *mut c_void;
+    pub fn splashdown_tap_stop(handle: *mut c_void);
     pub fn splashdown_apple_transcribe(
         path: *const c_char,
         locale: *const c_char,

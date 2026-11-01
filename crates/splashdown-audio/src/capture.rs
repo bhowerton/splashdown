@@ -47,7 +47,7 @@ impl Level {
     pub fn get(&self) -> f32 {
         f32::from_bits(self.0.rms.load(Ordering::Relaxed))
     }
-    fn set(&self, v: f32) {
+    pub(crate) fn set(&self, v: f32) {
         self.0.rms.store(v.to_bits(), Ordering::Relaxed);
     }
     /// The microphone was unplugged or switched off mid-recording. What it
@@ -80,7 +80,27 @@ impl Recorder {
         let config = device
             .default_input_config()
             .map_err(|e| CaptureError::Device(e.to_string()))?;
+        Self::record(&device, config)
+    }
 
+    /// Records what the default playback device plays (WASAPI loopback):
+    /// the other side of a call, for meeting notes.
+    #[cfg(windows)]
+    pub fn start_system_output() -> Result<Self, CaptureError> {
+        let device = cpal::default_host()
+            .default_output_device()
+            .ok_or(CaptureError::NoDevice)?;
+        let config = device
+            .default_output_config()
+            .map_err(|e| CaptureError::Device(e.to_string()))?;
+        // An input stream on an output device is a loopback recording.
+        Self::record(&device, config)
+    }
+
+    fn record(
+        device: &cpal::Device,
+        config: cpal::SupportedStreamConfig,
+    ) -> Result<Self, CaptureError> {
         let sample_rate = config.sample_rate().0;
         let channels = usize::from(config.channels().max(1));
         let buffer = Arc::new(Mutex::new(Vec::with_capacity(sample_rate as usize * 30)));

@@ -8,8 +8,10 @@
 
 mod ffi;
 mod providers;
+mod tap;
 
 pub use providers::{AppleLanguageModel, AppleSpeech};
+pub use tap::system_audio;
 
 use std::ffi::CString;
 

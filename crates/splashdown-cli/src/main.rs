@@ -192,6 +192,18 @@ enum WordsCommand {
 
 #[derive(Subcommand)]
 enum MeetingCommand {
+    /// Record a meeting for a while: the microphone (You, left channel)
+    /// and what the computer plays (Them, right channel), as a 16 kHz
+    /// stereo WAV for `meeting transcribe`.
+    Record {
+        out: PathBuf,
+        /// How long to record.
+        #[arg(long, default_value_t = 30)]
+        seconds: u64,
+        /// Microphone name (default: the system's).
+        #[arg(long)]
+        device: Option<String>,
+    },
     /// Transcribe a recorded meeting, a stereo file with You (the
     /// microphone) on the left and Them (the computer's sound) on the
     /// right, and print the transcript as Markdown.
@@ -333,6 +345,14 @@ fn main() -> Result<()> {
                     config,
                 },
         } => import_words(&file, dry_run, config)?,
+        Command::Meeting {
+            command:
+                MeetingCommand::Record {
+                    out,
+                    seconds,
+                    device,
+                },
+        } => record_meeting(&out, seconds, device.as_deref())?,
         Command::Meeting {
             command:
                 MeetingCommand::Transcribe {
@@ -564,6 +584,74 @@ fn import_words(file: &std::path::Path, dry_run: bool, config: Option<PathBuf>) 
         Ok(_) => println!("Saved; Splashdown is using them now."),
         Err(_) => println!("Saved; Splashdown will use them when it starts."),
     }
+    Ok(())
+}
+
+/// What the computer plays, as a live recording.
+fn system_audio() -> Result<splashdown_audio::live::LiveAudio> {
+    #[cfg(target_os = "macos")]
+    return splashdown_apple_shim::system_audio().map_err(anyhow::Error::msg);
+    #[cfg(windows)]
+    return Ok(splashdown_audio::live::LiveAudio::system_output()?);
+    #[cfg(not(any(target_os = "macos", windows)))]
+    bail!("recording the computer's sound isn't supported here");
+}
+
+/// Records both sides of a meeting into a stereo WAV.
+fn record_meeting(out: &std::path::Path, seconds: u64, device: Option<&str>) -> Result<()> {
+    use splashdown_audio::live::LiveAudio;
+
+    let mut you = LiveAudio::microphone(device)?;
+    let mut them = system_audio()?;
+    let (mut left, mut right) = (Vec::new(), Vec::new());
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(seconds);
+    let mut loudest = (0.0f32, 0.0f32);
+    while std::time::Instant::now() < end {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        left.extend(you.take());
+        right.extend(them.take());
+        loudest = (loudest.0.max(you.level()), loudest.1.max(them.level()));
+        eprint!(
+            "\rrecording {:>3} s · You {:.3} · Them {:.3}   ",
+            left.len() / 16_000,
+            you.level(),
+            them.level()
+        );
+    }
+    eprintln!();
+    eprintln!(
+        "audio delivered: You {:.1} s, Them {:.1} s",
+        left.len() as f64 / 16_000.0,
+        right.len() as f64 / 16_000.0
+    );
+    let frames = left.len().max(right.len());
+    left.resize(frames, 0.0);
+    right.resize(frames, 0.0);
+    let spec = hound::WavSpec {
+        channels: 2,
+        sample_rate: splashdown_audio::TARGET_SAMPLE_RATE,
+        bits_per_sample: 16,
+        sample_format: hound::SampleFormat::Int,
+    };
+    let mut writer = hound::WavWriter::create(out, spec)?;
+    for (l, r) in left.iter().zip(&right) {
+        for s in [l, r] {
+            writer.write_sample((s.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16)?;
+        }
+    }
+    writer.finalize()?;
+    eprintln!(
+        "wrote {:.1} s to {} (loudest: You {:.3}, Them {:.3}{})",
+        frames as f64 / 16_000.0,
+        out.display(),
+        loudest.0,
+        loudest.1,
+        if loudest.1 == 0.0 {
+            "; Them was silent: nothing played, or recording the computer's sound isn't allowed"
+        } else {
+            ""
+        }
+    );
     Ok(())
 }
 

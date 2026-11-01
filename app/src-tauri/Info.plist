@@ -10,6 +10,8 @@
   <true/>
   <key>NSMicrophoneUsageDescription</key>
   <string>Splashdown listens while you hold the dictation key, to turn your speech into text.</string>
+  <key>NSAudioCaptureUsageDescription</key>
+  <string>Splashdown records what the other people on a call say, so it can write it into your meeting note.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
   <string>Splashdown can use Apple's on-device speech recognition to transcribe what you say.</string>
   <!-- splashdown://toggle, start, stop and cancel, for Raycast, Alfred and

@@ -7,6 +7,7 @@ pub mod denoise;
 pub mod devices;
 pub mod file;
 pub mod gain;
+pub mod live;
 pub mod resample;
 pub mod vad;
 pub mod wav;

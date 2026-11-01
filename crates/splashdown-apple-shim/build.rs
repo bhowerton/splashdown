@@ -61,7 +61,14 @@ fn main() {
     );
     println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
 
-    for framework in ["Foundation", "AVFAudio", "Speech", "CoreMedia"] {
+    for framework in [
+        "Foundation",
+        "AVFAudio",
+        "Speech",
+        "CoreMedia",
+        "CoreAudio",
+        "AudioToolbox",
+    ] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
     // FoundationModels (macOS 26+) is linked weakly by .cargo/config.toml.

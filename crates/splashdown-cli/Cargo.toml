@@ -19,6 +19,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 clap.workspace = true
 dotenvy.workspace = true
+hound.workspace = true
 splashdown-audio.workspace = true
 splashdown-config.workspace = true
 splashdown-control.workspace = true
@@ -27,6 +28,9 @@ splashdown-providers.workspace = true
 serde.workspace = true
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 toml.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+splashdown-apple-shim.workspace = true
 
 [features]
 default = ["local-speech"]
