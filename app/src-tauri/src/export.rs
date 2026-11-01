@@ -89,6 +89,42 @@ pub fn check_settings_file(text: String) -> Result<ImportSummary, String> {
     })
 }
 
+/// What importing words from another app's file would add.
+#[derive(Serialize)]
+pub struct WordsImport {
+    /// The settings with the file merged in, to save if the user agrees.
+    settings: Settings,
+    /// What kind of file it was: "dictionary export".
+    kind: &'static str,
+    vocabulary: usize,
+    replacements: usize,
+    snippets: usize,
+    duplicates: usize,
+    conflicts: usize,
+    skipped: usize,
+}
+
+/// Merges another dictation app's export (vocabulary, corrections,
+/// snippets) into `settings`, the Settings window's current ones, without
+/// changing anything already there. Nothing is saved here.
+#[tauri::command]
+pub fn import_words(text: String, mut settings: Settings) -> Result<WordsImport, String> {
+    let imported = splashdown_config::import::parse(&text).map_err(|e| {
+        format!("Splashdown couldn't use that file: {e}. It takes a dictionary or snippets export, or a word list.")
+    })?;
+    let merged = splashdown_config::import::merge(&mut settings, &imported);
+    Ok(WordsImport {
+        settings,
+        kind: imported.kind,
+        vocabulary: merged.vocabulary,
+        replacements: merged.replacements,
+        snippets: merged.snippets,
+        duplicates: merged.duplicates,
+        conflicts: merged.conflicts,
+        skipped: imported.skipped,
+    })
+}
+
 /// Replaces the settings with an exported file's and applies them, the same
 /// way as saving in Settings. Whether this computer's setup guide was
 /// finished stays as it is: permissions are per computer.

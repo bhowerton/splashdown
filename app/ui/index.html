@@ -168,6 +168,9 @@
         </div>
         <label class="row"><span class="lbl">Learn from my corrections<small>If you fix a name right after dictating it, Splashdown suggests adding it here. Only the word is kept.</small></span>
           <input id="gen-learn" type="checkbox" class="switch" data-setting></label>
+        <div class="row"><span class="lbl">Bring your words from another dictation app<small>A dictionary or snippets export, or a word list (text or CSV, with “misspelling,correction” lines for corrections). Words, corrections and snippets are added; nothing already here changes.</small></span>
+          <button class="btn" id="words-import">Import…</button>
+          <input type="file" id="words-import-file" accept=".json,.csv,.txt,.tsv" hidden></div>
       </div>
       <div class="group">
         <div class="gh">Snippets</div>

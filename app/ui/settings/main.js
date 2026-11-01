@@ -229,6 +229,46 @@ $("cfg-export").addEventListener("click", async () => {
     toast(String(e), true);
   }
 });
+/** "a, b and c". */
+function listJoin(items) {
+  return items.length < 2 ? items.join("") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
+}
+
+// Words & language → Import: another dictation app's export, merged into
+// the settings shown here after a confirmation.
+$("words-import").addEventListener("click", () => $("words-import-file").click());
+$("words-import-file").addEventListener("change", async () => {
+  const input = $("words-import-file");
+  const file = input.files[0];
+  input.value = ""; // so choosing the same file again still fires
+  if (!file) return;
+  try {
+    const r = await invoke("import_words", { text: await file.text(), settings: collect() });
+    const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+    const parts = [
+      r.vocabulary && count(r.vocabulary, "word"),
+      r.replacements && count(r.replacements, "correction"),
+      r.snippets && count(r.snippets, "snippet"),
+    ].filter(Boolean);
+    const notes = [
+      r.duplicates && `${r.duplicates} already here`,
+      r.conflicts && `${count(r.conflicts, "entry", "entries")} kept as you have ${r.conflicts === 1 ? "it" : "them"}`,
+      r.skipped && `${count(r.skipped, "line")} couldn't be used`,
+    ].filter(Boolean);
+    if (!parts.length) {
+      toast(`Nothing new in “${file.name}”${notes.length ? ` (${notes.join(", ")})` : ""}`);
+      return;
+    }
+    const sure = await askConfirm(`Add ${listJoin(parts)} from “${file.name}”?`, {
+      action: "Add",
+      detail: `Read as a ${r.kind}.${notes.length ? ` ${notes.join("; ")}.` : ""} Nothing you already have changes.`,
+    });
+    if (sure) await save(r.settings);
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
+
 $("cfg-import").addEventListener("click", () => $("cfg-import-file").click());
 $("cfg-import-file").addEventListener("change", async () => {
   const input = $("cfg-import-file");

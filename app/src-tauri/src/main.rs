@@ -122,6 +122,7 @@ fn main() {
             export::export_settings,
             export::check_settings_file,
             export::import_settings,
+            export::import_words,
         ])
         .setup(|app| {
             // Menu bar app: no Dock icon, no app menu.
