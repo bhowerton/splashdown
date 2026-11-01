@@ -72,6 +72,9 @@ pub struct Status {
     /// Recording an app's audio rather than a meeting: the app's name (or
     /// "this computer's sound").
     pub app: Option<String>,
+    /// Seconds into the recording when words were last heard, if they
+    /// have been: whether what's recorded is being transcribed.
+    pub heard: Option<f64>,
     /// A question the note waits on ("Summarize this meeting with
     /// OpenRouter?"). It's asked in its own panel; Notes shows it too, so
     /// it can be answered there.
@@ -528,7 +531,9 @@ fn record(
                 status.warning = None;
                 kept_at = recorded_for;
             }
-            let heard_at = Duration::from_millis(heard.load(Ordering::Relaxed)).max(kept_at);
+            let heard_ms = heard.load(Ordering::Relaxed);
+            status.heard = (heard_ms > 0).then(|| heard_ms as f64 / 1000.0);
+            let heard_at = Duration::from_millis(heard_ms).max(kept_at);
             let quiet = recorded_for.saturating_sub(heard_at);
             let too_long = started.elapsed() >= LONGEST - GRACE;
             // Someone spoke after "Still in a meeting?": it is one.

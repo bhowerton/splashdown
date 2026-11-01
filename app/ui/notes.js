@@ -530,11 +530,8 @@ function updateHeader() {
   $("nt-job-show").hidden = !job || !!job.downloading || isLocked;
   $("nt-meeting").hidden = !meeting || liveHere();
   const record = $("nt-record");
-  record.classList.toggle("nt-recording", !!meeting);
-  const stopLabel = meeting?.app ? "Stop recording" : "Stop meeting";
-  $("nt-record-label").textContent = meeting ? stopLabel : "Record meeting";
-  record.querySelector("use").setAttribute("href", meeting ? "#i-stop" : "#i-rec");
-  record.setAttribute("aria-label", meeting ? stopLabel : "Record a meeting");
+  // While something records, its own bar has the one Stop.
+  record.hidden = !!meeting;
   for (const chip of document.querySelectorAll("#nt-rewrite button")) chip.disabled = isLocked || !!review;
   const empty = text.trim() === "";
   $("nt-copy").disabled = empty;
@@ -2101,11 +2098,11 @@ async function showMeeting(next) {
     $("nt-meeting-text").title = meeting.them_problem ?? "";
     $("nt-meeting-keep").hidden = !meeting.warning;
     $("nt-meeting-stop").hidden = meeting.finishing;
-    const level = (v) => `${Math.min(100, Math.round(Math.sqrt(v) * 140))}%`;
-    $("nt-level-you").style.width = level(meeting.you);
-    $("nt-level-them").style.width = level(meeting.them);
-    $("nt-live-you").style.width = level(meeting.you);
-    $("nt-live-them").style.width = level(meeting.them);
+    showLevel($("nt-level-you"), meeting.you);
+    showLevel($("nt-level-them"), meeting.them);
+    showLevel($("nt-live-you"), meeting.you);
+    showLevel($("nt-live-them"), meeting.them);
+    showHearing(meeting);
     $("nt-live-time").textContent = meeting.finishing ? "Finishing…" : clock(meeting.elapsed);
     $("nt-live-place").textContent = meeting.app
       ? `${meeting.app} · transcribed ${meeting.place}`
@@ -2118,6 +2115,7 @@ async function showMeeting(next) {
     $("nt-levels-them").hidden = !!meeting.app;
     $("nt-levels-you-label").textContent = side;
     $("nt-live-stop").disabled = meeting.finishing;
+    $("nt-live-stop-label").textContent = meeting.finishing ? "Finishing…" : "Stop";
     $("nt-live-warning").hidden = !meeting.warning;
     showQuestion(meeting.question);
     $("nt-live-warning-text").textContent = meeting.warning ?? "";
@@ -2144,6 +2142,50 @@ async function showMeeting(next) {
     }
   }
   updateHeader();
+}
+
+/** Below this (about −55 dBFS) there's no sound to speak of. */
+const SILENT = 0.0018;
+/** When the recording last had sound, by the clock, for "No sound". */
+let soundAt = 0;
+
+/** A level (RMS, 0–1) on a meter: −60 dB to 0 dB across, rising at once
+ *  and falling back gently, as level meters do. */
+function showLevel(bar, rms) {
+  const db = 20 * Math.log10(Math.max(rms, 1e-6));
+  const target = Math.max(0, Math.min(100, ((db + 60) / 60) * 100));
+  const shown = Number(bar.dataset.shown ?? 0);
+  const next = target >= shown ? target : Math.max(target, shown - 15);
+  bar.dataset.shown = String(next);
+  bar.style.width = `${next}%`;
+  bar.parentElement.setAttribute("aria-valuenow", String(Math.round(next)));
+}
+
+/** Whether the recording is hearing anything, in words: no sound at all,
+ *  sound with nothing said, or when words were last heard. */
+function showHearing(m) {
+  const el = $("nt-hearing");
+  const loud = Math.max(m.you, m.them) > SILENT;
+  if (loud || !soundAt) soundAt = loud ? Date.now() : soundAt || Date.now();
+  let text = "";
+  let kind = "";
+  if (m.finishing) {
+    text = "";
+  } else if (m.heard != null && m.elapsed - m.heard < 4) {
+    text = "Hearing words";
+    kind = "words";
+  } else if (Date.now() - soundAt > 3000) {
+    const who = m.app === "Microphone" ? "the microphone" : m.app ?? "either side";
+    text = `No sound from ${who}`;
+    kind = "quiet";
+  } else if (m.heard != null) {
+    const ago = Math.round(m.elapsed - m.heard);
+    text = ago < 60 ? `Words ${ago} s ago` : `Words ${Math.floor(ago / 60)} min ago`;
+  } else {
+    text = "Sound, no words yet";
+  }
+  el.textContent = text;
+  el.className = `nt-hearing${kind ? ` ${kind}` : ""}`;
 }
 
 /** A question the meeting's note waits on, with its answers. */

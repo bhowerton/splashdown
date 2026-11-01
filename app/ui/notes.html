@@ -158,9 +158,10 @@
             <div class="nt-live-bar">
               <span class="nt-recpill"><span class="nt-dot" aria-hidden="true"></span><span id="nt-live-time">Recording</span></span>
               <span id="nt-live-place" class="nt-muted nt-grow"></span>
-              <span class="nt-dev"><span class="nt-level"><i id="nt-live-you"></i></span><span id="nt-live-you-label">You</span></span>
-              <span class="nt-dev" id="nt-live-them-wrap"><span class="nt-level"><i id="nt-live-them"></i></span>Them</span>
-              <button class="btn primary" id="nt-live-stop"><svg class="ic sm"><use href="#i-stop"></use></svg>Stop and summarize</button>
+              <span id="nt-hearing" class="nt-hearing" role="status" aria-live="polite"></span>
+              <span class="nt-dev"><span id="nt-live-you-label">You</span><span class="nt-meter" role="meter" aria-label="Sound level" aria-valuemin="0" aria-valuemax="100"><i id="nt-live-you"></i></span></span>
+              <span class="nt-dev" id="nt-live-them-wrap"><span>Them</span><span class="nt-meter" role="meter" aria-label="Their sound level" aria-valuemin="0" aria-valuemax="100"><i id="nt-live-them"></i></span></span>
+              <button class="btn primary" id="nt-live-stop"><svg class="ic sm"><use href="#i-stop"></use></svg><span id="nt-live-stop-label">Stop</span></button>
             </div>
             <div id="nt-live-question" class="nt-notice nt-question" role="alertdialog" aria-labelledby="nt-live-question-title" hidden>
               <span><b id="nt-live-question-title"></b> <span id="nt-live-question-text" class="nt-muted"></span></span>
