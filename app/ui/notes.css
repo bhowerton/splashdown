@@ -31,8 +31,9 @@
   display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 9px; border-radius: 12px;
   border: 1px solid var(--border); background: var(--surface); font-size: 12px; white-space: nowrap;
 }
-.nt-chip:hover:not(:disabled) { background: var(--surface-2); }
+.nt-chip:hover:not(:disabled):not([aria-pressed="true"]) { background: var(--surface-2); }
 .nt-chip[aria-pressed="true"] { background: var(--text); border-color: var(--text); color: var(--surface); }
+.nt-chip[aria-pressed="true"]:hover { opacity: .85; }
 .nt-chip:disabled { opacity: .5; }
 .nt-chip-accent { color: var(--accent); }
 
@@ -59,7 +60,7 @@
   color: inherit; padding: 6px 8px; border-radius: 7px; font: inherit; cursor: default;
 }
 .nt-item .ic { margin-top: 2px; color: var(--muted); width: 14px; height: 14px; }
-.nt-item:hover { background: rgba(0,0,0,.04); }
+.nt-item:hover:not([aria-current="true"]) { background: rgba(0,0,0,.04); }
 .nt-item[aria-current="true"] { background: var(--accent-soft); }
 .nt-item[aria-current="true"] .ic { color: var(--accent); }
 .nt-item-text { min-width: 0; flex: 1; }
@@ -93,8 +94,8 @@
 .nt-rename[hidden] { display: none; }
 .nt-rename input { flex: 1; min-width: 80px; width: auto !important; font-size: 13px; }
 .nt-tools { display: flex; gap: 5px; }
-.nt-tool[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
-.nt-tool.nt-recording { background: var(--warn-soft); }
+.nt-tool[aria-pressed="true"], .nt-tool[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+.nt-tool.nt-recording, .nt-tool.nt-recording:hover:not(:disabled) { background: var(--warn-soft); }
 .nt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
 /* Narrow windows: the tools keep their icons. */
 @media (max-width: 760px) {
@@ -401,7 +402,7 @@ dialog.nt-apps { width: min(420px, 92vw); }
 .nt-versions .nt-vmeta time { color: var(--muted); flex: 1; }
 
 @media (prefers-color-scheme: dark) {
-  .nt-item:hover { background: rgba(255,255,255,.05); }
+  .nt-item:hover:not([aria-current="true"]) { background: rgba(255,255,255,.05); }
   .nt-turn mark, .nt-pal-row mark { background: #8a6d1d; color: #fff; }
 }
 
