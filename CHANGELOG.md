@@ -5,6 +5,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 ## Unreleased
 
 - **Only one copy of Splashdown runs at a time.** Opening it again while it's running (from the Start menu, say) now shows its Settings instead of starting a second copy. Two copies both answered the dictation key, so what you said was typed twice, once garbled.
+- **Model downloads you can count on.** Download for the built-in cleanup model in Settings → Providers works again: it showed no progress, and once done it was mistaken for the speech model, so Splashdown said a model wasn't downloaded (this is put right on its own after updating). A download that stalls or drops now carries on from where it stopped, by itself or the next time you click Download, instead of starting over or hanging; progress bars show in Settings, and a download keeps showing if you close Settings and open it again.
 
 ## 0.3.0 — 2026-11-01
 

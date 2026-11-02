@@ -9,7 +9,20 @@
 // which must be loaded before anything calls invoke.
 const tauri = window.__TAURI__;
 const invoke = tauri ? tauri.core.invoke : (cmd, args) => mockInvoke(cmd, args);
-const listen = tauri ? tauri.event.listen : async () => () => {};
+const listen = tauri ? tauri.event.listen : mockListen;
+
+/** Events the page's mock sends (`mockEmit`), when opened as a plain file. */
+const mockListeners = new Map();
+
+async function mockListen(name, handler) {
+  if (!mockListeners.has(name)) mockListeners.set(name, new Set());
+  mockListeners.get(name).add(handler);
+  return () => mockListeners.get(name).delete(handler);
+}
+
+function mockEmit(name, payload) {
+  for (const handler of mockListeners.get(name) ?? []) handler({ payload });
+}
 
 const $ = (id) => document.getElementById(id);
 

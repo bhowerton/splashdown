@@ -176,7 +176,7 @@ select:focus, input:focus, textarea:focus { border-color: var(--accent); box-sha
 .key-row .state { display: flex; gap: 8px; align-items: center; }
 .key-row input { width: 200px; }
 .key-row .lbl { min-width: 160px; }
-.progress { width: 120px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.progress { display: inline-block; vertical-align: middle; margin-right: 8px; width: 120px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
 .progress > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .15s; }
 
 .try { display: flex; gap: 8px; }

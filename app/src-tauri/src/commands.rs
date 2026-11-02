@@ -1,7 +1,7 @@
 //! Commands the Settings window calls (`window.__TAURI__.core.invoke`).
 
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
 use splashdown_config::{
@@ -196,6 +196,8 @@ pub struct Snapshot {
     speech_models: Vec<ModelStatus>,
     /// Built-in local text models (`AiProvider::Local`).
     local_models: Vec<ModelStatus>,
+    /// Models downloading now, so a window opened mid-download shows them.
+    downloads: Vec<DownloadProgress>,
     key_options: Vec<KeyOption>,
     /// What `auto` resolves to right now, or why it can't.
     resolved_speech: Result<String, String>,
@@ -426,6 +428,7 @@ fn snapshot(
         },
         speech_models,
         local_models,
+        downloads: DOWNLOADS.lock().unwrap_or_else(|e| e.into_inner()).clone(),
         key_options,
         resolved_speech,
         resolved_ai,
@@ -640,67 +643,130 @@ pub async fn test_ai(text: String, state: State<'_, AppState>) -> Result<TestRes
 }
 
 #[derive(Clone, Serialize)]
-struct DownloadProgress {
+pub struct DownloadProgress {
     id: String,
     done: u64,
     total: Option<u64>,
 }
 
+/// How a download ended, for every window (one opened after it started
+/// can't see the command's own answer).
+#[derive(Clone, Serialize)]
+struct DownloadDone {
+    id: String,
+    error: Option<String>,
+}
+
+/// Models downloading now, with how far each has got.
+static DOWNLOADS: Mutex<Vec<DownloadProgress>> = Mutex::new(Vec::new());
+
+fn downloads() -> std::sync::MutexGuard<'static, Vec<DownloadProgress>> {
+    DOWNLOADS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// Takes a model off `DOWNLOADS` however its download ends.
+struct Downloading(String);
+
+impl Drop for Downloading {
+    fn drop(&mut self) {
+        downloads().retain(|d| d.id != self.0);
+    }
+}
+
+/// Downloads a model, unless it's already here. A second request while it
+/// downloads (another click, a window opened again) waits for that one
+/// rather than writing the same file twice.
 #[tauri::command]
 pub async fn download_model(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Saved, String> {
-    if SpeechModel::from_id(&id).is_none()
-        && LocalModel::from_id(&id).is_none()
-        && id != splashdown_providers::models::Diarizer::ID
-        && id != splashdown_providers::models::Embedder::ID
-    {
-        return Err("Unknown model.".into());
-    }
-    // Two downloads of one model would write the same partial file.
-    static DOWNLOADING: Mutex<Vec<String>> = Mutex::new(Vec::new());
-    struct Downloading(String);
-    impl Drop for Downloading {
-        fn drop(&mut self) {
-            DOWNLOADING
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .retain(|d| *d != self.0);
-        }
-    }
-    {
-        let mut downloading = DOWNLOADING.lock().unwrap_or_else(|e| e.into_inner());
-        if downloading.contains(&id) {
-            return Err("That model is already downloading.".into());
-        }
-        downloading.push(id.clone());
-    }
-    let _downloading = Downloading(id.clone());
+    use splashdown_providers::models::{Diarizer, Embedder};
     let dir = engine::paths()?.models_dir;
-    let mut last_emit = Instant::now();
-    splashdown_providers::models::download_by_id(&id, &dir, |done, total| {
-        // Throttle progress events to ~10 per second.
-        if last_emit.elapsed().as_millis() >= 100 || total == Some(done) {
-            last_emit = Instant::now();
-            let _ = app.emit(
-                "model-download",
-                DownloadProgress {
-                    id: id.clone(),
-                    done,
-                    total,
-                },
-            );
+    let here = |dir: &std::path::Path| {
+        if id == Diarizer::ID {
+            Some(Diarizer::is_downloaded(dir))
+        } else if id == Embedder::ID {
+            Some(Embedder::is_downloaded(dir))
+        } else if let Some(m) = SpeechModel::from_id(&id) {
+            Some(m.is_downloaded(dir))
+        } else {
+            LocalModel::from_id(&id).map(|m| m.is_downloaded(dir))
         }
-    })
-    .await
-    .map_err(|e| e.to_string())?;
+    };
+    let Some(already) = here(&dir) else {
+        return Err("Unknown model.".into());
+    };
+    let started = {
+        let mut list = downloads();
+        let running = list.iter().any(|d| d.id == id);
+        if !running && !already {
+            list.push(DownloadProgress {
+                id: id.clone(),
+                done: 0,
+                total: None,
+            });
+        }
+        !running && !already
+    };
+    if !started {
+        // Downloading already: wait for it to end.
+        while downloads().iter().any(|d| d.id == id) {
+            tokio::time::sleep(Duration::from_millis(250)).await;
+        }
+        if here(&dir) != Some(true) {
+            return Err("The download didn't finish. Try again.".into());
+        }
+    } else {
+        let downloading = Downloading(id.clone());
+        let mut last_emit = Instant::now();
+        let result = splashdown_providers::models::download_by_id(&id, &dir, |done, total| {
+            if let Some(d) = downloads().iter_mut().find(|d| d.id == id) {
+                d.done = done;
+                d.total = total;
+            }
+            // Throttle progress events to ~10 per second.
+            if last_emit.elapsed().as_millis() >= 100 || total == Some(done) {
+                last_emit = Instant::now();
+                let _ = app.emit(
+                    "model-download",
+                    DownloadProgress {
+                        id: id.clone(),
+                        done,
+                        total,
+                    },
+                );
+            }
+        })
+        .await
+        .map_err(|e| download_error(&e));
+        drop(downloading);
+        let _ = app.emit(
+            "model-downloaded",
+            DownloadDone {
+                id: id.clone(),
+                error: result.as_ref().err().cloned(),
+            },
+        );
+        result?;
+    }
     let engine_error = state.apply().await;
     Ok(Saved {
         state: state.snapshot(),
         engine_error,
     })
+}
+
+/// A download's failure, in words for the person who clicked Download.
+fn download_error(e: &splashdown_core::ProviderError) -> String {
+    use splashdown_core::ProviderError;
+    match e {
+        ProviderError::Network(why) => format!(
+            "The download didn't finish ({why}). Check the internet connection and try again: it carries on where it stopped."
+        ),
+        other => format!("The download didn't finish: {other}"),
+    }
 }
 
 /// Downloads Apple's speech model for the configured language (from
@@ -797,7 +863,7 @@ pub fn request_accessibility() {
 pub async fn request_microphone() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {
         let recorder = splashdown_audio::Recorder::start(None).map_err(|e| e.to_string())?;
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        std::thread::sleep(Duration::from_millis(300));
         recorder.stop();
         Ok(())
     })

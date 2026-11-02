@@ -115,6 +115,20 @@ async function mockInvoke(cmd, args) {
       throw "Updates can't be installed in the preview.";
     case "send_feedback":
       return null;
+    case "download_model": {
+      // Two seconds of progress, then it's here.
+      const total = 2_500_000_000;
+      for (let i = 1; i <= 10; i++) {
+        await new Promise((r) => setTimeout(r, 200));
+        mockEmit("model-download", { id: args.id, done: (total / 10) * i, total });
+      }
+      for (const list of [mockInvoke.state.speech_models, mockInvoke.state.local_models]) {
+        const m = list.find((m) => m.id === args.id);
+        if (m) m.downloaded = true;
+      }
+      mockEmit("model-downloaded", { id: args.id, error: null });
+      return { state: mockInvoke.state, engine_error: null };
+    }
     case "test_ai":
       return { output: "I think we should ship it on Thursday.", millis: 512, model: "openrouter/google/gemini-2.5-flash-lite", note: null };
     default:

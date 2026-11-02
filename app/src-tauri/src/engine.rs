@@ -109,10 +109,27 @@ pub fn load_settings() -> Settings {
     let Ok(paths) = paths() else {
         return Settings::default();
     };
-    Settings::load(&paths.config_file()).unwrap_or_else(|e| {
+    let mut settings = Settings::load(&paths.config_file()).unwrap_or_else(|e| {
         tracing::warn!("ignoring config: {e}");
         Settings::default()
-    })
+    });
+    repair(&mut settings);
+    settings
+}
+
+/// Settings an earlier version saved wrong. 0.2 and 0.3 saved a built-in
+/// text model's id as the speech model when it was downloaded in Settings,
+/// which stopped speech-to-text: back to the default speech model.
+fn repair(settings: &mut Settings) {
+    if settings
+        .speech
+        .model
+        .as_deref()
+        .is_some_and(|m| splashdown_providers::LocalModel::from_id(m).is_some())
+    {
+        tracing::info!("the speech model was set to a text model: back to the default");
+        settings.speech.model = None;
+    }
 }
 
 pub fn keys(settings: &Settings) -> Keys {
@@ -378,4 +395,21 @@ fn on_device_speech(
         .find(|m| !(other_language && m.english_only()))
         .or_else(|| downloaded().next().filter(|_| !other_language))?;
     splashdown_providers::factory::local_speech_on_demand(model, &paths.models_dir).ok()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_text_model_saved_as_the_speech_model_is_undone() {
+        let mut settings = Settings::default();
+        settings.speech.model = Some("qwen3-4b".into());
+        repair(&mut settings);
+        assert_eq!(settings.speech.model, None);
+
+        settings.speech.model = Some("parakeet-v3".into());
+        repair(&mut settings);
+        assert_eq!(settings.speech.model.as_deref(), Some("parakeet-v3"));
+    }
 }

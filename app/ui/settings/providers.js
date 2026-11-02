@@ -192,13 +192,14 @@ function renderLocalSpeech(visible) {
         st.append(b);
         if (loading) recheckLoading();
       }
-      if (speechDownloads.has(m.id)) {
+      const pct = downloadPct(m.id);
+      if (pct !== undefined) {
         st.replaceChildren();
-        showProgress(st, speechDownloads.get(m.id));
+        showProgress(st, pct);
       } else if (m.downloaded) {
         if (m.id !== selected) st.append(button("Use", () => chooseLocalSpeech(m.id)));
       } else {
-        st.append(button("Download", () => downloadModel(m.id, m.id !== selected)));
+        st.append(button("Download", () => downloadSpeechModel(m.id, m.id !== selected)));
       }
       return row;
     })
@@ -223,8 +224,24 @@ function recheckLoading() {
   }, 1000);
 }
 
-/** Speech models downloading now, with their progress (0–100). */
-const speechDownloads = new Map();
+/** Models downloading now, with their progress (0–100): speech models and
+ *  the built-in text models alike. */
+const downloads = new Map();
+/** The downloads this window started, which tell the user how they ended
+ *  themselves. */
+const mine = new Set();
+
+/** How far a model's download has got (0–100), or undefined if it isn't
+ *  downloading. One started before this window opened is in the state. */
+function downloadPct(id) {
+  if (downloads.has(id)) return downloads.get(id);
+  const d = state.downloads?.find((d) => d.id === id);
+  return d ? percent(d.done, d.total) : undefined;
+}
+
+function percent(done, total) {
+  return total ? Math.floor((done / total) * 100) : 0;
+}
 
 function showProgress(st, pct) {
   st.innerHTML = `<span class="progress"><i style="width:${pct}%"></i></span><span class="mono pct">${pct}%</span>`;
@@ -238,39 +255,73 @@ function chooseLocalSpeech(id) {
 
 /** Downloads a speech model. The model in use stays in use until this one
  *  is ready; then, if `select`, this one takes over. */
-async function downloadModel(id, select) {
-  if (speechDownloads.has(id)) return;
-  speechDownloads.set(id, 0);
-  renderLocalSpeech(true);
+async function downloadSpeechModel(id, select) {
+  await download(id, renderLocalSpeech.bind(null, true), async (r) => {
+    if (!select) return r;
+    const s = r.state.settings;
+    s.speech.model = id;
+    return invoke("save_settings", { settings: s });
+  });
+}
+
+/** Downloads a built-in text model. With "Built-in local model" or
+ *  "Automatic" chosen, it's used as soon as it's here. */
+async function downloadLocalModel(id) {
+  await download(id, renderLocalModels, async (r) => r);
+}
+
+/** Runs a download, showing its progress, then `then` (which may save
+ *  settings) with the answer. */
+async function download(id, redraw, then) {
+  if (downloadPct(id) !== undefined) return;
+  downloads.set(id, 0);
+  mine.add(id);
+  redraw();
   try {
-    let r = await invoke("download_model", { id });
-    speechDownloads.delete(id);
-    if (select) {
-      const s = r.state.settings;
-      s.speech.model = id;
-      r = await invoke("save_settings", { settings: s });
-    }
+    const r = await then(await invoke("download_model", { id }));
+    downloads.delete(id);
     state = r.state;
     render();
-    toast(r.engine_error ? `Downloaded — but: ${r.engine_error}` : `${id} downloaded`);
+    toast(r.engine_error ? `Downloaded — but: ${r.engine_error}` : `${modelName(id)} is downloaded`);
   } catch (e) {
-    speechDownloads.delete(id);
+    downloads.delete(id);
     toast(String(e), true);
     refresh();
+  } finally {
+    // Its "model-downloaded" event may come after this answer.
+    setTimeout(() => mine.delete(id), 2000);
   }
+}
+
+function modelName(id) {
+  const m = [...state.speech_models, ...(state.local_models ?? [])].find((m) => m.id === id);
+  return (m?.label ?? id).split(" · ")[0];
 }
 
 listen("model-download", (event) => {
   const { id, done, total } = event.payload;
+  const pct = percent(done, total);
+  const known = downloads.has(id);
+  downloads.set(id, pct);
   const row = document.querySelector(`[data-model="${id}"]`);
-  if (!total) return;
-  const pct = Math.floor((done / total) * 100);
-  if (speechDownloads.has(id)) speechDownloads.set(id, pct);
-  if (!row) return;
-  const bar = row.querySelector(".progress > i");
-  if (bar) bar.style.width = `${pct}%`;
+  const bar = row?.querySelector(".progress > i");
+  if (!bar) {
+    // Started elsewhere (onboarding, before this window opened): show it.
+    if (!known && row) render();
+    return;
+  }
+  bar.style.width = `${pct}%`;
   const label = row.querySelector(".pct");
   if (label) label.textContent = `${pct}%`;
+});
+
+// A download this window didn't start (or can't hear back from) ended.
+listen("model-downloaded", (event) => {
+  const { id, error } = event.payload;
+  downloads.delete(id);
+  if (mine.has(id)) return;
+  if (error) toast(error, true);
+  refresh();
 });
 
 // ---------------------------------------------------------------- built-in local model
@@ -285,7 +336,6 @@ function renderLocalModels() {
   const local = s.ai.provider === "local";
   const show = local || (s.ai.provider === "auto" && off);
   if (!show || !state.local_models?.length) return host.replaceChildren();
-  if (host.querySelector(".progress")) return; // a download is running
   const selected = s.ai.model ?? state.local_models[0].id;
   const models = local ? state.local_models : state.local_models.slice(0, 1);
   host.replaceChildren(
@@ -297,12 +347,15 @@ function renderLocalModels() {
       row.innerHTML = `<span class="lbl"><span></span><small>Free and private: runs on this computer, no account or key. ~${(m.mb / 1000).toFixed(1)} GB download; uses about ${ram} GB of memory while in use.</small></span><span class="state"></span>`;
       row.querySelector(".lbl > span").textContent = m.label ?? m.id;
       const st = row.querySelector(".state");
-      if (m.downloaded) {
+      const pct = downloadPct(m.id);
+      if (pct !== undefined) {
+        showProgress(st, pct);
+      } else if (m.downloaded) {
         const inUse = s.ai.provider !== "auto" ? m.id === selected : !off;
         if (inUse || !local) st.append(badge(inUse ? "In use" : "Downloaded", "ok"));
         else st.append(button("Use", () => chooseLocalModel(m.id)));
       } else {
-        st.append(button("Download", () => downloadModel(m.id, row, false)));
+        st.append(button("Download", () => downloadLocalModel(m.id)));
       }
       return row;
     })
