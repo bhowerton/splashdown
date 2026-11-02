@@ -5,6 +5,8 @@
 //! API keys come from the environment or a `.env.local` file in the current
 //! directory (`OPENAI_API_KEY`, `OPENROUTER_API_KEY`, `SPLASHDOWN_CUSTOM_API_KEY`).
 
+#[cfg(target_os = "macos")]
+mod computer;
 mod eval;
 mod manage;
 mod opts;
@@ -154,6 +156,11 @@ enum Command {
         #[command(flatten)]
         providers: ProviderOpts,
     },
+    /// Have Claude do a task on screen, with Splashdown's checks (an
+    /// exploration; macOS only). Needs an Anthropic API key and Screen
+    /// Recording and Accessibility for the terminal.
+    #[cfg(target_os = "macos")]
+    Computer(computer::ComputerArgs),
     /// Score providers and models against the eval sets in `eval/`.
     Eval {
         #[command(subcommand)]
@@ -710,6 +717,8 @@ fn run() -> Result<()> {
         }
         Command::Config { providers } => opts::print_config(&providers)?,
         Command::Eval { command } => rt.block_on(eval::run(command))?,
+        #[cfg(target_os = "macos")]
+        Command::Computer(args) => computer::run(&rt, args)?,
         Command::Toggle
         | Command::Start
         | Command::Stop

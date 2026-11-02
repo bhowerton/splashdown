@@ -202,6 +202,57 @@ impl PartialEq for AxElement {
     }
 }
 
+/// The control at a point on the screen (in points), for computer use's
+/// checks before a click: its role ("AXButton"), whether it's a password
+/// field, the label people see on it or the nearest one around it, and
+/// the app it belongs to.
+pub(crate) fn element_at(x: f64, y: f64) -> Option<crate::ElementInfo> {
+    let system = AxElement::system_wide()?;
+    let mut raw: CFTypeRef = std::ptr::null();
+    // SAFETY: `system` is a live AXUIElementRef and `raw` a valid
+    // out-pointer; on success it holds a +1 reference (Copy rule).
+    let err = unsafe {
+        ffi::AXUIElementCopyElementAtPosition(system.raw(), x as f32, y as f32, &mut raw)
+    };
+    if err != AX_SUCCESS {
+        return None;
+    }
+    // SAFETY: on success `raw` is an AXUIElementRef we own.
+    let element = unsafe { AxElement::from_create(raw) }?;
+    let role = element.string_attribute("AXRole").unwrap_or_default();
+    let secure = element.string_attribute("AXSubrole").ok().as_deref() == Some("AXSecureTextField");
+    let pid = element.pid().unwrap_or(0);
+    // The text on a button may be a child of it: look up a few levels.
+    let mut label = String::new();
+    let mut current = Some(element);
+    for _ in 0..3 {
+        let Some(el) = current else { break };
+        for name in ["AXTitle", "AXDescription", "AXValue"] {
+            if let Ok(text) = el.string_attribute(name)
+                && !text.trim().is_empty()
+                && text.chars().count() <= 80
+            {
+                label = text.trim().to_string();
+                break;
+            }
+        }
+        if !label.is_empty() {
+            break;
+        }
+        current = el.element_attribute("AXParent");
+    }
+    let app = objc2_app_kit::NSRunningApplication::runningApplicationWithProcessIdentifier(pid)
+        .and_then(|a| a.localizedName())
+        .map(|n| n.to_string())
+        .unwrap_or_default();
+    Some(crate::ElementInfo {
+        role,
+        secure,
+        label,
+        app,
+    })
+}
+
 pub(crate) struct FocusElement {
     element: Option<AxElement>,
     /// The window it was in, for when the app swaps the element itself.

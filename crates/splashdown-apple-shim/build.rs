@@ -68,6 +68,10 @@ fn main() {
         "CoreMedia",
         "CoreAudio",
         "AudioToolbox",
+        "ScreenCaptureKit",
+        "ImageIO",
+        "CoreGraphics",
+        "UniformTypeIdentifiers",
     ] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }

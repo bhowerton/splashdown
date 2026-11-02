@@ -28,12 +28,17 @@ splashdown-core.workspace = true
 splashdown-providers.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+base64.workspace = true
+reqwest.workspace = true
+splashdown-platform.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread"] }
+tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
 toml.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 splashdown-apple-shim.workspace = true
+# Computer use (exploration): Cua Driver's MIT-licensed driver, pinned.
+cua-driver-sdk = { git = "https://github.com/trycua/cua", rev = "50242387d74cf82ccbed20846fc134e7a49ffa7c" }
 
 [features]
 default = ["local-speech"]

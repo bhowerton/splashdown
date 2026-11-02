@@ -204,7 +204,7 @@ fn read_text(pb: &NSPasteboard) -> Option<String> {
         .map(|s| s.to_string())
 }
 
-fn source() -> Result<CGEventSource> {
+pub(crate) fn source() -> Result<CGEventSource> {
     // A private source, so modifiers the user is physically holding don't
     // leak into our synthetic events.
     CGEventSource::new(CGEventSourceStateID::Private)
@@ -238,15 +238,17 @@ pub(crate) const INJECTED_TAG: i64 = 0x5350_4C44;
 /// arrive all at once, especially while it's busy.
 const KEY_GAP: Duration = Duration::from_millis(12);
 const KEY_COMMAND: CGKeyCode = 0x37;
+const KEY_CONTROL: CGKeyCode = 0x3B;
 const KEY_OPTION: CGKeyCode = 0x3A;
 const KEY_SHIFT: CGKeyCode = 0x38;
 
 /// Presses `key` with `flags` the way a person does: modifiers down, the
 /// key down and up, modifiers up, with short gaps.
-fn post_key(key: CGKeyCode, flags: CGEventFlags) -> Result<()> {
+pub(crate) fn post_key(key: CGKeyCode, flags: CGEventFlags) -> Result<()> {
     wait_for_modifiers_released();
     let modifiers: Vec<(CGKeyCode, CGEventFlags)> = [
         (KEY_COMMAND, CGEventFlags::CGEventFlagCommand),
+        (KEY_CONTROL, CGEventFlags::CGEventFlagControl),
         (KEY_OPTION, CGEventFlags::CGEventFlagAlternate),
         // Shift+Return for a new line: apps that check which keys are down,
         // not the event's flags, would otherwise see a plain Return and send.

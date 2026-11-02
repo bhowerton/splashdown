@@ -420,6 +420,105 @@ pub fn altgr_types(letter: char) -> bool {
     }
 }
 
+// ---------------------------------------------------------------- computer use
+
+/// The control at a point on the screen, as Accessibility describes it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct ElementInfo {
+    /// "AXButton", "AXTextField", "AXMenuItem"…
+    pub role: String,
+    /// A password field.
+    pub secure: bool,
+    /// What it says: its title or description, or the nearest around it.
+    pub label: String,
+    /// The app it belongs to.
+    pub app: String,
+}
+
+/// Driving the mouse and keyboard for computer use (an exploration, macOS
+/// only so far). Coordinates are screen points.
+pub mod computer {
+    use splashdown_core::computer::{Button, Combo, Direction, Mods};
+
+    use crate::{ElementInfo, Result};
+
+    #[cfg(target_os = "macos")]
+    use crate::imp::computer as imp;
+
+    #[cfg(not(target_os = "macos"))]
+    mod imp {
+        use super::*;
+        use crate::PlatformError;
+        pub(crate) fn cursor() -> Option<(f64, f64)> {
+            None
+        }
+        pub(crate) fn move_to(_: (f64, f64)) -> Result<()> {
+            Err(PlatformError::Unsupported)
+        }
+        pub(crate) fn click(_: (f64, f64), _: Button, _: u8, _: Mods) -> Result<()> {
+            Err(PlatformError::Unsupported)
+        }
+        pub(crate) fn left_button(_: bool) -> Result<()> {
+            Err(PlatformError::Unsupported)
+        }
+        pub(crate) fn drag(_: (f64, f64), _: (f64, f64), _: Mods) -> Result<()> {
+            Err(PlatformError::Unsupported)
+        }
+        pub(crate) fn scroll(_: Option<(f64, f64)>, _: Direction, _: u32, _: Mods) -> Result<()> {
+            Err(PlatformError::Unsupported)
+        }
+        pub(crate) fn key(_: &Combo, _: u32) -> Result<()> {
+            Err(PlatformError::Unsupported)
+        }
+        pub(crate) fn hold(_: &Combo, _: f64) -> Result<()> {
+            Err(PlatformError::Unsupported)
+        }
+    }
+
+    pub fn cursor() -> Option<(f64, f64)> {
+        imp::cursor()
+    }
+    pub fn move_to(at: (f64, f64)) -> Result<()> {
+        imp::move_to(at)
+    }
+    pub fn click(at: (f64, f64), button: Button, count: u8, mods: Mods) -> Result<()> {
+        imp::click(at, button, count, mods)
+    }
+    pub fn left_button(down: bool) -> Result<()> {
+        imp::left_button(down)
+    }
+    pub fn drag(from: (f64, f64), to: (f64, f64), mods: Mods) -> Result<()> {
+        imp::drag(from, to, mods)
+    }
+    pub fn scroll(
+        at: Option<(f64, f64)>,
+        direction: Direction,
+        amount: u32,
+        mods: Mods,
+    ) -> Result<()> {
+        imp::scroll(at, direction, amount, mods)
+    }
+    pub fn key(combo: &Combo, repeat: u32) -> Result<()> {
+        imp::key(combo, repeat)
+    }
+    pub fn hold(combo: &Combo, seconds: f64) -> Result<()> {
+        imp::hold(combo, seconds)
+    }
+
+    /// The control at a point (screen points).
+    pub fn element_at(x: f64, y: f64) -> Option<ElementInfo> {
+        #[cfg(target_os = "macos")]
+        {
+            crate::imp::element_at(x, y)
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = (x, y);
+            None
+        }
+    }
+}
+
 // ---------------------------------------------------------------- media
 
 /// A media key, as on a keyboard: whichever app is playing answers it.

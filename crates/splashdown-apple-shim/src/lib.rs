@@ -9,12 +9,14 @@
 mod calendar;
 mod ffi;
 mod providers;
+mod screenshot;
 mod tap;
 
 pub use calendar::{
     AddError, Added, CalendarEvent, add_event, add_reminder, calendar_access, calendar_now, remove,
 };
 pub use providers::{AppleLanguageModel, AppleSpeech};
+pub use screenshot::{Screenshot, ScreenshotError, screenshot, zoom};
 pub use tap::{app_audio, system_audio};
 
 use std::ffi::CString;

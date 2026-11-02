@@ -216,6 +216,7 @@ The working list of improvements after 0.1.1, in rough order. Mark items here as
 ### 8. Later, to stand out
 - ✅ **MCP voice input for coding agents:** Claude Code, Cursor or Codex can ask the user to answer by voice. `splashdown-mcp`, set up as in [AGENTS.md](AGENTS.md).
 - ✅ **Whisper mode** for quiet speech: an opt-in switch (General and the menu bar) that raises quiet recordings to a normal level before transcription (up to 25×, softly limited) and lowers hands-free's "still speaking" level. A recording at about −40 dB went from "no speech found" to a word-perfect transcript.
+- 🟡 **Computer use (exploration, 2026-11-02):** `splashdown-cli computer "<task>"` on macOS has Claude do a task on screen through Anthropic's computer toolset, with Splashdown's own checks before every action: apps it never touches, an allow-list, a yes before clicking anything labelled Send, Delete, Buy or Pay, nothing typed into password fields, the mouse pausing it, and limits on steps, time and cost. `eval/computer-tasks.toml` is the 15-task spike set. `--driver cua` drives the screen with [Cua Driver](https://github.com/trycua/cua) (MIT, Rust, embedded in-process, clicks in the background without taking the pointer) instead of Splashdown's own CGEvent driver, to compare the two. ⬜ Run the spike on both drivers; decide whether it goes in the app, and with which models (any vision model plus a grounding model is the next step).
 - ⬜ **Linux** (the architecture allows it).
 - ⬜ Localize the app's own interface.
 

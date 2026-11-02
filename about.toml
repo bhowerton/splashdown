@@ -14,5 +14,6 @@ accepted = [
     "CC0-1.0",
     "Unlicense",
     "MPL-2.0",
+    "BSL-1.0",
 ]
 workarounds = ["ring"]

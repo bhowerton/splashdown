@@ -20,4 +20,7 @@ allow = [
     "CC0-1.0",
     "Unlicense",
     "MPL-2.0",
+    # Boost Software License: permissive, like MIT (clipboard crates under
+    # Cua Driver, for computer use).
+    "BSL-1.0",
 ]

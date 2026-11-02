@@ -7,6 +7,7 @@ pub mod action;
 pub mod ask;
 mod audio;
 pub mod command;
+pub mod computer;
 pub mod fallback;
 pub mod files;
 pub mod gesture;

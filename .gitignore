@@ -20,3 +20,6 @@
 
 # Built by scripts/package-mac.sh for release bundles
 /app/src-tauri/binaries/
+
+# Computer-use spike records (splashdown-cli computer --log).
+computer-runs.jsonl
