@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.4.0 — 2026-11-01
 
 - **A setup anyone can do.** The first-run guide now asks one thing: set Splashdown up on this computer (free, private, no account), or use an API key if you have one. Set up on this computer, it starts downloading what it needs right away (about 3 GB) and carries on while you allow permissions, with one progress bar that says how long is left. You can try dictating as soon as the part that understands you arrives; tidying up switches on by itself when its download finishes, even if you close the guide. It checks for disk space first, and a download that stops is one click from carrying on.
 - **The best models your computer can run, by default.** Splashdown now uses its own speech model (Nemotron) and tidy-up model (Qwen3 4B) rather than Apple's built-in ones when they're downloaded: in our tests they make about half the speech errors, and tidy up better (85% of cases against 72%). On a computer with less than 12 GB of memory, tidying up uses Apple Intelligence where the Mac has it, and otherwise a new compact Qwen3 4B (1.7 GB), which tidies up far better than the old small model (74% of cases against 55%) in about as much memory; it's in Settings → Providers too.
