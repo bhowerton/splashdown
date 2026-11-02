@@ -90,6 +90,9 @@ pub enum Request {
     /// The app's state as JSON: version, whether it's ready, recording,
     /// which providers it uses, and any meeting.
     Status,
+    /// Show the Settings window. A second copy of the app sends this to
+    /// the first, then quits.
+    Settings,
 }
 
 impl Request {
@@ -259,6 +262,10 @@ mod tests {
     fn requests_parse() {
         assert_eq!(Request::parse(r#"{"cmd":"toggle"}"#), Ok(Request::Toggle));
         assert_eq!(Request::parse(" {\"cmd\":\"stop\"}\n"), Ok(Request::Stop));
+        assert_eq!(
+            Request::parse(r#"{"cmd":"settings"}"#),
+            Ok(Request::Settings)
+        );
         assert_eq!(
             Request::parse(r#"{"cmd":"listen"}"#),
             Ok(Request::Listen { prompt: None })

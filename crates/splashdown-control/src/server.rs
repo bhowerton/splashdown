@@ -228,7 +228,9 @@ mod imp {
     use std::os::windows::io::{AsRawHandle, FromRawHandle, RawHandle};
     use std::ptr;
 
-    use windows_sys::Win32::Foundation::{ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE};
+    use windows_sys::Win32::Foundation::{
+        ERROR_ACCESS_DENIED, ERROR_PIPE_CONNECTED, HANDLE, INVALID_HANDLE_VALUE,
+    };
     use windows_sys::Win32::Storage::FileSystem::{
         FILE_FLAG_FIRST_PIPE_INSTANCE, FlushFileBuffers, PIPE_ACCESS_DUPLEX,
     };
@@ -241,9 +243,19 @@ mod imp {
     use crate::PIPE_NAME;
 
     /// Starts listening on the named pipe, on a thread of its own. Fails
-    /// if another copy of the app already owns the pipe.
+    /// if another copy of the app already owns the pipe (`AddrInUse`, as
+    /// on macOS).
     pub fn serve(handler: Handler) -> io::Result<()> {
-        let first = create_instance(true)?;
+        let first = create_instance(true).map_err(|e| {
+            if e.raw_os_error() == Some(ERROR_ACCESS_DENIED as i32) {
+                io::Error::new(
+                    io::ErrorKind::AddrInUse,
+                    "another copy of Splashdown is already listening",
+                )
+            } else {
+                e
+            }
+        })?;
         std::thread::Builder::new()
             .name("splashdown-control".into())
             .spawn(move || accept_loop(first, handler))?;

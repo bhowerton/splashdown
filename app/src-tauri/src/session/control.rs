@@ -80,6 +80,14 @@ impl Controller {
                 .notes_settings()
                 .and_then(|n| crate::notes::agent_append(&n, &text, to.as_deref()))
                 .map(Some),
+            Request::Settings => {
+                let app = self.ui.app().clone();
+                let _ = self
+                    .ui
+                    .app()
+                    .run_on_main_thread(move || crate::tray::open_settings(&app));
+                Ok(None)
+            }
             Request::Listen { .. } if recording => Err("Already recording".into()),
             Request::Listen { prompt } => match self.start_external() {
                 Ok(()) => {

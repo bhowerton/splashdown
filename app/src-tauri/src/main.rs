@@ -41,6 +41,13 @@ use tauri::{Listener, Manager, RunEvent};
 use crate::history::History;
 
 fn main() {
+    // Already running: that copy shows Settings, and this one quits
+    // before it takes the microphone or the dictation key.
+    if triggers::hand_over() {
+        init_logging();
+        tracing::info!("Splashdown is already running: showed its Settings and quit");
+        return;
+    }
     // Before logging starts, so the old logs folder can still move.
     let moved = Paths::resolve()
         .map(|p| p.migrate_legacy())
@@ -214,7 +221,7 @@ fn main() {
                 engine::keys(&settings),
                 history.clone(),
             );
-            triggers::serve(session.clone());
+            let only_copy = triggers::serve(session.clone());
             // The session asks for a rebuild when spending crosses a limit.
             let handle = app.handle().clone();
             app.listen_any(ui::REBUILD_ENGINE, move |_| {
@@ -239,6 +246,10 @@ fn main() {
             updates::start(app.handle());
             shortcuts::sync(app.handle(), &presets, &transforms);
 
+            if !only_copy {
+                app.handle().exit(0);
+                return Ok(());
+            }
             // First run: the setup guide. Later, if a permission was
             // revoked: Settings, which opens on the Permissions tab.
             if !onboarded {

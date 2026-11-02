@@ -5,20 +5,42 @@
 
 use std::sync::Arc;
 
-use splashdown_control::{Reply, Request};
+use splashdown_control::{ClientError, Reply, Request};
 use tauri::Manager;
 
 use crate::commands::AppState;
 use crate::session::Handle;
 
-/// Starts listening on the control socket. If it can't (another copy of
-/// the app is running, say), only the dictation key works.
-pub fn serve(session: Handle) {
+/// Asks a copy of the app that's already running to show Settings. True
+/// if one answered: this copy should quit, or both would answer the
+/// dictation key and insert the text twice.
+pub fn hand_over() -> bool {
+    match splashdown_control::send(&Request::Settings) {
+        Err(ClientError::NotRunning) => false,
+        // Can't tell: two copies are better than none.
+        Err(ClientError::Io(e)) => {
+            eprintln!("couldn't check for another copy of Splashdown: {e}");
+            false
+        }
+        // Any answer, even an older copy's "bad request", is a copy.
+        Ok(_) | Err(_) => true,
+    }
+}
+
+/// Starts listening on the control socket. If it can't for another
+/// reason, only the dictation key works. False if another copy of the
+/// app has it (started at the same moment as this one): quit.
+pub fn serve(session: Handle) -> bool {
     let handler = Arc::new(move |request: Request| Reply::from(session.control(request)));
     match splashdown_control::serve(handler) {
         Ok(()) => tracing::info!("control socket ready"),
+        Err(e) if e.kind() == std::io::ErrorKind::AddrInUse => {
+            tracing::warn!("{e}: quitting");
+            return false;
+        }
         Err(e) => tracing::warn!("control socket unavailable: {e}"),
     }
+    true
 }
 
 /// Handles `splashdown://` links the system hands the app (macOS

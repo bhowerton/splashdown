@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Only one copy of Splashdown runs at a time.** Opening it again while it's running (from the Start menu, say) now shows its Settings instead of starting a second copy. Two copies both answered the dictation key, so what you said was typed twice, once garbled.
+
 ## 0.3.0 — 2026-11-01
 
 - **The status pill at the text cursor on Windows.** As on a Mac, the pill now shows just below where you're typing (above it near the bottom of the screen), not only at the bottom center, in classic Windows apps and in browsers, Office and other apps that report their text cursor to accessibility tools. Settings → General → Show the status next to the text cursor turns it off.
