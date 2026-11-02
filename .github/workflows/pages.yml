@@ -34,7 +34,7 @@ jobs:
       - name: Gather the shared images
         run: |
           cp app/src-tauri/icons/source/icon.svg site/assets/
-          cp docs/assets/demo.svg docs/assets/sources.svg docs/assets/sources-tall.svg site/assets/
+          cp docs/assets/demo.svg docs/assets/actions.svg docs/assets/sources.svg docs/assets/sources-tall.svg site/assets/
           cp docs/assets/readme/*.png site/assets/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3

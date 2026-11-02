@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Hold a key. Say it. It's typed.</strong><br>
-  Free, open-source dictation for Mac and Windows: speak, and clean text appears in any app. It also writes down your meetings, videos and voice memos, tells who said what, and answers questions from your notes, all on your computer if you like. No subscription, no account.
+  Free, open-source dictation for Mac and Windows: speak, and clean text appears in any app. Say what to do, too: open apps, set reminders, run your own scripts. It also writes down your meetings, videos and voice memos, tells who said what, and answers questions from your notes, all on your computer if you like. No subscription, no account.
 </p>
 
 <p align="center">
@@ -41,6 +41,7 @@
 - **Free and open source, for good.** No subscription, no account, no word limits. Your own API key costs cents a month, and you can set a spending limit.
 - **Works everywhere you type.** Email, Slack, Messages, docs, the browser, your terminal or code editor: any text field in any app.
 - **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
+- **Says what to do, not just what to write.** "Open Spotify", "remind me at 5 to stretch", "add dentist to my calendar on Thursday at 4", "pause the music", or your own: "deploy staging", "next slide". Nothing is sent, deleted or bought for you.
 - **Notes, meetings and transcripts, too.** Dictate into notes that are plain Markdown files, record a call without a bot joining it, transcribe whatever an app is playing, and ask your notes questions.
 - **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
@@ -66,13 +67,20 @@
 - **Live text while you speak** with speech-to-text on your computer: Nemotron writes as you speak, and your text is ready the moment you let go.
 - **Hands-free** for long dictations: hold the key and press **H**, then let go. Stops on its own after 3 minutes of silence.
 - **Straight into a note:** hold the key and press **N**, and what you say is added to your Inbox (or today's daily note) instead of typed. ⌃⌥Z takes it back.
+- **Music steps aside.** Other sounds are turned down while you speak, as with Siri, or muted or paused if you prefer. On audio interfaces whose volume can't be changed, the music is paused instead.
 - **Whisper mode** for speaking quietly, and **mixed languages** in one sentence.
 
 ### Talk to it
 
+<p align="center">
+  <img src="docs/assets/actions.svg" width="800" alt="Animation: holding Option, tapping Shift and saying 'remind me at 5 to stretch' adds a reminder for 17:00; 'search YouTube for paella recipes' opens the search; 'deploy staging', one of your own actions, shows exactly what will run and asks first, then runs it. Music in the corner is turned down while each command is said.">
+</p>
+
 - **Instructions while you dictate.** Tap **Right Shift** mid-dictation and say what to do: "make it a bulleted list", "make it an email".
 - **Spoken commands, in any language.** Hold Right Option and tap Right Shift *before* speaking: "delete that last sentence", "make that more formal", "envíalo". The AI works out what you meant; nothing depends on exact phrases. Editing commands need an app that lets Splashdown read and select its text; when one doesn't, it says so rather than guess.
-- **Voice actions.** Turn them on in Settings → Actions, and the same commands can do things: "open Spotify", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "search YouTube for paella recipes", "pause the music", or, with text selected, "email this to Sam". Add your own too: a link, a script or keys to press, each with a name to say ("deploy staging", "next slide"). Nothing is sent, deleted or bought for you: an email opens as a draft, and a Shortcut or your own action asks before it runs.
+- **Voice actions.** Turn them on in Settings → Actions, and the same commands can do things: "open Spotify", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "search YouTube for paella recipes", "pause the music", "start recording the meeting", or, with text selected, "email this to Sam". "Undo that" takes back an event, reminder or to-do. Nothing is sent, deleted or bought for you: an email opens as a draft, and a Shortcut asks before it runs.
+- **Your own actions.** Give a link, a script or program, or keys to press a name, and say it: "deploy staging", "next slide", "open issue ENG-42" (whatever you say after the name can go into the link or the script). Splashdown shows exactly what will run and asks first, until you choose Always allow.
+- **"What can I say?"** Say it (or "help") for a window with everything you can say or press, with your own keys and actions. Also in the menu bar under Help.
 - **Rewrite a selection.** Select text, hold the key, say what to change.
 - **Undo the AI.** **⌃⌥Z** right after it's typed swaps in exactly what you said; **⌃⌥V** pastes your last raw words.
 
@@ -120,6 +128,7 @@
 - **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), and an always-on-screen **mini bar** for clicking instead of holding a key.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
+- **A setup guide that has you try it.** The first run gets Splashdown ready on your computer, then walks you through the main things one at a time (dictate, rewrite, instruct, send, fix by voice, do things, ask), ticking each off as it works. Skip any of it.
 
 ### For developers
 
