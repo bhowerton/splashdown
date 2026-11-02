@@ -54,7 +54,7 @@ const ACTIONS: &[&str] = &[
 /// Added to the actions when voice actions are on.
 const DO: &str = "do";
 
-const DO_ACTION: &str = "\n- do: the command asks the computer to do something beyond this text field: open or switch to an app, search the web, open a website, play, pause or skip music, change the volume, add a calendar event, a reminder or a to-do, draft an email in the mail app (\"email Dana that…\"), run a Shortcut, or something the dictation app itself does (record a meeting, a new note, switch preset, whisper mode, retry the last dictation). \"text\" is the command as said. Questions are ask, not do; writing at the cursor is write, not do.";
+const DO_ACTION: &str = "\n- do: the command asks the computer to do something beyond this text field: open or switch to an app, search the web, open a website, play, pause or skip music, change the volume, add a calendar event, a reminder or a to-do, draft an email in the mail app (\"email Dana that…\"), run a Shortcut, or something the dictation app itself does (record a meeting, a new note, switch preset, whisper mode, retry the last dictation, or list the commands the dictation app understands when asked \"what can I say?\"). \"text\" is the command as said. Questions are ask, not do, unless they ask which commands the dictation app understands; writing at the cursor is write, not do.";
 
 const DO_EXAMPLE: &str = "\n\n<command>abre Spotify</command>\n{\"action\": \"do\", \"text\": \"abre Spotify\"}\n\n<command>remind me to call Sam at 3</command>\n{\"action\": \"do\", \"text\": \"remind me to call Sam at 3\"}";
 

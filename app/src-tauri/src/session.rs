@@ -1811,6 +1811,9 @@ impl Controller {
 
     /// Opens the Ask panel on `question`, asked from `active`'s app.
     fn show_answer(&mut self, active: &Active, question: String, selection: Option<String>) {
+        if splashdown_core::action::asks_what_to_say(&question) {
+            return self.what_to_say();
+        }
         let Ok(engine) = &self.engine else {
             return;
         };
@@ -2289,6 +2292,10 @@ impl Controller {
                 return self.notice(Tone::Warning, &short(&message));
             }
         };
+        // Answered with no AI, so it works with voice actions off too.
+        if splashdown_core::action::asks_what_to_say(&spoken) {
+            return self.what_to_say();
+        }
         let target_pid = active.focus.as_ref().map(|f| f.app.pid);
         // "That" is the last dictation, while it's recent and in this app.
         let recent = self
@@ -2337,7 +2344,12 @@ impl Controller {
     fn carry_out(&mut self, command: Command, focus: Option<&Focus>, target_pid: Option<i32>) {
         let paste = |text: &str| splashdown_platform::insert_text(text, InsertMethod::Paste);
         match command {
-            Command::Unclear => return self.notice(Tone::Info, "Didn't understand that command"),
+            Command::Unclear => {
+                return self.notice(
+                    Tone::Info,
+                    "Didn't understand that command · say “what can I say?”",
+                );
+            }
             // Answered in the Ask panel instead (`run_command`).
             Command::Ask(_) => return,
             // Carried out by `do_action` instead (`run_command`).
@@ -2450,6 +2462,9 @@ impl Controller {
     /// thread. `selection` is selected text the action may use (an email's
     /// body), never orders.
     fn do_action(&mut self, active: &Active, request: &str, selection: Option<String>) {
+        if splashdown_core::action::asks_what_to_say(request) {
+            return self.what_to_say();
+        }
         let Ok(engine) = &self.engine else {
             return;
         };
@@ -2511,7 +2526,10 @@ impl Controller {
                 } else {
                     reason
                 };
-                return self.notice(Tone::Info, &short(&reason));
+                return self.notice(
+                    Tone::Info,
+                    &format!("{} · say “what can I say?”", short(&reason)),
+                );
             }
             splashdown_core::action::Plan::Invalid(why) => {
                 tracing::info!("action refused: {why}");
@@ -2566,8 +2584,22 @@ impl Controller {
                 self.handle(Action::HandsFree);
                 true
             }
+            "show_commands" => {
+                self.what_to_say();
+                true
+            }
             _ => false,
         }
+    }
+
+    /// "What can I say?": the list of commands, in its own window.
+    fn what_to_say(&mut self) {
+        let app = self.ui.app().clone();
+        let _ = self
+            .ui
+            .app()
+            .run_on_main_thread(move || crate::help::open(&app));
+        self.ui.hide();
     }
 
     fn finish_command(&mut self, result: splashdown_platform::Result<()>, done: &str) {

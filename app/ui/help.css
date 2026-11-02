@@ -1,0 +1,22 @@
+/* What you can say (about 520 × 640): every kind of command, grouped, with
+   things to say in quotes and keys as key caps. Colors, buttons and .kbd
+   come from settings.css. */
+.hp-body { overflow: hidden; }
+.hp { height: 100vh; display: flex; flex-direction: column; background: var(--surface); }
+.hp-scroll { flex: 1; overflow-y: auto; padding: 6px 18px 14px; }
+.hp-section { padding: 12px 0 10px; border-bottom: 1px solid var(--border); }
+.hp-section:last-child { border-bottom: 0; }
+.hp-section h2 { margin: 0 0 3px; font-size: 13.5px; font-weight: 600; }
+.hp-how { margin: 0 0 8px; font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.hp-row { display: flex; gap: 12px; padding: 3px 0; font-size: 13px; line-height: 1.45; }
+.hp-what { flex: 0 0 34%; color: var(--muted); }
+.hp-say { flex: 1; min-width: 0; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 4px 6px; user-select: text; }
+.hp-say q { quotes: "“" "”"; }
+.hp-say q:not(:last-child)::after { content: close-quote ","; }
+.hp-turn-on { margin-top: 2px; }
+.hp-bar {
+  display: flex; align-items: center; gap: 8px; padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+.hp-grow { flex: 1; }
+.hp-note { font-size: 11.5px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

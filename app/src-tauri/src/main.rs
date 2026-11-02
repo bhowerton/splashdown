@@ -11,6 +11,7 @@ mod engine;
 mod errors;
 mod export;
 mod feedback;
+mod help;
 mod history;
 mod insights;
 mod meeting;
@@ -179,6 +180,9 @@ fn main() {
             ask::ask_copy,
             ask::ask_close,
             ask::ask_followup,
+            help::help_sheet,
+            help::help_close,
+            help::help_open_actions,
             prompt::prompt_state,
             prompt::prompt_answer,
             calls::call_offer_state,

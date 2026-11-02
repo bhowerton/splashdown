@@ -78,6 +78,7 @@ pub const OWN: &[&str] = &[
     "hands_free",
     "retry_last_dictation",
     "open_settings",
+    "show_commands",
 ];
 
 pub const MEDIA: &[&str] = &[
@@ -135,7 +136,7 @@ pub const CATALOG: &[Spec] = &[
     },
     Spec {
         id: "splashdown",
-        about: "something the dictation app itself does: start or stop recording a meeting, a new note, open Notes, today's note, switch to a preset (a saved style such as Email or Code), whisper mode on or off, hands-free dictation, retry the last dictation, open Settings. open_notes is the dictation app's own notes; an app called Notes is open_app",
+        about: "something the dictation app itself does: start or stop recording a meeting, a new note, open Notes, today's note, switch to a preset (a saved style such as Email or Code), whisper mode on or off, hands-free dictation, retry the last dictation, open Settings, show what the user can say (\"what can I say?\", \"help\"). open_notes is the dictation app's own notes; an app called Notes is open_app",
         params: &[
             p("what", Kind::OneOf(OWN), "which one"),
             opt("preset", Kind::Text, "for switch_preset: the preset's name"),
@@ -621,6 +622,108 @@ pub fn plan(output: &str, said: &str, ctx: &PlanContext, enabled: Option<&[&str]
 }
 
 /// Lower case, without accents, for comparing names.
+/// Whether a command asks what can be said ("what can I say?", "help"):
+/// answered with the list of commands, with no AI involved, so it works
+/// with voice actions off. Other wordings and languages reach the planner
+/// as `show_commands`.
+pub fn asks_what_to_say(said: &str) -> bool {
+    const ASKS: &[&str] = &[
+        "what can i say",
+        "what can i do",
+        "what can you do",
+        "what can splashdown do",
+        "what can i ask",
+        "what do i say",
+        "what are the commands",
+        "what commands are there",
+        "what commands can i use",
+        "what commands can i say",
+        "which commands are there",
+        "show commands",
+        "show the commands",
+        "show me the commands",
+        "show me what i can say",
+        "list commands",
+        "list the commands",
+        "commands",
+        "voice commands",
+        "help",
+        "show help",
+        "help me",
+    ];
+    let words: Vec<String> = fold(said)
+        .split(|c: char| !c.is_alphanumeric() && c != '\'')
+        .filter(|w| !w.is_empty())
+        .map(|w| w.replace('\'', ""))
+        .collect();
+    let mut words: &[String] = &words;
+    // "Hey Splashdown, …", "OK so …", "… please".
+    while let [first, rest @ ..] = words
+        && ["hey", "ok", "okay", "so", "splashdown", "um", "uh"].contains(&first.as_str())
+    {
+        words = rest;
+    }
+    if let [rest @ .., last] = words
+        && last == "please"
+    {
+        words = rest;
+    }
+    let asked = words.join(" ");
+    if ASKS.contains(&asked.as_str()) {
+        return true;
+    }
+    // Or any question about the commands made only of words like these
+    // ("which voice commands does Splashdown understand?"), so a question
+    // about another program's commands is still answered.
+    const ABOUT_COMMANDS: &[&str] = &[
+        "what",
+        "which",
+        "are",
+        "is",
+        "there",
+        "the",
+        "does",
+        "do",
+        "can",
+        "could",
+        "i",
+        "you",
+        "me",
+        "my",
+        "your",
+        "splashdown",
+        "understand",
+        "understands",
+        "know",
+        "knows",
+        "use",
+        "say",
+        "give",
+        "voice",
+        "spoken",
+        "list",
+        "show",
+        "tell",
+        "available",
+        "all",
+        "of",
+        "a",
+        "about",
+        "supported",
+        "support",
+        "supports",
+        "have",
+        "has",
+        "work",
+        "works",
+    ];
+    words.iter().any(|w| w == "commands" || w == "command")
+        && words.len() <= 10
+        && words
+            .iter()
+            .all(|w| w == "commands" || w == "command" || ABOUT_COMMANDS.contains(&w.as_str()))
+}
+
 pub fn fold(text: &str) -> String {
     text.to_lowercase()
         .chars()
@@ -888,6 +991,32 @@ mod tests {
         PlanContext {
             now: "Monday, 2026-11-02 10:00".into(),
             ..PlanContext::default()
+        }
+    }
+
+    #[test]
+    fn knows_when_asked_what_to_say() {
+        for said in [
+            "What can I say?",
+            "help",
+            "Help.",
+            "Hey Splashdown, what can you do?",
+            "show me the commands please",
+            "OK so what are the commands",
+            "Which commands does Splashdown understand?",
+            "what voice commands are available",
+        ] {
+            assert!(asks_what_to_say(said), "{said}");
+        }
+        for said in [
+            "help me write an email to Sam",
+            "what can I say to cheer her up",
+            "what commands does git have for rebasing",
+            "run the command again",
+            "delete that",
+            "",
+        ] {
+            assert!(!asks_what_to_say(said), "{said}");
         }
     }
 

@@ -142,6 +142,7 @@
 | Record a meeting | **⌃⌥M** (again to stop) |
 | Use another preset | While holding, press **1–9** |
 | Change the spoken language | Menu bar → **Language** (detects it automatically by default) |
+| See everything you can say | Tap **Right Shift** and say "what can I say?", or menu bar → **What you can say…** |
 | Cancel | **Esc** |
 | Paste exactly what you said, without the AI | **⌃⌥V** |
 | Swap the AI's version for exactly what you said | **⌃⌥Z** right after it's typed |

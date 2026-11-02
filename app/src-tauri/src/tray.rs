@@ -167,6 +167,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         Some(crate::meeting::ACCELERATOR),
     )?;
     let _ = MEETING_ITEM.set(meeting.clone());
+    let what_to_say = MenuItem::with_id(app, "help", "What you can say…", true, None::<&str>)?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let update = MenuItem::with_id(app, "update", CHECK_FOR_UPDATES, true, None::<&str>)?;
     let feedback = MenuItem::with_id(app, "feedback", "Send feedback…", true, None::<&str>)?;
@@ -187,6 +188,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
             &notes,
             &meeting,
             &PredefinedMenuItem::separator(app)?,
+            &what_to_say,
             &settings,
             &update,
             &feedback,
@@ -220,6 +222,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                 }
                 "notes" => crate::notes::open(app),
                 "meeting" => crate::meeting::toggle(app),
+                "help" => crate::help::open(app),
                 "settings" => open_settings(app),
                 "mini-bar" => toggle_mini_bar(app),
                 "update" => show_updates(app),
