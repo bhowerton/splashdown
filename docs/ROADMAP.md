@@ -15,7 +15,7 @@
 | M4 App shell | ✅ | Settings (all tabs), onboarding, presets, history, privacy, menu bar, overlay by the text cursor. Left: a VoiceOver walkthrough on a real build |
 | M4b Power features | ✅ | Learning vocabulary, snippets, spoken commands in any language, auto-send, other triggers, field context, languages and translation |
 | M5 Apple on-device | ✅ | Apple speech and cleanup in daily use (cleanup 80%, 0.40 s). Weak-link fallback on macOS 13–15 not tested on a real machine |
-| M5b Built-in local model | 🟡 | `splashdown-llm` helper with Qwen3 4B: 84% fully local, 0.13 s on a Mac GPU, 0.41 s CPU-only. Small model for ~8 GB machines: Qwen3 1.7B (55%, 0.06 s GPU). Windows (CPU/Vulkan) untested |
+| M5b Built-in local model | 🟡 | `splashdown-llm` helper with Qwen3 4B: 84% fully local, 0.13 s on a Mac GPU, 0.41 s CPU-only. Small model for ~8 GB machines: Qwen3 4B compact (IQ3_XXS: 74%, 2.6 GB on the CPU), or Apple's on a Mac with Apple Intelligence. Windows (CPU/Vulkan) untested |
 | Open-source readiness | ✅ | Dual MIT/Apache-2.0 license, CONTRIBUTING, ARCHITECTURE, code of conduct, security policy, issue templates, `SAFETY` comments (lint-enforced), license checks (cargo-deny) and third-party notices (cargo-about) |
 | M6 Tester beta | ⬜ | Needs signed, notarized release builds |
 
@@ -126,7 +126,7 @@ Cheap features that close visible gaps.
 
 ### 6. On-device AI
 - ✅ **M5 Apple:** SpeechAnalyzer and Foundation Models through the Swift shim. Free and private on Apple Silicon with macOS 26. Wired into Settings, onboarding and "Automatic"; a question guard and prompt changes made the on-device cleanup safer. Still to do: test the weak-link fallback on macOS 13–15.
-- 🟡 **M5b built-in local model:** the `splashdown-llm` helper (llama.cpp, prompt caching) and a two-model catalog (Qwen3 4B; Qwen3 1.7B for machines with about 8 GB of memory, chosen over Gemma 3 1B and LFM2 1.2B by the cleanup eval), with a Settings option, download and "Automatic" support. Offered in onboarding (the 4B model). Still to do: test on Windows (CPU and Vulkan), and recommending the small model by installed RAM.
+- 🟡 **M5b built-in local model:** the `splashdown-llm` helper (llama.cpp, prompt caching) and a catalog chosen by the cleanup eval (Qwen3 4B; Qwen3 4B compact for machines with less than 12 GB of memory, which beat Qwen3 1.7B, Granite, Ministral, SmolLM3 and Phi-4-mini there; Qwen3 1.7B kept for those who chose it), with a Settings option, download and "Automatic" support. Setup picks by installed memory (2026-11-01). Still to do: test on Windows (CPU and Vulkan).
 
 ### 7. Engineering quality (ongoing)
 - ⬜ Resource budgets: near-zero idle CPU, unload Whisper and local models after an idle period, measure battery impact.

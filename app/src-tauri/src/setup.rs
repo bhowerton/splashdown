@@ -6,8 +6,9 @@
 //!
 //! The models are the best the computer can run: Nemotron for speech
 //! everywhere, Qwen3 4B for tidying up where there's memory for it. With
-//! about 8 GB, Apple's built-in model where the Mac has one (it does
-//! better than the small download), otherwise the small model.
+//! about 8 GB, Apple's built-in model where the Mac has one (no download,
+//! no memory of its own, and as good in the eval), otherwise Qwen3 4B
+//! packed smaller.
 
 use std::sync::Mutex;
 use std::time::Instant;
@@ -44,7 +45,7 @@ fn cleanup_for(memory: Option<u64>, apple: bool) -> Cleanup {
     } else if apple {
         Cleanup::Apple
     } else {
-        Cleanup::Local(LocalModel::Qwen3_1_7B)
+        Cleanup::Local(LocalModel::Qwen3_4BCompact)
     }
 }
 
@@ -99,7 +100,7 @@ fn plan(speech_only: bool) -> Result<Plan, String> {
             Cleanup::Apple => "apple",
             Cleanup::None => "none",
         },
-        small: cleanup == Cleanup::Local(LocalModel::Qwen3_1_7B),
+        small: cleanup == Cleanup::Local(LocalModel::Qwen3_4BCompact),
         download_mb,
         free_mb: free.map(|b| b / 1_000_000),
         too_little_space: download_mb > 0
@@ -152,7 +153,7 @@ pub fn start_local_setup(speech_only: bool, app: AppHandle) -> Result<Status, St
     }
     let plan = plan(speech_only)?;
     let cleanup = match plan.cleanup {
-        "local" if plan.small => Cleanup::Local(LocalModel::Qwen3_1_7B),
+        "local" if plan.small => Cleanup::Local(LocalModel::Qwen3_4BCompact),
         "local" => Cleanup::Local(LocalModel::Qwen3_4B),
         "apple" => Cleanup::Apple,
         _ => Cleanup::None,
@@ -300,7 +301,7 @@ mod tests {
     fn the_best_tidy_up_the_computer_can_run() {
         const GB: u64 = 1 << 30;
         let big = Cleanup::Local(LocalModel::Qwen3_4B);
-        let small = Cleanup::Local(LocalModel::Qwen3_1_7B);
+        let small = Cleanup::Local(LocalModel::Qwen3_4BCompact);
         assert_eq!(cleanup_for(Some(16 * GB), true), big, "Apple's does worse");
         assert_eq!(cleanup_for(Some(16 * GB), false), big);
         assert_eq!(cleanup_for(None, false), big, "memory unknown");

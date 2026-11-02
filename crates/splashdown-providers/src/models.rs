@@ -185,17 +185,27 @@ impl SpeechModel {
 pub enum LocalModel {
     /// Qwen3 4B Instruct (2507), 4-bit. Apache-2.0. ~2.5 GB.
     Qwen3_4B,
+    /// The same Qwen3 4B, packed smaller (IQ3_XXS). ~1.7 GB, and about
+    /// 2.6 GB of memory on the CPU: the most the eval gets from a computer
+    /// with about 8 GB (74%, against 52–55% for Qwen3 1.7B, which uses as
+    /// much memory there).
+    Qwen3_4BCompact,
     /// Qwen3 1.7B, 4-bit, thinking off (by `splashdown-llm`). Apache-2.0.
-    /// ~1.1 GB. For machines with about 8 GB of memory.
+    /// ~1.1 GB. Kept for those who chose it; the compact 4B does better.
     Qwen3_1_7B,
 }
 
 impl LocalModel {
-    pub const ALL: [LocalModel; 2] = [LocalModel::Qwen3_4B, LocalModel::Qwen3_1_7B];
+    pub const ALL: [LocalModel; 3] = [
+        LocalModel::Qwen3_4B,
+        LocalModel::Qwen3_4BCompact,
+        LocalModel::Qwen3_1_7B,
+    ];
 
     pub fn id(self) -> &'static str {
         match self {
             LocalModel::Qwen3_4B => "qwen3-4b",
+            LocalModel::Qwen3_4BCompact => "qwen3-4b-compact",
             LocalModel::Qwen3_1_7B => "qwen3-1.7b",
         }
     }
@@ -207,13 +217,16 @@ impl LocalModel {
     pub fn file_name(self) -> &'static str {
         match self {
             LocalModel::Qwen3_4B => "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+            LocalModel::Qwen3_4BCompact => "Qwen3-4B-Instruct-2507-UD-IQ3_XXS.gguf",
             LocalModel::Qwen3_1_7B => "Qwen3-1.7B-Q4_K_M.gguf",
         }
     }
 
     pub fn url(self) -> String {
         let repo = match self {
-            LocalModel::Qwen3_4B => "unsloth/Qwen3-4B-Instruct-2507-GGUF",
+            LocalModel::Qwen3_4B | LocalModel::Qwen3_4BCompact => {
+                "unsloth/Qwen3-4B-Instruct-2507-GGUF"
+            }
             LocalModel::Qwen3_1_7B => "unsloth/Qwen3-1.7B-GGUF",
         };
         format!(
@@ -230,6 +243,7 @@ impl LocalModel {
     pub fn approx_mb(self) -> u32 {
         match self {
             LocalModel::Qwen3_4B => 2500,
+            LocalModel::Qwen3_4BCompact => 1670,
             LocalModel::Qwen3_1_7B => 1100,
         }
     }
@@ -239,6 +253,7 @@ impl LocalModel {
     pub fn approx_ram_mb(self) -> u32 {
         match self {
             LocalModel::Qwen3_4B => 3000,
+            LocalModel::Qwen3_4BCompact => 2300,
             LocalModel::Qwen3_1_7B => 1700,
         }
     }
@@ -247,7 +262,8 @@ impl LocalModel {
     pub fn label(self) -> &'static str {
         match self {
             LocalModel::Qwen3_4B => "Qwen3 4B · best quality",
-            LocalModel::Qwen3_1_7B => "Qwen3 1.7B · smaller, faster",
+            LocalModel::Qwen3_4BCompact => "Qwen3 4B compact · for about 8 GB of memory",
+            LocalModel::Qwen3_1_7B => "Qwen3 1.7B · smallest",
         }
     }
 

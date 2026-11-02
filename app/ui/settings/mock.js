@@ -35,7 +35,8 @@ async function mockInvoke(cmd, args) {
     },
     local_models: [
       { id: "qwen3-4b", mb: 2500, ram_mb: 3000, downloaded: false, label: "Qwen3 4B · best quality" },
-      { id: "qwen3-1.7b", mb: 1100, ram_mb: 1700, downloaded: false, label: "Qwen3 1.7B · smaller, faster" },
+      { id: "qwen3-4b-compact", mb: 1670, ram_mb: 2300, downloaded: false, label: "Qwen3 4B compact · for about 8 GB of memory" },
+      { id: "qwen3-1.7b", mb: 1100, ram_mb: 1700, downloaded: false, label: "Qwen3 1.7B · smallest" },
     ],
     key_options: [
       { value: "right-alt", label: "Right Option" },
