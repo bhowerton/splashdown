@@ -1,0 +1,53 @@
+name: Release cache
+
+# Release builds run on version tags, and a tag can only use build caches
+# saved on main. This keeps one warm for the Mac release build (both
+# architectures, release profile, as scripts/package-mac.sh builds them,
+# but unsigned), so a release compiles only Splashdown's own crates. The
+# Windows release uses the cache CI's windows-installer job saves.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.lock"
+      - ".github/workflows/release-cache.yml"
+  schedule:
+    # Weekly, so a new stable Rust (part of the cache key) is picked up.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+concurrency:
+  group: release-cache
+  cancel-in-progress: true
+
+env:
+  # The same as release.yml: environment variables are part of the cache key.
+  CARGO_TERM_COLOR: always
+
+jobs:
+  mac:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v5
+      - name: Select Xcode 26
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: mac-release
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-binstall
+      - name: Install the Tauri CLI
+        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked
+      - name: Build both architectures
+        run: |
+          cargo build --release --locked -p splashdown-llm --target aarch64-apple-darwin
+          cargo build --release --locked -p splashdown-llm --target x86_64-apple-darwin
+          cargo tauri build --target universal-apple-darwin --bundles app --no-sign

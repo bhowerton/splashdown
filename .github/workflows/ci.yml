@@ -73,12 +73,21 @@ jobs:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+        with:
+          # Shared with release.yml's Windows job, which restores it on a
+          # tag (tags can only use caches saved on main).
+          shared-key: windows-release
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-binstall
       - name: Install the Tauri CLI
-        run: cargo install tauri-cli --version "^2" --locked
+        # A prebuilt binary (compiling it took 6–10 minutes); cargo-binstall
+        # compiles it only if there's none for this platform.
+        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked
       - name: Build the installer
         shell: pwsh
         run: scripts/package-win.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: windows-installer
           path: target/release/bundle/release/Splashdown-windows-x64-setup.exe
