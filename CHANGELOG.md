@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.3.0 — 2026-11-01
 
 - **The status pill at the text cursor on Windows.** As on a Mac, the pill now shows just below where you're typing (above it near the bottom of the screen), not only at the bottom center, in classic Windows apps and in browsers, Office and other apps that report their text cursor to accessibility tools. Settings → General → Show the status next to the text cursor turns it off.
 - **Transcribe a meeting again with another model.** When a meeting's or recording's audio is kept with its note, Transcribe again… in the note's ⋯ menu (or ⌘K) runs it through another downloaded speech model, such as Whisper large-v3-turbo for a call in another language, or the one in Settings. The new transcript takes the old one's place, with the progress and Stop of a file transcription; speakers keep the names you gave them, and My notes and the summary stay as they were. Stopped part way, the note is left as it was.
