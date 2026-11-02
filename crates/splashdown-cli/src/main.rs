@@ -103,6 +103,13 @@ enum Command {
         /// The last dictation the command may refer to.
         #[arg(long)]
         last: Option<String>,
+        /// Voice actions on: a request to do something ("open Spotify") is
+        /// planned into an action and printed, not carried out.
+        #[arg(long)]
+        actions: bool,
+        /// Selected text an action may use (an email's body).
+        #[arg(long)]
+        selection: Option<String>,
         #[command(flatten)]
         providers: ProviderOpts,
         #[command(flatten)]
@@ -520,6 +527,8 @@ fn run() -> Result<()> {
         Command::Interpret {
             spoken,
             last,
+            actions,
+            selection,
             providers,
             context,
         } => {
@@ -528,6 +537,7 @@ fn run() -> Result<()> {
                 &spoken,
                 last.as_deref(),
                 &context.prompt_context(&setup.settings),
+                actions,
             ))?;
             eprintln!(
                 "── timing      ai {:.2}s ({})",
@@ -535,6 +545,19 @@ fn run() -> Result<()> {
                 out.llm_name
             );
             println!("{:?}", out.command);
+            if let splashdown_core::command::Command::Do(request) = &out.command {
+                let ctx = splashdown_core::action::PlanContext {
+                    selection,
+                    ..eval::plan_context(chrono::Local::now().naive_local())
+                };
+                let plan = rt.block_on(setup.pipeline.plan_action(request, &ctx, None))?;
+                eprintln!(
+                    "── timing      plan {:.2}s ({})",
+                    plan.llm_time.as_secs_f32(),
+                    plan.llm_name
+                );
+                println!("{:?}", plan.plan);
+            }
         }
         Command::Ask {
             question,

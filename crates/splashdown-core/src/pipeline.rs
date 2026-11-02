@@ -96,6 +96,15 @@ pub struct CommandOutcome {
     pub llm_time: Duration,
 }
 
+/// The action a `do` command was planned into, and what planning it cost.
+#[derive(Debug, Clone)]
+pub struct ActionOutcome {
+    pub plan: crate::action::Plan,
+    pub llm_name: String,
+    pub usage: Usage,
+    pub llm_time: Duration,
+}
+
 #[derive(Debug, Clone)]
 pub struct Outcome {
     pub mode: Mode,
@@ -240,26 +249,23 @@ impl Pipeline {
     }
 
     /// Interprets a spoken command (see `crate::command`). `last` is the last
-    /// dictation, if it's still just before the cursor. Uses the model for
-    /// instructions when one is set.
+    /// dictation, if it's still just before the cursor; `actions`: voice
+    /// actions are on. Uses the model for instructions when one is set.
     pub async fn command(
         &self,
         spoken: &str,
         last: Option<&str>,
         ctx: &PromptContext,
+        actions: bool,
     ) -> Result<CommandOutcome, PipelineError> {
-        let llm = self
-            .instruction_llm
-            .as_ref()
-            .or(self.llm.as_ref())
-            .ok_or(PipelineError::NoModel(Mode::DictateInstruct))?;
-        let mut request = crate::command::request(spoken, last, ctx);
+        let llm = self.command_llm()?;
+        let mut request = crate::command::request(spoken, last, ctx, actions);
         if !llm.supports_json_schema() {
             request.json_schema = None;
         }
         let started = Instant::now();
         let completion = llm.complete(&request).await.map_err(PipelineError::Llm)?;
-        let command = match crate::command::parse(&completion.text) {
+        let command = match crate::command::parse(&completion.text, actions) {
             // Nothing to replace: it can only mean new text.
             crate::command::Command::ReplaceLast(text) if last.is_none() => {
                 crate::command::Command::Write(text)
@@ -267,6 +273,9 @@ impl Pipeline {
             crate::command::Command::Ask(question) if question.is_empty() => {
                 crate::command::Command::Ask(spoken.to_string())
             }
+            // The words as said: the interpreter's copy may be translated
+            // or reworded, and names and times must survive as they were.
+            crate::command::Command::Do(_) => crate::command::Command::Do(spoken.to_string()),
             other => other,
         };
         Ok(CommandOutcome {
@@ -275,6 +284,54 @@ impl Pipeline {
             usage: completion.usage,
             llm_time: started.elapsed(),
         })
+    }
+
+    /// Plans a `do` command into one action from the catalog (see
+    /// `crate::action`), limited to `enabled` (all when `None`).
+    pub async fn plan_action(
+        &self,
+        said: &str,
+        ctx: &crate::action::PlanContext,
+        enabled: Option<&[&str]>,
+    ) -> Result<ActionOutcome, PipelineError> {
+        let llm = self.command_llm()?;
+        let mut request = crate::action::request(said, ctx, enabled);
+        if !llm.supports_json_schema() {
+            request.json_schema = None;
+        }
+        let started = Instant::now();
+        // Some models refuse a schema with a choice of shapes, or answer it
+        // with blank space until they run out of room: ask again without it
+        // (the reply is checked either way).
+        let mut completion = match llm.complete(&request).await {
+            Err(ProviderError::Api(e)) if request.json_schema.is_some() && e.starts_with("400") => {
+                request.json_schema = None;
+                llm.complete(&request).await
+            }
+            other => other,
+        }
+        .map_err(PipelineError::Llm)?;
+        let mut usage = completion.usage;
+        if request.json_schema.is_some() && !crate::action::readable(&completion.text) {
+            request.json_schema = None;
+            completion = llm.complete(&request).await.map_err(PipelineError::Llm)?;
+            usage += completion.usage;
+        }
+        Ok(ActionOutcome {
+            plan: crate::action::plan(&completion.text, said, ctx, enabled),
+            llm_name: llm.name(),
+            usage,
+            llm_time: started.elapsed(),
+        })
+    }
+
+    /// The model for commands and actions: the one for instructions when
+    /// one is set.
+    fn command_llm(&self) -> Result<&Arc<dyn TextModel>, PipelineError> {
+        self.instruction_llm
+            .as_ref()
+            .or(self.llm.as_ref())
+            .ok_or(PipelineError::NoModel(Mode::DictateInstruct))
     }
 
     /// Transcribes a recording on its own (a spoken command).
@@ -698,6 +755,7 @@ mod tests {
             "capitalize that",
             Some("can someone review my pr"),
             &PromptContext::default(),
+            false,
         ))
         .unwrap();
         assert_eq!(
@@ -711,7 +769,8 @@ mod tests {
             &[],
             Some(Ok(r#"{"action":"replace_last","text":"No, thanks."}"#)),
         );
-        let out = block_on(p.command("write a short no", None, &PromptContext::default())).unwrap();
+        let out = block_on(p.command("write a short no", None, &PromptContext::default(), false))
+            .unwrap();
         assert_eq!(
             out.command,
             crate::command::Command::Write("No, thanks.".into())
@@ -719,7 +778,7 @@ mod tests {
         // No AI model: commands can't work.
         let (p, _) = pipeline(&[], None);
         assert!(matches!(
-            block_on(p.command("send it", None, &PromptContext::default())),
+            block_on(p.command("send it", None, &PromptContext::default(), false)),
             Err(PipelineError::NoModel(_))
         ));
     }

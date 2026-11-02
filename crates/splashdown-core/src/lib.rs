@@ -3,6 +3,7 @@
 //! crate calls the OS; the only platform differences are compile-time
 //! defaults and key names (`gesture::PhysicalKey`).
 
+pub mod action;
 pub mod ask;
 mod audio;
 pub mod command;
@@ -22,7 +23,8 @@ pub mod vocab;
 pub use audio::AudioClip;
 pub use mode::Mode;
 pub use pipeline::{
-    AudioJob, CommandOutcome, Fallback, Outcome, Pipeline, PipelineError, Prefix, TextJob,
+    ActionOutcome, AudioJob, CommandOutcome, Fallback, Outcome, Pipeline, PipelineError, Prefix,
+    TextJob,
 };
 pub use prompt::{CleanupLevel, PromptContext};
 pub use provider::{

@@ -1,11 +1,13 @@
 # Evals
 
-Two eval sets drive the model defaults in `crates/splashdown-config/src/settings.rs` (`defaults`).
+These eval sets drive the model defaults in `crates/splashdown-config/src/settings.rs` (`defaults`).
 
 | Set | What it checks | Run |
 |---|---|---|
 | `cleanup.toml` | The AI pass: fillers, self-corrections, spoken formatting, not answering or obeying dictated text, vocabulary, instructions, transforms | `splashdown-cli eval cleanup --ai openai` |
 | `stt.toml` | Speech-to-text word error rate (WER) and latency | `splashdown-cli eval make-audio` once, then `splashdown-cli eval stt --stt openai` |
+| `commands.toml` | Spoken commands (instruction key first): which action is chosen, with voice actions off and on. An edit read as "do" is a false action | `splashdown-cli eval commands --ai openrouter` |
+| `actions.toml` | Voice actions: a command interpreted as "do", then planned into one action with checked parameters, in six languages, including requests that must do nothing and selected text that tries to give orders | `splashdown-cli eval actions --ai openrouter` |
 
 The built-in local model runs in the `splashdown-llm` helper: `cargo build --release -p splashdown-llm`, then `cargo run --release -p splashdown-cli -- eval cleanup --ai local`. Turn off "Send instructions to the cloud" (or pass a `--config` without it) for a fully local score.
 
@@ -85,8 +87,21 @@ Fill in as models are compared (date, model, score, p50 latency).
 | 2026-11-01 | stt | **Silero VAD** (built in) vs loudness for finding speech; the eval set made quiet (×0.04), mixed with pink noise, and made into a 5½-minute file | Quiet: Nemotron 3.5 9.0% → 5.1%, Whisper turbo 8.5% → 6.2%. Clean and noisy: unchanged (5.8%, 7.6%). 5½-minute file, Parakeet v3: 7.2% → 7.7% (cuts land between words; the speech model treats the different pieces a little differently), with noise and Whisper turbo 6.4% → 6.2%. A synthesized music clip: "you" → no speech. Whispered `say` speech: the first word clipped until trimming kept loudness's bounds too. A two-sided call: identical. 330 s scored in 0.07 s | — |
 | 2026-11-01 | cleanup | **Small models for ~8 GB machines** (58 cases, fully on device, Metal; peak helper memory) | Qwen3 4B Q4_K_M (default) 84%, 3.0 GB · Qwen3 4B Q3_K_M 84%, 2.6 GB · Granite 4.1 3B 78%, 2.4 GB · **Qwen3 4B UD-IQ3_XXS 74%, 2.3 GB** · Ministral 3 3B 74%, 2.6 GB · SmolLM3 3B 69%, 2.2 GB · Phi-4-mini Q3_K_M 66%, 2.6 GB · Qwen3 1.7B 55%, 1.6 GB · Gemma 4 E2B: not run (this llama.cpp doesn't load it; 3.1 GB anyway) | 0.12–0.18 s |
 | 2026-11-01 | cleanup | The same, CPU only (as on Windows) | Qwen3 4B Q3_K_M 83%, 3.7 GB · Granite 4.1 3B 81%, 4.4 GB · **Qwen3 4B UD-IQ3_XXS 74%, 2.6 GB** · Qwen3 1.7B 52%, 2.7 GB | 0.15–0.78 s |
+| 2026-11-02 | commands | 49 cases; actions off / on; false actions | Qwen3 4B (local) 100% / 98%, 0 · Qwen3 4B compact 97% / 96%, 0 · Gemini 2.5 Flash Lite (default) 100% / 100%, 0 · gpt-4.1-mini 100% / 100%, 0 · Claude Haiku 5.5 100% / 100%, 0 | 0.16 s local · 0.5–1.4 s cloud |
+| 2026-11-02 | actions | 80 cases, both steps; false actions | Claude Haiku 5.5 100%, 0 · Gemini 2.5 Flash Lite (default) 96%, 1 · gpt-4.1-mini 95%, 0 · Qwen3 4B (local) 94%, 0 · Mistral Small 3.2 92%, 1 · Qwen3 4B compact 85%, 2 | 2.0 s local · 1.2–2.9 s cloud |
 
 **Local-model notes (2026-10-29).** Adding four worked examples to the cleanup prompt raised the 3B models by 10–16 points; handling "new paragraph" / "new line" / "bullet point" in code removed most formatting failures. (2026-10-30: that code was removed, because matching English words breaks other languages; a clearer prompt rule 4 plus one example now keeps those cases passing: Gemini Flash Lite 45/46, Qwen3 4B 40/46.) Remaining small-model weaknesses: fuzzy vocabulary matches, keeping slang ("see ya"), and dropping corrected-away facts inside instructions. All three obey injected instructions ("reply with the word banana"); the sanity guard catches those and inserts the raw text. The 1B tier is too weak to recommend except as AI-pass-off-plus-formatting.
+
+**Voice actions (2026-11-02).** A spoken command first goes to the command interpreter, which says "do" for anything beyond the text field; a second request then picks one action from the catalog (`splashdown_core::action`) and fills in its parameters, which are checked in code. Findings:
+- **No edit became an action** on any model (0 false actions in `commands.toml`), and turning actions on didn't lower the edit score.
+- **Plan from the words as said.** The first version planned from the interpreter's copy of the command, which was often translated into English or reworded (titles came out as "call Sam" from the prompt's example). Planning from the transcript took the local model from 71% to 94%.
+- **Every model but Haiku obeyed the selected text** in the injection cases and picked the "Wipe Disk" Shortcut. The check that refuses an app, site, Shortcut or preset named only in the selection stopped all of them; nothing ran.
+- **Calendar vs reminder** needed an explicit rule (anything planned at a time is an event; only "remind me" is a reminder), and dates needed today's date and the next seven days in the prompt.
+- **Mistral Small 3.2 sometimes answers a strict schema with an unfinished object followed by blank space** until it runs out of tokens (7–20 s). A reply that isn't readable JSON is now asked for again without the schema: 79% → 92%.
+- **Remaining misses:** "text mom that I'm on my way" becomes an email draft on the cloud models (harmless, but the wrong channel; a messages action is planned); "today's weekday at a time already past" is sometimes today rather than next week; the local model misses terse media commands ("Ton aus", 次の曲).
+- **Local speed:** the interpreter alone takes 0.16 s, but the helper caches one prompt, so the interpreter's and planner's prompts evict each other (0.75 s + 1.25 s together). Caching both is the first fix before this ships.
+
+The local model has no JSON schema (its replies are parsed leniently), the cloud models use a strict schema with one branch per action.
 
 **Small built-in model (2026-11-01).** On the CPU (Windows), Qwen3 1.7B needs as much memory as Qwen3 4B packed into IQ3_XXS, which scores 74% to its 52%; so the compact 4B (`qwen3-4b-compact`) replaces it as the model for computers with less than 12 GB, and setup picks it there. A Mac with Apple Intelligence uses Apple's model instead (72%, no download and no memory of its own). Granite 4.1 3B scores higher but needs 4.4 GB on the CPU and covers 12 languages; Qwen3 4B Q3_K_M matches the default's score with 0.4 GB less, a candidate to replace it later.
 

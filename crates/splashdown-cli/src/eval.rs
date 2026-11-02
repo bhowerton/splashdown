@@ -8,6 +8,8 @@ use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use serde::Deserialize;
 use splashdown_config::Secrets;
+use splashdown_core::action::{Action, Plan, PlanContext};
+use splashdown_core::command::Command;
 use splashdown_core::{Fallback, Mode, Pipeline, PromptContext, TextJob};
 
 use crate::opts::{self, ProviderOpts};
@@ -25,6 +27,34 @@ pub enum EvalCommand {
         #[arg(short, long)]
         verbose: bool,
         /// Compare several models of the same provider, comma-separated.
+        #[arg(long, value_delimiter = ',')]
+        models: Vec<String>,
+        #[command(flatten)]
+        providers: ProviderOpts,
+    },
+    /// Score spoken commands on eval/commands.toml, with voice actions
+    /// off and then on.
+    Commands {
+        #[arg(long, default_value = "eval/commands.toml")]
+        cases: PathBuf,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(short, long)]
+        verbose: bool,
+        #[arg(long, value_delimiter = ',')]
+        models: Vec<String>,
+        #[command(flatten)]
+        providers: ProviderOpts,
+    },
+    /// Score voice actions on eval/actions.toml: each command is
+    /// interpreted, then planned into an action.
+    Actions {
+        #[arg(long, default_value = "eval/actions.toml")]
+        cases: PathBuf,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(short, long)]
+        verbose: bool,
         #[arg(long, value_delimiter = ',')]
         models: Vec<String>,
         #[command(flatten)]
@@ -65,6 +95,34 @@ pub async fn run(cmd: EvalCommand) -> Result<()> {
             models,
             providers,
         } => cleanup(&cases, filter.as_deref(), verbose, &models, &providers).await,
+        EvalCommand::Commands {
+            cases,
+            filter,
+            verbose,
+            models,
+            providers,
+        } => {
+            let file: CommandFile = read_cases(&cases)?;
+            let cases = filtered(&file.case, filter.as_deref(), |c| &c.id);
+            for run in model_runs(&models, &providers) {
+                commands(&cases, verbose, &run).await?;
+            }
+            Ok(())
+        }
+        EvalCommand::Actions {
+            cases,
+            filter,
+            verbose,
+            models,
+            providers,
+        } => {
+            let file: ActionFile = read_cases(&cases)?;
+            let cases = filtered(&file.case, filter.as_deref(), |c| &c.id);
+            for run in model_runs(&models, &providers) {
+                actions(&cases, verbose, &run).await?;
+            }
+            Ok(())
+        }
         EvalCommand::Stt {
             cases,
             audio_dir,
@@ -353,6 +411,381 @@ async fn cleanup_one(
         p50: percentile(&latencies, 0.5),
         p90: percentile(&latencies, 0.9),
     })
+}
+
+// ---------------------------------------------------------------- commands
+
+fn read_cases<T: serde::de::DeserializeOwned>(path: &Path) -> Result<T> {
+    Ok(toml::from_str(
+        &std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?,
+    )?)
+}
+
+fn filtered<'a, T>(cases: &'a [T], filter: Option<&str>, id: impl Fn(&T) -> &String) -> Vec<&'a T> {
+    cases
+        .iter()
+        .filter(|c| filter.is_none_or(|f| id(c).contains(f)))
+        .collect()
+}
+
+fn model_runs(models: &[String], providers: &ProviderOpts) -> Vec<ProviderOpts> {
+    if models.is_empty() {
+        return vec![providers.clone()];
+    }
+    models
+        .iter()
+        .map(|m| ProviderOpts {
+            ai_model: Some(m.clone()),
+            ..providers.clone()
+        })
+        .collect()
+}
+
+/// The pipeline for text-only evals, and its model's name.
+fn text_pipeline(providers: &ProviderOpts) -> Result<(String, Pipeline)> {
+    let settings = opts::settings(providers)?;
+    let secrets = Secrets::from_env();
+    let Some(llm) = opts::build_llm(&settings, &secrets)? else {
+        bail!("this eval needs an AI provider (--ai …)");
+    };
+    let instruction_llm = opts::build_instruction_llm(&settings, &secrets)?;
+    let name = match &instruction_llm {
+        Some(cloud) => cloud.name(),
+        None => llm.name(),
+    };
+    let pipeline = Pipeline::new(std::sync::Arc::new(NoopStt), Some(llm))
+        .with_instruction_model(instruction_llm);
+    Ok((name, pipeline))
+}
+
+/// One acceptable answer, or several.
+#[derive(Deserialize)]
+#[serde(untagged)]
+enum OneOrMore {
+    One(String),
+    More(Vec<String>),
+}
+
+impl OneOrMore {
+    fn list(&self) -> Vec<&str> {
+        match self {
+            OneOrMore::One(s) => vec![s.as_str()],
+            OneOrMore::More(v) => v.iter().map(String::as_str).collect(),
+        }
+    }
+}
+
+#[derive(Deserialize)]
+struct CommandFile {
+    case: Vec<CommandCase>,
+}
+
+#[derive(Deserialize)]
+struct CommandCase {
+    id: String,
+    said: String,
+    last: Option<String>,
+    app: Option<String>,
+    expect: OneOrMore,
+    /// Case-insensitive substrings the command's text must contain.
+    #[serde(default)]
+    text: Vec<String>,
+}
+
+fn command_id(command: &Command) -> &'static str {
+    match command {
+        Command::ReplaceLast(_) => "replace_last",
+        Command::DeleteLastWord => "delete_last_word",
+        Command::DeleteLastSentence => "delete_last_sentence",
+        Command::SelectLast => "select_last",
+        Command::BoldLast => "bold_last",
+        Command::ItalicLast => "italic_last",
+        Command::PressEnter => "press_enter",
+        Command::UndoLast => "undo_last",
+        Command::Write(_) => "write",
+        Command::Ask(_) => "ask",
+        Command::Do(_) => "do",
+        Command::Unclear => "unclear",
+    }
+}
+
+fn command_text(command: &Command) -> &str {
+    match command {
+        Command::ReplaceLast(t) | Command::Write(t) | Command::Ask(t) | Command::Do(t) => t,
+        _ => "",
+    }
+}
+
+async fn commands(cases: &[&CommandCase], verbose: bool, providers: &ProviderOpts) -> Result<()> {
+    let (name, pipeline) = text_pipeline(providers)?;
+    // Untimed warm-up so a local model's load time doesn't skew latency.
+    if let Some(first) = cases.first() {
+        let _ = pipeline
+            .command(&first.said, None, &PromptContext::default(), false)
+            .await;
+    }
+    for actions in [false, true] {
+        let label = if actions { "actions on" } else { "actions off" };
+        eprintln!("\nCommands eval · {name} · {label}\n");
+        let mut latencies = Vec::new();
+        let (mut passed, mut total, mut errors, mut false_actions) = (0, 0, 0, 0);
+        let mut cost = splashdown_core::Usage::default();
+        for case in cases {
+            let expect: Vec<&str> = case
+                .expect
+                .list()
+                .into_iter()
+                .filter(|e| actions || *e != "do")
+                .collect();
+            if expect.is_empty() {
+                continue;
+            }
+            total += 1;
+            let ctx = PromptContext {
+                app_name: case.app.clone(),
+                ..PromptContext::default()
+            };
+            let started = Instant::now();
+            let result = pipeline
+                .command(&case.said, case.last.as_deref(), &ctx, actions)
+                .await;
+            latencies.push(started.elapsed());
+            let (got, text, mut fails) = match result {
+                Ok(out) => {
+                    cost += out.usage;
+                    let id = command_id(&out.command);
+                    (id, command_text(&out.command).to_string(), Vec::new())
+                }
+                Err(e) => {
+                    errors += 1;
+                    ("error", String::new(), vec![format!("error: {e}")])
+                }
+            };
+            if fails.is_empty() {
+                if !expect.contains(&got) {
+                    fails.push(format!("{got}, wanted {}", expect.join(" or ")));
+                    if got == "do" {
+                        false_actions += 1;
+                        fails.push("FALSE ACTION".into());
+                    }
+                } else {
+                    let lower = text.to_lowercase();
+                    for t in &case.text {
+                        if !lower.contains(&t.to_lowercase()) {
+                            fails.push(format!("text missing {t:?}"));
+                        }
+                    }
+                }
+            }
+            let ok = fails.is_empty();
+            passed += usize::from(ok);
+            println!(
+                "{} {:<28} {:>5.2}s  {}",
+                if ok { "✓" } else { "✗" },
+                case.id,
+                started.elapsed().as_secs_f32(),
+                fails.join("; ")
+            );
+            if (verbose || !ok) && !text.is_empty() {
+                println!("      │ {got}: {text}");
+            }
+        }
+        summary(
+            &format!("{name} · {label}"),
+            passed,
+            total,
+            errors,
+            &mut latencies,
+        );
+        println!(
+            "{name} · {label}: {false_actions} false action(s) · cost ${:.4}",
+            cost.cost_usd
+        );
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------- actions
+
+/// What the planner knows of now: fixed in the eval so dates can be
+/// checked exactly.
+pub fn plan_context(now: chrono::NaiveDateTime) -> PlanContext {
+    PlanContext {
+        now: now.format("%A %Y-%m-%d %H:%M").to_string(),
+        coming_days: (1..=7)
+            .map(|d| {
+                (now.date() + chrono::Days::new(d))
+                    .format("%A %Y-%m-%d")
+                    .to_string()
+            })
+            .collect(),
+        ..PlanContext::default()
+    }
+}
+
+#[derive(Deserialize)]
+struct ActionFile {
+    case: Vec<ActionCase>,
+}
+
+#[derive(Deserialize)]
+struct ActionCase {
+    id: String,
+    said: String,
+    selection: Option<String>,
+    action: OneOrMore,
+    /// Parameter → what it must contain; times exactly; "-" for absent.
+    #[serde(default)]
+    params: std::collections::BTreeMap<String, String>,
+}
+
+const TIME_PARAMS: &[&str] = &["start", "end", "due"];
+
+fn param_failures(case: &ActionCase, action: &Action) -> Vec<String> {
+    let fields = action.fields();
+    let mut out = Vec::new();
+    for (name, want) in &case.params {
+        let got = fields
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, v)| v.as_str());
+        let ok = match (want.as_str(), got) {
+            ("-", got) => got.is_none(),
+            (_, None) => false,
+            (want, Some(got)) if TIME_PARAMS.contains(&name.as_str()) => want == got,
+            (want, Some(got)) => {
+                splashdown_core::action::fold(got).contains(&splashdown_core::action::fold(want))
+            }
+        };
+        if !ok {
+            out.push(format!("{name} = {got:?}, wanted {want:?}"));
+        }
+    }
+    out
+}
+
+async fn actions(cases: &[&ActionCase], verbose: bool, providers: &ProviderOpts) -> Result<()> {
+    let (name, pipeline) = text_pipeline(providers)?;
+    let now = chrono::NaiveDate::from_ymd_opt(2026, 11, 2)
+        .and_then(|d| d.and_hms_opt(10, 0, 0))
+        .context("the eval's date")?;
+    let base = PlanContext {
+        shortcuts: ["Morning routine", "Log water", "Start focus", "Wipe Disk"]
+            .map(String::from)
+            .to_vec(),
+        presets: ["Email", "Code", "Formal"].map(String::from).to_vec(),
+        ..plan_context(now)
+    };
+    eprintln!("\nActions eval · {name} · {} cases\n", cases.len());
+    if let Some(first) = cases.first() {
+        let _ = pipeline
+            .command(&first.said, None, &PromptContext::default(), true)
+            .await;
+    }
+    let mut latencies = Vec::new();
+    let (mut interpret_times, mut plan_times) = (Vec::new(), Vec::new());
+    let (mut passed, mut errors, mut false_actions, mut interpreted, mut refused) = (0, 0, 0, 0, 0);
+    let mut cost = splashdown_core::Usage::default();
+    for case in cases {
+        let expect = case.action.list();
+        let nothing_ok = expect.contains(&"none");
+        let started = Instant::now();
+        let mut fails = Vec::new();
+        let mut shown = String::new();
+        match pipeline
+            .command(&case.said, None, &PromptContext::default(), true)
+            .await
+        {
+            Err(e) => {
+                errors += 1;
+                fails.push(format!("error: {e}"));
+            }
+            Ok(out) => {
+                cost += out.usage;
+                interpret_times.push(out.llm_time);
+                match out.command {
+                    Command::Do(request) => {
+                        interpreted += 1;
+                        let ctx = PlanContext {
+                            selection: case.selection.clone(),
+                            ..base.clone()
+                        };
+                        match pipeline.plan_action(&request, &ctx, None).await {
+                            Err(e) => {
+                                errors += 1;
+                                fails.push(format!("error: {e}"));
+                            }
+                            Ok(plan) => {
+                                cost += plan.usage;
+                                plan_times.push(plan.llm_time);
+                                match plan.plan {
+                                    Plan::Nothing(reason) => {
+                                        shown = format!("none: {reason}");
+                                        if !nothing_ok {
+                                            fails.push(format!(
+                                                "none, wanted {}",
+                                                expect.join(" or ")
+                                            ));
+                                        }
+                                    }
+                                    Plan::Invalid(why) => {
+                                        refused += 1;
+                                        shown = format!("invalid: {why}");
+                                        if !nothing_ok {
+                                            fails.push(format!("invalid: {why}"));
+                                        }
+                                    }
+                                    Plan::Do(action) => {
+                                        shown = format!("{action:?}");
+                                        if expect.contains(&action.id()) {
+                                            fails.extend(param_failures(case, &action));
+                                        } else {
+                                            false_actions += 1;
+                                            fails.push(format!(
+                                                "{}, wanted {} · FALSE ACTION",
+                                                action.id(),
+                                                expect.join(" or ")
+                                            ));
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    other => {
+                        shown = format!("interpreted as {}", command_id(&other));
+                        if !nothing_ok {
+                            fails.push(format!("{}, not do", command_id(&other)));
+                        }
+                    }
+                }
+            }
+        }
+        latencies.push(started.elapsed());
+        let ok = fails.is_empty();
+        passed += usize::from(ok);
+        println!(
+            "{} {:<24} {:>5.2}s  {}",
+            if ok { "✓" } else { "✗" },
+            case.id,
+            started.elapsed().as_secs_f32(),
+            fails.join("; ")
+        );
+        if (verbose || !ok) && !shown.is_empty() {
+            println!("      │ {shown}");
+        }
+    }
+    summary(&name, passed, cases.len(), errors, &mut latencies);
+    interpret_times.sort();
+    plan_times.sort();
+    println!(
+        "{name}: {false_actions} false action(s) · {refused} refused by the checks · {interpreted} of {} interpreted as do · interpret p50 {:.2}s · plan p50 {:.2}s · cost ${:.4}",
+        cases.len(),
+        percentile(&interpret_times, 0.5),
+        percentile(&plan_times, 0.5),
+        cost.cost_usd
+    );
+    Ok(())
 }
 
 // ---------------------------------------------------------------- stt

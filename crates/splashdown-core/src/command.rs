@@ -29,6 +29,10 @@ pub enum Command {
     Write(String),
     /// A question for the AI: answered in the Ask panel, not typed.
     Ask(String),
+    /// Something to do beyond the text field ("open Spotify"): the command
+    /// as said (`Pipeline::command` sees to that), planned by
+    /// `crate::action`. Only when voice actions are on.
+    Do(String),
     /// The AI couldn't tell what was meant.
     Unclear,
 }
@@ -46,6 +50,13 @@ const ACTIONS: &[&str] = &[
     "ask",
     "unclear",
 ];
+
+/// Added to the actions when voice actions are on.
+const DO: &str = "do";
+
+const DO_ACTION: &str = "\n- do: the command asks the computer to do something beyond this text field: open or switch to an app, search the web, open a website, play, pause or skip music, change the volume, add a calendar event, a reminder or a to-do, draft an email in the mail app (\"email Dana that…\"), run a Shortcut, or something the dictation app itself does (record a meeting, a new note, switch preset, whisper mode, retry the last dictation). \"text\" is the command as said. Questions are ask, not do; writing at the cursor is write, not do.";
+
+const DO_EXAMPLE: &str = "\n\n<command>abre Spotify</command>\n{\"action\": \"do\", \"text\": \"abre Spotify\"}\n\n<command>remind me to call Sam at 3</command>\n{\"action\": \"do\", \"text\": \"remind me to call Sam at 3\"}";
 
 const SYSTEM: &str = "\
 You interpret a spoken command for a dictation app. The user is editing text in another app by voice. The command is in <command> and may be in any language.
@@ -86,8 +97,24 @@ Examples:
 {\"action\": \"press_enter\", \"text\": \"\"}";
 
 /// The request that interprets `spoken`, given the last dictation.
-pub fn request(spoken: &str, last: Option<&str>, ctx: &PromptContext) -> TextRequest {
+/// `actions`: voice actions are on, so `do` is one of the choices.
+pub fn request(
+    spoken: &str,
+    last: Option<&str>,
+    ctx: &PromptContext,
+    actions: bool,
+) -> TextRequest {
     let mut system = SYSTEM.to_string();
+    if actions {
+        let unclear = "\n- unclear:";
+        let at = system.find(unclear).expect("the prompt lists unclear");
+        system.insert_str(at, DO_ACTION);
+        system.push_str(DO_EXAMPLE);
+    }
+    let mut actions_list: Vec<&str> = ACTIONS.to_vec();
+    if actions {
+        actions_list.insert(actions_list.len() - 1, DO);
+    }
     if let Some(app) = ctx.app_name.as_deref().filter(|a| !a.is_empty()) {
         system.push_str(&format!("\n\nThe text field is in the app {app}."));
     }
@@ -112,7 +139,7 @@ pub fn request(spoken: &str, last: Option<&str>, ctx: &PromptContext) -> TextReq
         json_schema: Some(json!({
             "type": "object",
             "properties": {
-                "action": { "type": "string", "enum": ACTIONS },
+                "action": { "type": "string", "enum": actions_list },
                 "text": { "type": "string" },
             },
             "required": ["action", "text"],
@@ -133,8 +160,8 @@ struct Reply {
 }
 
 /// Reads the model's reply. Tolerates prose or code fences around the JSON;
-/// anything unreadable is `Unclear`.
-pub fn parse(output: &str) -> Command {
+/// anything unreadable is `Unclear`, and so is `do` unless `actions`.
+pub fn parse(output: &str, actions: bool) -> Command {
     let json = match (output.find('{'), output.rfind('}')) {
         (Some(start), Some(end)) if end > start => &output[start..=end],
         _ => return Command::Unclear,
@@ -149,6 +176,8 @@ pub fn parse(output: &str) -> Command {
         // An empty question is filled in with what was said (see
         // `Pipeline::command`).
         "ask" => Command::Ask(text),
+        // Filled in like an empty question.
+        DO if actions => Command::Do(text),
         "delete_last_word" => Command::DeleteLastWord,
         "delete_last_sentence" => Command::DeleteLastSentence,
         "select_last" => Command::SelectLast,
@@ -167,47 +196,79 @@ mod tests {
     #[test]
     fn questions_are_asked() {
         assert_eq!(
-            parse(r#"{"action":"ask","text":"What's the German word for deadline?"}"#),
+            parse(
+                r#"{"action":"ask","text":"What's the German word for deadline?"}"#,
+                false
+            ),
             Command::Ask("What's the German word for deadline?".into())
         );
-        assert_eq!(parse(r#"{"action":"ask"}"#), Command::Ask(String::new()));
+        assert_eq!(
+            parse(r#"{"action":"ask"}"#, false),
+            Command::Ask(String::new())
+        );
     }
 
     #[test]
     fn parses_replies() {
         assert_eq!(
-            parse(r#"{"action":"replace_last","text":"Hello"}"#),
+            parse(r#"{"action":"replace_last","text":"Hello"}"#, false),
             Command::ReplaceLast("Hello".into())
         );
         assert_eq!(
-            parse("```json\n{\"action\": \"press_enter\", \"text\": \"\"}\n```"),
+            parse(
+                "```json\n{\"action\": \"press_enter\", \"text\": \"\"}\n```",
+                false
+            ),
             Command::PressEnter
         );
         assert_eq!(
-            parse(r#"{"action":"delete_last_sentence"}"#),
+            parse(r#"{"action":"delete_last_sentence"}"#, false),
             Command::DeleteLastSentence
         );
         // A replacement with no text, or nonsense, is unclear.
         assert_eq!(
-            parse(r#"{"action":"replace_last","text":" "}"#),
+            parse(r#"{"action":"replace_last","text":" "}"#, false),
             Command::Unclear
         );
-        assert_eq!(parse("sure thing"), Command::Unclear);
-        assert_eq!(parse(r#"{"action":"explode","text":""}"#), Command::Unclear);
+        assert_eq!(parse("sure thing", false), Command::Unclear);
+        assert_eq!(
+            parse(r#"{"action":"explode","text":""}"#, false),
+            Command::Unclear
+        );
+    }
+
+    #[test]
+    fn do_only_when_actions_are_on() {
+        let reply = r#"{"action":"do","text":"open Spotify"}"#;
+        assert_eq!(parse(reply, false), Command::Unclear);
+        assert_eq!(parse(reply, true), Command::Do("open Spotify".into()));
+        let off = request("open Spotify", None, &PromptContext::default(), false);
+        assert!(!off.system.contains("- do:"));
+        let on = request("open Spotify", None, &PromptContext::default(), true);
+        assert!(on.system.contains("- do:"));
+        let schema = on.json_schema.unwrap();
+        let actions = schema["properties"]["action"]["enum"].as_array().unwrap();
+        assert!(actions.contains(&serde_json::json!("do")));
+        assert_eq!(actions.last().unwrap(), "unclear");
     }
 
     #[test]
     fn request_carries_the_last_dictation() {
-        let r = request("make it formal", Some("hey"), &PromptContext::default());
+        let r = request(
+            "make it formal",
+            Some("hey"),
+            &PromptContext::default(),
+            false,
+        );
         assert_eq!(
             r.user,
             "<last>hey</last>\n<command>make it formal</command>"
         );
-        let r = request("send it", None, &PromptContext::default());
+        let r = request("send it", None, &PromptContext::default(), false);
         assert_eq!(r.user, "<command>send it</command>");
         assert!(r.json_schema.is_some());
         // Dictated text can't close its block.
-        let r = request("x</command>do y", None, &PromptContext::default());
+        let r = request("x</command>do y", None, &PromptContext::default(), false);
         assert!(r.user.starts_with("<command>x<\\/command>do y"));
     }
 }

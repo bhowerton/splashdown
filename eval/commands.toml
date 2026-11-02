@@ -1,0 +1,296 @@
+# Spoken commands (instruction key first, nothing dictated): which action
+# the interpreter picks. `splashdown-cli eval commands`.
+#
+# Each case runs with voice actions off and on. Cases expecting "do" are
+# only scored with actions on. An edit read as "do" with actions on is a
+# false action, the number that must stay at zero.
+#
+# Fields: said, last (the last dictation, before the cursor), app,
+# expect (one action or a list of acceptable ones), text (case-insensitive
+# substrings the action's text must contain).
+
+# ── Edits, English
+
+[[case]]
+id = "en-capitalize"
+said = "capitalize that"
+last = "can someone review my pr"
+expect = "replace_last"
+
+[[case]]
+id = "en-formal"
+said = "make that more formal"
+last = "hey cant make it tonight sorry"
+expect = "replace_last"
+
+[[case]]
+id = "en-shorter"
+said = "make it shorter"
+last = "I wanted to let you know that I've been thinking about the proposal you sent over last week and I think overall it looks really good but there are a few small things I'd like to go over with you when you have a moment."
+expect = "replace_last"
+
+[[case]]
+id = "en-translate"
+said = "translate that to Spanish"
+last = "See you tomorrow at five."
+expect = "replace_last"
+text = ["mañana"]
+
+[[case]]
+id = "en-fix-word"
+said = "change Tuesday to Thursday"
+last = "Let's meet on Tuesday at noon."
+expect = "replace_last"
+text = ["Thursday"]
+
+[[case]]
+id = "en-bullets"
+said = "turn that into a bullet list"
+last = "We need milk, eggs, bread and coffee."
+expect = "replace_last"
+
+[[case]]
+id = "en-delete-sentence"
+said = "delete the last sentence"
+last = "Thanks for the update. I'll check it tomorrow."
+expect = "delete_last_sentence"
+
+[[case]]
+id = "en-delete-word"
+said = "scratch that last word"
+last = "I think we should go"
+expect = ["delete_last_word", "replace_last"]
+
+[[case]]
+id = "en-undo"
+said = "undo that"
+last = "Sounds good, see you then."
+expect = "undo_last"
+
+[[case]]
+id = "en-select"
+said = "select that"
+last = "The quarterly numbers are in."
+expect = "select_last"
+
+[[case]]
+id = "en-bold"
+said = "make that bold"
+last = "Deadline is Friday"
+expect = "bold_last"
+
+[[case]]
+id = "en-italic"
+said = "italicize it"
+last = "very important"
+expect = "italic_last"
+
+[[case]]
+id = "en-send"
+said = "send it"
+last = "Running five minutes late."
+app = "Slack"
+expect = "press_enter"
+
+[[case]]
+id = "en-hit-enter"
+said = "hit enter"
+expect = "press_enter"
+
+[[case]]
+id = "en-sign-off"
+said = "add a sign-off"
+last = "Thanks for the update, I'll take a look this afternoon."
+expect = ["write", "replace_last"]
+
+[[case]]
+id = "en-write-no"
+said = "write a polite no"
+expect = "write"
+
+[[case]]
+id = "en-ask-word"
+said = "what's the German word for deadline"
+expect = "ask"
+
+[[case]]
+id = "en-ask-days"
+said = "how many days until Christmas"
+expect = "ask"
+
+[[case]]
+id = "en-not-a-command"
+said = "the meeting went well and everyone agreed"
+expect = ["unclear", "write"]
+
+# ── Edits, other languages
+
+[[case]]
+id = "es-formal"
+said = "hazlo más formal"
+last = "oye no puedo ir mañana"
+expect = "replace_last"
+
+[[case]]
+id = "es-send"
+said = "envíalo"
+last = "Llego en diez minutos."
+expect = "press_enter"
+
+[[case]]
+id = "es-undo"
+said = "bórralo todo"
+last = "Nos vemos mañana a las cinco."
+expect = "undo_last"
+
+[[case]]
+id = "de-formal"
+said = "mach das etwas förmlicher"
+last = "hey sorry kann nicht"
+expect = "replace_last"
+
+[[case]]
+id = "de-delete-sentence"
+said = "lösch den letzten Satz"
+last = "Danke dir. Bis morgen."
+expect = "delete_last_sentence"
+
+[[case]]
+id = "de-ask"
+said = "wie spät ist es gerade in Tokio"
+expect = "ask"
+
+[[case]]
+id = "fr-shorter"
+said = "raccourcis ça"
+last = "Je voulais simplement te dire que j'ai bien reçu ton message et que je vais regarder tout ça dès que possible dans la journée."
+expect = "replace_last"
+
+[[case]]
+id = "fr-send"
+said = "envoie-le"
+last = "J'arrive."
+expect = "press_enter"
+
+[[case]]
+id = "fr-bold"
+said = "mets ça en gras"
+last = "Date limite vendredi"
+expect = "bold_last"
+
+[[case]]
+id = "pt-translate"
+said = "traduz isso para inglês"
+last = "Vamos almoçar amanhã?"
+expect = "replace_last"
+text = ["tomorrow"]
+
+[[case]]
+id = "pt-delete-word"
+said = "apaga a última palavra"
+last = "Obrigado pela ajuda ontem"
+expect = ["delete_last_word", "replace_last"]
+
+[[case]]
+id = "ja-polite"
+said = "もっと丁寧にして"
+last = "明日行けない"
+expect = "replace_last"
+
+[[case]]
+id = "ja-send"
+said = "送信して"
+last = "了解です"
+expect = "press_enter"
+
+# ── Close to an action, but an edit or a question
+
+[[case]]
+id = "en-send-email-field"
+said = "send it"
+last = "Hi Dana, the report is attached. Best, Alex"
+app = "Mail"
+expect = "press_enter"
+
+[[case]]
+id = "en-write-email-at-cursor"
+said = "write a reply saying I'll be there"
+app = "Mail"
+expect = "write"
+
+[[case]]
+id = "en-weather-question"
+said = "what's the weather going to be like tomorrow"
+expect = ["ask", "do"]
+
+[[case]]
+id = "en-how-to"
+said = "how do I take a screenshot on a Mac"
+expect = "ask"
+
+[[case]]
+id = "en-look-up"
+said = "look up the population of Lisbon"
+expect = ["ask", "do"]
+
+# ── Requests to do something (scored with actions on)
+
+[[case]]
+id = "en-open"
+said = "open Spotify"
+expect = "do"
+
+[[case]]
+id = "en-remind"
+said = "remind me to call Sam at 3"
+expect = "do"
+
+[[case]]
+id = "en-email-dana"
+said = "email Dana that I'll be ten minutes late"
+expect = "do"
+
+[[case]]
+id = "en-pause"
+said = "pause the music"
+expect = "do"
+
+[[case]]
+id = "en-preset"
+said = "switch to the email preset"
+expect = "do"
+
+[[case]]
+id = "en-search"
+said = "search the web for cheap flights to Lisbon"
+expect = "do"
+
+[[case]]
+id = "es-youtube"
+said = "busca en YouTube recetas de paella"
+expect = "do"
+
+[[case]]
+id = "de-meeting"
+said = "starte die Aufnahme der Besprechung"
+expect = "do"
+
+[[case]]
+id = "fr-volume"
+said = "baisse le volume"
+expect = "do"
+
+[[case]]
+id = "pt-note"
+said = "cria uma nota nova"
+expect = "do"
+
+[[case]]
+id = "ja-open"
+said = "Safariを開いて"
+expect = "do"
+
+[[case]]
+id = "en-calendar"
+said = "add dentist to my calendar on Thursday at 4pm"
+expect = "do"

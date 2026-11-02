@@ -2250,8 +2250,12 @@ impl Controller {
             .is_some_and(|(pid, at)| Some(pid) == target_pid && at.elapsed() < UNDO_WINDOW);
         let last = (recent && !self.last_text.trim().is_empty()).then(|| self.last_text.clone());
         let context = prompt_context(&engine.context, None, &active.preset, None);
-        let result =
-            tauri::async_runtime::block_on(pipeline.command(&spoken, last.as_deref(), &context));
+        let result = tauri::async_runtime::block_on(pipeline.command(
+            &spoken,
+            last.as_deref(),
+            &context,
+            false,
+        ));
         let outcome = match result {
             Ok(outcome) => outcome,
             Err(e) => {
@@ -2288,6 +2292,8 @@ impl Controller {
             Command::Unclear => return self.notice(Tone::Info, "Didn't understand that command"),
             // Answered in the Ask panel instead (`run_command`).
             Command::Ask(_) => return,
+            // Not asked for until voice actions are on.
+            Command::Do(_) => return self.notice(Tone::Info, "Didn't understand that command"),
             Command::PressEnter => {
                 return self.finish_command(splashdown_platform::press(KeyAction::Return), "Sent");
             }
