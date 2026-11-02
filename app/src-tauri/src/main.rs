@@ -186,6 +186,7 @@ fn main() {
             help::help_open_actions,
             my_actions::my_action_problem,
             my_actions::my_action_pick_program,
+            voice_actions::last_action,
             prompt::prompt_state,
             prompt::prompt_answer,
             calls::call_offer_state,

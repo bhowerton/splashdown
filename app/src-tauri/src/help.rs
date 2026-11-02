@@ -222,8 +222,8 @@ pub fn sheet(settings: &Settings) -> Sheet {
             .to_string()
     } else {
         format!(
-            "Tap {instruction} first, as for changes, then say what to do. Nothing is ever \
-             sent, deleted or bought."
+            "Hold {dictation} and tap {instruction} first, as for changes, then say what to \
+             do. Nothing is ever sent, deleted or bought."
         )
     };
     // Right after the changes: the same key does both.

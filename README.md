@@ -71,7 +71,7 @@
 ### Talk to it
 
 - **Instructions while you dictate.** Tap **Right Shift** mid-dictation and say what to do: "make it a bulleted list", "make it an email".
-- **Spoken commands, in any language.** Tap Right Shift *before* speaking: "delete that last sentence", "make that more formal", "envíalo". The AI works out what you meant; nothing depends on exact phrases. Editing commands need an app that lets Splashdown read and select its text; when one doesn't, it says so rather than guess.
+- **Spoken commands, in any language.** Hold Right Option and tap Right Shift *before* speaking: "delete that last sentence", "make that more formal", "envíalo". The AI works out what you meant; nothing depends on exact phrases. Editing commands need an app that lets Splashdown read and select its text; when one doesn't, it says so rather than guess.
 - **Voice actions.** Turn them on in Settings → Actions, and the same commands can do things: "open Spotify", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "search YouTube for paella recipes", "pause the music", or, with text selected, "email this to Sam". Add your own too: a link, a script or keys to press, each with a name to say ("deploy staging", "next slide"). Nothing is sent, deleted or bought for you: an email opens as a draft, and a Shortcut or your own action asks before it runs.
 - **Rewrite a selection.** Select text, hold the key, say what to change.
 - **Undo the AI.** **⌃⌥Z** right after it's typed swaps in exactly what you said; **⌃⌥V** pastes your last raw words.
@@ -142,7 +142,7 @@
 | Record a meeting | **⌃⌥M** (again to stop) |
 | Use another preset | While holding, press **1–9** |
 | Change the spoken language | Menu bar → **Language** (detects it automatically by default) |
-| See everything you can say | Tap **Right Shift** and say "what can I say?", or menu bar → Help → **What you can say…** |
+| See everything you can say | Hold **Right Option**, tap **Right Shift**, and say "what can I say?", or menu bar → Help → **What you can say…** |
 | Cancel | **Esc** |
 | Paste exactly what you said, without the AI | **⌃⌥V** |
 | Swap the AI's version for exactly what you said | **⌃⌥Z** right after it's typed |

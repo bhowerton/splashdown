@@ -16,6 +16,8 @@ let plan = null; // what setting up on this computer would download
 let setup = null; // how it's going, once started
 let practiceSince = 0;
 let practiceDone = false;
+let actionsSince = 0;
+let actionsDone = false;
 
 // ---------------------------------------------------------------- navigation
 
@@ -324,7 +326,53 @@ async function checkPractice() {
     st.textContent = `✓ It works — heard “${last.raw || last.text}”`;
     st.classList.add("ok");
     $("tips").hidden = false;
+    $("ob-actions").checked = !!state.settings.actions?.enabled;
+    $("actions-try").hidden = false;
+    renderActionsTry();
     updateFooter();
+  }
+}
+
+// Voice actions are off until chosen: offered once dictation works, with
+// one to try and a tick when it does.
+
+function renderActionsTry() {
+  const st = $("actions-status");
+  st.hidden = !$("ob-actions").checked;
+  if (actionsDone) return;
+  st.innerHTML = "";
+  const bold = (text) => {
+    const b = document.createElement("b");
+    b.textContent = text;
+    return b;
+  };
+  const say = document.createElement("em");
+  say.textContent = "“open Calculator”";
+  st.append("Try one: hold ", bold(dictationKeyLabel(state)), ", tap ", bold("Right Shift"), ", then say ", say, ".");
+}
+
+$("ob-actions").addEventListener("change", async () => {
+  const on = $("ob-actions").checked;
+  const settings = structuredClone(state.settings);
+  settings.actions = { ...(settings.actions ?? {}), enabled: on };
+  try {
+    state = (await invoke("save_settings", { settings })).state;
+  } catch (e) {
+    $("ob-actions").checked = !on;
+    toast(String(e), true);
+  }
+  actionsSince = Date.now();
+  renderActionsTry();
+});
+
+async function checkActions() {
+  if (step !== 4 || actionsDone || !$("ob-actions").checked) return;
+  const last = await invoke("last_action").catch(() => null);
+  if (last && last.at >= actionsSince) {
+    actionsDone = true;
+    const st = $("actions-status");
+    st.textContent = `✓ It works — ${last.text}. Say “what can I say?” the same way to see the rest.`;
+    st.classList.add("ok");
   }
 }
 
@@ -361,6 +409,7 @@ async function poll() {
     /* window closing */
   }
   checkPractice();
+  checkActions();
 }
 
 (async () => {
@@ -405,7 +454,12 @@ async function mockInvoke(cmd, args) {
     platform: "macos",
   };
   if (cmd === "get_state") return mockInvoke.s;
-  if (cmd === "last_result") return null;
+  if (cmd === "last_result") return mockInvoke.dictated ? { at: Date.now(), raw: "Hello, this is my first dictation" } : null;
+  if (cmd === "last_action") return mockInvoke.acted ? { at: Date.now(), text: "Opened Calculator" } : null;
+  if (cmd === "save_settings") {
+    mockInvoke.s.settings = args.settings;
+    return { state: mockInvoke.s, engine_error: null };
+  }
   if (cmd === "local_setup_status") return null;
   if (cmd === "local_setup_plan") return { cleanup: "local", small: false, download_mb: 2995, free_mb: 80_000, too_little_space: false };
   if (cmd === "start_local_setup") {

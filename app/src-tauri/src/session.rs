@@ -552,6 +552,7 @@ impl Controller {
                 }
                 Ok(Msg::ActionDone(result)) => match result {
                     Ok(done) => {
+                        crate::voice_actions::note_done(&done.text);
                         if let Some(undo) = done.undo {
                             self.last_action = Some((undo, Instant::now()));
                         }
