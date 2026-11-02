@@ -552,7 +552,7 @@ impl Controller {
                 }
                 Ok(Msg::ActionDone(result)) => match result {
                     Ok(done) => {
-                        crate::voice_actions::note_done(&done.text);
+                        crate::did::note(crate::did::ACTED, &done.text);
                         if let Some(undo) = done.undo {
                             self.last_action = Some((undo, Instant::now()));
                         }
@@ -1581,6 +1581,17 @@ impl Controller {
             std::thread::sleep(RETURN_AFTER_INSERT);
             sent = splashdown_platform::press(KeyAction::Return).is_ok();
         }
+        crate::did::note(
+            match outcome.mode {
+                Mode::Transform => crate::did::REWROTE,
+                Mode::DictateInstruct => crate::did::INSTRUCTED,
+                Mode::Dictate | Mode::Raw => crate::did::DICTATED,
+            },
+            &outcome.text,
+        );
+        if sent {
+            crate::did::note(crate::did::SENT, &outcome.text);
+        }
         let mut status = inserted_status(
             took,
             sent,
@@ -1850,6 +1861,7 @@ impl Controller {
             cite_numbers: false,
         };
         tracing::info!("asking, with {} matching note(s)", context.notes.len());
+        crate::did::note(crate::did::ASKED, &question);
         crate::ask::ask(
             self.ui.app(),
             crate::ask::Question {
@@ -2606,7 +2618,10 @@ impl Controller {
 
     fn finish_command(&mut self, result: splashdown_platform::Result<()>, done: &str) {
         match result {
-            Ok(()) => self.done(done),
+            Ok(()) => {
+                crate::did::note(crate::did::EDITED, done);
+                self.done(done);
+            }
             Err(e) => self.notice(Tone::Warning, &short(&e.to_string())),
         }
     }

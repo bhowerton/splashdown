@@ -14,10 +14,10 @@ let state = null;
 let choice = "local"; // "local" | "openrouter" | "openai" | "anthropic" | "existing"
 let plan = null; // what setting up on this computer would download
 let setup = null; // how it's going, once started
-let practiceSince = 0;
-let practiceDone = false;
-let actionsSince = 0;
-let actionsDone = false;
+let tryIndex = 0; // which of TRIES is being tried (TRIES.length: all done)
+let trySince = 0; // when it began, so only what's done after counts
+let tryState = []; // "done" or "skipped", by index
+let tryTicked = false; // the current one worked; moving on in a moment
 
 // ---------------------------------------------------------------- navigation
 
@@ -54,9 +54,10 @@ function updateFooter() {
     next.disabled = true;
     note.textContent = "Accessibility is needed for the dictation key";
   }
-  if (step === 4 && !practiceDone) {
-    next.textContent = "Skip";
-  }
+  // While trying things, moving on is a quiet choice, not the main one.
+  const skipping = step === 4 && tryIndex < TRIES.length;
+  next.classList.toggle("primary", !skipping);
+  if (skipping) next.textContent = "Skip the rest";
 }
 
 $("back").onclick = () => go(step - 1);
@@ -291,64 +292,160 @@ function renderPermissions() {
   if (step === 3) updateFooter();
 }
 
-// ---------------------------------------------------------------- step 4: practice
+// ---------------------------------------------------------------- step 4: try it
+
+// The main things, one at a time in one practice box, each ticked off when
+// Splashdown says it worked (`did_since`), and each skippable.
+
+function kbd(text) {
+  const k = document.createElement("kbd");
+  k.textContent = text;
+  return k;
+}
+
+function said(text) {
+  const em = document.createElement("em");
+  em.textContent = `“${text}”`;
+  return em;
+}
+
+function keys() {
+  const letter = (state.settings.hotkeys.ask ?? "a").toUpperCase();
+  return { dict: dictationKeyLabel(state), instr: "Right Shift", ask: letter, ret: state.platform === "macos" ? "Return" : "Enter" };
+}
+
+/** What to try, how (as nodes), what Splashdown reports when it worked,
+ *  and what the box holds to start with. */
+const TRIES = [
+  {
+    title: "Dictate",
+    how: (k) => ["Click in the box, hold ", kbd(k.dict), ", say ", said("Hello, this is my first dictation"), ", and let go."],
+    did: ["dictated", "instructed", "rewrote"],
+  },
+  {
+    title: "Change selected text",
+    how: (k) => ["Select the sentence in the box, then hold ", kbd(k.dict), " and say ", said("make it more excited"), "."],
+    did: ["rewrote"],
+    start: "Our team meeting moved to Thursday afternoon.",
+  },
+  {
+    title: "Add an instruction",
+    how: (k) => ["Hold ", kbd(k.dict), " and say ", said("milk, eggs and bread"), ", then tap ", kbd(k.instr), ", say ", said("as a bulleted list"), " and let go."],
+    did: ["instructed"],
+  },
+  {
+    title: "Press Return when it's typed",
+    how: (k) => ["Hold ", kbd(k.dict), ", say something, and tap ", kbd(k.ret), " before you let go. In a chat app, that sends it."],
+    did: ["sent"],
+  },
+  {
+    title: "Fix it by voice",
+    how: (k) => ["Hold ", kbd(k.dict), ", tap ", kbd(k.instr), " first, then say ", said("delete that last sentence"), "."],
+    did: ["edited"],
+    start: "This sentence stays. This one goes.",
+  },
+  {
+    title: "Do things",
+    how: (k) => ["Turn this on, then hold ", kbd(k.dict), ", tap ", kbd(k.instr), " first, and say ", said("open Calculator"), "."],
+    did: ["acted"],
+    actions: true,
+    noBox: true,
+  },
+  {
+    title: "Ask a question",
+    how: (k) => ["Hold ", kbd(k.dict), ", press ", kbd(k.ask), ", and ask ", said("what's the German word for deadline?"), ". The answer shows in a panel; Esc closes it."],
+    did: ["asked"],
+    noBox: true,
+  },
+];
 
 function startPractice() {
-  practiceSince = Date.now();
+  showTry();
+}
+
+/** The strip of steps, the current one's instructions, and the box. */
+function showTry() {
+  tryTicked = false;
+  trySince = Date.now();
+  const list = $("try-list");
+  list.replaceChildren(
+    ...TRIES.map((t, i) => {
+      const item = document.createElement("li");
+      const mark = { done: "✓", skipped: "–" }[tryState[i]] ?? String(i + 1);
+      item.className = tryState[i] ?? (i === tryIndex ? "current" : "");
+      item.textContent = `${mark} ${t.title}`;
+      return item;
+    }),
+  );
+  const finished = tryIndex >= TRIES.length;
+  $("try-card").hidden = finished;
+  $("try-finished").hidden = !finished;
+  $("practice").hidden = finished || !!TRIES[tryIndex]?.noBox;
+  $("practice-status").hidden = finished;
+  $("try-skip").hidden = finished;
+  if (finished) {
+    $("actions-try").hidden = true;
+    updateFooter();
+    return;
+  }
+  const t = TRIES[tryIndex];
+  $("try-count").textContent = `${tryIndex + 1} of ${TRIES.length}`;
+  $("try-title").textContent = t.title;
+  $("try-how").replaceChildren(...t.how(keys()));
+  $("actions-try").hidden = !t.actions;
+  $("ob-actions").checked = !!state.settings.actions?.enabled;
+  const box = $("practice");
+  box.value = t.start ?? (tryIndex === 0 ? "" : box.value);
+  const st = $("practice-status");
+  st.classList.remove("ok");
+  st.dataset.ready = "";
   renderPractice();
-  setTimeout(() => $("practice").focus(), 50);
+  updateFooter();
 }
 
 /** Dictation can only be tried once the speech model is here. */
 function renderPractice() {
+  if (tryIndex >= TRIES.length || tryTicked) return;
   const box = $("practice");
   const st = $("practice-status");
-  if (practiceDone) return;
   const ready = speechReady();
-  if (box.disabled === !ready && st.dataset.ready === String(ready)) return;
+  if (st.dataset.ready === String(ready)) return;
   box.disabled = !ready;
   st.dataset.ready = String(ready);
   st.textContent = ready
-    ? "Waiting for your first dictation…"
+    ? "Waiting for you to try it…"
     : "Almost ready: Splashdown is still downloading what it needs to understand you. This box switches on by itself.";
   if (ready) {
-    practiceSince = Date.now();
+    trySince = Date.now();
     box.focus();
+    // At the end, so "that last sentence" is the one before the cursor.
+    box.setSelectionRange(box.value.length, box.value.length);
   }
 }
 
-async function checkPractice() {
-  if (step !== 4 || practiceDone || !speechReady()) return;
-  const last = await invoke("last_result").catch(() => null);
-  if (last && last.at >= practiceSince) {
-    practiceDone = true;
-    const st = $("practice-status");
-    st.textContent = `✓ It works — heard “${last.raw || last.text}”`;
-    st.classList.add("ok");
-    $("tips").hidden = false;
-    $("ob-actions").checked = !!state.settings.actions?.enabled;
-    $("actions-try").hidden = false;
-    renderActionsTry();
-    updateFooter();
-  }
+/** Moves on: `how` is "done" or "skipped". */
+function nextTry(how) {
+  tryState[tryIndex] = how;
+  tryIndex += 1;
+  showTry();
 }
 
-// Voice actions are off until chosen: offered once dictation works, with
-// one to try and a tick when it does.
+$("try-skip").addEventListener("click", () => nextTry("skipped"));
 
-function renderActionsTry() {
-  const st = $("actions-status");
-  st.hidden = !$("ob-actions").checked;
-  if (actionsDone) return;
-  st.innerHTML = "";
-  const bold = (text) => {
-    const b = document.createElement("b");
-    b.textContent = text;
-    return b;
-  };
-  const say = document.createElement("em");
-  say.textContent = "“open Calculator”";
-  st.append("Try one: hold ", bold(dictationKeyLabel(state)), ", tap ", bold("Right Shift"), ", then say ", say, ".");
+async function checkTry() {
+  if (step !== 4 || tryIndex >= TRIES.length || tryTicked || !speechReady()) return;
+  const t = TRIES[tryIndex];
+  const done = await invoke("did_since", { since: trySince }).catch(() => []);
+  const hit = done.find((d) => t.did.includes(d.what));
+  if (!hit) return;
+  tryTicked = true;
+  const st = $("practice-status");
+  st.textContent = t.actions ? `✓ It works — ${hit.text}` : "✓ It works";
+  st.classList.add("ok");
+  const index = tryIndex;
+  setTimeout(() => {
+    if (tryIndex === index) nextTry("done");
+  }, 1500);
 }
 
 $("ob-actions").addEventListener("change", async () => {
@@ -361,20 +458,8 @@ $("ob-actions").addEventListener("change", async () => {
     $("ob-actions").checked = !on;
     toast(String(e), true);
   }
-  actionsSince = Date.now();
-  renderActionsTry();
+  trySince = Date.now();
 });
-
-async function checkActions() {
-  if (step !== 4 || actionsDone || !$("ob-actions").checked) return;
-  const last = await invoke("last_action").catch(() => null);
-  if (last && last.at >= actionsSince) {
-    actionsDone = true;
-    const st = $("actions-status");
-    st.textContent = `✓ It works — ${last.text}. Say “what can I say?” the same way to see the rest.`;
-    st.classList.add("ok");
-  }
-}
 
 // ---------------------------------------------------------------- step 5: done
 
@@ -408,8 +493,7 @@ async function poll() {
   } catch {
     /* window closing */
   }
-  checkPractice();
-  checkActions();
+  checkTry();
 }
 
 (async () => {
@@ -454,8 +538,7 @@ async function mockInvoke(cmd, args) {
     platform: "macos",
   };
   if (cmd === "get_state") return mockInvoke.s;
-  if (cmd === "last_result") return mockInvoke.dictated ? { at: Date.now(), raw: "Hello, this is my first dictation" } : null;
-  if (cmd === "last_action") return mockInvoke.acted ? { at: Date.now(), text: "Opened Calculator" } : null;
+  if (cmd === "did_since") return mockInvoke.did ? [{ what: mockInvoke.did, at: Date.now(), text: "Opened Calculator" }] : [];
   if (cmd === "save_settings") {
     mockInvoke.s.settings = args.settings;
     return { state: mockInvoke.s, engine_error: null };

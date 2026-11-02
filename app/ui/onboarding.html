@@ -82,25 +82,25 @@
     </div>
   </section>
 
-  <!-- 4 · Practice -->
+  <!-- 4 · Try it: the main things, one at a time, each skippable -->
   <section class="ob-step" data-step="4" hidden>
     <h1>Try it</h1>
-    <p class="sub">Click in the box, hold <b class="dict-key">Right Option</b>, say <em>“Hello, this is my first dictation”</em>, and let go.</p>
-    <textarea id="practice" class="practice" rows="4" aria-label="Practice box" placeholder="Your words will appear here"></textarea>
-    <div class="practice-status" id="practice-status" role="status" aria-live="polite">Waiting for your first dictation…</div>
-    <div class="tips" id="tips" hidden>
-      <b>Nice!</b> Now try one more:
-      <ul>
-        <li>Select the text, hold the key and say <em>“make it more excited”</em>.</li>
-        <li>Or while holding, tap <b>Right Shift</b> and say an instruction, like <em>“…as a short email”</em>.</li>
-      </ul>
-    </div>
-    <div class="actions-try" id="actions-try" hidden>
-      <div class="group">
+    <ol class="try-list" id="try-list" aria-label="Things to try"></ol>
+    <div class="try-card" id="try-card">
+      <div class="try-head"><b id="try-title"></b><span class="try-count" id="try-count"></span></div>
+      <p class="try-how" id="try-how"></p>
+      <div class="actions-try" id="actions-try" hidden>
         <label class="row"><span class="lbl">Let spoken commands do things<small>Open apps, search the web, play music, add reminders and events. Nothing is ever sent, deleted or bought, and you can turn it off in Settings → Actions.</small></span>
           <input type="checkbox" class="switch" id="ob-actions"></label>
       </div>
-      <div class="practice-status" id="actions-status" role="status" aria-live="polite" hidden></div>
+    </div>
+    <textarea id="practice" class="practice" rows="4" aria-label="Practice box" placeholder="Your words will appear here"></textarea>
+    <div class="try-foot">
+      <div class="practice-status" id="practice-status" role="status" aria-live="polite"></div>
+      <button class="link" id="try-skip">Skip this one</button>
+    </div>
+    <div class="tips" id="try-finished" hidden>
+      <b>That's the main things.</b> Hold the dictation key, tap Right Shift and say <em>“what can I say?”</em> any time to see the rest: notes, hands-free, presets, meetings and your own actions.
     </div>
   </section>
 

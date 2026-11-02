@@ -53,33 +53,6 @@ impl Undo {
     }
 }
 
-/// The last action that worked, for the setup guide's "try one".
-#[derive(Clone, serde::Serialize)]
-pub struct LastAction {
-    /// Milliseconds since the Unix epoch, like history entries.
-    pub at: u64,
-    pub text: String,
-}
-
-static LAST_DONE: Mutex<Option<LastAction>> = Mutex::new(None);
-
-/// Notes an action that worked (the session, when one finishes).
-pub fn note_done(text: &str) {
-    let at = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_millis() as u64);
-    *LAST_DONE.lock().unwrap_or_else(|e| e.into_inner()) = Some(LastAction {
-        at,
-        text: text.to_string(),
-    });
-}
-
-/// The last action that worked, if any since Splashdown started.
-#[tauri::command]
-pub fn last_action() -> Option<LastAction> {
-    LAST_DONE.lock().unwrap_or_else(|e| e.into_inner()).clone()
-}
-
 fn done(text: impl Into<String>) -> Result<Done, String> {
     Ok(Done {
         text: text.into(),

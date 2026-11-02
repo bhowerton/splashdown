@@ -56,8 +56,21 @@ kbd {
 .practice-status.ok { color: var(--ok); font-weight: 600; }
 .tips { margin-top: 14px; background: var(--accent-soft); border-radius: var(--radius); padding: 12px 14px; font-size: 13px; }
 .tips ul { margin: 6px 0 0; padding-left: 18px; }
-.actions-try { margin-top: 14px; }
-.actions-try .row { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+/* Try it: the steps, the current one, the shared practice box. */
+.try-list { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; margin: 4px 0 14px; padding: 0; }
+.try-list li { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2); color: var(--muted); }
+.try-list li.current { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+.try-list li.done { color: var(--ok); }
+.try-list li.skipped { text-decoration: line-through; }
+.try-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 12px 14px; margin-bottom: 10px; }
+.try-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.try-count { font-size: 12px; color: var(--muted); }
+.try-how { margin: 6px 0 0; font-size: 13.5px; line-height: 1.6; }
+.try-how kbd { font-size: 12px; }
+.actions-try { margin-top: 10px; }
+.actions-try .row { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+.try-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.try-foot .practice-status { flex: 1; }
 
 .cheat .row { min-height: 38px; padding: 7px 14px; }
 .cheat .row > span:last-child { color: var(--muted); font-size: 12.5px; }
