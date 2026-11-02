@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Component, Path, PathBuf};
 use std::sync::Mutex;
-use std::time::UNIX_EPOCH;
+use std::time::{Duration, UNIX_EPOCH};
 
 use chrono::{DateTime, Local, TimeZone};
 use serde::{Deserialize, Serialize};
@@ -403,9 +403,12 @@ impl Store {
             unique_suffix()
         ));
         std::fs::write(&tmp, text)?;
-        std::fs::rename(&tmp, path).inspect_err(|_| {
-            let _ = std::fs::remove_file(&tmp);
-        })
+        // A sync app (OneDrive, Dropbox) or the search indexer may have the
+        // note open for a moment.
+        splashdown_providers::models::rename_patiently(&tmp, path, Duration::from_secs(2))
+            .inspect_err(|_| {
+                let _ = std::fs::remove_file(&tmp);
+            })
     }
 
     /// `YYYY-MM-DD <first line>.md` in `dir`, numbered if taken; untitled

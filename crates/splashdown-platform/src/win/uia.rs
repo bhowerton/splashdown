@@ -374,9 +374,7 @@ fn top_window(pid: u32) -> Option<HWND> {
         // SAFETY: `lparam` points at the `Search` below, which outlives
         // EnumWindows.
         let search = unsafe { &mut *(lparam.0 as *mut Search) };
-        // SAFETY: `window` is a live handle from the enumeration.
-        let visible = unsafe { IsWindowVisible(window) }.as_bool();
-        if visible && window_pid(window) == Some(search.pid) {
+        if is_app_window(window) && window_pid(window) == Some(search.pid) {
             search.found = Some(window);
             return BOOL(0);
         }
@@ -387,6 +385,58 @@ fn top_window(pid: u32) -> Option<HWND> {
     // EnumWindows returns. Stopping early reports an error, which is ignored.
     let _ = unsafe { EnumWindows(Some(visit), LPARAM(&raw mut search as isize)) };
     search.found
+}
+
+/// A window people switch to: visible, not a tool window (palettes,
+/// floating bars) and not owned by another (dialogs, popups).
+fn is_app_window(window: HWND) -> bool {
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongPtrW, WS_EX_TOOLWINDOW,
+    };
+    // SAFETY: `window` is a live handle; these only read its state.
+    unsafe {
+        IsWindowVisible(window).as_bool()
+            && GetWindow(window, GW_OWNER).is_err()
+            && (GetWindowLongPtrW(window, GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW.0) == 0
+    }
+}
+
+/// Apps with a window open, by the names people know them by (the
+/// program's description, "Notepad", and its file name, "notepad"), with
+/// their process ids: for "switch to …", which mustn't start another copy.
+pub(crate) fn running_apps() -> Vec<(String, i32)> {
+    unsafe extern "system" fn visit(window: HWND, lparam: LPARAM) -> BOOL {
+        // SAFETY: `lparam` points at the Vec below, which outlives
+        // EnumWindows.
+        let pids = unsafe { &mut *(lparam.0 as *mut Vec<u32>) };
+        if is_app_window(window)
+            && let Some(pid) = window_pid(window)
+            && !pids.contains(&pid)
+        {
+            pids.push(pid);
+        }
+        BOOL(1)
+    }
+    let mut pids: Vec<u32> = Vec::new();
+    // SAFETY: `visit` matches WNDENUMPROC and `pids` lives until
+    // EnumWindows returns.
+    let _ = unsafe { EnumWindows(Some(visit), LPARAM(&raw mut pids as isize)) };
+    let mut apps = Vec::new();
+    for pid in pids {
+        let Some(path) = exe_path(pid) else {
+            continue;
+        };
+        let Ok(pid) = i32::try_from(pid) else {
+            continue;
+        };
+        if let Some(description) = file_description(&path) {
+            apps.push((description, pid));
+        }
+        if let Some(stem) = std::path::Path::new(&path).file_stem() {
+            apps.push((stem.to_string_lossy().into_owned(), pid));
+        }
+    }
+    apps
 }
 
 pub(crate) fn is_current(app: &AppInfo, focus: &FocusElement) -> bool {

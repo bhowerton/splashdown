@@ -26,6 +26,8 @@ function renderActions() {
     : "Added to today's note as a to-do with its time: Windows has no reminders app to add to.";
   setValue($("ac-engine"), a.search_engine ?? "google");
   $("ac-confirm").checked = !!a.confirm_events;
+  // On Windows the calendar app shows each event before it's saved.
+  $("ac-confirm").closest(".row").hidden = !mac;
   renderTrusted(a.trusted_shortcuts ?? [], mac);
 }
 

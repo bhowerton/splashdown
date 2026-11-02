@@ -6,6 +6,10 @@
 //! `warm_up`), keeps the model loaded, and exits by itself after a while
 //! idle; a request after that starts it again.
 
+/// `CREATE_NO_WINDOW`.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -28,6 +32,34 @@ pub struct LocalLlm {
 struct Helper {
     path: PathBuf,
     process: Option<Process>,
+}
+
+/// The helpers running, by process id, so they can all be stopped before
+/// an update replaces their file (`stop_all_helpers`).
+static RUNNING: Mutex<Vec<u32>> = Mutex::new(Vec::new());
+
+/// Stops every running helper. Windows can't replace a program's file
+/// while it runs, so the updater would fail on it; one is started again
+/// when it's next needed.
+pub fn stop_all_helpers() {
+    let pids = std::mem::take(&mut *RUNNING.lock().unwrap_or_else(|e| e.into_inner()));
+    for pid in pids {
+        #[cfg(windows)]
+        let mut command = {
+            use std::os::windows::process::CommandExt;
+            let mut c = Command::new("taskkill");
+            c.args(["/PID", &pid.to_string(), "/F"])
+                .creation_flags(CREATE_NO_WINDOW);
+            c
+        };
+        #[cfg(not(windows))]
+        let mut command = {
+            let mut c = Command::new("kill");
+            c.arg(pid.to_string());
+            c
+        };
+        let _ = command.stdout(Stdio::null()).stderr(Stdio::null()).status();
+    }
 }
 
 struct Process {
@@ -219,7 +251,14 @@ impl Helper {
     }
 
     fn spawn(&self) -> ProviderResult<Process> {
-        let mut child = Command::new(&self.path)
+        let mut command = Command::new(&self.path);
+        // The helper is a console program: no console window on Windows.
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            command.creation_flags(CREATE_NO_WINDOW);
+        }
+        let mut child = command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::null())
@@ -229,6 +268,10 @@ impl Helper {
             })?;
         let stdin = child.stdin.take().expect("piped");
         let stdout = BufReader::new(child.stdout.take().expect("piped"));
+        RUNNING
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .push(child.id());
         Ok(Process {
             child,
             stdin,
@@ -238,6 +281,11 @@ impl Helper {
 
     fn stop(&mut self) {
         if let Some(mut p) = self.process.take() {
+            let pid = p.child.id();
+            RUNNING
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .retain(|&r| r != pid);
             let _ = p.child.kill();
             let _ = p.child.wait();
         }

@@ -45,9 +45,9 @@ use crate::history::History;
 fn main() {
     // Already running: that copy shows Settings, and this one quits
     // before it takes the microphone or the dictation key.
+    // No logging here: starting it could move the running copy's log
+    // aside (it's rotated at startup), and that copy notes the hand-over.
     if triggers::hand_over() {
-        init_logging();
-        tracing::info!("Splashdown is already running: showed its Settings and quit");
         return;
     }
     // Before logging starts, so the old logs folder can still move.

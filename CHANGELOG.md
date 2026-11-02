@@ -6,6 +6,24 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 - **Voice actions: say what to do, not just what to write.** Turn on Settings → Actions, tap the instruction key and say "open Spotify", "search YouTube for paella recipes", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "pause the music", "add milk to my to-dos", "email Dana that I'll be ten minutes late" or "start recording the meeting", in any language. Select text first and "email this to Sam" or "add this to my to-dos" uses it. Nothing is ever sent, deleted or bought: an email opens as a draft for you to send, a Shortcut asks before it runs (unless you choose Always allow), and "undo that" takes back an event, reminder or to-do. Each action can be turned off. Works with the built-in model on your computer as well as cloud ones. Events go to your calendar and reminders to Reminders on a Mac; on Windows an event opens in your calendar app to save, and a reminder becomes a to-do in today's note.
 - **Music and videos are turned down while you speak, as with Siri.** While you hold the key, other sounds drop to a quarter of their volume and come back when you let go, so you aren't talking over them and they don't leak into the microphone. This is now the default for everyone, including if you used Splashdown before (it was off unless you had chosen it). Settings → General → Other sounds while you speak can mute them instead, or leave them as they are.
+- **Windows fixes from a review of everything written for Windows.**
+  - No console window: the built-in tidy-up model and the link downloader no longer pop one up, and neither does Open Settings for the microphone.
+  - Keyboards with AltGr (Polish, Czech, German and others) keep their characters. Ctrl+Alt+V, Z, N or M is no longer taken as a shortcut where AltGr types something with it.
+  - Alt or a Windows key as the dictation key no longer opens the app's menu or Start when you let go.
+  - Two people signed in at once can each run Splashdown; the second copy used to quit.
+  - Starting a meeting from Notes, opening Notes from the meeting bar, and opening the setup guide from Settings could freeze the app; they don't now.
+  - Questions such as "Still in a meeting?" no longer take the keyboard from what you're typing in.
+  - If the microphone is off for desktop apps, the setup guide says how to turn it on, instead of waiting forever.
+  - Opening links, settings pages, files and apps works with any characters in their names.
+  - "Open" finds Store apps whose names have accents.
+  - "Switch to Notepad" brings the open window forward instead of starting another copy.
+  - Downloads, link helpers and notes in a OneDrive or Dropbox folder wait out a virus scanner or sync app holding the file, instead of failing.
+  - Stopping a link transcription stops the download too.
+  - Installing an update waits until a meeting is stopped, and no longer fails on the built-in model's helper.
+  - Text pastes into Git Bash and PuTTY.
+  - Arrow keys sent to a Remote Desktop window are no longer read as keypad numbers.
+  - The dictation key keeps working while the built-in model is busy.
+  - Restoring your clipboard no longer adds the same item to clipboard history again.
 - **Spoken commands answer faster with the built-in model.** It now keeps the prompts for tidying up, commands and actions ready at once, without using more memory, so switching between them no longer starts over: a command and its action take about 0.4 s on a Mac instead of 2 s.
 
 ## 0.4.0 — 2026-11-01

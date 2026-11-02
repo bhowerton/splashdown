@@ -66,6 +66,9 @@ fn show(app: &AppHandle) {
                     .visible_on_all_workspaces(true)
                     .skip_taskbar(true)
                     .focused(false)
+                    // Never focused, even when shown again later: a question
+                    // mid-typing mustn't take the keystrokes.
+                    .focusable(false)
                     .visible(false)
                     .build();
             match built {

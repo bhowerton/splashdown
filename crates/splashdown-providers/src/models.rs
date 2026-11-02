@@ -421,11 +421,33 @@ async fn rename(part: &Path, dest: &Path) -> Result<(), ProviderError> {
     loop {
         match std::fs::rename(part, dest) {
             Ok(()) => return Ok(()),
-            Err(e) if tries < 20 && e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(e) if tries < 20 && in_use(&e) => {
                 tries += 1;
                 tokio::time::sleep(Duration::from_millis(250)).await;
             }
             Err(e) => return Err(io_error(e)),
+        }
+    }
+}
+
+/// Whether a file operation failed because another program (a virus
+/// scanner, the search indexer, a sync app) has the file open for a
+/// moment: access denied, or Windows' sharing and lock violations
+/// (errors 32 and 33), which Rust doesn't count as denied.
+pub fn in_use(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(32 | 33))
+}
+
+/// `std::fs::rename`, tried again for up to `wait` while the file is in
+/// use (`in_use`).
+pub fn rename_patiently(from: &Path, to: &Path, wait: Duration) -> std::io::Result<()> {
+    let started = std::time::Instant::now();
+    loop {
+        match std::fs::rename(from, to) {
+            Err(e) if in_use(&e) && started.elapsed() < wait => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            other => return other,
         }
     }
 }

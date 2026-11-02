@@ -18,7 +18,7 @@ mod transcribe;
 pub use anthropic::AnthropicModel;
 pub use chat::ChatModel;
 pub use endpoint::{Endpoint, Flavor, OPENAI_BASE_URL, OPENROUTER_BASE_URL};
-pub use local_llm::{LocalEmbedder, LocalLlm};
+pub use local_llm::{LocalEmbedder, LocalLlm, stop_all_helpers};
 #[cfg(feature = "local-speech")]
 pub use local_speech::{
     LocalSpeech, Profile as SpeechProfile, SpeakerTurn, diarize, loading as speech_model_loading,

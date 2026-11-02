@@ -198,6 +198,11 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
         .unwrap_or_else(|e| e.into_inner())
         .clone()
         .ok_or("There's no update to install. Check again.")?;
+    // On Windows the installer takes over at once: a meeting would be
+    // cut off mid-sentence.
+    if crate::meeting::is_running() {
+        return Err("Stop the meeting first, then install the update.".into());
+    }
     if updates.busy.swap(true, Ordering::SeqCst) {
         return Err("Already checking for or installing an update.".into());
     }
@@ -223,7 +228,14 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
                     updates.update(app, |s| s.progress = Some(percent));
                 }
             },
-            || {},
+            // Downloaded, about to install. On Windows the installer then
+            // ends this app at once, skipping what quitting does: put the
+            // volume back, and stop the local model's helper, whose file
+            // the installer couldn't replace while it runs.
+            || {
+                splashdown_platform::restore_output();
+                splashdown_providers::stop_all_helpers();
+            },
         )
         .await;
 

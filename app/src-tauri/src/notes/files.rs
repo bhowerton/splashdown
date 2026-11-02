@@ -871,6 +871,12 @@ fn yt_dlp_error(stderr: &str) -> String {
 pub(super) fn run_stoppable(
     mut command: std::process::Command,
 ) -> Result<std::process::Output, String> {
+    // yt-dlp is a console program: no console window on Windows.
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
     let mut child = command
         .spawn()
         .map_err(|e| format!("Couldn't run yt-dlp: {e}"))?;
@@ -927,9 +933,28 @@ pub fn notes_transcribe_stop() {
     // And a link still downloading.
     CANCEL.store(true, Ordering::Relaxed);
     if let Some(mut child) = DOWNLOADER.lock().unwrap_or_else(|e| e.into_inner()).take() {
-        let _ = child.kill();
+        end_tree(&mut child);
         let _ = child.wait();
     }
+}
+
+/// `CREATE_NO_WINDOW`.
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// Ends `child` and what it started: yt-dlp on Windows is a launcher that
+/// runs the real program as a child of its own, which would otherwise
+/// keep downloading (and keep its folder locked) after Stop.
+fn end_tree(child: &mut std::process::Child) {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let _ = std::process::Command::new("taskkill")
+            .args(["/PID", &child.id().to_string(), "/T", "/F"])
+            .creation_flags(CREATE_NO_WINDOW)
+            .status();
+    }
+    let _ = child.kill();
 }
 
 /// A speech model a meeting can be transcribed again with.

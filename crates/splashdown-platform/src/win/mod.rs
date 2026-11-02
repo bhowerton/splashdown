@@ -18,6 +18,8 @@ mod output;
 #[cfg(windows)]
 mod overlay;
 #[cfg(windows)]
+mod shell;
+#[cfg(windows)]
 mod sound;
 #[cfg(windows)]
 mod uia;
@@ -32,7 +34,7 @@ pub(crate) use clipboard::{
     refresh_shortcut_keys, type_text,
 };
 #[cfg(windows)]
-pub(crate) use keys::KeyListener;
+pub(crate) use keys::{KeyListener, altgr_types};
 #[cfg(windows)]
 pub(crate) use minibar::MiniBar;
 #[cfg(windows)]
@@ -42,12 +44,14 @@ pub(crate) use output::{
 #[cfg(windows)]
 pub(crate) use overlay::Overlay;
 #[cfg(windows)]
+pub(crate) use shell::shell_open;
+#[cfg(windows)]
 pub(crate) use sound::{play_sound, reduce_motion};
 #[cfg(windows)]
 pub(crate) use uia::{
     FocusElement, activate_app, app_display, capture_focus, caret_rect, cursor_offset, field_text,
     frontmost_app, is_chromium, is_current, is_secure_field, microphone_users, os_version,
-    permissions, request_accessibility, secure_input_active, select_range, selection,
+    permissions, request_accessibility, running_apps, secure_input_active, select_range, selection,
 };
 
 #[cfg(windows)]

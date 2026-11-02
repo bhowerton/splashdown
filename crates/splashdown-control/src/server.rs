@@ -240,7 +240,7 @@ mod imp {
     };
 
     use super::{Handler, handle_connection, spawn_connection};
-    use crate::PIPE_NAME;
+    use crate::pipe_name;
 
     /// Starts listening on the named pipe, on a thread of its own. Fails
     /// if another copy of the app already owns the pipe (`AddrInUse`, as
@@ -297,7 +297,7 @@ mod imp {
     }
 
     fn create_instance(first: bool) -> io::Result<File> {
-        let name: Vec<u16> = PIPE_NAME.encode_utf16().chain(Some(0)).collect();
+        let name: Vec<u16> = pipe_name().encode_utf16().chain(Some(0)).collect();
         let mut open_mode = PIPE_ACCESS_DUPLEX;
         if first {
             // Fail if someone else already created the pipe.

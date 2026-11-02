@@ -310,7 +310,7 @@ function renderHotkeyTip() {
   const mac = state.platform === "macos";
   let tip = "";
   if (d === i) tip = "The dictation and instruction keys must be different.";
-  else if (d.endsWith("shift")) tip = "Shift also types capital letters, so holding it to dictate can get in the way. A right-hand Command, Option or Control key usually works better.";
+  else if (d.endsWith("shift")) tip = `Shift also types capital letters, so holding it to dictate can get in the way. ${mac ? "A right-hand Command, Option or Control key" : "Right Ctrl"} usually works better.`;
   else if (d.startsWith("left-")) tip = "Left-side modifier keys are in many shortcuts. That's fine (shortcuts cancel dictation silently), but a right-hand key is less likely to clash.";
   else if (d === "right-alt" && mac) tip = "Tip: Option also types special characters (é, ü, ©). If you use those a lot, Right Command is a good alternative.";
   else if (d === "right-alt" && !mac) tip = "Right Alt is AltGr on many keyboard layouts and types special characters. Right Ctrl is usually a safer choice.";

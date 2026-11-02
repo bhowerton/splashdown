@@ -81,6 +81,7 @@ impl Controller {
                 .and_then(|n| crate::notes::agent_append(&n, &text, to.as_deref()))
                 .map(Some),
             Request::Settings => {
+                tracing::info!("opened again while running: showing Settings");
                 let app = self.ui.app().clone();
                 let _ = self
                     .ui

@@ -210,7 +210,9 @@ async fn download(
         std::fs::set_permissions(&part, std::fs::Permissions::from_mode(0o755))
             .map_err(|e| e.to_string())?;
     }
-    std::fs::rename(&part, dest).map_err(|e| e.to_string())
+    // A virus scanner checks a new program before it can be moved.
+    splashdown_providers::models::rename_patiently(&part, dest, std::time::Duration::from_secs(10))
+        .map_err(|e| e.to_string())
 }
 
 /// Whether yt-dlp hasn't updated itself for a while.

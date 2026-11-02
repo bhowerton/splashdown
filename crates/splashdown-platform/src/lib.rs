@@ -402,17 +402,22 @@ pub fn open_permission_settings(kind: PermissionKind) -> Result<()> {
         // Windows only gates the microphone.
         "ms-settings:privacy-microphone"
     };
-    let mut cmd = if cfg!(target_os = "windows") {
-        let mut c = std::process::Command::new("cmd");
-        c.args(["/C", "start", ""]);
-        c
-    } else {
-        std::process::Command::new("open")
-    };
-    cmd.arg(url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| PlatformError::Failed(e.to_string()))
+    open_url(url)
+}
+
+/// Whether AltGr plus `letter` types a character on one of the user's
+/// keyboard layouts (Windows), where a Ctrl+Alt shortcut on it would take
+/// the character away. Always false on macOS, which has no AltGr.
+pub fn altgr_types(letter: char) -> bool {
+    #[cfg(windows)]
+    {
+        imp::altgr_types(letter)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = letter;
+        false
+    }
 }
 
 // ---------------------------------------------------------------- media
@@ -455,20 +460,21 @@ pub fn set_output_muted(muted: bool) -> Result<()> {
 }
 
 /// Opens a web page in the default browser.
+/// On Windows, `ShellExecuteW` (no console, and any characters in a path),
+/// which also opens `ms-settings:` pages and files such as an `.ics`.
 pub fn open_url(url: &str) -> Result<()> {
-    // Not `cmd /C start` on Windows: cmd would read `&` and `%` in a query
-    // string as its own syntax.
-    let mut cmd = if cfg!(target_os = "windows") {
-        let mut c = std::process::Command::new("rundll32");
-        c.arg("url.dll,FileProtocolHandler");
-        c
-    } else {
+    #[cfg(windows)]
+    {
+        imp::shell_open(url)
+    }
+    #[cfg(not(windows))]
+    {
         std::process::Command::new("open")
-    };
-    cmd.arg(url)
-        .spawn()
-        .map(|_| ())
-        .map_err(|e| PlatformError::Failed(e.to_string()))
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| PlatformError::Failed(e.to_string()))
+    }
 }
 
 /// Shows `path` selected in Finder or File Explorer.
@@ -526,6 +532,20 @@ pub fn frontmost_app() -> Option<(i32, String, String)> {
 /// only lets the active app pass activation on).
 pub fn activate_app(pid: i32) -> Result<()> {
     imp::activate_app(pid)
+}
+
+/// Apps with a window open on Windows, by name, with their process ids
+/// (for "switch to …"). Empty on macOS, where opening an app that's
+/// already running brings it forward anyway.
+pub fn running_apps() -> Vec<(String, i32)> {
+    #[cfg(windows)]
+    {
+        imp::running_apps()
+    }
+    #[cfg(not(windows))]
+    {
+        Vec::new()
+    }
 }
 
 // ---------------------------------------------------------------- feedback

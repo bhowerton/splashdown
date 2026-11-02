@@ -179,3 +179,11 @@ pub(crate) fn set_output_volume(_level: f32) -> bool {
 pub(crate) fn set_output_muted(_muted: bool) -> bool {
     false
 }
+
+pub(crate) fn altgr_types(_letter: char) -> bool {
+    false
+}
+
+pub(crate) fn running_apps() -> Vec<(String, i32)> {
+    Vec::new()
+}

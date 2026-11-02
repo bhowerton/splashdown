@@ -73,9 +73,17 @@ struct HookState {
     /// expects one key-down per press (as macOS reports them), so repeats
     /// are answered here without reaching it.
     held: [Option<bool>; MODIFIERS],
+    /// When the Alt or Win key that's down went down, while no other key
+    /// has been pressed since (see `mask_lone_release`).
+    lone_since: [Option<std::time::Instant>; MODIFIERS],
 }
 
 const MODIFIERS: usize = 8;
+/// A hold of Alt or Win this long, alone, was a dictation, not a tap.
+const LONE_HOLD: std::time::Duration = std::time::Duration::from_millis(300);
+/// An unassigned virtual key (AutoHotkey's "mask key"): pressed in between,
+/// it makes a lone Alt or Win release no longer a tap.
+const MASK_KEY: u16 = 0xE8;
 
 thread_local! {
     /// Set on the hook thread only; the hook procedure runs on that thread.
@@ -87,8 +95,21 @@ fn run_hook(handler: KeyHandler, ready: mpsc::Sender<Result<u32>>) {
         *s.borrow_mut() = Some(HookState {
             handler,
             held: [None; MODIFIERS],
+            lone_since: [None; MODIFIERS],
         });
     });
+
+    // Windows removes a low-level hook, silently, that answers too slowly
+    // too often; with a local model keeping every core busy, a normal
+    // thread could miss its turn. The hook does next to nothing, so this
+    // costs nothing.
+    // SAFETY: this thread's own pseudo-handle and a plain value.
+    let _ = unsafe {
+        use windows::Win32::System::Threading::{
+            GetCurrentThread, SetThreadPriority, THREAD_PRIORITY_TIME_CRITICAL,
+        };
+        SetThreadPriority(GetCurrentThread(), THREAD_PRIORITY_TIME_CRITICAL)
+    };
 
     let mut msg = MSG::default();
     // SAFETY: `msg` is a valid out-pointer and PM_NOREMOVE leaves the queue
@@ -178,17 +199,74 @@ fn on_key(info: &KBDLLHOOKSTRUCT) -> bool {
                 if let Some(swallowed) = state.held[slot] {
                     return swallowed; // auto-repeat
                 }
+                // Another key down: no modifier held is alone any more.
+                state.lone_since = [None; MODIFIERS];
+                if is_alt_or_win(slot) {
+                    state.lone_since[slot] = Some(std::time::Instant::now());
+                }
                 let swallow = (state.handler)(ev);
                 state.held[slot] = Some(swallow);
                 swallow
             }
             Some(slot) => {
                 state.held[slot] = None;
+                let swallow = (state.handler)(ev);
+                if !swallow
+                    && state.lone_since[slot]
+                        .take()
+                        .is_some_and(|at| at.elapsed() >= LONE_HOLD)
+                {
+                    mask_lone_release();
+                }
+                swallow
+            }
+            None => {
+                if ev.down {
+                    state.lone_since = [None; MODIFIERS];
+                }
                 (state.handler)(ev)
             }
-            None => (state.handler)(ev),
         }
     })
+}
+
+/// Alt and Win: released after a hold with no other key, Windows takes
+/// them for a tap and opens the app's menu (Alt) or Start (Win).
+fn is_alt_or_win(slot: usize) -> bool {
+    (4..=7).contains(&slot)
+}
+
+/// Before a long, lone Alt or Win hold is released (the dictation key, if
+/// it's one of them), taps `MASK_KEY`, so the release doesn't open the
+/// app's menu or Start. Sent from inside the hook, as AutoHotkey does; our
+/// tag lets it pass straight through here.
+fn mask_lone_release() {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT, KEYEVENTF_KEYUP, SendInput,
+    };
+    let key = |up: bool| INPUT {
+        r#type: INPUT_KEYBOARD,
+        Anonymous: INPUT_0 {
+            ki: KEYBDINPUT {
+                wVk: VIRTUAL_KEY(MASK_KEY),
+                wScan: 0,
+                dwFlags: if up {
+                    KEYEVENTF_KEYUP
+                } else {
+                    KEYBD_EVENT_FLAGS(0)
+                },
+                time: 0,
+                dwExtraInfo: INJECTED_TAG,
+            },
+        },
+    };
+    // SAFETY: two fully initialized keyboard INPUTs and the size of one.
+    unsafe {
+        SendInput(
+            &[key(false), key(true)],
+            std::mem::size_of::<INPUT>() as i32,
+        )
+    };
 }
 
 fn modifier_slot(key: PhysicalKey) -> Option<usize> {
@@ -245,4 +323,44 @@ fn translate(info: &KBDLLHOOKSTRUCT) -> Option<KeyEvent> {
         _ => PhysicalKey::Other,
     };
     Some(KeyEvent { key, down })
+}
+
+/// Whether AltGr plus `letter` types a character on any of the keyboard
+/// layouts the user has: Windows sees AltGr as Ctrl+Alt, so a Ctrl+Alt
+/// shortcut on that letter would swallow it (ż is AltGr+Z in Polish, @ is
+/// AltGr+V in Czech).
+pub(crate) fn altgr_types(letter: char) -> bool {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetKeyboardLayoutList, HKL, MAPVK_VK_TO_VSC, MapVirtualKeyExW, ToUnicodeEx, VK_CONTROL,
+        VK_LCONTROL, VK_MENU, VK_RMENU,
+    };
+    if !letter.is_ascii_alphabetic() {
+        return false;
+    }
+    let vk = u32::from(letter.to_ascii_uppercase());
+    // SAFETY: a count query with no buffer.
+    let count = unsafe { GetKeyboardLayoutList(None) };
+    let mut layouts = vec![HKL::default(); usize::try_from(count).unwrap_or(0)];
+    // SAFETY: the buffer holds `count` layouts.
+    let got = unsafe { GetKeyboardLayoutList(Some(&mut layouts)) };
+    layouts.truncate(usize::try_from(got).unwrap_or(0));
+    // AltGr as Windows sends it: Left Ctrl and Right Alt down.
+    let mut state = [0u8; 256];
+    for key in [VK_CONTROL, VK_LCONTROL, VK_MENU, VK_RMENU] {
+        state[usize::from(key.0)] = 0x80;
+    }
+    /// `ToUnicodeEx` leaves the keyboard's state as it was (Windows 10
+    /// 1607 and later).
+    const KEEP_STATE: u32 = 0x4;
+    layouts.into_iter().any(|layout| {
+        let mut out = [0u16; 8];
+        // SAFETY: plain values and buffers that outlive the calls.
+        let typed = unsafe {
+            let scan = MapVirtualKeyExW(vk, MAPVK_VK_TO_VSC, Some(layout));
+            ToUnicodeEx(vk, scan, &state, &mut out, KEEP_STATE, Some(layout))
+        };
+        // A dead key (negative) types something too; control characters
+        // (Ctrl+Alt+letter on layouts without AltGr) don't count.
+        typed < 0 || (typed > 0 && out[0] >= 0x20)
+    })
 }

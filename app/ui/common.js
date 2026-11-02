@@ -183,11 +183,17 @@ function renderPermissionRows(p, prefix, dotClass) {
 
   $(`${prefix}mic-step`).className = `${dotClass}${p.microphone === "granted" ? " done" : ""}`;
   const mic = $(`${prefix}mic-state`);
+  const windows = state?.platform === "windows";
   $(`${prefix}mic-howto`).hidden = p.microphone !== "denied";
+  if (windows) {
+    $(`${prefix}mic-howto`).innerHTML =
+      "Microphone access is off for desktop apps. In Settings → Privacy &amp; security → Microphone, turn on <b>Let desktop apps access your microphone</b>.";
+  }
   if (p.microphone === "granted") {
     mic.replaceChildren(badge("Allowed", "ok"));
   } else if (p.microphone === "denied") {
-    mic.replaceChildren(button("Open System Settings", () => openPerm("microphone"), "btn primary"));
+    const label = windows ? "Open Settings" : "Open System Settings";
+    mic.replaceChildren(button(label, () => openPerm("microphone"), "btn primary"));
   } else if (!mic.querySelector("button")) {
     mic.replaceChildren(
       button("Allow…", async (e) => {

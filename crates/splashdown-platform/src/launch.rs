@@ -33,29 +33,24 @@ pub fn installed_apps() -> Vec<InstalledApp> {
 
 /// Opens `app`, or brings it to the front if it's already open.
 pub fn open_app(app: &InstalledApp) -> Result<()> {
-    let mut cmd = match &app.how {
+    let failed = |e: String| PlatformError::Failed(format!("couldn't open {}: {e}", app.name));
+    match &app.how {
         #[cfg(target_os = "macos")]
-        Open::Path(path) => {
-            let mut c = std::process::Command::new("open");
-            c.arg("-a").arg(path);
-            c
-        }
+        Open::Path(path) => std::process::Command::new("open")
+            .arg("-a")
+            .arg(path)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| failed(e.to_string())),
+        // What a double-click on the shortcut does.
         #[cfg(not(target_os = "macos"))]
         Open::Path(path) => {
-            // What a double-click on the shortcut does.
-            let mut c = std::process::Command::new("rundll32");
-            c.arg("url.dll,FileProtocolHandler").arg(path);
-            c
+            crate::open_url(&path.to_string_lossy()).map_err(|e| failed(e.to_string()))
         }
         Open::AppId(id) => {
-            let mut c = std::process::Command::new("explorer.exe");
-            c.arg(format!("shell:AppsFolder\\{id}"));
-            c
+            crate::open_url(&format!("shell:AppsFolder\\{id}")).map_err(|e| failed(e.to_string()))
         }
-    };
-    cmd.spawn()
-        .map(|_| ())
-        .map_err(|e| PlatformError::Failed(format!("couldn't open {}: {e}", app.name)))
+    }
 }
 
 #[cfg(target_os = "macos")]
@@ -157,7 +152,9 @@ fn store_apps() -> Vec<InstalledApp> {
             "-NoProfile",
             "-NonInteractive",
             "-Command",
-            "Get-StartApps | Where-Object { $_.AppID -like '*!*' } | ForEach-Object { $_.Name + \"`t\" + $_.AppID }",
+            // UTF-8 out: captured, Windows PowerShell otherwise writes in the
+            // console's legacy code page, garbling "Paramètres" or 設定.
+            "[Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); Get-StartApps | Where-Object { $_.AppID -like '*!*' } | ForEach-Object { $_.Name + \"`t\" + $_.AppID }",
         ])
         .creation_flags(NO_WINDOW)
         .output();

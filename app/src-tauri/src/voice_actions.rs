@@ -68,7 +68,8 @@ pub fn carry_out(
     language: Option<&str>,
 ) -> Result<Done, String> {
     match action {
-        Action::OpenApp { app: name } | Action::SwitchToApp { app: name } => open_app(&name),
+        Action::SwitchToApp { app: name } => switch_to_app(&name),
+        Action::OpenApp { app: name } => open_app(&name),
         Action::SearchWeb { query, site } => {
             let url = search_url(settings.search_engine, &site, &query, language)?;
             open(&url)?;
@@ -143,6 +144,21 @@ pub fn warm_up() {
         #[cfg(target_os = "macos")]
         shortcuts();
     });
+}
+
+/// Brings a running app forward, or opens it if it isn't running. On
+/// Windows, opening a shortcut again starts another copy of apps that
+/// allow several (Notepad, File Explorer), so a running one is looked for
+/// first.
+fn switch_to_app(name: &str) -> Result<Done, String> {
+    let running = splashdown_platform::running_apps();
+    let names: Vec<String> = running.iter().map(|(n, _)| n.clone()).collect();
+    if let Some(i) = best_name(name, &names)
+        && splashdown_platform::activate_app(running[i].1).is_ok()
+    {
+        return done(format!("Switched to {}", running[i].0));
+    }
+    open_app(name)
 }
 
 fn open_app(name: &str) -> Result<Done, String> {
@@ -398,6 +414,7 @@ fn when(time: &str) -> String {
 }
 
 /// Asks before adding, when the user wants that. Whether to go ahead.
+#[cfg(target_os = "macos")]
 fn confirmed(app: &AppHandle, settings: &ActionSettings, what: &str) -> bool {
     !settings.confirm_events
         || crate::prompt::ask(app, "Add this?", what, &["Add it", "Cancel"]) == Some(0)
@@ -412,11 +429,11 @@ fn create_event(
     location: Option<&str>,
 ) -> Result<Done, String> {
     let described = format!("“{title}”, {}", when(start));
-    if !confirmed(app, settings, &format!("Add {described} to your calendar.")) {
-        return done("Not added");
-    }
     #[cfg(target_os = "macos")]
     {
+        if !confirmed(app, settings, &format!("Add {described} to your calendar.")) {
+            return done("Not added");
+        }
         let added = tauri::async_runtime::block_on(splashdown_apple_shim::add_event(
             title, start, end, location,
         ))
@@ -426,11 +443,26 @@ fn create_event(
             undo: Some(Undo::Calendar(added)),
         })
     }
+    // The calendar app shows the event to save or not: no question first.
     #[cfg(not(target_os = "macos"))]
     {
-        let _ = app;
-        let path = std::env::temp_dir().join(format!(
-            "Splashdown event {}.ics",
+        let _ = (app, settings);
+        let dir = std::env::temp_dir().join("Splashdown events");
+        let _ = std::fs::create_dir_all(&dir);
+        // Earlier ones have been opened (and saved or not) by now.
+        if let Ok(old) = std::fs::read_dir(&dir) {
+            for entry in old.flatten() {
+                let stale = entry
+                    .metadata()
+                    .and_then(|m| m.modified())
+                    .is_ok_and(|t| t.elapsed().is_ok_and(|age| age > Duration::from_secs(3600)));
+                if stale {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+        let path = dir.join(format!(
+            "Event {}.ics",
             chrono::Local::now().format("%Y%m%d-%H%M%S")
         ));
         std::fs::write(&path, ics(title, start, end, location)?)

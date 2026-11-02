@@ -94,12 +94,18 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
         tracing::warn!("global shortcuts unavailable: {e}");
         return;
     }
-    for (shortcut, name) in [
-        (paste_raw, "Ctrl+Alt+V"),
-        (undo_ai, "Ctrl+Alt+Z"),
-        (notes, crate::notes::ACCELERATOR),
-        (meeting, crate::meeting::ACCELERATOR),
+    for (shortcut, name, letter) in [
+        (paste_raw, "Ctrl+Alt+V", 'v'),
+        (undo_ai, "Ctrl+Alt+Z", 'z'),
+        (notes, crate::notes::ACCELERATOR, 'n'),
+        (meeting, crate::meeting::ACCELERATOR, 'm'),
     ] {
+        // On a keyboard where AltGr (Ctrl+Alt to Windows) plus this letter
+        // types a character, the character wins; the menu item remains.
+        if splashdown_platform::altgr_types(letter) {
+            tracing::info!("{name} left to AltGr on this keyboard");
+            continue;
+        }
         if let Err(e) = app.global_shortcut().register(shortcut) {
             tracing::warn!("couldn't register {name}: {e}");
         }

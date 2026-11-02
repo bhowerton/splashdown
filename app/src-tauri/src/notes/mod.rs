@@ -1601,7 +1601,9 @@ pub fn notes_add(text: String, state: State<'_, AppState>) -> Result<String, Str
 
 /// "Edit transforms…": Settings, on the tab that lists them.
 #[tauri::command]
-pub fn notes_edit_transforms(app: AppHandle) {
+// Async: a synchronous command runs on the main thread, and building a
+// window from there deadlocks on Windows (here: Settings).
+pub async fn notes_edit_transforms(app: AppHandle) {
     crate::tray::open_settings_tab(&app, "words");
 }
 
@@ -1635,7 +1637,9 @@ pub async fn notes_meaning_progress(app: AppHandle) -> Result<(usize, usize), St
 }
 
 #[tauri::command]
-pub fn open_notes(app: AppHandle) {
+// Async: a synchronous command runs on the main thread, and building a
+// window from there deadlocks on Windows (here: Notes).
+pub async fn open_notes(app: AppHandle) {
     open(&app);
 }
 

@@ -11,7 +11,7 @@
 //!
 //! macOS listens on a Unix socket in the config folder
 //! (`Paths::control_socket`), mode 0600, and checks that every peer is the
-//! same user. Windows uses the named pipe `\\.\pipe\splashdown`, which only
+//! same user. Windows uses the named pipe `\\.\pipe\splashdown-<user>-<session>`, which only
 //! this user (and administrators) can write to.
 
 mod server;
@@ -26,9 +26,31 @@ pub use server::{Handler, serve};
 /// The longest line either side accepts (a `listen` prompt, a long answer).
 pub const MAX_LINE: u64 = 256 * 1024;
 
-/// Windows: the app's named pipe.
+/// Windows: the app's named pipe, one per user and sign-in session.
+/// Pipe names are shared by the whole machine, so with one name a second
+/// person signed in at the same time (fast user switching, a shared PC)
+/// couldn't open it, and their copy would take that for "already running"
+/// and quit.
 #[cfg(windows)]
-pub const PIPE_NAME: &str = r"\\.\pipe\splashdown";
+pub fn pipe_name() -> String {
+    use windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId;
+    use windows_sys::Win32::System::Threading::GetCurrentProcessId;
+    let user: String = std::env::var("USERNAME")
+        .unwrap_or_default()
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || "-_.".contains(c) {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let mut session = 0u32;
+    // SAFETY: our own process id, and a valid place for the answer.
+    unsafe { ProcessIdToSessionId(GetCurrentProcessId(), &mut session) };
+    format!(r"\\.\pipe\splashdown-{user}-{session}")
+}
 
 /// What to do.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -183,7 +205,7 @@ fn read_line(stream: impl Read) -> io::Result<Option<String>> {
 pub fn endpoint() -> Option<PathBuf> {
     #[cfg(windows)]
     {
-        Some(PathBuf::from(PIPE_NAME))
+        Some(PathBuf::from(pipe_name()))
     }
     #[cfg(not(windows))]
     {
@@ -241,7 +263,7 @@ fn connect() -> Result<std::fs::File, ClientError> {
         match std::fs::OpenOptions::new()
             .read(true)
             .write(true)
-            .open(PIPE_NAME)
+            .open(pipe_name())
         {
             Ok(f) => return Ok(f),
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Err(ClientError::NotRunning),

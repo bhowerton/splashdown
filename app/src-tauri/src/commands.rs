@@ -1110,7 +1110,9 @@ pub async fn finish_onboarding(
 }
 
 #[tauri::command]
-pub fn open_onboarding(app: AppHandle) {
+// Async: a synchronous command runs on the main thread, and building a
+// window from there deadlocks on Windows (here: the setup guide).
+pub async fn open_onboarding(app: AppHandle) {
     crate::tray::open_onboarding(&app);
 }
 

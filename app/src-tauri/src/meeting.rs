@@ -1246,8 +1246,13 @@ pub(crate) fn recording_of(store: &Store, note: &str) -> Option<PathBuf> {
         .rev()
         .find_map(|l| l.trim().strip_prefix("[Recording](")?.strip_suffix(')'))?;
     let rel = link.replace("%20", " ");
-    // Only the notes folder's own attachments.
-    if rel.contains("..") || Path::new(&rel).is_absolute() {
+    // Only the notes folder's own attachments: plain names all the way
+    // (on Windows, `\x.wav` and `C:x.wav` aren't "absolute" but still
+    // leave the folder).
+    if !Path::new(&rel)
+        .components()
+        .all(|c| matches!(c, std::path::Component::Normal(_)))
+    {
         return None;
     }
     let path = store.root().join(rel);
@@ -1539,7 +1544,9 @@ fn last_timestamp(body: &str) -> Option<Duration> {
 // ---------------------------------------------------------------- commands
 
 #[tauri::command]
-pub fn meeting_toggle(app: AppHandle) {
+// Async: a synchronous command runs on the main thread, and building a
+// window from there deadlocks on Windows (the meeting pill, Notes).
+pub async fn meeting_toggle(app: AppHandle) {
     toggle(&app);
 }
 
@@ -1583,13 +1590,17 @@ pub async fn audio_apps() -> Vec<AudioAppItem> {
 /// Starts transcribing what an app plays (`sources` from `audio_apps`; none
 /// for everything the computer plays).
 #[tauri::command]
-pub fn meeting_start_app(name: String, sources: Vec<u32>, app: AppHandle) -> Result<(), String> {
+pub async fn meeting_start_app(
+    name: String,
+    sources: Vec<u32>,
+    app: AppHandle,
+) -> Result<(), String> {
     start_recording(&app, Source::App { name, sources }).map(|_| ())
 }
 
 /// Starts transcribing the microphone alone.
 #[tauri::command]
-pub fn meeting_start_microphone(app: AppHandle) -> Result<(), String> {
+pub async fn meeting_start_microphone(app: AppHandle) -> Result<(), String> {
     start_recording(&app, Source::Microphone).map(|_| ())
 }
 

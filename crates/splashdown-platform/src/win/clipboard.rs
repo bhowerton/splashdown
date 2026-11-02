@@ -7,7 +7,8 @@ use windows::Win32::Foundation::{CloseHandle, E_ACCESSDENIED, GlobalFree, HANDLE
 use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
 use windows::Win32::System::DataExchange::{
     CloseClipboard, EmptyClipboard, EnumClipboardFormats, GetClipboardData,
-    GetClipboardSequenceNumber, OpenClipboard, RegisterClipboardFormatW, SetClipboardData,
+    GetClipboardFormatNameW, GetClipboardSequenceNumber, OpenClipboard, RegisterClipboardFormatW,
+    SetClipboardData,
 };
 use windows::Win32::System::Memory::{
     GMEM_MOVEABLE, GlobalAlloc, GlobalLock, GlobalSize, GlobalUnlock,
@@ -18,8 +19,9 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT,
     KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, MAPVK_VK_TO_VSC, MapVirtualKeyW,
-    SendInput, VIRTUAL_KEY, VK_B, VK_BACK, VK_C, VK_CONTROL, VK_I, VK_LWIN, VK_MEDIA_NEXT_TRACK,
-    VK_MEDIA_PLAY_PAUSE, VK_MEDIA_PREV_TRACK, VK_MENU, VK_RETURN, VK_RIGHT, VK_RWIN, VK_SHIFT,
+    SendInput, VIRTUAL_KEY, VK_B, VK_BACK, VK_C, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END, VK_HOME,
+    VK_I, VK_INSERT, VK_LEFT, VK_LWIN, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE,
+    VK_MEDIA_PREV_TRACK, VK_MENU, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_RWIN, VK_SHIFT, VK_UP,
     VK_V, VK_Z,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -174,6 +176,17 @@ fn is_memory_format(format: u32) -> bool {
     )
 }
 
+/// OLE's formats for the app that copied, which point into that app's
+/// running copy rather than holding data: put back later, they can confuse
+/// a paste in Explorer or Office. The data's other formats are kept.
+fn is_live_object(format: u32) -> bool {
+    let mut name = [0u16; 64];
+    // SAFETY: a buffer of the given length; registered formats only.
+    let len = unsafe { GetClipboardFormatNameW(format, &mut name) };
+    let name = String::from_utf16_lossy(&name[..usize::try_from(len).unwrap_or(0)]);
+    matches!(name.as_str(), "DataObject" | "Ole Private Data")
+}
+
 /// Everything copyable on the clipboard, format by format. `None` when the
 /// clipboard couldn't be opened, in which case it's left alone afterward.
 struct Snapshot(Option<Vec<(u32, Vec<u8>)>>);
@@ -185,7 +198,7 @@ fn snapshot() -> Snapshot {
     let items = open
         .formats()
         .into_iter()
-        .filter(|&f| is_memory_format(f))
+        .filter(|&f| is_memory_format(f) && !is_live_object(f))
         .filter_map(|f| open.read(f).map(|bytes| (f, bytes)))
         .collect();
     Snapshot(Some(items))
@@ -202,6 +215,9 @@ fn restore(snap: &Snapshot) {
         for (format, bytes) in items {
             open.write(*format, bytes);
         }
+        // It's the user's item, already in their clipboard history once:
+        // putting it back mustn't add it again.
+        transient_markers(&open);
     }
 }
 
@@ -273,12 +289,21 @@ fn sequence() -> u32 {
 fn key_input(vk: VIRTUAL_KEY, up: bool) -> INPUT {
     // SAFETY: plain values.
     let scan = unsafe { MapVirtualKeyW(u32::from(vk.0), MAPVK_VK_TO_VSC) };
-    // No extended-key flag: Return is the main one, not keypad Enter.
-    let flags = if up {
+    // No extended-key flag for Return: the main one, not keypad Enter. The
+    // arrows and their neighbours need it, or apps that read scan codes
+    // (Remote Desktop, virtual machines) see the keypad's 6 for →.
+    let mut flags = if up {
         KEYEVENTF_KEYUP
     } else {
         KEYBD_EVENT_FLAGS(0)
     };
+    if [
+        VK_LEFT, VK_RIGHT, VK_UP, VK_DOWN, VK_HOME, VK_END, VK_PRIOR, VK_NEXT, VK_INSERT, VK_DELETE,
+    ]
+    .contains(&vk)
+    {
+        flags |= KEYEVENTF_EXTENDEDKEY;
+    }
     keyboard(KEYBDINPUT {
         wVk: vk,
         wScan: u16::try_from(scan).unwrap_or(0),
@@ -458,7 +483,13 @@ pub(crate) fn paste_text(text: &str) -> Result<()> {
         ));
     }
     let ours = sequence();
-    let sent = post_key(Some(VK_CONTROL), VK_V);
+    // Terminals that take Ctrl+V as a key of its own (it would insert ^V)
+    // paste with Shift+Insert, as they document.
+    let sent = if foreground_class().is_some_and(|c| SHIFT_INSERT_CLASSES.contains(&c.as_str())) {
+        post_key(Some(VK_SHIFT), VK_INSERT)
+    } else {
+        post_key(Some(VK_CONTROL), VK_V)
+    };
     if sent.is_ok() {
         std::thread::sleep(PASTE_SETTLE);
     }
@@ -539,18 +570,25 @@ const CONSOLE_CLASSES: &[&str] = &[
     "PuTTY",
 ];
 
-fn foreground_is_console() -> bool {
+/// Git Bash's mintty and PuTTY: Ctrl+V goes to the program running in them.
+const SHIFT_INSERT_CLASSES: &[&str] = &["mintty", "PuTTY"];
+
+/// The class name of the window in front.
+fn foreground_class() -> Option<String> {
     // SAFETY: takes no arguments; may return a null window.
     let window: HWND = unsafe { GetForegroundWindow() };
     if window.is_invalid() {
-        return false;
+        return None;
     }
     let mut buf = [0u16; 128];
     // SAFETY: `window` is a window handle (a stale one just fails) and the
     // buffer's length is passed with it.
     let len = unsafe { GetClassNameW(window, &mut buf) };
-    let class = from_wide(&buf[..usize::try_from(len).unwrap_or(0)]);
-    CONSOLE_CLASSES.contains(&class.as_str())
+    Some(from_wide(&buf[..usize::try_from(len).unwrap_or(0)]))
+}
+
+fn foreground_is_console() -> bool {
+    foreground_class().is_some_and(|class| CONSOLE_CLASSES.contains(&class.as_str()))
 }
 
 pub(crate) fn copy_selection() -> Option<String> {

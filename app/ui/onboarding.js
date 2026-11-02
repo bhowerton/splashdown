@@ -19,9 +19,11 @@ let practiceDone = false;
 
 // ---------------------------------------------------------------- navigation
 
-/** Windows asks for no permissions: that step is skipped there. */
+/** Windows asks for no permissions: that step is skipped there, unless
+ *  the microphone is turned off for desktop apps (then the guide says how
+ *  to turn it on, or practice would wait forever). */
 function skipped(n) {
-  return n === 3 && state?.platform !== "macos";
+  return n === 3 && state?.platform !== "macos" && state?.permissions?.microphone !== "denied";
 }
 
 function go(n) {
@@ -280,6 +282,10 @@ $("gr-retry").onclick = async () => {
 
 function renderPermissions() {
   renderPermissionRows(state.permissions, "", "step-dot");
+  // Windows only ever shows this step for the microphone.
+  const windows = state.platform !== "macos";
+  $("ax-row").hidden = windows;
+  $("perm-title").textContent = windows ? "Allow the microphone" : "Two quick permissions";
   if (step === 3) updateFooter();
 }
 
