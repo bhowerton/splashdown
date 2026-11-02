@@ -625,6 +625,46 @@ mod tests {
         }
     }
 
+    /// A stream fed the way the app feeds it: microphone audio at `RATE`,
+    /// in pieces of about 100 ms (as the session's ticks take them), each
+    /// resampled to 16 kHz on its own. Needs the model (`MODEL`, default
+    /// `nemotron`) and the eval audio:
+    /// `RATE=44100 cargo test -p splashdown-providers --release -- --ignored --nocapture fed_like_the_app`.
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "needs a downloaded model and eval/audio"]
+    async fn fed_like_the_app() {
+        let id = std::env::var("MODEL").unwrap_or_else(|_| "nemotron".into());
+        let rate: u32 = std::env::var("RATE").map_or(48_000, |r| r.parse().unwrap());
+        let model = crate::SpeechModel::from_id(&id).unwrap();
+        let dir = splashdown_config::Paths::resolve().unwrap().models_dir;
+        let speech = LocalSpeech::on_demand(&dir.join(model.file_name()), model.profile()).unwrap();
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../eval/audio");
+        let hints = SttHints::default();
+        for case in ["question", "short-greeting", "numbers"] {
+            let clip = splashdown_audio::wav::read(&root.join(format!("{case}.wav"))).unwrap();
+            let mic = splashdown_audio::resample::resample(&to_16k(&clip), 16_000, rate);
+            let mut stream = speech.stream(&hints).unwrap();
+            let (mut fed, mut tick) = (0, 0usize);
+            while fed < mic.len() {
+                // Ticks of 100 ms and a bit, never a whole number of samples
+                // at 16 kHz.
+                tick += 1;
+                let n = (rate as usize / 10 + tick * 37 % 211).min(mic.len() - fed);
+                stream.feed(&splashdown_audio::resample::resample(
+                    &mic[fed..fed + n],
+                    rate,
+                    16_000,
+                ));
+                fed += n;
+            }
+            let streamed = tokio::task::spawn_blocking(move || stream.finish())
+                .await
+                .unwrap()
+                .unwrap();
+            println!("{case} at {rate} Hz: {streamed}");
+        }
+    }
+
     /// What each downloaded model says about itself, against the catalog.
     /// `cargo test -p splashdown-providers --release -- --ignored --nocapture catalog`.
     #[test]
