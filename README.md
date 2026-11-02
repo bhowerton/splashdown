@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Hold a key. Say it. It's typed.</strong><br>
-  Free, open-source dictation for Mac and Windows, with notes, meeting notes and transcripts built in. Works in every app. No subscription, no account.
+  Free, open-source dictation for Mac and Windows: speak, and clean text appears in any app. It also writes down your meetings, videos and voice memos, tells who said what, and answers questions from your notes, all on your computer if you like. No subscription, no account.
 </p>
 
 <p align="center">
