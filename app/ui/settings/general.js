@@ -70,7 +70,7 @@ function renderGeneral() {
   renderMixedLanguages(s.general.languages ?? []);
   $("gen-mini-bar").checked = s.general.mini_bar === true;
   $("gen-noise").checked = s.general.noise_reduction === true;
-  setValue($("gen-other-audio"), s.general.other_audio ?? "leave");
+  setValue($("gen-other-audio"), s.general.other_sounds ?? "lower");
   // A number of days set by hand in config.toml gets its own choice.
   const days = String(s.general.history_days ?? "");
   if (![...$("hist-days").options].some((o) => o.value === days)) $("hist-days").append(new Option(`${days} days`, days));

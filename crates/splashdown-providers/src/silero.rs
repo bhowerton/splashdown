@@ -58,6 +58,28 @@ impl SpeechDetector for Silero {
     }
 
     fn probabilities(&self, samples: &[f32]) -> Option<Vec<f32>> {
+        // Nothing to score (the moment before an instruction-key tap):
+        // transcribe.cpp would refuse it as an invalid argument.
+        if samples.is_empty() {
+            return Some(Vec::new());
+        }
+        // transcribe.cpp also refuses audio with a non-number in it; which
+        // microphone sends that is worth knowing.
+        let bad = samples.iter().filter(|s| !s.is_finite()).count();
+        let cleaned;
+        let samples = if bad > 0 {
+            tracing::warn!(
+                "the microphone sent {bad} invalid samples of {}",
+                samples.len()
+            );
+            cleaned = samples
+                .iter()
+                .map(|&s| if s.is_finite() { s } else { 0.0 })
+                .collect::<Vec<f32>>();
+            &cleaned[..]
+        } else {
+            samples
+        };
         let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
         match session.run(samples, &VadOptions::default()) {
             Ok(result) => Some(result.probs),
@@ -73,14 +95,17 @@ impl SpeechDetector for Silero {
 mod tests {
     use super::*;
 
-    fn silero() -> Silero {
-        let dir = std::env::temp_dir().join(format!("splashdown-silero-{}", std::process::id()));
+    /// A folder of its own per test: tests run at once, and two writing
+    /// the model file into one folder would trip over each other.
+    fn silero(test: &str) -> Silero {
+        let dir =
+            std::env::temp_dir().join(format!("splashdown-silero-{}-{test}", std::process::id()));
         Silero::load(&dir).unwrap()
     }
 
     #[test]
     fn silence_and_noise_arent_speech() {
-        let silero = silero();
+        let silero = silero("noise");
         assert_eq!(silero.frame(), 512);
         let silence = vec![0.0f32; 16_000];
         let probs = silero.probabilities(&silence).unwrap();
@@ -95,6 +120,17 @@ mod tests {
         assert!(probs.iter().all(|&p| p < 0.5), "{probs:?}");
     }
 
+    #[test]
+    fn empty_or_broken_audio_is_scored_not_refused() {
+        let silero = silero("broken");
+        assert_eq!(silero.probabilities(&[]), Some(Vec::new()));
+        let mut broken = vec![0.0f32; 16_000];
+        broken[100] = f32::NAN;
+        broken[200] = f32::INFINITY;
+        let probs = silero.probabilities(&broken).unwrap();
+        assert_eq!(probs.len(), 32);
+    }
+
     /// Speed and results on a real recording:
     /// `WAV=path cargo test -p splashdown-providers --release -- --ignored --nocapture silero`.
     #[test]
@@ -102,7 +138,7 @@ mod tests {
     fn silero_on_a_recording() {
         let path = std::env::var("WAV").expect("WAV=path to a 16 kHz recording");
         let clip = splashdown_audio::wav::read(Path::new(&path)).unwrap();
-        let silero = silero();
+        let silero = silero("recording");
         let started = std::time::Instant::now();
         let probs = silero.probabilities(&clip.samples).unwrap();
         let took = started.elapsed();

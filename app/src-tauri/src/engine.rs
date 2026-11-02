@@ -267,7 +267,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         share_app_name: settings.general.share_app_name(),
         // Apple's on-device model repeats and even obeys earlier text
         // (eval: earlier-*), so it never gets any.
-        quiet_others: match settings.general.other_audio {
+        quiet_others: match settings.general.other_sounds() {
             OtherAudio::Leave => None,
             OtherAudio::Lower => Some(splashdown_platform::Quieten::Lower),
             OtherAudio::Mute => Some(splashdown_platform::Quieten::Mute),

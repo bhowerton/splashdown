@@ -1264,6 +1264,18 @@ impl Controller {
                 self.pending_command = Some(command);
                 return None;
             }
+            // Why nothing happened, for the log: lengths and levels only.
+            let secs = |c: &AudioClip| c.duration().as_secs_f32();
+            tracing::info!(
+                "no speech found ({:?}): {:.1} s{}, loudest {:.4}",
+                mode,
+                secs(&speech),
+                instruction.as_ref().map_or(String::new(), |i| format!(
+                    " + {:.1} s after the instruction key",
+                    secs(i)
+                )),
+                active.loudest
+            );
             if heard_nothing {
                 self.notice(Tone::Warning, MIC_SILENT_NOTICE);
             } else {
@@ -2265,7 +2277,13 @@ impl Controller {
         let spoken = tauri::async_runtime::block_on(pipeline.transcribe_only(clip, &hints));
         let (spoken, stt_usage) = match spoken {
             Ok((text, usage)) if !text.trim().is_empty() => (text, usage),
-            Ok(_) => return self.notice(Tone::Info, "Didn't catch that"),
+            Ok(_) => {
+                tracing::info!(
+                    "the speech model heard no words in a {:.1} s command",
+                    clip.duration().as_secs_f32()
+                );
+                return self.notice(Tone::Info, "Didn't catch that");
+            }
             Err(e) => {
                 let message = errors::pipeline(&e, Some(&pipeline.stt_name()), None);
                 return self.notice(Tone::Warning, &short(&message));

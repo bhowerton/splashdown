@@ -434,15 +434,21 @@ pub struct GeneralSettings {
     /// days. Unset means keep them (up to the last 300).
     pub history_days: Option<u32>,
     /// What happens to other sounds (music, videos) while recording.
-    pub other_audio: OtherAudio,
+    /// Unset means turned down, as Siri does.
+    pub other_sounds: Option<OtherAudio>,
+    /// The same setting's earlier name, read once and never written: it was
+    /// always saved, as "leave" when nobody had chosen it, so only "lower"
+    /// and "mute" carry over (`Settings::load`).
+    #[serde(rename = "other_audio", skip_serializing)]
+    pub legacy_other_audio: Option<OtherAudio>,
 }
 
 /// Other sounds while recording.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum OtherAudio {
-    #[default]
     Leave,
+    /// To a quarter of their volume (the default).
     Lower,
     Mute,
 }
@@ -461,6 +467,11 @@ impl GeneralSettings {
 
     pub fn overlay_near_cursor(&self) -> bool {
         self.overlay_near_cursor.unwrap_or(true)
+    }
+
+    /// What happens to other sounds while recording.
+    pub fn other_sounds(&self) -> OtherAudio {
+        self.other_sounds.unwrap_or(OtherAudio::Lower)
     }
 
     pub fn whisper_mode(&self) -> bool {
@@ -724,7 +735,7 @@ impl Settings {
     /// Loads settings from `path`; a missing file means all defaults.
     pub fn load(path: &Path) -> Result<Self, LoadError> {
         match std::fs::read_to_string(path) {
-            Ok(text) => Ok(toml::from_str(&text)?),
+            Ok(text) => Self::from_toml(&text),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(source) => Err(LoadError::Io {
                 path: path.display().to_string(),
@@ -752,7 +763,22 @@ impl Settings {
 
     /// Reads `config.toml` text, e.g. a file exported on another computer.
     pub fn from_toml(text: &str) -> Result<Self, LoadError> {
-        Ok(toml::from_str(text)?)
+        let mut settings: Self = toml::from_str(text)?;
+        settings.upgrade();
+        Ok(settings)
+    }
+
+    /// Settings saved by earlier versions, in today's terms.
+    fn upgrade(&mut self) {
+        // Other sounds are now turned down by default; a saved "leave"
+        // under the old name was only ever the old default.
+        let general = &mut self.general;
+        if let Some(chosen) = general.legacy_other_audio.take()
+            && general.other_sounds.is_none()
+            && chosen != OtherAudio::Leave
+        {
+            general.other_sounds = Some(chosen);
+        }
     }
 
     /// Writes settings to `path`, creating its folder if needed.
@@ -1483,11 +1509,19 @@ mod tests {
     }
 
     #[test]
-    fn other_audio_is_left_alone_unless_chosen() {
-        assert_eq!(GeneralSettings::default().other_audio, OtherAudio::Leave);
+    fn other_sounds_are_turned_down_unless_chosen() {
+        assert_eq!(GeneralSettings::default().other_sounds(), OtherAudio::Lower);
         assert!(GeneralSettings::default().share_recent());
-        let s: Settings = toml::from_str("[general]\nother_audio = \"mute\"").unwrap();
-        assert_eq!(s.general.other_audio, OtherAudio::Mute);
+        let s = Settings::from_toml("[general]\nother_sounds = \"leave\"").unwrap();
+        assert_eq!(s.general.other_sounds(), OtherAudio::Leave, "chosen now");
+        // The old name: "leave" was the old default, the rest were chosen.
+        let s = Settings::from_toml("[general]\nother_audio = \"leave\"").unwrap();
+        assert_eq!(s.general.other_sounds(), OtherAudio::Lower);
+        let s = Settings::from_toml("[general]\nother_audio = \"mute\"").unwrap();
+        assert_eq!(s.general.other_sounds(), OtherAudio::Mute);
+        // Saved again, only the new name is written.
+        let text = s.to_toml().unwrap();
+        assert!(text.contains("other_sounds = \"mute\"") && !text.contains("other_audio"));
     }
 
     #[test]
