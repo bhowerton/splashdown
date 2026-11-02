@@ -62,6 +62,8 @@ pub struct Engine {
     pub sound_volume: f32,
     /// Preferred microphones in order (none: automatic).
     pub microphones: Vec<String>,
+    /// Voice actions: whether they're on, and which.
+    pub actions: splashdown_config::ActionSettings,
 }
 
 impl Engine {
@@ -238,7 +240,10 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         match preset_model(settings, &secrets, on_device, choice, &local_llm) {
             Ok(Some(llm)) => {
                 tracing::info!("preset {}: ai: {}", preset.id, llm.name());
-                preset_pipelines.insert(preset.id.clone(), Pipeline::new(stt.clone(), Some(llm)));
+                preset_pipelines.insert(
+                    preset.id.clone(),
+                    Pipeline::new(stt.clone(), Some(llm)).with_actions(settings.actions.enabled),
+                );
             }
             // Off, or nothing usable: the main pipeline.
             Ok(None) => {}
@@ -275,10 +280,13 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         sounds: settings.general.sounds(),
         sound_volume: settings.general.sound_volume(),
         microphones: settings.general.microphones(),
+        actions: settings.actions.clone(),
         presets,
         transforms: settings.transforms(),
         preset_pipelines,
-        pipeline: Pipeline::new(stt, llm).with_instruction_model(instruction_llm),
+        pipeline: Pipeline::new(stt, llm)
+            .with_instruction_model(instruction_llm)
+            .with_actions(settings.actions.enabled),
         context: PromptContext {
             user_name: settings.general.user_name.clone(),
             vocabulary: vocabulary.clone(),

@@ -10,6 +10,7 @@
 <svg class="sprite" aria-hidden="true">
   <symbol id="i-general" viewBox="0 0 24 24"><path d="M4 7h9M18 7h2M4 17h3M12 17h8"/><circle cx="15.5" cy="7" r="2.5"/><circle cx="9.5" cy="17" r="2.5"/></symbol>
   <symbol id="i-words" viewBox="0 0 24 24"><path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-7.5L7 20v-3.5H5A1.5 1.5 0 0 1 3.5 15V6A1.5 1.5 0 0 1 5 4.5z"/><path d="M8 9h8M8 12.5h5"/></symbol>
+  <symbol id="i-actions" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3z"/></symbol>
   <symbol id="i-presets" viewBox="0 0 24 24"><path d="M12 3.5 3 8.5l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
   <symbol id="i-providers" viewBox="0 0 24 24"><path d="M11 3c.7 4.6 2.9 6.8 7.5 7.5-4.6.7-6.8 2.9-7.5 7.5-.7-4.6-2.9-6.8-7.5-7.5C8.1 9.8 10.3 7.6 11 3z"/><path d="M19 15.5v5M16.5 18h5"/></symbol>
   <symbol id="i-spending" viewBox="0 0 24 24"><rect x="3" y="5.5" width="18" height="13" rx="2.5"/><path d="M3 10h18M7 15h4"/></symbol>
@@ -29,6 +30,7 @@
       <a href="#general" data-tab="general"><span class="tile t-general" aria-hidden="true"><svg><use href="#i-general"/></svg></span>General</a>
       <a href="#words" data-tab="words"><span class="tile t-words" aria-hidden="true"><svg><use href="#i-words"/></svg></span>Words &amp; language</a>
       <a href="#presets" data-tab="presets"><span class="tile t-presets" aria-hidden="true"><svg><use href="#i-presets"/></svg></span>Presets</a>
+      <a href="#actions" data-tab="actions"><span class="tile t-actions" aria-hidden="true"><svg><use href="#i-actions"/></svg></span>Actions</a>
     </div>
     <div class="side-group" role="group" aria-labelledby="sg-ai"><div class="side-h" id="sg-ai">AI</div>
       <a href="#providers" data-tab="providers"><span class="tile t-providers" aria-hidden="true"><svg><use href="#i-providers"/></svg></span>Providers</a>
@@ -146,6 +148,53 @@
           </select></label>
         <label class="row"><span class="lbl">Show mini bar<small>A small button that stays on screen, if you'd rather click than hold a key: click it to start dictating into the field you're typing in, and again to finish. Drag it anywhere. Also in the menu bar.</small></span>
           <input id="gen-mini-bar" type="checkbox" class="switch" data-setting></label>
+      </div>
+    </section>
+
+    <!-- ================= Actions ================= -->
+    <section id="tab-actions" class="tab" hidden>
+      <header class="page-head">
+        <span class="tile big t-actions" aria-hidden="true"><svg><use href="#i-actions"/></svg></span>
+        <div><h1>Actions</h1><p>Tap <b class="instr-key">the instruction key</b>, then say what to do: “open Spotify”, “remind me at 3 to call Sam”, “search YouTube for paella recipes”, “start recording the meeting”. Any language.</p></div>
+      </header>
+      <div class="group">
+        <label class="row"><span class="lbl">Let spoken commands do things on this computer<small>Off: commands only edit what you dictated. Nothing is ever sent, deleted or bought: an email opens as a draft for you to send.</small></span>
+          <input id="ac-enabled" type="checkbox" class="switch" data-setting></label>
+      </div>
+      <div class="group" id="ac-list">
+        <div class="gh">What they can do</div>
+        <label class="row"><span class="lbl">Open and switch apps<small>“Open Spotify”, “go back to Slack”.</small></span>
+          <input type="checkbox" class="switch" data-action="open_app" data-setting></label>
+        <label class="row"><span class="lbl">Search the web<small>Or YouTube, Maps, Wikipedia, Amazon, images and news.</small></span>
+          <input type="checkbox" class="switch" data-action="search_web" data-setting></label>
+        <label class="row"><span class="lbl">Open websites by name<small>“Go to GitHub”, “open spiegel.de”. A site it doesn't know is searched for instead.</small></span>
+          <input type="checkbox" class="switch" data-action="open_website" data-setting></label>
+        <label class="row"><span class="lbl">Splashdown itself<small>Record a meeting, a new note, today's note, switch preset, whisper mode, retry the last dictation.</small></span>
+          <input type="checkbox" class="switch" data-action="splashdown" data-setting></label>
+        <label class="row"><span class="lbl">Add to-dos<small>To today's note in Notes. “Undo that” takes one back.</small></span>
+          <input type="checkbox" class="switch" data-action="add_todo" data-setting></label>
+        <label class="row"><span class="lbl">Music and volume<small>Play, pause, next, mute, louder, “set the volume to 30”.</small></span>
+          <input type="checkbox" class="switch" data-action="media" data-setting></label>
+        <label class="row"><span class="lbl">Add calendar events<small id="ac-event-note"></small></span>
+          <input type="checkbox" class="switch" data-action="create_event" data-setting></label>
+        <label class="row"><span class="lbl">Add reminders<small id="ac-reminder-note"></small></span>
+          <input type="checkbox" class="switch" data-action="create_reminder" data-setting></label>
+        <label class="row"><span class="lbl">Draft emails<small>In your mail app, for you to check and send.</small></span>
+          <input type="checkbox" class="switch" data-action="draft_email" data-setting></label>
+        <label class="row" id="ac-shortcut-row"><span class="lbl">Run your Shortcuts<small>“Run my Morning routine shortcut.” Asks before running one, unless you chose Always allow.</small></span>
+          <input type="checkbox" class="switch" data-action="run_shortcut" data-setting></label>
+      </div>
+      <div class="group" id="ac-choices">
+        <div class="gh">Choices</div>
+        <label class="row"><span class="lbl">Search with</span>
+          <select id="ac-engine" data-setting>
+            <option value="google">Google</option>
+            <option value="duckduckgo">DuckDuckGo</option>
+            <option value="bing">Bing</option>
+          </select></label>
+        <label class="row"><span class="lbl">Ask before adding events and reminders<small>Off: they're added at once, and “undo that” takes one back.</small></span>
+          <input id="ac-confirm" type="checkbox" class="switch" data-setting></label>
+        <div class="row" id="ac-trusted-row"><span class="lbl">Shortcuts that run without asking<small id="ac-trusted"></small></span></div>
       </div>
     </section>
 
@@ -505,6 +554,7 @@
 <script src="settings/history.js"></script>
 <script src="settings/insights.js"></script>
 <script src="settings/privacy.js"></script>
+<script src="settings/actions.js"></script>
 <script src="settings/spending.js"></script>
 <script src="settings/main.js"></script>
 </body>

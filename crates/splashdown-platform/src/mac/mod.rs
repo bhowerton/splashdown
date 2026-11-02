@@ -6,6 +6,7 @@ mod ax;
 mod clipboard;
 mod ffi;
 mod keys;
+mod media;
 mod mic;
 mod minibar;
 mod output;
@@ -22,9 +23,12 @@ pub(crate) use clipboard::{
     type_text,
 };
 pub(crate) use keys::KeyListener;
+pub(crate) use media::press_media_key;
 pub(crate) use mic::{audio_apps, microphone_users};
 pub(crate) use minibar::MiniBar;
-pub(crate) use output::{QuietOutput, quiet_output};
+pub(crate) use output::{
+    QuietOutput, output_volume, quiet_output, set_output_muted, set_output_volume,
+};
 pub(crate) use overlay::{Overlay, play_sound, reduce_motion};
 
 pub(crate) const NAME: &str = "macos";

@@ -3101,6 +3101,14 @@ listen("notes-send-target", (event) => {
   updateHeader();
 });
 
+/** What a voice action asked for once the window is up: "new" or "daily". */
+function then(what) {
+  if (what === "new") newNote();
+  else if (what === "daily") openDaily();
+}
+
+listen("notes-then", (event) => then(event.payload));
+
 // Shown again (⌃⌥N or the menu bar), maybe from a different app.
 listen("notes-shown", (event) => {
   sendTarget = event.payload ?? null;
@@ -3156,6 +3164,8 @@ async function showKey() {
   }
   loadTransforms();
   showKey();
+  // Opened by a voice action ("new note", "today's note").
+  then(new URLSearchParams(location.search).get("then"));
   try {
     const running = await invoke("notes_transcribing");
     if (running) showJob(running);

@@ -69,3 +69,127 @@ public func splashdown_calendar_now(_ ctx: UnsafeMutableRawPointer?, _ callback:
     let title = (event.title ?? "").replacingOccurrences(of: "\n", with: " ")
     reply.send(OK, ([title] + people.map { $0.replacingOccurrences(of: "\n", with: " ") }).joined(separator: "\n"))
 }
+
+// Voice actions: adding an event or a reminder ("add dentist to my calendar
+// on Thursday at 4"), and taking it back again (Undo).
+
+private let reminders = EKEventStore()
+
+/// Local times as the planner writes them.
+private func localTime(_ text: String) -> Date? {
+    let format = DateFormatter()
+    format.locale = Locale(identifier: "en_US_POSIX")
+    format.timeZone = TimeZone.current
+    format.dateFormat = "yyyy-MM-dd'T'HH:mm"
+    return format.date(from: text)
+}
+
+/// Runs `then` once access to `type` is settled, asking the first time.
+private func withAccess(to type: EKEntityType, store: EKEventStore, _ then: @escaping @Sendable (Bool) -> Void) {
+    let status = EKEventStore.authorizationStatus(for: type)
+    if #available(macOS 14.0, *) {
+        if status == .fullAccess { return then(true) }
+        if status == .denied || status == .restricted { return then(false) }
+        if type == .event {
+            store.requestFullAccessToEvents { granted, _ in then(granted) }
+        } else {
+            store.requestFullAccessToReminders { granted, _ in then(granted) }
+        }
+    } else {
+        if status == .authorized { return then(true) }
+        store.requestAccess(to: type) { granted, _ in then(granted) }
+    }
+}
+
+/// Adds an event to the default calendar. `fields` holds the title, start,
+/// end (may be empty: an hour) and location (may be empty), one per line,
+/// times as yyyy-MM-ddTHH:mm local. Replies OK with the event's identifier,
+/// REFUSED without access, or an error.
+@_cdecl("splashdown_calendar_add_event")
+public func splashdown_calendar_add_event(
+    _ fields: UnsafePointer<CChar>,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ callback: SplashdownCallback
+) {
+    let reply = Reply(ctx: ctx, callback: callback)
+    let lines = String(cString: fields).components(separatedBy: "\n")
+    let field = { (i: Int) in i < lines.count ? lines[i] : "" }
+    withAccess(to: .event, store: events) { granted in
+        guard granted else { return reply.send(REFUSED, "") }
+        guard let start = localTime(field(1)) else { return reply.send(-1, "bad start time") }
+        let event = EKEvent(eventStore: events)
+        event.title = field(0)
+        event.startDate = start
+        event.endDate = localTime(field(2)).flatMap { $0 > start ? $0 : nil } ?? start.addingTimeInterval(3600)
+        if !field(3).isEmpty { event.location = field(3) }
+        guard let calendar = events.defaultCalendarForNewEvents else {
+            return reply.send(-1, "there's no calendar to add it to")
+        }
+        event.calendar = calendar
+        do {
+            try events.save(event, span: .thisEvent, commit: true)
+            reply.send(OK, event.eventIdentifier ?? "")
+        } catch {
+            reply.send(-1, error.localizedDescription)
+        }
+    }
+}
+
+/// Adds a reminder to the default list. `fields` holds the text and the
+/// due time (may be empty), one per line. Replies OK with its identifier,
+/// REFUSED without access, or an error.
+@_cdecl("splashdown_calendar_add_reminder")
+public func splashdown_calendar_add_reminder(
+    _ fields: UnsafePointer<CChar>,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ callback: SplashdownCallback
+) {
+    let reply = Reply(ctx: ctx, callback: callback)
+    let lines = String(cString: fields).components(separatedBy: "\n")
+    let field = { (i: Int) in i < lines.count ? lines[i] : "" }
+    withAccess(to: .reminder, store: reminders) { granted in
+        guard granted else { return reply.send(REFUSED, "") }
+        let reminder = EKReminder(eventStore: reminders)
+        reminder.title = field(0)
+        if let due = localTime(field(1)) {
+            reminder.dueDateComponents = Calendar.current.dateComponents(
+                [.year, .month, .day, .hour, .minute], from: due)
+            reminder.addAlarm(EKAlarm(absoluteDate: due))
+        }
+        guard let list = reminders.defaultCalendarForNewReminders() else {
+            return reply.send(-1, "there's no reminders list to add it to")
+        }
+        reminder.calendar = list
+        do {
+            try reminders.save(reminder, commit: true)
+            reply.send(OK, reminder.calendarItemIdentifier)
+        } catch {
+            reply.send(-1, error.localizedDescription)
+        }
+    }
+}
+
+/// Removes an event or reminder this app just added (Undo). Replies OK,
+/// or OK with nothing when it's already gone.
+@_cdecl("splashdown_calendar_remove")
+public func splashdown_calendar_remove(
+    _ id: UnsafePointer<CChar>,
+    _ reminder: Bool,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ callback: SplashdownCallback
+) {
+    let reply = Reply(ctx: ctx, callback: callback)
+    let id = String(cString: id)
+    do {
+        if reminder {
+            if let item = reminders.calendarItem(withIdentifier: id) as? EKReminder {
+                try reminders.remove(item, commit: true)
+            }
+        } else if let item = events.event(withIdentifier: id) {
+            try events.remove(item, span: .thisEvent, commit: true)
+        }
+        reply.send(OK, "")
+    } catch {
+        reply.send(-1, error.localizedDescription)
+    }
+}

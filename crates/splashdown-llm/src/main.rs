@@ -3,9 +3,10 @@
 //! `LocalLlmRequest`s as JSON lines on stdin and answers each with one
 //! `LocalLlmReply` line on stdout (see `splashdown_core::local_llm`).
 //!
-//! It keeps the model and its processed prompt between requests: the long,
-//! unchanging system prompt is evaluated once, so later requests only pay
-//! for the new text. That's what makes CPU-only machines usable. After a
+//! It keeps the model and its processed prompts between requests: each
+//! long, unchanging system prompt (cleanup, commands, actions) is evaluated
+//! once and kept in a slot of its own, so later requests only pay for the
+//! new text. That's what makes CPU-only machines usable. After a
 //! while without requests it exits, returning its memory; the app starts it
 //! again on demand.
 
@@ -30,6 +31,12 @@ const IDLE_EXIT: Duration = Duration::from_secs(10 * 60);
 /// Context size: room for the cleanup prompt (~1,000 tokens), the user's
 /// text and the reply. Larger contexts cost memory for the whole session.
 const N_CTX: u32 = 4096;
+/// Prompts kept at once (cleanup, commands, planning actions), sharing the
+/// context's `N_CTX` tokens, so keeping several costs no extra memory.
+const SLOTS: usize = 3;
+/// Fewest tokens in common with a slot's prompt for a request to reuse
+/// that slot rather than the least recently used one.
+const MIN_SHARED: usize = 64;
 /// Tokens evaluated per batch while reading a prompt.
 const N_BATCH: u32 = 512;
 /// Same seed every time, so a given input cleans up the same way.
@@ -162,18 +169,49 @@ fn load(backend: &LlamaBackend, path: &Path, cpu_only: bool) -> Result<LlamaMode
         .map_err(|e| format!("couldn't load {}: {e}", path.display()))
 }
 
-/// A loaded model with a context whose cache holds the last prompt.
+/// A loaded model with a context whose cache holds the last few prompts,
+/// one per sequence (slot), sharing one pool of `N_CTX` tokens.
 struct Session<'m> {
     model: &'m LlamaModel,
     template: LlamaChatTemplate,
     /// The model thinks first unless its reply starts with an empty thought.
     hybrid_thinking: bool,
     ctx: LlamaContext<'m>,
-    /// The tokens currently in the context's cache, in order.
+    slots: [Slot; SLOTS],
+    /// Counts requests, to find the slot used least recently.
+    clock: u64,
+}
+
+/// One sequence in the context's cache.
+#[derive(Default)]
+struct Slot {
+    /// The tokens it holds, in order.
     cached: Vec<LlamaToken>,
+    /// `Session::clock` when it was last used.
+    used: u64,
 }
 
 impl<'m> Session<'m> {
+    /// The slot used least recently (an empty one first).
+    fn least_used(&self) -> usize {
+        (0..SLOTS)
+            .min_by_key(|&i| (!self.slots[i].cached.is_empty(), self.slots[i].used))
+            .expect("there are slots")
+    }
+
+    /// The slot, other than `keep`, to empty first when room is needed.
+    fn evictable(&self, keep: usize) -> Option<usize> {
+        (0..SLOTS)
+            .filter(|&i| i != keep && !self.slots[i].cached.is_empty())
+            .min_by_key(|&i| self.slots[i].used)
+    }
+
+    /// Cells of the shared pool not held by any slot.
+    fn free_cells(&self, n_ctx: usize) -> usize {
+        let held: usize = self.slots.iter().map(|s| s.cached.len()).sum();
+        n_ctx.saturating_sub(held)
+    }
+
     fn new(backend: &LlamaBackend, model: &'m LlamaModel) -> Result<Self, String> {
         let template = model
             .chat_template(None)
@@ -186,6 +224,9 @@ impl<'m> Session<'m> {
         let threads = threads();
         let params = LlamaContextParams::default()
             .with_n_ctx(NonZeroU32::new(N_CTX.min(model.n_ctx_train())))
+            .with_n_seq_max(SLOTS as u32)
+            // One pool for all slots, rather than N_CTX / SLOTS each.
+            .with_kv_unified(true)
             .with_n_batch(N_BATCH)
             .with_n_threads(threads)
             .with_n_threads_batch(threads);
@@ -197,7 +238,8 @@ impl<'m> Session<'m> {
             template,
             hybrid_thinking,
             ctx,
-            cached: Vec::new(),
+            slots: Default::default(),
+            clock: 0,
         })
     }
 
@@ -217,7 +259,7 @@ impl<'m> Session<'m> {
                 Err(e) => {
                     // The cache may be half-updated; start clean next time.
                     self.ctx.clear_kv_cache();
-                    self.cached.clear();
+                    self.slots = Default::default();
                     error(e)
                 }
             },
@@ -260,21 +302,54 @@ impl<'m> Session<'m> {
         }
         let max_new = (max_tokens as usize).clamp(16, room);
 
-        // Reuse the cached start of the prompt (usually the whole system
-        // prompt) and evaluate only the rest. At least the last token is
-        // evaluated again, because its logits start the reply.
-        let mut keep = common_prefix(&self.cached, &tokens).min(tokens.len() - 1);
+        // The slot whose prompt starts the same way (usually the same
+        // system prompt), else the one used least recently.
+        self.clock += 1;
+        let (seq, prefix) = self
+            .slots
+            .iter()
+            .enumerate()
+            .map(|(i, slot)| (i, common_prefix(&slot.cached, &tokens)))
+            .max_by_key(|&(i, prefix)| (prefix, std::cmp::Reverse(self.slots[i].used)))
+            .expect("there are slots");
+        // A few shared tokens (the template's opening) aren't worth a
+        // slot holding another prompt.
+        let (seq, prefix) = if prefix < MIN_SHARED {
+            (self.least_used(), 0)
+        } else {
+            (seq, prefix)
+        };
+        self.slots[seq].used = self.clock;
+
+        // Reuse the cached start of the prompt and evaluate only the rest.
+        // At least the last token is evaluated again, because its logits
+        // start the reply.
+        let mut keep = prefix.min(tokens.len() - 1);
         let trimmed = self
             .ctx
-            .clear_kv_cache_seq(Some(0), Some(keep as u32), None)
+            .clear_kv_cache_seq(Some(seq as u32), Some(keep as u32), None)
             .map_err(|e| format!("cache: {e}"))?;
         if !trimmed {
             // Models with recurrent layers (LFM2) keep one running state
             // that can't be cut back to a prefix: start from scratch.
             self.ctx.clear_kv_cache();
+            self.slots = Default::default();
+            self.slots[seq].used = self.clock;
             keep = 0;
         }
-        self.cached.truncate(keep);
+        self.slots[seq].cached.truncate(keep);
+        // Room for the rest of the prompt and the reply: the other slots
+        // give theirs up, least recently used first.
+        let needed = tokens.len() - keep + max_new;
+        while self.free_cells(n_ctx) < needed {
+            let Some(other) = self.evictable(seq) else {
+                break;
+            };
+            self.ctx
+                .clear_kv_cache_seq(Some(other as u32), None, None)
+                .map_err(|e| format!("cache: {e}"))?;
+            self.slots[other] = Slot::default();
+        }
 
         let mut batch = LlamaBatch::new(N_BATCH as usize, 1);
         let new = &tokens[keep..];
@@ -285,13 +360,13 @@ impl<'m> Session<'m> {
                 let pos = start + i;
                 let last = pos == tokens.len() - 1;
                 batch
-                    .add(t, pos as i32, &[0], last)
+                    .add(t, pos as i32, &[seq as i32], last)
                     .map_err(|e| format!("batch: {e}"))?;
             }
             self.ctx
                 .decode(&mut batch)
                 .map_err(|e| format!("prompt: {e}"))?;
-            self.cached.extend_from_slice(chunk);
+            self.slots[seq].cached.extend_from_slice(chunk);
         }
 
         let mut sampler = if temperature <= 0.0 {
@@ -318,12 +393,22 @@ impl<'m> Session<'m> {
             }
             batch.clear();
             batch
-                .add(token, pos as i32, &[0], true)
+                .add(token, pos as i32, &[seq as i32], true)
                 .map_err(|e| format!("batch: {e}"))?;
             self.ctx
                 .decode(&mut batch)
                 .map_err(|e| format!("generation: {e}"))?;
-            self.cached.push(token);
+            self.slots[seq].cached.push(token);
+        }
+        // The reply won't start the next prompt: give its room back.
+        let prompt_end = tokens.len();
+        if self.slots[seq].cached.len() > prompt_end
+            && self
+                .ctx
+                .clear_kv_cache_seq(Some(seq as u32), Some(prompt_end as u32), None)
+                .unwrap_or(false)
+        {
+            self.slots[seq].cached.truncate(prompt_end);
         }
         Ok(LocalLlmReply::Ok {
             text: String::from_utf8_lossy(&out).trim().to_string(),

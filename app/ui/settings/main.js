@@ -48,6 +48,7 @@ function render() {
   renderPermissions();
   renderPresets();
   renderPrivacy();
+  renderActions();
   renderSnippets();
   renderReplacements();
   renderTransforms();
@@ -170,6 +171,7 @@ function collect() {
   s.general.local_only = $("pv-local").checked;
   s.general.share_app_name = $("pv-appname").checked ? null : false;
   s.general.share_recent = $("pv-recent").checked ? null : false;
+  s.actions = collectActions(s.actions);
 
   const sttProvider = $("stt-provider").value;
   if (sttProvider !== s.speech.provider) {

@@ -122,6 +122,10 @@ pub struct Outcome {
     pub usage: Usage,
     /// The AI pass's share of `usage`.
     pub llm_usage: Usage,
+    /// With voice actions on, a Transform's instruction asked to do
+    /// something ("email this to Sam") rather than to change the
+    /// selection: the words as said, for `plan_action`. `text` is empty.
+    pub action: Option<String>,
 }
 
 pub struct Pipeline {
@@ -130,6 +134,8 @@ pub struct Pipeline {
     /// Handles instructions and transforms instead of `llm`, when set: a
     /// stronger cloud model behind a local one that does plain cleanup.
     instruction_llm: Option<Arc<dyn TextModel>>,
+    /// Voice actions are on: an instruction for a selection may be one.
+    actions: bool,
 }
 
 impl Pipeline {
@@ -138,7 +144,15 @@ impl Pipeline {
             stt,
             llm,
             instruction_llm: None,
+            actions: false,
         }
+    }
+
+    /// With voice actions on, an instruction for selected text is first
+    /// checked for a request to do something (see `Outcome::action`).
+    pub fn with_actions(mut self, on: bool) -> Self {
+        self.actions = on;
+        self
     }
 
     /// Sends instructions and transforms to `model` (if given) instead of
@@ -383,6 +397,7 @@ impl Pipeline {
             llm_name: None,
             usage: Usage::default(),
             llm_usage: Usage::default(),
+            action: None,
         };
 
         // Raw mode, or nothing but a snippet was said: no AI needed.
@@ -413,6 +428,26 @@ impl Pipeline {
 
         let selection = job.selection.as_deref().unwrap_or_default();
         let instruction = job.instruction.as_deref().unwrap_or_default();
+        if self.actions
+            && job.mode == Mode::Transform
+            && !selection.trim().is_empty()
+            && !instruction.trim().is_empty()
+        {
+            // An error here leaves it a transform, as without actions.
+            if let Ok(command) = self
+                .command(instruction, Some(selection), &job.context, true)
+                .await
+            {
+                outcome.usage += command.usage;
+                outcome.llm_usage += command.usage;
+                outcome.llm_time = command.llm_time;
+                if let crate::command::Command::Do(request) = command.command {
+                    outcome.action = Some(request);
+                    outcome.text = String::new();
+                    return Ok(outcome);
+                }
+            }
+        }
         let task = match job.mode {
             Mode::Transform if selection.is_empty() => return Err(PipelineError::NoSelection),
             Mode::Transform => PromptTask::Transform {
@@ -936,6 +971,28 @@ mod tests {
         job.selection = Some("long text".into());
         let err = block_on(p.run(job)).unwrap_err();
         assert!(matches!(err, PipelineError::NoModel(Mode::Transform)));
+    }
+
+    #[test]
+    fn an_instruction_for_a_selection_can_be_an_action() {
+        let job = || {
+            let mut job = audio_job(Mode::Transform, false);
+            job.selection = Some("Q3 numbers are in.".into());
+            job
+        };
+        let reply = r#"{"action": "do", "text": "email this to Sam"}"#;
+        // With actions on, the words as said come back for planning.
+        let (p, _) = pipeline(&["email this to Sam"], Some(Ok(reply)));
+        let out = block_on(p.with_actions(true).run(job())).unwrap();
+        assert_eq!(out.action.as_deref(), Some("email this to Sam"));
+        assert_eq!(out.text, "");
+        // Off, it's a transform as always: the model's reply is the text.
+        let (p, llm) = pipeline(&["email this to Sam"], Some(Ok(reply)));
+        let out = block_on(p.run(job())).unwrap();
+        assert_eq!(out.action, None);
+        assert_eq!(out.text, reply);
+        let asked = llm.unwrap().1.lock().unwrap().clone().unwrap();
+        assert!(!asked.system.contains("- do:"), "no command interpreter");
     }
 
     #[test]

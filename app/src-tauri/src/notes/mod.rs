@@ -32,6 +32,8 @@ pub const ACCELERATOR: &str = "Ctrl+Alt+N";
 /// App event telling the page it was shown again, with the app "Paste into"
 /// would paste into (or null).
 const SHOWN: &str = "notes-shown";
+/// App event: open a new note ("new") or today's note ("daily").
+const THEN: &str = "notes-then";
 /// App event with a new app for "Paste into" (you used another app).
 const TARGET: &str = "notes-send-target";
 /// App event asking the page to run a transform (its shortcut was pressed
@@ -359,6 +361,30 @@ pub fn capture(
     );
     let appended = store
         .append(&target, &text, now)
+        .map_err(|e| format!("Couldn't add it to your notes: {e}"))?;
+    let label = Path::new(&appended.path)
+        .file_stem()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned());
+    Ok(Captured {
+        folder: settings.folder.clone(),
+        appended,
+        label,
+    })
+}
+
+/// Adds a to-do (`- [ ] text`) to today's note, for voice actions.
+pub fn add_todo(settings: &NotesSettings, text: &str) -> Result<Captured, String> {
+    let (store, _) = store_for(settings.folder.clone())?;
+    let target = Target::Daily {
+        folder: settings.daily_folder().to_string(),
+        format: settings.daily_format().to_string(),
+    };
+    let appended = store
+        .append(
+            &target,
+            &format!("- [ ] {}", text.trim()),
+            chrono::Local::now(),
+        )
         .map_err(|e| format!("Couldn't add it to your notes: {e}"))?;
     let label = Path::new(&appended.path)
         .file_stem()
@@ -884,15 +910,28 @@ pub fn toggle(app: &AppHandle) {
 /// Shows the Notes window (creating it the first time) with the note
 /// focused.
 pub fn open(app: &AppHandle) {
+    open_to(app, None);
+}
+
+/// `open`, then a new note or today's note (`then`: "new" or "daily"),
+/// for voice actions.
+pub fn open_to(app: &AppHandle, then: Option<&str>) {
     remember_front_app();
     read_for_meaning(app);
     if let Some(window) = app.get_webview_window(WINDOW) {
         let _ = window.show();
         let _ = window.set_focus();
         let _ = app.emit_to(WINDOW, SHOWN, target_name());
+        if let Some(then) = then {
+            let _ = app.emit_to(WINDOW, THEN, then);
+        }
         return;
     }
-    let result = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App("notes.html".into()))
+    let page = match then {
+        Some(then) => format!("notes.html?then={then}"),
+        None => "notes.html".into(),
+    };
+    let result = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App(page.into()))
         .title("Notes")
         .inner_size(1100.0, 680.0)
         .min_inner_size(420.0, 300.0)

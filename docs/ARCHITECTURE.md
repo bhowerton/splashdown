@@ -10,7 +10,7 @@ How Splashdown fits together, for people changing it: where each part of the app
                                                             splashdown-providers)
 ```
 
-Hold the dictation key and the session starts the microphone and captures the focused field. Release it and the recording goes through the pipeline: speech-to-text, snippets, an optional AI pass, then the sanity guard. A spoken command (the instruction key tapped before anything is said) goes to the AI instead, which names an action for the session to carry out (`splashdown_core::command`). The result is pasted or typed into the field it came from.
+Hold the dictation key and the session starts the microphone and captures the focused field. Release it and the recording goes through the pipeline: speech-to-text, snippets, an optional AI pass, then the sanity guard. A spoken command (the instruction key tapped before anything is said) goes to the AI instead, which names an action for the session to carry out (`splashdown_core::command`). With voice actions on, it can also answer `do`: a second request plans that into one action from a fixed catalog (`splashdown_core::action`), whose parameters are checked before `voice_actions` carries it out off the session thread. The result is pasted or typed into the field it came from.
 
 ## Crates
 

@@ -33,6 +33,7 @@ mod tray;
 mod triggers;
 mod ui;
 mod updates;
+mod voice_actions;
 
 use std::sync::{Arc, Mutex};
 
@@ -206,6 +207,9 @@ fn main() {
                 splashdown_providers::factory::use_speech_detector(&paths.models_dir);
             }
             let settings = engine::load_settings();
+            if settings.actions.enabled {
+                voice_actions::warm_up();
+            }
             minibar::init(app.handle(), settings.general.mini_bar());
             // A meeting the app closed on: offer to finish its note.
             meeting::recover(app.handle());

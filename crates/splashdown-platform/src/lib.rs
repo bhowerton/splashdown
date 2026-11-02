@@ -10,8 +10,10 @@ pub use splashdown_core::gesture::{KeyEvent, PhysicalKey};
 #[cfg(target_os = "macos")]
 #[path = "mac/mod.rs"]
 mod imp;
+mod launch;
 mod machine;
 
+pub use launch::{InstalledApp, installed_apps, open_app};
 pub use machine::{free_disk_bytes, memory_bytes};
 
 #[cfg(not(target_os = "macos"))]
@@ -411,6 +413,45 @@ pub fn open_permission_settings(kind: PermissionKind) -> Result<()> {
         .spawn()
         .map(|_| ())
         .map_err(|e| PlatformError::Failed(e.to_string()))
+}
+
+// ---------------------------------------------------------------- media
+
+/// A media key, as on a keyboard: whichever app is playing answers it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MediaKey {
+    PlayPause,
+    Next,
+    Previous,
+}
+
+pub fn press_media_key(key: MediaKey) -> Result<()> {
+    imp::press_media_key(key)
+}
+
+/// The default output device's volume, 0.0–1.0.
+pub fn output_volume() -> Option<f32> {
+    imp::output_volume()
+}
+
+/// Sets the default output's volume (0.0–1.0), unmuting it when it goes
+/// above nothing.
+pub fn set_output_volume(level: f32) -> Result<()> {
+    if imp::set_output_volume(level) {
+        Ok(())
+    } else {
+        Err(PlatformError::Failed(
+            "the sound's volume can't be changed".into(),
+        ))
+    }
+}
+
+pub fn set_output_muted(muted: bool) -> Result<()> {
+    if imp::set_output_muted(muted) {
+        Ok(())
+    } else {
+        Err(PlatformError::Failed("the sound can't be muted".into()))
+    }
 }
 
 /// Opens a web page in the default browser.

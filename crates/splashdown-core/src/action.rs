@@ -647,6 +647,72 @@ fn mentions(text: &str, value: &str) -> bool {
             .any(|w| text.contains(w))
 }
 
+/// Which of `names` (installed apps) `query` means: the same name, all of
+/// its words ("word" → "Microsoft Word", "vs code" → "Visual Studio
+/// Code"), the start of a name, or a name one or two letters off (a
+/// misheard "Spotfy"). Ties go to the shorter name.
+pub fn best_name(query: &str, names: &[String]) -> Option<usize> {
+    let words = |s: &str| -> Vec<String> {
+        fold(s.trim_end_matches(".app"))
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_string)
+            .collect()
+    };
+    let q = words(query);
+    if q.is_empty() {
+        return None;
+    }
+    let q_joined = q.join(" ");
+    names
+        .iter()
+        .enumerate()
+        .filter_map(|(i, name)| {
+            let n = words(name);
+            let n_joined = n.join(" ");
+            let initials: String = n.iter().filter_map(|w| w.chars().next()).collect();
+            let word_matches = |qw: &String| {
+                n.iter()
+                    .any(|nw| nw == qw || (qw.len() >= 3 && nw.starts_with(qw.as_str())))
+                    || (qw.len() >= 2 && initials.starts_with(qw.as_str()))
+            };
+            let score = if n_joined == q_joined {
+                100
+            } else if q.iter().all(word_matches) {
+                80
+            } else if q_joined.chars().count() >= 3 && n_joined.starts_with(&q_joined) {
+                70
+            } else {
+                let distance = edit_distance(&n_joined, &q_joined);
+                let allowed = if q_joined.chars().count() >= 8 { 2 } else { 1 };
+                if q_joined.chars().count() >= 4 && distance <= allowed {
+                    60
+                } else {
+                    return None;
+                }
+            };
+            Some((i, score, n_joined.chars().count()))
+        })
+        .max_by_key(|&(_, score, len)| (score, std::cmp::Reverse(len)))
+        .map(|(i, ..)| i)
+}
+
+fn edit_distance(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut cur = vec![i + 1; b.len() + 1];
+        for (j, cb) in b.iter().enumerate() {
+            cur[j + 1] = (prev[j] + usize::from(ca != cb))
+                .min(prev[j + 1] + 1)
+                .min(cur[j] + 1);
+        }
+        prev = cur;
+    }
+    prev[b.len()]
+}
+
 /// A parameter's value, checked against its kind. `None` when it's
 /// missing, null or empty.
 enum Checked {
@@ -993,6 +1059,34 @@ mod tests {
                 preset: Some("Email".into())
             })
         );
+    }
+
+    #[test]
+    fn finds_the_app_that_was_meant() {
+        let names: Vec<String> = [
+            "Spotify",
+            "Microsoft Word",
+            "Microsoft PowerPoint",
+            "Visual Studio Code",
+            "Notes",
+            "Calculator",
+            "Google Chrome",
+            "Slack",
+            "Safari",
+            "Safari Technology Preview",
+        ]
+        .map(String::from)
+        .to_vec();
+        let find = |q: &str| best_name(q, &names).map(|i| names[i].as_str());
+        assert_eq!(find("Spotify"), Some("Spotify"));
+        assert_eq!(find("spotfy"), Some("Spotify"), "misheard");
+        assert_eq!(find("Word"), Some("Microsoft Word"));
+        assert_eq!(find("VS Code"), Some("Visual Studio Code"));
+        assert_eq!(find("Chrome"), Some("Google Chrome"));
+        assert_eq!(find("Safari"), Some("Safari"), "the shorter, exact one");
+        assert_eq!(find("calculator.app"), Some("Calculator"));
+        assert_eq!(find("Photoshop"), None);
+        assert_eq!(find("no"), None, "too short to guess from");
     }
 
     #[test]

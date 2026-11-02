@@ -132,6 +132,9 @@ enum Msg {
     FileSpeech(mpsc::Sender<Result<FileSpeech, String>>),
     /// The model that answers questions, for Ask in Notes.
     AnswerModel(mpsc::Sender<Result<AnswerModel, String>>),
+    /// A voice action finished (`voice_actions`): what to show, and what
+    /// "undo that" would take back.
+    ActionDone(Result<crate::voice_actions::Done, String>),
 }
 
 /// What a question asked in Notes needs from the engine.
@@ -450,6 +453,8 @@ struct Controller {
     mic_lost: bool,
     /// Why the last pipeline run failed (not "no speech").
     pipeline_error: Option<String>,
+    /// What the last voice action added, and when, for "undo that".
+    last_action: Option<(crate::voice_actions::Undo, Instant)>,
 }
 
 impl Controller {
@@ -490,6 +495,7 @@ impl Controller {
             last_notice: None,
             mic_lost: false,
             pipeline_error: None,
+            last_action: None,
         }
     }
 
@@ -544,6 +550,15 @@ impl Controller {
                             });
                     let _ = reply.send(speech);
                 }
+                Ok(Msg::ActionDone(result)) => match result {
+                    Ok(done) => {
+                        if let Some(undo) = done.undo {
+                            self.last_action = Some((undo, Instant::now()));
+                        }
+                        self.done(&done.text);
+                    }
+                    Err(e) => self.notice(Tone::Warning, &short(&e)),
+                },
                 Ok(Msg::AnswerModel(reply)) => {
                     let model = self
                         .engine
@@ -1127,6 +1142,19 @@ impl Controller {
                 crate::tray::show_retry(true);
             }
             _ => crate::rescue::done(),
+        }
+        if let Some((outcome, _)) = &outcome
+            && let Some(request) = &outcome.action
+        {
+            // An instruction for the selection that asked to do something:
+            // the selection is the action's material.
+            crate::spend::record_outcome(outcome);
+            let selection = match &active.selection {
+                Selection::Text(text) => Some(text.clone()),
+                _ => None,
+            };
+            self.do_action(&active, request, selection);
+            return;
         }
         if let Some((outcome, took)) = outcome {
             crate::spend::record_outcome(&outcome);
@@ -2254,7 +2282,7 @@ impl Controller {
             &spoken,
             last.as_deref(),
             &context,
-            false,
+            engine.actions.enabled,
         ));
         let outcome = match result {
             Ok(outcome) => outcome,
@@ -2277,6 +2305,8 @@ impl Controller {
         let still_focused = active.focus.as_ref().is_none_or(Focus::is_current);
         if let Command::Ask(question) = outcome.command {
             self.show_answer(active, question, None);
+        } else if let Command::Do(request) = outcome.command {
+            self.do_action(active, &request, None);
         } else if !still_focused {
             self.notice(Tone::Warning, "Focus changed — didn't do that");
         } else {
@@ -2292,12 +2322,28 @@ impl Controller {
             Command::Unclear => return self.notice(Tone::Info, "Didn't understand that command"),
             // Answered in the Ask panel instead (`run_command`).
             Command::Ask(_) => return,
-            // Not asked for until voice actions are on.
-            Command::Do(_) => return self.notice(Tone::Info, "Didn't understand that command"),
+            // Carried out by `do_action` instead (`run_command`).
+            Command::Do(_) => return,
             Command::PressEnter => {
                 return self.finish_command(splashdown_platform::press(KeyAction::Return), "Sent");
             }
-            Command::UndoLast => return self.undo_last(target_pid, true),
+            Command::UndoLast => {
+                // The last voice action, if it came after the last insertion.
+                let inserted = self.last_insert.map(|(_, at)| at);
+                if let Some((undo, _)) = self.last_action.take_if(|(_, at)| {
+                    at.elapsed() < UNDO_WINDOW && inserted.is_none_or(|i| i < *at)
+                }) {
+                    let tx = self.tx.clone();
+                    std::thread::spawn(move || {
+                        let result = undo
+                            .undo()
+                            .map(|text| crate::voice_actions::Done { text, undo: None });
+                        let _ = tx.send(Msg::ActionDone(result));
+                    });
+                    return;
+                }
+                return self.undo_last(target_pid, true);
+            }
             Command::DeleteLastWord => {
                 return self
                     .finish_command(splashdown_platform::press(KeyAction::DeleteWord), "Deleted");
@@ -2381,6 +2427,131 @@ impl Controller {
         self.finish_command(result, done);
     }
 
+    /// A command for a voice action: plans it into one action from the
+    /// catalog (`splashdown_core::action`) and carries it out off this
+    /// thread. `selection` is selected text the action may use (an email's
+    /// body), never orders.
+    fn do_action(&mut self, active: &Active, request: &str, selection: Option<String>) {
+        let Ok(engine) = &self.engine else {
+            return;
+        };
+        if active.focus.as_ref().is_some_and(Focus::is_secure_field)
+            || splashdown_platform::secure_input_active()
+        {
+            return self.notice(Tone::Warning, "Not while a password is being typed");
+        }
+        let enabled = engine.actions.enabled_ids();
+        let now = chrono::Local::now().naive_local();
+        let ctx = splashdown_core::action::PlanContext {
+            now: now.format("%A %Y-%m-%d %H:%M").to_string(),
+            coming_days: (1..=7)
+                .map(|d| {
+                    (now.date() + chrono::Days::new(d))
+                        .format("%A %Y-%m-%d")
+                        .to_string()
+                })
+                .collect(),
+            selection,
+            shortcuts: if enabled.contains(&"run_shortcut") {
+                crate::voice_actions::shortcuts()
+            } else {
+                Vec::new()
+            },
+            presets: engine.presets.iter().map(|p| p.name.clone()).collect(),
+        };
+        let pipeline = engine.pipeline_for(&active.preset);
+        self.ui.show(OverlayState::Message {
+            tone: Tone::Info,
+            text: "Working on it…".into(),
+        });
+        let planned =
+            tauri::async_runtime::block_on(pipeline.plan_action(request, &ctx, Some(&enabled)));
+        let planned = match planned {
+            Ok(planned) => planned,
+            Err(e) => {
+                let llm = pipeline
+                    .instruction_llm_name()
+                    .or_else(|| pipeline.llm_name());
+                let message = errors::pipeline(&e, None, llm.as_deref());
+                return self.notice(Tone::Warning, &short(&message));
+            }
+        };
+        tracing::info!(
+            "action → {} ({:?})",
+            plan_label(&planned.plan),
+            planned.llm_time
+        );
+        crate::spend::shared().record(
+            &[(planned.llm_name.clone(), planned.usage)],
+            chrono::Local::now(),
+        );
+        let action = match planned.plan {
+            splashdown_core::action::Plan::Do(action) => action,
+            splashdown_core::action::Plan::Nothing(reason) => {
+                let reason = if reason.is_empty() {
+                    "Splashdown can't do that one".to_string()
+                } else {
+                    reason
+                };
+                return self.notice(Tone::Info, &short(&reason));
+            }
+            splashdown_core::action::Plan::Invalid(why) => {
+                tracing::info!("action refused: {why}");
+                return self.notice(Tone::Warning, "Didn't do that: it wasn't clear what to do");
+            }
+        };
+        let settings = engine.actions.clone();
+        let language = engine.hints.language.clone();
+        if let splashdown_core::action::Action::Splashdown { what, preset } = &action
+            && self.own_action(what, preset.as_deref())
+        {
+            return;
+        }
+        let app = self.ui.app().clone();
+        let tx = self.tx.clone();
+        std::thread::spawn(move || {
+            let result =
+                crate::voice_actions::carry_out(&app, action, &settings, language.as_deref());
+            let _ = tx.send(Msg::ActionDone(result));
+        });
+    }
+
+    /// Splashdown's own actions that change the session (a preset, retry,
+    /// hands-free). Whether it was one of those.
+    fn own_action(&mut self, what: &str, preset: Option<&str>) -> bool {
+        match what {
+            "switch_preset" => {
+                let Ok(engine) = &self.engine else {
+                    return true;
+                };
+                let names: Vec<String> = engine.presets.iter().map(|p| p.name.clone()).collect();
+                match preset.and_then(|p| splashdown_core::action::best_name(p, &names)) {
+                    Some(i) => {
+                        let preset = engine.presets[i].clone();
+                        self.pinned_preset = Some(preset.id.clone());
+                        self.refresh_tray();
+                        self.done(&format!("Using the {} preset", preset.name));
+                    }
+                    None => self.notice(
+                        Tone::Info,
+                        &format!("No preset called “{}”", preset.unwrap_or_default()),
+                    ),
+                }
+                true
+            }
+            "retry_last_dictation" => {
+                self.retry_last();
+                true
+            }
+            "hands_free" => {
+                self.handle(Action::Start);
+                self.handle(Action::HandsFree);
+                true
+            }
+            _ => false,
+        }
+    }
+
     fn finish_command(&mut self, result: splashdown_platform::Result<()>, done: &str) {
         match result {
             Ok(()) => self.done(done),
@@ -2412,6 +2583,15 @@ impl Controller {
             text: text.to_string(),
         });
         self.hide_at = Some(Instant::now() + SHOW_NOTICE);
+    }
+}
+
+/// A plan, for the log: the action's id, never what it was asked to do.
+fn plan_label(plan: &splashdown_core::action::Plan) -> &'static str {
+    match plan {
+        splashdown_core::action::Plan::Do(action) => action.id(),
+        splashdown_core::action::Plan::Nothing(_) => "none",
+        splashdown_core::action::Plan::Invalid(_) => "refused",
     }
 }
 

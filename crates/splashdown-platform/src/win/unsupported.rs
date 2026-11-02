@@ -163,3 +163,19 @@ pub(crate) fn microphone_users() -> Vec<String> {
 pub(crate) fn audio_apps() -> Vec<crate::AudioApp> {
     Vec::new()
 }
+
+pub(crate) fn press_media_key(_key: crate::MediaKey) -> Result<()> {
+    Err(PlatformError::Unsupported)
+}
+
+pub(crate) fn output_volume() -> Option<f32> {
+    None
+}
+
+pub(crate) fn set_output_volume(_level: f32) -> bool {
+    false
+}
+
+pub(crate) fn set_output_muted(_muted: bool) -> bool {
+    false
+}

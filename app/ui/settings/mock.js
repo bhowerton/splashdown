@@ -14,6 +14,7 @@ async function mockInvoke(cmd, args) {
       hotkeys: { dictation: null, instruction: null },
       presets: null,
       snippets: [{ trigger: "my address", text: "1 Infinite Loop, Cupertino" }],
+      actions: { enabled: true, off: ["run_shortcut"], search_engine: "google", confirm_events: false, trusted_shortcuts: ["Log water"] },
     },
     keys: [
       { name: "openai", source: null, hint: null },

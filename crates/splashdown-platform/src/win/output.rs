@@ -55,6 +55,38 @@ fn endpoint_by_id(id: &[u16]) -> Option<IAudioEndpointVolume> {
     volume_of(&device)
 }
 
+/// The default output's volume (0.0–1.0), for "turn it up".
+pub(crate) fn output_volume() -> Option<f32> {
+    let (volume, _) = endpoint()?;
+    // SAFETY: a plain getter on a live endpoint.
+    unsafe { volume.GetMasterVolumeLevelScalar() }.ok()
+}
+
+/// Sets the default output's volume (0.0–1.0), and unmutes it when the
+/// volume goes up from nothing.
+pub(crate) fn set_output_volume(level: f32) -> bool {
+    let Some((volume, _)) = endpoint() else {
+        return false;
+    };
+    let level = level.clamp(0.0, 1.0);
+    // SAFETY: plain values on a live endpoint; no event context.
+    let set = unsafe { volume.SetMasterVolumeLevelScalar(level, std::ptr::null()) }.is_ok();
+    if set && level > 0.0 {
+        // SAFETY: as above.
+        let _ = unsafe { volume.SetMute(false, std::ptr::null()) };
+    }
+    set
+}
+
+/// Mutes or unmutes the default output.
+pub(crate) fn set_output_muted(muted: bool) -> bool {
+    let Some((volume, _)) = endpoint() else {
+        return false;
+    };
+    // SAFETY: plain values on a live endpoint; no event context.
+    unsafe { volume.SetMute(muted, std::ptr::null()) }.is_ok()
+}
+
 pub(crate) struct QuietOutput {
     /// The device it was done on.
     device: Vec<u16>,

@@ -2,6 +2,11 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Voice actions: say what to do, not just what to write.** Turn on Settings → Actions, tap the instruction key and say "open Spotify", "search YouTube for paella recipes", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "pause the music", "add milk to my to-dos", "email Dana that I'll be ten minutes late" or "start recording the meeting", in any language. Select text first and "email this to Sam" or "add this to my to-dos" uses it. Nothing is ever sent, deleted or bought: an email opens as a draft for you to send, a Shortcut asks before it runs (unless you choose Always allow), and "undo that" takes back an event, reminder or to-do. Each action can be turned off. Works with the built-in model on your computer as well as cloud ones. Events go to your calendar and reminders to Reminders on a Mac; on Windows an event opens in your calendar app to save, and a reminder becomes a to-do in today's note.
+- **Spoken commands answer faster with the built-in model.** It now keeps the prompts for tidying up, commands and actions ready at once, without using more memory, so switching between them no longer starts over: a command and its action take about 0.4 s on a Mac instead of 2 s.
+
 ## 0.4.0 — 2026-11-01
 
 - **A setup anyone can do.** The first-run guide now asks one thing: set Splashdown up on this computer (free, private, no account), or use an API key if you have one. Set up on this computer, it starts downloading what it needs right away (about 3 GB) and carries on while you allow permissions, with one progress bar that says how long is left. You can try dictating as soon as the part that understands you arrives; tidying up switches on by itself when its download finishes, even if you close the guide. It checks for disk space first, and a download that stops is one click from carrying on.

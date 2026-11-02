@@ -48,6 +48,48 @@ pub struct Settings {
     /// Saved instructions run over a note or selected text.
     /// Unset means the built-in ones; once edited, the full list is saved.
     pub transforms: Option<Vec<crate::Transform>>,
+    pub actions: ActionSettings,
+}
+
+/// Voice actions: spoken commands that do things beyond the text field
+/// ("open Spotify", "remind me at 3…"), planned by
+/// `splashdown_core::action`.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ActionSettings {
+    /// Spoken commands may do things on this computer. Off until chosen.
+    pub enabled: bool,
+    /// Built-in actions turned off (catalog ids, `open_app`…).
+    pub off: Vec<String>,
+    /// Where a web search goes.
+    pub search_engine: SearchEngine,
+    /// Ask before adding a calendar event or reminder, rather than adding
+    /// it with Undo.
+    pub confirm_events: bool,
+    /// Shortcuts that run without asking first ("Always allow").
+    pub trusted_shortcuts: Vec<String>,
+}
+
+impl ActionSettings {
+    /// The catalog ids that are on.
+    pub fn enabled_ids(&self) -> Vec<&'static str> {
+        splashdown_core::action::CATALOG
+            .iter()
+            .map(|s| s.id)
+            .filter(|id| !self.off.iter().any(|o| o == id))
+            .filter(|id| cfg!(target_os = "macos") || *id != "run_shortcut")
+            .collect()
+    }
+}
+
+/// A web search engine.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum SearchEngine {
+    #[default]
+    Google,
+    Duckduckgo,
+    Bing,
 }
 
 /// Notes.

@@ -163,13 +163,54 @@ pub(crate) struct QuietOutput {
     changes: Vec<Change>,
 }
 
-pub(crate) fn quiet_output(how: Quieten) -> Option<QuietOutput> {
+/// The default output device.
+fn default_device() -> Option<u32> {
     let default = Address {
         selector: DEFAULT_OUTPUT,
         scope: SCOPE_GLOBAL,
         element: MAIN,
     };
-    let device: u32 = get(SYSTEM_OBJECT, &default).filter(|&d| d != 0)?;
+    get(SYSTEM_OBJECT, &default).filter(|&d| d != 0)
+}
+
+/// The default output's volume (0.0–1.0), for "turn it up".
+pub(crate) fn output_volume() -> Option<f32> {
+    let device = default_device()?;
+    let element = *elements(device, VOLUME).first()?;
+    get::<f32>(device, &output(VOLUME, element))
+}
+
+/// Sets the default output's volume (0.0–1.0) on every channel, and
+/// unmutes it when the volume goes up from nothing.
+pub(crate) fn set_output_volume(level: f32) -> bool {
+    let Some(device) = default_device() else {
+        return false;
+    };
+    let level = level.clamp(0.0, 1.0);
+    let mut any = false;
+    for element in elements(device, VOLUME) {
+        any |= set(device, &output(VOLUME, element), level);
+    }
+    if level > 0.0 {
+        set_output_muted(false);
+    }
+    any
+}
+
+/// Mutes or unmutes the default output.
+pub(crate) fn set_output_muted(muted: bool) -> bool {
+    let Some(device) = default_device() else {
+        return false;
+    };
+    let mut any = false;
+    for element in elements(device, MUTE) {
+        any |= set(device, &output(MUTE, element), u32::from(muted));
+    }
+    any
+}
+
+pub(crate) fn quiet_output(how: Quieten) -> Option<QuietOutput> {
+    let device = default_device()?;
     let mut changes = Vec::new();
     match how {
         Quieten::Mute => {

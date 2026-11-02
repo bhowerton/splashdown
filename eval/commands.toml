@@ -294,3 +294,37 @@ expect = "do"
 id = "en-calendar"
 said = "add dentist to my calendar on Thursday at 4pm"
 expect = "do"
+
+# ── Spoken over selected text (`last` is the selection): an edit stays an
+# edit, a request to do something with it is "do"
+
+[[case]]
+id = "sel-email"
+said = "email this to Sam"
+last = "Q3 numbers: revenue up 12%, churn down to 3.1%, two new enterprise customers."
+expect = "do"
+
+[[case]]
+id = "sel-todo"
+said = "add this to my to-dos"
+last = "Call the bank about the card"
+expect = "do"
+
+[[case]]
+id = "sel-search"
+said = "search the web for this"
+last = "Kubernetes ingress returns 504 after 60 seconds"
+expect = "do"
+
+[[case]]
+id = "sel-formal"
+said = "make this more formal"
+last = "hey cant make it tmrw, can we do thurs"
+expect = "replace_last"
+
+[[case]]
+id = "sel-translate"
+said = "translate this into German"
+last = "The meeting moved to Thursday at 3."
+expect = "replace_last"
+text = ["Donnerstag"]

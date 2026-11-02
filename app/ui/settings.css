@@ -29,6 +29,7 @@
 .t-general { --tile: #7d7d86; }
 .t-words { --tile: #a550e0; }
 .t-presets { --tile: #f08700; }
+.t-actions { --tile: #d4a106; }
 .t-providers { --tile: #5b5bd6; }
 .t-spending { --tile: #2ba84a; }
 .t-history { --tile: #1e88ff; }
@@ -421,3 +422,7 @@ dialog.confirm::backdrop { background: rgba(0,0,0,.3); }
 .transform-acts { display: flex; gap: 12px; align-items: center; }
 .nt-daily { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 .nt-daily input { width: 110px !important; }
+
+/* Actions: the list while actions are off. */
+.group.dim .row { opacity: .5; }
+#ac-trusted .chip { margin: 4px 6px 0 0; }
