@@ -271,6 +271,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
             OtherAudio::Leave => None,
             OtherAudio::Lower => Some(splashdown_platform::Quieten::Lower),
             OtherAudio::Mute => Some(splashdown_platform::Quieten::Mute),
+            OtherAudio::Pause => Some(splashdown_platform::Quieten::Pause),
         },
         share_recent: settings.general.share_recent()
             && ai_choice

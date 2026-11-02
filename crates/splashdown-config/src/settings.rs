@@ -451,6 +451,8 @@ pub enum OtherAudio {
     /// To a quarter of their volume (the default).
     Lower,
     Mute,
+    /// Players that are playing are paused, and played again afterwards.
+    Pause,
 }
 
 /// Quiet enough to sit under speech without being missed.
@@ -1519,6 +1521,8 @@ mod tests {
         assert_eq!(s.general.other_sounds(), OtherAudio::Lower);
         let s = Settings::from_toml("[general]\nother_audio = \"mute\"").unwrap();
         assert_eq!(s.general.other_sounds(), OtherAudio::Mute);
+        let p = Settings::from_toml("[general]\nother_sounds = \"pause\"").unwrap();
+        assert_eq!(p.general.other_sounds(), OtherAudio::Pause);
         // Saved again, only the new name is written.
         let text = s.to_toml().unwrap();
         assert!(text.contains("other_sounds = \"mute\"") && !text.contains("other_audio"));

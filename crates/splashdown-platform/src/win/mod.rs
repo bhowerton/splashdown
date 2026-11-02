@@ -39,7 +39,8 @@ pub(crate) use keys::{KeyListener, altgr_types};
 pub(crate) use minibar::MiniBar;
 #[cfg(windows)]
 pub(crate) use output::{
-    QuietOutput, output_volume, quiet_output, set_output_muted, set_output_volume,
+    QuietOutput, can_quiet_output, output_volume, pause_players, quiet_output, resume_players,
+    set_output_muted, set_output_volume,
 };
 #[cfg(windows)]
 pub(crate) use overlay::Overlay;

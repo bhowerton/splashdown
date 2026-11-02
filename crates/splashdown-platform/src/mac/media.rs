@@ -1,6 +1,8 @@
 //! Media keys (play/pause, next, previous) for voice actions: the same
 //! system-defined events the keyboard's media keys send, so whichever app
-//! is playing answers them.
+//! is playing answers them. And pausing music while recording, by asking
+//! the players themselves: a media key can't tell whether anything is
+//! playing, and would start the music when nothing is.
 
 use std::ffi::c_void;
 
@@ -91,6 +93,61 @@ fn with_event(code: isize, down: bool, use_it: impl FnOnce(CgEventRef)) -> Resul
         use_it(cg);
         Ok(())
     })
+}
+
+/// Players that can be asked whether they're playing (AppleScript), by
+/// bundle ID. The first time, macOS asks the user whether Splashdown may
+/// control each one.
+const PLAYERS: [&str; 2] = ["com.spotify.client", "com.apple.Music"];
+
+/// Pauses the players that are playing, and returns them.
+pub(crate) fn pause_players() -> Vec<String> {
+    PLAYERS
+        .into_iter()
+        .filter(|id| running(id))
+        .filter(|id| {
+            ask(
+                id,
+                "if player state is playing then\npause\nreturn \"paused\"\nend if",
+            )
+            .is_some_and(|said| said == "paused")
+        })
+        .map(String::from)
+        .collect()
+}
+
+/// Plays again the players `pause_players` paused, unless they were
+/// started, stopped or quit meanwhile.
+pub(crate) fn resume_players(players: &[String]) {
+    for id in players.iter().filter(|id| running(id)) {
+        ask(id, "if player state is paused then play");
+    }
+}
+
+/// Whether the app is running: asking one that isn't would open it.
+fn running(id: &str) -> bool {
+    objc2_app_kit::NSRunningApplication::runningApplicationsWithBundleIdentifier(
+        &objc2_foundation::NSString::from_str(id),
+    )
+    .count()
+        > 0
+}
+
+/// Runs `script` inside a `tell` to the app, returning what it returns.
+fn ask(id: &str, script: &str) -> Option<String> {
+    let out = std::process::Command::new("/usr/bin/osascript")
+        .arg("-e")
+        .arg(format!("tell application id \"{id}\"\n{script}\nend tell"))
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        tracing::debug!(
+            "couldn't ask {id} about playing: {}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+        return None;
+    }
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
 }
 
 #[cfg(test)]

@@ -1,6 +1,12 @@
 //! Quieting other sounds while recording: the default playback device's
-//! volume or mute, through `IAudioEndpointVolume`, put back afterwards.
+//! volume or mute, through `IAudioEndpointVolume`, put back afterwards; or
+//! pausing music through the media controls Windows shows for each app.
 
+use windows::Media::Control::{
+    GlobalSystemMediaTransportControlsSession as MediaSession,
+    GlobalSystemMediaTransportControlsSessionManager as MediaSessions,
+    GlobalSystemMediaTransportControlsSessionPlaybackStatus as PlaybackStatus,
+};
 use windows::Win32::Media::Audio::Endpoints::IAudioEndpointVolume;
 use windows::Win32::Media::Audio::{
     IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator, eConsole, eRender,
@@ -128,6 +134,57 @@ pub(crate) fn quiet_output(how: Quieten) -> Option<QuietOutput> {
                     muted: false,
                 })
             }
+        }
+        // Music is paused instead (`players`).
+        Quieten::Pause => None,
+    }
+}
+
+/// Whether the default output's volume or mute can be changed: on Windows
+/// whenever there's a playback device.
+pub(crate) fn can_quiet_output(_how: Quieten) -> bool {
+    endpoint().is_some()
+}
+
+/// The apps showing media controls (players, browser tabs with a video).
+fn media_sessions() -> Vec<MediaSession> {
+    MediaSessions::RequestAsync()
+        .and_then(|request| request.join())
+        .and_then(|sessions| sessions.GetSessions())
+        .map(|list| list.into_iter().collect())
+        .unwrap_or_default()
+}
+
+fn status(session: &MediaSession) -> Option<PlaybackStatus> {
+    session.GetPlaybackInfo().ok()?.PlaybackStatus().ok()
+}
+
+/// Pauses the apps that are playing, and returns them (by app ID).
+pub(crate) fn pause_players() -> Vec<String> {
+    let mut paused = Vec::new();
+    for session in media_sessions() {
+        if status(&session) != Some(PlaybackStatus::Playing) {
+            continue;
+        }
+        let Ok(id) = session.SourceAppUserModelId() else {
+            continue;
+        };
+        if session.TryPauseAsync().and_then(|op| op.join()) == Ok(true) {
+            paused.push(id.to_string());
+        }
+    }
+    paused
+}
+
+/// Plays again the apps `pause_players` paused, unless they were started,
+/// stopped or closed meanwhile.
+pub(crate) fn resume_players(players: &[String]) {
+    for session in media_sessions() {
+        let ours = session
+            .SourceAppUserModelId()
+            .is_ok_and(|id| players.contains(&id.to_string()));
+        if ours && status(&session) == Some(PlaybackStatus::Paused) {
+            let _ = session.TryPlayAsync().and_then(|op| op.join());
         }
     }
 }

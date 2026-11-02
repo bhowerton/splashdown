@@ -12,6 +12,7 @@ pub use splashdown_core::gesture::{KeyEvent, PhysicalKey};
 mod imp;
 mod launch;
 mod machine;
+mod players;
 
 pub use launch::{InstalledApp, installed_apps, open_app};
 pub use machine::{free_disk_bytes, memory_bytes};
@@ -530,6 +531,9 @@ pub enum MediaKey {
 }
 
 pub fn press_media_key(key: MediaKey) -> Result<()> {
+    // Music paused for the recording that asked for this is played again
+    // first, so "pause the music" pauses it rather than starting it.
+    players::settle(std::time::Duration::from_secs(2));
     imp::press_media_key(key)
 }
 
@@ -676,19 +680,30 @@ pub enum Quieten {
     /// Down to a quarter of their volume.
     Lower,
     Mute,
+    /// Players that are playing are paused, and played again afterwards:
+    /// Spotify and Music on macOS, any app showing media controls on
+    /// Windows.
+    Pause,
 }
 
-/// The computer's sound output, lowered or muted while recording. Dropping
-/// it puts the volume back, unless the user changed it meanwhile.
+/// Other sounds, quieted while recording. Dropping it puts them back:
+/// the volume (unless the user changed it meanwhile), or the music.
 pub struct QuietOutput(u64);
 
-/// What was lowered or muted, kept here rather than in `QuietOutput` so
+/// Only ever dropped: that puts back what it quieted.
+#[allow(dead_code)]
+enum Quieted {
+    Output(imp::QuietOutput),
+    Paused(players::Paused),
+}
+
+/// What was quieted, kept here rather than in `QuietOutput` so
 /// `restore_output` can put it back when the app quits mid-recording. The
 /// number says which `QuietOutput` it belongs to.
-static QUIETED: std::sync::Mutex<Option<(u64, imp::QuietOutput)>> = std::sync::Mutex::new(None);
+static QUIETED: std::sync::Mutex<Option<(u64, Quieted)>> = std::sync::Mutex::new(None);
 static QUIET_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
-fn quieted() -> std::sync::MutexGuard<'static, Option<(u64, imp::QuietOutput)>> {
+fn quieted() -> std::sync::MutexGuard<'static, Option<(u64, Quieted)>> {
     QUIETED.lock().unwrap_or_else(|e| e.into_inner())
 }
 
@@ -735,13 +750,25 @@ pub fn app_loopback(pid: u32, sink: SoundSink) -> Result<AppLoopback> {
     imp::app_loopback(pid, sink)
 }
 
-/// Lowers or mutes the default output device. `None` when there's nothing
-/// to do: no device or volume control, or it's already silent or muted.
+/// Lowers or mutes the default output device, or pauses music. A device
+/// whose volume can't be changed (some audio interfaces) gets its music
+/// paused instead. `None` when there's nothing to do: no device, or it's
+/// already silent or muted.
 pub fn quiet_output(how: Quieten) -> Option<QuietOutput> {
     // Put back anything still quieted first, so it isn't taken as the
     // level to return to.
     drop(quieted().take());
-    let quiet = imp::quiet_output(how)?;
+    let quiet = match how {
+        Quieten::Pause => Quieted::Paused(players::pause()),
+        Quieten::Lower | Quieten::Mute => match imp::quiet_output(how) {
+            Some(quiet) => Quieted::Output(quiet),
+            None if !imp::can_quiet_output(how) => {
+                tracing::info!("the sound's volume can't be changed; pausing music instead");
+                Quieted::Paused(players::pause())
+            }
+            None => return None,
+        },
+    };
     let n = QUIET_COUNT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     *quieted() = Some((n, quiet));
     Some(QuietOutput(n))
@@ -762,6 +789,7 @@ impl Drop for QuietOutput {
 /// restarting while one is in progress.
 pub fn restore_output() {
     drop(quieted().take());
+    players::settle(std::time::Duration::from_secs(3));
 }
 
 // ---------------------------------------------------------------- overlay

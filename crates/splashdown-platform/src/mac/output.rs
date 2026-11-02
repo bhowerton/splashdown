@@ -235,8 +235,17 @@ pub(crate) fn quiet_output(how: Quieten) -> Option<QuietOutput> {
                 }
             }
         }
+        // Music is paused instead (`players`).
+        Quieten::Pause => {}
     }
     (!changes.is_empty()).then_some(QuietOutput { device, changes })
+}
+
+/// Whether the default output's volume (`Lower`) or mute (`Mute`) can be
+/// changed at all. Audio interfaces often leave it to their own knob.
+pub(crate) fn can_quiet_output(how: Quieten) -> bool {
+    let selector = if how == Quieten::Mute { MUTE } else { VOLUME };
+    default_device().is_some_and(|device| !elements(device, selector).is_empty())
 }
 
 impl Drop for QuietOutput {

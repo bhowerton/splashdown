@@ -156,6 +156,16 @@ pub(crate) fn quiet_output(_how: crate::Quieten) -> Option<QuietOutput> {
     None
 }
 
+pub(crate) fn can_quiet_output(_how: crate::Quieten) -> bool {
+    true
+}
+
+pub(crate) fn pause_players() -> Vec<String> {
+    Vec::new()
+}
+
+pub(crate) fn resume_players(_players: &[String]) {}
+
 pub(crate) fn microphone_users() -> Vec<String> {
     Vec::new()
 }

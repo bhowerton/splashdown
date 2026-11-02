@@ -8,6 +8,9 @@
   <!-- Recording while the dictation key is held. -->
   <key>com.apple.security.device.audio-input</key>
   <true/>
+  <!-- Pausing Spotify or Music while recording (AppleScript). -->
+  <key>com.apple.security.automation.apple-events</key>
+  <true/>
   <!-- Meeting titles from the calendar, when the user turns it on. -->
   <key>com.apple.security.personal-information.calendars</key>
   <true/>

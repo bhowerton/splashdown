@@ -24,11 +24,11 @@ pub(crate) use clipboard::{
     type_text,
 };
 pub(crate) use keys::KeyListener;
-pub(crate) use media::press_media_key;
+pub(crate) use media::{pause_players, press_media_key, resume_players};
 pub(crate) use mic::{audio_apps, microphone_users};
 pub(crate) use minibar::MiniBar;
 pub(crate) use output::{
-    QuietOutput, output_volume, quiet_output, set_output_muted, set_output_volume,
+    QuietOutput, can_quiet_output, output_volume, quiet_output, set_output_muted, set_output_volume,
 };
 pub(crate) use overlay::{Overlay, play_sound, reduce_motion};
 
