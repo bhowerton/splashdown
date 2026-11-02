@@ -10,6 +10,9 @@ pub use splashdown_core::gesture::{KeyEvent, PhysicalKey};
 #[cfg(target_os = "macos")]
 #[path = "mac/mod.rs"]
 mod imp;
+mod machine;
+
+pub use machine::{free_disk_bytes, memory_bytes};
 
 #[cfg(not(target_os = "macos"))]
 #[path = "win/mod.rs"]

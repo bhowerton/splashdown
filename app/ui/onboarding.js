@@ -2,22 +2,37 @@
 
 // First-run setup guide (needs common.js). Opened as a plain file in a
 // browser it uses the sample data in mockInvoke, for design work.
+//
+// Written for people who've never heard of an AI model: one obvious choice
+// (set up on this computer), which starts the downloads at once and keeps
+// going in the background (the `setup` module) while the rest of the guide
+// carries on. API keys are there for those who have one.
 
 const LAST = 5;
 let step = 1;
 let state = null;
-let choice = null; // "local" | "openrouter" | "openai" | "existing"
+let choice = "local"; // "local" | "openrouter" | "openai" | "anthropic" | "existing"
+let plan = null; // what setting up on this computer would download
+let setup = null; // how it's going, once started
 let practiceSince = 0;
 let practiceDone = false;
 
 // ---------------------------------------------------------------- navigation
 
+/** Windows asks for no permissions: that step is skipped there. */
+function skipped(n) {
+  return n === 3 && state?.platform !== "macos";
+}
+
 function go(n) {
+  const back = n < step;
   step = Math.max(1, Math.min(LAST, n));
+  if (skipped(step)) step += back ? -1 : 1;
   document.querySelectorAll(".ob-step").forEach((s) => (s.hidden = Number(s.dataset.step) !== step));
   document.querySelectorAll(".steps i").forEach((i, idx) => i.classList.toggle("on", idx < step));
   $("back").hidden = step === 1;
   if (step === 4) startPractice();
+  renderSetup();
   updateFooter();
 }
 
@@ -29,11 +44,11 @@ function updateFooter() {
   next.textContent = { 1: "Get started", 5: "Finish" }[step] ?? "Continue";
   if (step === 2) {
     next.disabled = !choiceReady();
-    if (!choice) note.textContent = "Pick one to continue";
+    if (KEY_CHOICES[choice] && next.disabled) note.textContent = "Paste your key to continue";
   }
   if (step === 3 && state && !state.permissions.accessibility) {
     next.disabled = true;
-    note.textContent = "Accessibility is needed for the hotkey";
+    note.textContent = "Accessibility is needed for the dictation key";
   }
   if (step === 4 && !practiceDone) {
     next.textContent = "Skip";
@@ -47,7 +62,7 @@ $("next").onclick = async () => {
   go(step + 1);
 };
 
-// ---------------------------------------------------------------- step 2: AI
+// ---------------------------------------------------------------- step 2: getting ready
 
 const KEY_CHOICES = {
   openrouter: { label: "OpenRouter", site: "openrouter.ai/keys" },
@@ -55,26 +70,9 @@ const KEY_CHOICES = {
   anthropic: { label: "Anthropic", site: "platform.claude.com/settings/keys" },
 };
 
-// Apple's speech model can be used here (possibly after a download).
-function appleSpeech() {
-  return state.apple && state.apple.speech !== "unavailable";
-}
-
-// Apple Intelligence can do the cleanup.
-function appleCleanup() {
-  return !!state.apple?.language_model;
-}
-
 function existingKey() {
   return state.keys.find((k) => k.source && k.name !== "custom");
 }
-
-function localModel() {
-  return state.local_models?.[0];
-}
-
-// The built-in cleanup model is offered where Apple's isn't available.
-let wantLocalModel = true;
 
 function choiceReady() {
   if (choice === "local" || choice === "existing") return true;
@@ -82,42 +80,28 @@ function choiceReady() {
   return false;
 }
 
-/** The row saying how speech will be recognized on this computer. */
-function speechRow() {
-  const row = document.createElement("div");
-  row.className = "row";
-  if (appleSpeech()) {
-    row.innerHTML = state.apple.speech === "ready"
-      ? `<span class="lbl">Apple's speech model is ready<small>Built into macOS.</small></span><span class="badge ok">Ready</span>`
-      : `<span class="lbl">Downloads Apple's speech model<small>From Apple, when you click Continue.</small></span><span class="state dl-state" aria-live="polite" data-dl="apple"></span>`;
-  } else {
-    const id = state.defaults.local_speech;
-    const model = state.speech_models.find((m) => m.id === id);
-    row.innerHTML = model?.downloaded
-      ? `<span class="lbl">Speech model ready<small>${model.label} is already on this computer.</small></span><span class="badge ok">Ready</span>`
-      : `<span class="lbl">Downloads a speech model (~${model?.mb ?? 475} MB)<small>Happens when you click Continue.</small></span><span class="state dl-state" aria-live="polite" data-dl="${id}"></span>`;
-  }
-  return row;
+function gb(bytes) {
+  return (bytes / 1e9).toFixed(1);
 }
 
-/** The built-in cleanup model, as an option (checked by default). */
-function localModelRow() {
-  const m = localModel();
-  const row = document.createElement("label");
-  row.className = "row";
-  const size = `~${(m.mb / 1000).toFixed(1)} GB`;
-  row.innerHTML = m.downloaded
-    ? `<span class="lbl">Built-in cleanup model is ready<small>Tidies “um”s and self-corrections on this computer.</small></span><span class="badge ok">Ready</span>`
-    : `<span class="lbl">Also tidy up my words on this computer<small>Downloads the built-in cleanup model (${size}). Without it, your words are typed exactly as heard.</small></span><span class="state dl-state" aria-live="polite" data-dl="${m.id}"></span>`;
-  if (!m.downloaded) {
-    const box = document.createElement("input");
-    box.type = "checkbox";
-    box.className = "switch";
-    box.checked = wantLocalModel;
-    box.onchange = () => (wantLocalModel = box.checked);
-    row.querySelector(".state").before(box);
+/** What "Set up on this computer" will do, in plain words. */
+function describePlan() {
+  const blurb = $("local-blurb");
+  const warning = $("space-warning");
+  warning.hidden = true;
+  if (!plan) return;
+  const size = `about ${gb(plan.download_mb * 1e6)} GB`;
+  if (plan.download_mb === 0) {
+    blurb.textContent = "Everything Splashdown needs is already on this computer.";
+  } else if (plan.cleanup === "apple") {
+    blurb.textContent = `Splashdown downloads what it needs to understand you (${size}), and tidies up your words with the Apple Intelligence built into your Mac. It takes a minute or two, and you can carry on while it does.`;
+  } else {
+    blurb.textContent = `Splashdown downloads what it needs to understand you and tidy up your words (${size}). It takes a few minutes, and you can carry on while it does.`;
   }
-  return row;
+  if (plan.too_little_space) {
+    warning.textContent = `This computer has ${gb(plan.free_mb * 1e6)} GB of free space, and Splashdown needs about ${gb(plan.download_mb * 1e6 + 1e9)} GB. Free up some space first (empty the ${state.platform === "macos" ? "Trash" : "Recycle Bin"}, or delete large files you don't need), or use an API key below.`;
+    warning.hidden = false;
+  }
 }
 
 function keyRow(name) {
@@ -125,7 +109,8 @@ function keyRow(name) {
   const key = state.keys.find((k) => k.name === name);
   const row = document.createElement("div");
   row.className = "row";
-  row.innerHTML = `<span class="lbl">${info.label} API key<small>Create one at ${info.site}. It's stored in your Keychain.</small></span>`;
+  const where = state.platform === "macos" ? "It's kept in your Keychain." : "It's kept safely on this computer.";
+  row.innerHTML = `<span class="lbl">${info.label} API key<small>Create one at ${info.site}. ${where}</small></span>`;
   if (key?.source) {
     row.append(badge(`Saved · …${key.hint}`, "ok"));
     return row;
@@ -162,110 +147,134 @@ function keyRow(name) {
 }
 
 function renderChoice() {
-  document.querySelectorAll(".card").forEach((c) => c.classList.toggle("sel", c.dataset.choice === choice));
+  document.querySelectorAll(".card").forEach((c) => {
+    c.classList.toggle("sel", c.dataset.choice === choice);
+    c.setAttribute("aria-pressed", String(c.dataset.choice === choice));
+  });
   const detail = $("choice-detail");
   detail.replaceChildren();
-  if (choice === "openrouter" || choice === "openai") {
-    detail.append(keyRow(choice));
-  } else if (choice === "anthropic") {
-    // Claude only does the cleanup; speech stays on this computer.
-    detail.append(keyRow("anthropic"), speechRow());
-  } else if (choice === "local") {
-    detail.append(speechRow());
-    if (appleCleanup()) {
-      const row = document.createElement("div");
-      row.className = "row";
-      row.innerHTML = `<span class="lbl">Cleanup uses Apple Intelligence<small>Also on this Mac.</small></span><span class="badge ok">Ready</span>`;
-      detail.append(row);
-    } else if (localModel()) {
-      detail.append(localModelRow());
-    }
-  }
+  if (KEY_CHOICES[choice]) detail.append(keyRow(choice));
   updateFooter();
 }
 
-document.querySelectorAll(".card").forEach((c) =>
-  c.addEventListener("click", () => {
-    choice = c.dataset.choice;
-    renderChoice();
-  })
-);
-
-/** Runs a download step, showing progress in its row. Returns false if it
- *  failed (the error is shown). */
-async function downloadStep(id, command, args) {
-  const st = document.querySelector(`.dl-state[data-dl="${id}"]`);
-  if (st) st.innerHTML = `<span class="progress wide${id === "apple" ? " indeterminate" : ""}"><i></i></span>`;
-  try {
-    const r = await invoke(command, args);
-    state = r.state;
-    return true;
-  } catch (e) {
-    toast(String(e), true);
-    return false;
-  }
+function showKeys(open) {
+  $("ai-cards").hidden = !open;
+  $("show-keys").setAttribute("aria-expanded", String(open));
 }
 
-/** Gets speech recognition on this computer ready; returns its settings. */
-async function prepareLocalSpeech() {
-  if (appleSpeech()) {
-    if (state.apple.speech !== "ready" && !(await downloadStep("apple", "prepare_apple_speech", {}))) return null;
-    return { provider: "apple", model: null };
-  }
-  const id = state.defaults.local_speech;
-  const model = state.speech_models.find((m) => m.id === id);
-  if (!model?.downloaded && !(await downloadStep(id, "download_model", { id }))) return null;
-  return { provider: "whisper-local", model: id };
+$("show-keys").onclick = () => showKeys($("ai-cards").hidden);
+
+function pick(card) {
+  choice = card.dataset.choice;
+  renderChoice();
 }
 
-/** Saves the chosen setup. Returns false to stay on the step. */
+document.querySelectorAll(".card").forEach((c) => c.addEventListener("click", () => pick(c)));
+
+/** Saves the chosen setup and starts any downloads. Returns false to stay
+ *  on the step. */
 async function applyChoice() {
-  const settings = structuredClone(state.settings);
   $("next").disabled = true;
   const fail = () => {
     $("next").disabled = false;
     return false;
   };
-  if (choice === "local") {
-    const speech = await prepareLocalSpeech();
-    if (!speech) return fail();
-    settings.speech = speech;
-    // Keep cleanup on a key that already exists; otherwise on this computer.
-    if (!existingKey()) {
-      let ai = "off";
-      if (appleCleanup()) {
-        ai = "apple";
-      } else if (localModel() && (localModel().downloaded || wantLocalModel)) {
-        const m = localModel();
-        if (!m.downloaded && !(await downloadStep(m.id, "download_model", { id: m.id }))) return fail();
-        ai = "local";
-      }
-      settings.ai = { ...settings.ai, provider: ai, model: null };
-    }
-  } else if (choice === "anthropic") {
-    const speech = await prepareLocalSpeech();
-    if (!speech) return fail();
-    settings.speech = speech;
-    settings.ai = { ...settings.ai, provider: "anthropic", model: null };
-  } else {
-    settings.speech = { provider: "auto", model: null };
-    settings.ai = { ...settings.ai, provider: "auto", model: null };
-  }
   try {
-    const r = await invoke("save_settings", { settings });
-    state = r.state;
+    if (choice === "local") {
+      // Saved by the setup itself, as each part arrives.
+      setup = await invoke("start_local_setup", { speechOnly: false });
+    } else if (choice === "anthropic") {
+      // Claude only tidies up; the voice is understood on this computer.
+      await saveProviders("auto", "anthropic");
+      setup = await invoke("start_local_setup", { speechOnly: true });
+    } else {
+      await saveProviders("auto", "auto");
+    }
   } catch (e) {
     toast(String(e), true);
     return fail();
   }
+  watchSetup();
   return true;
 }
 
-listen("model-download", (event) => {
-  const { id, done, total } = event.payload;
-  const bar = document.querySelector(`.dl-state[data-dl="${id}"] .progress > i`);
-  if (bar && total) bar.style.width = `${Math.floor((done / total) * 100)}%`;
+async function saveProviders(speech, ai) {
+  const fresh = await invoke("get_state");
+  const settings = structuredClone(fresh.settings);
+  settings.speech = { provider: speech, model: null };
+  settings.ai = { ...settings.ai, provider: ai, model: null };
+  state = (await invoke("save_settings", { settings })).state;
+}
+
+// ---------------------------------------------------------------- downloads in the background
+
+/** Recent progress, to say how long is left. */
+let samples = [];
+
+function watchSetup() {
+  samples = [];
+  renderSetup();
+}
+
+listen("setup-progress", (event) => {
+  setup = event.payload;
+  samples.push({ t: Date.now(), done: setup.done });
+  samples = samples.filter((s) => Date.now() - s.t < 10_000);
+  renderSetup();
 });
+
+function timeLeft() {
+  if (samples.length < 2) return "";
+  const first = samples[0];
+  const last = samples[samples.length - 1];
+  const rate = (last.done - first.done) / ((last.t - first.t) / 1000);
+  if (!(rate > 0)) return "";
+  const seconds = (setup.total - setup.done) / rate;
+  if (seconds < 60) return " · less than a minute left";
+  const minutes = Math.round(seconds / 60);
+  return ` · about ${minutes} minute${minutes === 1 ? "" : "s"} left`;
+}
+
+/** Can dictation be tried yet? */
+function speechReady() {
+  return !setup || setup.speech_ready;
+}
+
+/** The strip at the top saying how getting ready is going, from step 3 on. */
+function renderSetup() {
+  const strip = $("getting-ready");
+  strip.hidden = !setup || step < 3;
+  if (step === 4) renderPractice();
+  if (step === LAST) renderDone();
+  if (!setup) return;
+  const text = $("gr-text");
+  const bar = $("gr-bar");
+  const retry = $("gr-retry");
+  retry.hidden = !setup.error;
+  $("gr-progress").hidden = !setup.working;
+  bar.style.width = `${setup.total ? Math.floor((setup.done / setup.total) * 100) : 0}%`;
+  strip.classList.toggle("ok", !setup.working && !setup.error);
+  strip.classList.toggle("error", !!setup.error);
+  const amount = setup.total ? `${gb(setup.done)} of ${gb(setup.total)} GB` : "";
+  if (setup.error) {
+    text.textContent = setup.error;
+  } else if (!setup.working) {
+    text.textContent = "✓ Splashdown is ready.";
+  } else if (!setup.speech_ready) {
+    text.textContent = `Getting Splashdown ready… ${amount}${timeLeft()}`;
+  } else {
+    text.textContent = `✓ You can try it now. Still downloading what tidies up your words: ${amount}${timeLeft()}`;
+  }
+}
+
+$("gr-retry").onclick = async () => {
+  try {
+    setup = await invoke("start_local_setup", { speechOnly: choice === "anthropic" });
+    watchSetup();
+  } catch (e) {
+    toast(String(e), true);
+  }
+};
 
 // ---------------------------------------------------------------- step 3: permissions
 
@@ -278,11 +287,30 @@ function renderPermissions() {
 
 function startPractice() {
   practiceSince = Date.now();
+  renderPractice();
   setTimeout(() => $("practice").focus(), 50);
 }
 
+/** Dictation can only be tried once the speech model is here. */
+function renderPractice() {
+  const box = $("practice");
+  const st = $("practice-status");
+  if (practiceDone) return;
+  const ready = speechReady();
+  if (box.disabled === !ready && st.dataset.ready === String(ready)) return;
+  box.disabled = !ready;
+  st.dataset.ready = String(ready);
+  st.textContent = ready
+    ? "Waiting for your first dictation…"
+    : "Almost ready: Splashdown is still downloading what it needs to understand you. This box switches on by itself.";
+  if (ready) {
+    practiceSince = Date.now();
+    box.focus();
+  }
+}
+
 async function checkPractice() {
-  if (step !== 4 || practiceDone) return;
+  if (step !== 4 || practiceDone || !speechReady()) return;
   const last = await invoke("last_result").catch(() => null);
   if (last && last.at >= practiceSince) {
     practiceDone = true;
@@ -295,6 +323,16 @@ async function checkPractice() {
 }
 
 // ---------------------------------------------------------------- step 5: done
+
+function renderDone() {
+  const home = state.platform === "macos"
+    ? "Splashdown lives in the menu bar, at the top of the screen."
+    : "Splashdown lives by the clock, at the bottom right of the screen (click ^ if you don't see it).";
+  const still = setup?.working
+    ? " It's still finishing a download: tidying up your words switches on by itself when it's done, even if you close this window."
+    : "";
+  $("done-sub").textContent = `${home}${still} A few things worth knowing:`;
+}
 
 async function finish() {
   $("next").disabled = true;
@@ -322,13 +360,10 @@ async function poll() {
 (async () => {
   state = await invoke("get_state");
   showDictationKey(state);
-
-  const free = document.querySelector('.card[data-choice="local"] p');
-  if (appleSpeech() && appleCleanup()) {
-    free.textContent = "Uses the speech recognition and Apple Intelligence built into your Mac. Nothing leaves it.";
-  } else if (localModel()) {
-    free.textContent = "Speech recognition and cleanup run on this computer, with free downloads. Nothing leaves it.";
-  }
+  // Opened again while getting ready: carry on showing it.
+  setup = await invoke("local_setup_status").catch(() => null);
+  plan = await invoke("local_setup_plan", { speechOnly: false }).catch(() => null);
+  describePlan();
 
   // A key that's already set up (e.g. from .env.local) is offered as-is.
   const existing = existingKey();
@@ -337,12 +372,10 @@ async function poll() {
     const card = document.createElement("button");
     card.className = "card";
     card.dataset.choice = "existing";
-    card.innerHTML = `<span class="ic">✓</span><b>Use my ${name} key</b><p>Already set up (…${existing.hint}).</p><span class="badge ok">Ready</span>`;
-    card.addEventListener("click", () => {
-      choice = "existing";
-      renderChoice();
-    });
+    card.innerHTML = `<span class="ic" aria-hidden="true">✓</span><b>Use my ${name} key</b><p>Already set up (…${existing.hint}).</p><span class="badge ok">Ready</span>`;
+    card.addEventListener("click", () => pick(card));
     $("ai-cards").prepend(card);
+    showKeys(true);
     choice = "existing";
   }
   renderChoice();
@@ -354,20 +387,34 @@ async function poll() {
 // ---------------------------------------------------------------- preview
 
 /** Sample data for the file:// preview. Only called when window.__TAURI__ is
- *  absent (see invoke in common.js). */
-async function mockInvoke(cmd) {
+ *  absent (see invoke in common.js). Setting up takes a few seconds. */
+async function mockInvoke(cmd, args) {
   await new Promise((r) => setTimeout(r, 200));
   mockInvoke.s ??= {
     settings: { speech: { provider: "auto", model: null }, ai: { provider: "auto", model: null, base_url: null }, general: {}, hotkeys: { dictation: null } },
-    keys: [{ name: "openai", source: null, hint: null }, { name: "openrouter", source: "environment", hint: "9f2c" }, { name: "anthropic", source: null, hint: null }, { name: "custom", source: null, hint: null }],
+    keys: [{ name: "openai", source: null, hint: null }, { name: "openrouter", source: null, hint: null }, { name: "anthropic", source: null, hint: null }, { name: "custom", source: null, hint: null }],
     permissions: { accessibility: false, microphone: "not-asked" },
     defaults: { local_speech: "nemotron" },
-    speech_models: [{ id: "nemotron", mb: 495, downloaded: true, label: "Nemotron 3.5" }],
-    local_models: [{ id: "qwen3-4b", mb: 2500, downloaded: false, label: "Qwen3 4B · best quality" }],
     key_options: [{ value: "right-alt", label: "Right Option" }],
     platform: "macos",
   };
   if (cmd === "get_state") return mockInvoke.s;
   if (cmd === "last_result") return null;
+  if (cmd === "local_setup_status") return null;
+  if (cmd === "local_setup_plan") return { cleanup: "local", small: false, download_mb: 2995, free_mb: 80_000, too_little_space: false };
+  if (cmd === "start_local_setup") {
+    const total = 2_995_000_000;
+    const status = { working: true, speech_ready: false, cleanup_ready: false, done: 0, total, error: null };
+    (async () => {
+      for (let i = 1; i <= 20; i++) {
+        await new Promise((r) => setTimeout(r, 400));
+        status.done = (total / 20) * i;
+        status.speech_ready = status.done > 495_000_000;
+        if (i === 20) Object.assign(status, { working: false, cleanup_ready: true });
+        mockEmit("setup-progress", { ...status });
+      }
+    })();
+    return status;
+  }
   return { state: mockInvoke.s, engine_error: null };
 }

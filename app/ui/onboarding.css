@@ -1,3 +1,4 @@
+[hidden] { display: none !important; }
 .ob-body { overflow: hidden; }
 .ob { height: 100vh; display: flex; flex-direction: column; padding: 26px 34px 20px; }
 .ob .steps { display: flex; gap: 6px; margin-bottom: 26px; }
@@ -67,3 +68,21 @@ kbd {
 .progress.indeterminate > i { width: 35%; animation: slide 1.2s ease-in-out infinite; }
 @keyframes slide { from { transform: translateX(-100%); } to { transform: translateX(290%); } }
 @media (prefers-reduced-motion: reduce) { .progress.indeterminate > i { animation: none; width: 100%; opacity: .5; } }
+
+/* The one choice most people make, and the way to the others. */
+.card.main-choice { width: 100%; padding: 18px; gap: 8px; }
+.card.main-choice b { font-size: 16px; }
+.card.main-choice p { font-size: 13.5px; }
+.badges { display: flex; gap: 6px; flex-wrap: wrap; }
+.space-warning { margin: 10px 0 0; padding: 10px 12px; border-radius: var(--radius); background: var(--warn-soft); color: var(--warn); font-size: 13px; }
+.link.more { display: block; margin: 16px 0 12px; font-size: 13px; }
+
+/* Getting ready, in the background, from the permissions step on. */
+.getting-ready {
+  display: flex; align-items: center; gap: 12px; margin: -12px 0 18px; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); font-size: 13px;
+}
+.getting-ready .gr-text { flex: 1; }
+.getting-ready.ok { border-color: var(--ok); color: var(--ok); font-weight: 600; }
+.getting-ready.error { border-color: var(--warn); background: var(--warn-soft); }
+.practice:disabled { opacity: .55; }

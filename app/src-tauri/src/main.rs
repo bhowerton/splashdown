@@ -25,6 +25,7 @@ mod recent;
 mod replacements;
 mod rescue;
 mod session;
+mod setup;
 mod shortcuts;
 mod spend;
 mod stream_typing;
@@ -86,6 +87,9 @@ fn main() {
             commands::delete_key,
             commands::test_ai,
             commands::download_model,
+            setup::local_setup_plan,
+            setup::local_setup_status,
+            setup::start_local_setup,
             commands::prepare_apple_speech,
             commands::show_log_file,
             commands::open_limits_page,

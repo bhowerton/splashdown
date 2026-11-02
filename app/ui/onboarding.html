@@ -10,6 +10,11 @@
 <body class="ob-body">
 <main class="ob">
   <div class="steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+  <div class="getting-ready" id="getting-ready" role="status" aria-live="polite" hidden>
+    <span class="gr-text" id="gr-text"></span>
+    <span class="progress wide" id="gr-progress"><i id="gr-bar"></i></span>
+    <button class="btn primary" id="gr-retry" hidden>Try again</button>
+  </div>
 
   <!-- 1 · Welcome -->
   <section class="ob-step" data-step="1">
@@ -21,30 +26,33 @@
     </div>
   </section>
 
-  <!-- 2 · AI -->
+  <!-- 2 · Get ready -->
   <section class="ob-step" data-step="2" hidden>
-    <h1>How should it understand you?</h1>
-    <p class="sub">You can change this any time in Settings.</p>
-    <div class="cards" id="ai-cards">
-      <button class="card" data-choice="local">
-        <span class="ic">▣</span><b>Free &amp; private</b>
-        <p>Speech is recognized on this computer. Nothing leaves it. No AI cleanup until you add a key or a local model.</p>
-        <span class="badge ok">No account needed</span>
-      </button>
+    <h1>Let's get Splashdown ready</h1>
+    <p class="sub">It works right here on your computer: free, with no account, and nothing you say leaves it.</p>
+    <button class="card main-choice" data-choice="local">
+      <span class="ic" aria-hidden="true">▣</span>
+      <b>Set up on this computer</b>
+      <p id="local-blurb">Splashdown downloads what it needs to understand you and tidy up your words. It takes a few minutes, and you can carry on while it does.</p>
+      <span class="badges"><span class="badge ok">Recommended</span><span class="badge muted">Free</span><span class="badge muted">Private</span></span>
+    </button>
+    <p class="space-warning" id="space-warning" role="alert" hidden></p>
+    <button class="link more" id="show-keys" aria-expanded="false" aria-controls="ai-cards">I have an API key from OpenAI, OpenRouter or Anthropic</button>
+    <div class="cards" id="ai-cards" hidden>
       <button class="card" data-choice="openrouter">
-        <span class="ic">⇄</span><b>OpenRouter key</b>
-        <p>One key, many models. Best cleanup and formatting; a few cents a day even with heavy use.</p>
+        <span class="ic" aria-hidden="true">⇄</span><b>OpenRouter key</b>
+        <p>One key, many models. Best tidying up and formatting; a few cents a day even with heavy use.</p>
         <span class="badge acc">Cloud</span>
       </button>
       <button class="card" data-choice="openai">
-        <span class="ic">◎</span><b>OpenAI key</b>
-        <p>Accurate speech recognition and cleanup with your OpenAI account.</p>
+        <span class="ic" aria-hidden="true">◎</span><b>OpenAI key</b>
+        <p>Accurate speech recognition and tidying up with your OpenAI account.</p>
         <span class="badge acc">Cloud</span>
       </button>
       <button class="card" data-choice="anthropic">
-        <span class="ic">✳</span><b>Anthropic key</b>
-        <p>Claude tidies and formats your words. Speech is recognized on this computer.</p>
-        <span class="badge acc">Cloud cleanup</span>
+        <span class="ic" aria-hidden="true">✳</span><b>Anthropic key</b>
+        <p>Claude tidies up and formats your words. Your voice is understood on this computer.</p>
+        <span class="badge acc">Cloud tidy-up</span>
       </button>
     </div>
     <div class="choice-detail" id="choice-detail"></div>
@@ -92,7 +100,7 @@
   <!-- 5 · Done -->
   <section class="ob-step" data-step="5" hidden>
     <h1>You're all set</h1>
-    <p class="sub">Splashdown lives in the menu bar. A few things worth knowing:</p>
+    <p class="sub" id="done-sub">Splashdown lives in the menu bar. A few things worth knowing:</p>
     <div class="group cheat">
       <div class="row"><span class="lbl">Dictate</span><span><kbd class="dict-key">Right Option</kbd> hold</span></div>
       <div class="row"><span class="lbl">Add an instruction (“make it an email”)</span><span>tap <kbd>Right Shift</kbd> while holding</span></div>

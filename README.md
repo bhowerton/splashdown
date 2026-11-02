@@ -164,7 +164,7 @@ On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 brew install --cask bhowerton/tap/splashdown
 ```
 
-Builds are universal (Apple Silicon and Intel), signed with Point Dynamics' Apple Developer ID and notarized, so macOS opens them without warnings. The first launch opens a short setup guide: choose how it should understand you, then allow Accessibility and Microphone.
+Builds are universal (Apple Silicon and Intel), signed with Point Dynamics' Apple Developer ID and notarized, so macOS opens them without warnings. The first launch opens a short setup guide: one click sets Splashdown up on your computer (it downloads what it needs, about 3 GB, while you carry on), then allow Accessibility and Microphone. If you have an API key, you can use that instead.
 
 **Windows:** [download the installer](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-windows-x64-setup.exe) and run it; no administrator rights needed. It's code-signed by Point Dynamics, LLC. A brand-new release can still get a SmartScreen notice until enough people have downloaded it: choose **More info → Run anyway**. If you installed 0.1.0, download the latest version by hand once; it updates itself from then on.
 

@@ -673,15 +673,30 @@ impl Drop for Downloading {
     }
 }
 
-/// Downloads a model, unless it's already here. A second request while it
-/// downloads (another click, a window opened again) waits for that one
-/// rather than writing the same file twice.
+/// Downloads a model for Settings, then rebuilds the engine so it's used.
 #[tauri::command]
 pub async fn download_model(
     id: String,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Saved, String> {
+    fetch_model(&app, &id, |_, _| {}).await?;
+    let engine_error = state.apply().await;
+    Ok(Saved {
+        state: state.snapshot(),
+        engine_error,
+    })
+}
+
+/// Downloads a model, unless it's already here, telling every window how
+/// it's going (and `on_progress`). A second request while it downloads
+/// (another click, a window opened again, the setup guide) waits for that
+/// one rather than writing the same file twice.
+pub async fn fetch_model(
+    app: &AppHandle,
+    id: &str,
+    mut on_progress: impl FnMut(u64, Option<u64>) + Send,
+) -> Result<(), String> {
     use splashdown_providers::models::{Diarizer, Embedder};
     let dir = engine::paths()?.models_dir;
     let here = |dir: &std::path::Path| {
@@ -689,73 +704,76 @@ pub async fn download_model(
             Some(Diarizer::is_downloaded(dir))
         } else if id == Embedder::ID {
             Some(Embedder::is_downloaded(dir))
-        } else if let Some(m) = SpeechModel::from_id(&id) {
+        } else if let Some(m) = SpeechModel::from_id(id) {
             Some(m.is_downloaded(dir))
         } else {
-            LocalModel::from_id(&id).map(|m| m.is_downloaded(dir))
+            LocalModel::from_id(id).map(|m| m.is_downloaded(dir))
         }
     };
     let Some(already) = here(&dir) else {
         return Err("Unknown model.".into());
     };
+    if already {
+        return Ok(());
+    }
     let started = {
         let mut list = downloads();
         let running = list.iter().any(|d| d.id == id);
-        if !running && !already {
+        if !running {
             list.push(DownloadProgress {
-                id: id.clone(),
+                id: id.to_string(),
                 done: 0,
                 total: None,
             });
         }
-        !running && !already
+        !running
     };
     if !started {
-        // Downloading already: wait for it to end.
-        while downloads().iter().any(|d| d.id == id) {
+        // Downloading already: follow it to the end.
+        loop {
+            let now = downloads().iter().find(|d| d.id == id).cloned();
+            let Some(now) = now else { break };
+            on_progress(now.done, now.total);
             tokio::time::sleep(Duration::from_millis(250)).await;
         }
-        if here(&dir) != Some(true) {
-            return Err("The download didn't finish. Try again.".into());
-        }
-    } else {
-        let downloading = Downloading(id.clone());
-        let mut last_emit = Instant::now();
-        let result = splashdown_providers::models::download_by_id(&id, &dir, |done, total| {
-            if let Some(d) = downloads().iter_mut().find(|d| d.id == id) {
-                d.done = done;
-                d.total = total;
-            }
-            // Throttle progress events to ~10 per second.
-            if last_emit.elapsed().as_millis() >= 100 || total == Some(done) {
-                last_emit = Instant::now();
-                let _ = app.emit(
-                    "model-download",
-                    DownloadProgress {
-                        id: id.clone(),
-                        done,
-                        total,
-                    },
-                );
-            }
-        })
-        .await
-        .map_err(|e| download_error(&e));
-        drop(downloading);
-        let _ = app.emit(
-            "model-downloaded",
-            DownloadDone {
-                id: id.clone(),
-                error: result.as_ref().err().cloned(),
-            },
-        );
-        result?;
+        return match here(&dir) {
+            Some(true) => Ok(()),
+            _ => Err("The download didn't finish. Try again.".into()),
+        };
     }
-    let engine_error = state.apply().await;
-    Ok(Saved {
-        state: state.snapshot(),
-        engine_error,
+    let downloading = Downloading(id.to_string());
+    let mut last_emit = Instant::now();
+    let result = splashdown_providers::models::download_by_id(id, &dir, |done, total| {
+        if let Some(d) = downloads().iter_mut().find(|d| d.id == id) {
+            d.done = done;
+            d.total = total;
+        }
+        on_progress(done, total);
+        // Throttle progress events to ~10 per second.
+        if last_emit.elapsed().as_millis() >= 100 || total == Some(done) {
+            last_emit = Instant::now();
+            let _ = app.emit(
+                "model-download",
+                DownloadProgress {
+                    id: id.to_string(),
+                    done,
+                    total,
+                },
+            );
+        }
     })
+    .await
+    .map(|_| ())
+    .map_err(|e| download_error(&e));
+    drop(downloading);
+    let _ = app.emit(
+        "model-downloaded",
+        DownloadDone {
+            id: id.to_string(),
+            error: result.as_ref().err().cloned(),
+        },
+    );
+    result
 }
 
 /// A download's failure, in words for the person who clicked Download.

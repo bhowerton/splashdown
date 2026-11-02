@@ -742,10 +742,10 @@ impl Settings {
         if !(on_device.over_budget && choice.destination() == Destination::Cloud) {
             return Ok(choice);
         }
-        let provider = if on_device.apple_speech {
-            SpeechProvider::Apple
-        } else if on_device.local_speech {
+        let provider = if on_device.local_speech {
             SpeechProvider::WhisperLocal
+        } else if on_device.apple_speech {
+            SpeechProvider::Apple
         } else {
             return Err(ResolveError::OverBudget);
         };
@@ -764,6 +764,11 @@ impl Settings {
     ) -> Result<SpeechChoice, ResolveError> {
         let local_only = self.general.local_only;
         let provider = match self.speech.provider {
+            // The built-in speech model first: about twice as accurate as
+            // Apple's in the eval.
+            SpeechProvider::Auto if local_only && on_device.local_speech => {
+                SpeechProvider::WhisperLocal
+            }
             SpeechProvider::Auto if local_only && on_device.apple_speech => SpeechProvider::Apple,
             SpeechProvider::Auto if local_only => SpeechProvider::WhisperLocal,
             SpeechProvider::Openai | SpeechProvider::Openrouter if local_only => {
@@ -771,6 +776,7 @@ impl Settings {
             }
             SpeechProvider::Auto if secrets.openai.is_some() => SpeechProvider::Openai,
             SpeechProvider::Auto if secrets.openrouter.is_some() => SpeechProvider::Openrouter,
+            SpeechProvider::Auto if on_device.local_speech => SpeechProvider::WhisperLocal,
             SpeechProvider::Auto if on_device.apple_speech => SpeechProvider::Apple,
             SpeechProvider::Auto => SpeechProvider::WhisperLocal,
             p => p,
@@ -807,10 +813,10 @@ impl Settings {
         if !(on_device.over_budget && paid) {
             return Ok(choice);
         }
-        let provider = if on_device.apple_language_model {
-            AiProvider::Apple
-        } else if on_device.local_model {
+        let provider = if on_device.local_model {
             AiProvider::Local
+        } else if on_device.apple_language_model {
+            AiProvider::Apple
         } else {
             return Ok(None);
         };
@@ -829,8 +835,10 @@ impl Settings {
     ) -> Result<Option<AiChoice>, ResolveError> {
         let local_only = self.general.local_only;
         let provider = match self.ai.provider {
-            AiProvider::Auto if local_only && on_device.apple_language_model => AiProvider::Apple,
+            // The built-in model first: it does better than Apple's in the
+            // eval (85% to 72%).
             AiProvider::Auto if local_only && on_device.local_model => AiProvider::Local,
+            AiProvider::Auto if local_only && on_device.apple_language_model => AiProvider::Apple,
             AiProvider::Auto if local_only => return Ok(None),
             AiProvider::Openai | AiProvider::Openrouter | AiProvider::Anthropic if local_only => {
                 return Err(ResolveError::LocalOnly("a cloud AI provider"));
@@ -849,8 +857,8 @@ impl Settings {
             AiProvider::Auto if secrets.openai.is_some() => AiProvider::Openai,
             AiProvider::Auto if secrets.openrouter.is_some() => AiProvider::Openrouter,
             AiProvider::Auto if secrets.anthropic.is_some() => AiProvider::Anthropic,
-            AiProvider::Auto if on_device.apple_language_model => AiProvider::Apple,
             AiProvider::Auto if on_device.local_model => AiProvider::Local,
+            AiProvider::Auto if on_device.apple_language_model => AiProvider::Apple,
             AiProvider::Auto | AiProvider::Off => return Ok(None),
             p => p,
         };
@@ -1132,7 +1140,31 @@ mod tests {
     }
 
     #[test]
-    fn auto_uses_the_local_model_without_keys_or_apple() {
+    fn auto_prefers_the_built_in_speech_model_to_apples() {
+        let s = Settings::default();
+        let both = Situation {
+            apple_speech: true,
+            local_speech: true,
+            ..Situation::default()
+        };
+        let pick = |s: &Settings, on: Situation| {
+            s.resolve_speech_with(&secrets(false, false), on)
+                .unwrap()
+                .provider
+        };
+        assert_eq!(pick(&s, both), SpeechProvider::WhisperLocal);
+        let mut local_only = s.clone();
+        local_only.general.local_only = true;
+        assert_eq!(pick(&local_only, both), SpeechProvider::WhisperLocal);
+        let apple = Situation {
+            apple_speech: true,
+            ..Situation::default()
+        };
+        assert_eq!(pick(&s, apple), SpeechProvider::Apple, "not downloaded yet");
+    }
+
+    #[test]
+    fn auto_uses_the_local_model_without_keys_then_apple() {
         let local = Situation {
             local_model: true,
             ..Situation::default()
@@ -1151,7 +1183,16 @@ mod tests {
             apple_language_model: true,
             ..local
         };
-        assert_eq!(pick(&secrets(false, false), both), Some(AiProvider::Apple));
+        assert_eq!(
+            pick(&secrets(false, false), both),
+            Some(AiProvider::Local),
+            "the built-in model before Apple's"
+        );
+        let apple = Situation {
+            apple_language_model: true,
+            ..Situation::default()
+        };
+        assert_eq!(pick(&secrets(false, false), apple), Some(AiProvider::Apple));
         assert_eq!(pick(&secrets(false, false), Situation::default()), None);
         let choice = s
             .resolve_ai_with(&secrets(false, false), local)

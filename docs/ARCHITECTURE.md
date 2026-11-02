@@ -77,7 +77,7 @@ Control requests go through the same `Recognizer` as the key: `start_hands_free`
 
 ## Providers and "Automatic"
 
-`splashdown-config::Settings::resolve_speech_with` / `resolve_ai_with` turn the saved settings plus available keys and on-device models into a concrete `SpeechChoice` / `AiChoice`. `splashdown-providers::factory` turns those into trait objects. The order for "Automatic" is: a saved key (the user chose that provider) → Apple's on-device models → local speech-to-text with no AI pass. Local-only mode is enforced here, in one place.
+`splashdown-config::Settings::resolve_speech_with` / `resolve_ai_with` turn the saved settings plus available keys and on-device models into a concrete `SpeechChoice` / `AiChoice`. `splashdown-providers::factory` turns those into trait objects. The order for "Automatic" is: a saved key (the user chose that provider) → the built-in models, when downloaded (Nemotron, Qwen3 4B; they beat Apple's in the eval) → Apple's on-device models → local speech-to-text with no AI pass. Local-only mode is enforced here, in one place.
 
 ## The Apple shim
 
