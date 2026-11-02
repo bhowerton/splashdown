@@ -30,8 +30,8 @@ pub use app_audio::AppLoopback;
 pub(crate) use app_audio::{app_loopback, audio_apps};
 #[cfg(windows)]
 pub(crate) use clipboard::{
-    clipboard_text, copy_selection, copy_to_clipboard, paste_text, press, press_media_key,
-    refresh_shortcut_keys, type_text,
+    clipboard_text, copy_selection, copy_to_clipboard, paste_text, press, press_combo,
+    press_media_key, refresh_shortcut_keys, type_text,
 };
 #[cfg(windows)]
 pub(crate) use keys::{KeyListener, altgr_types};

@@ -8,7 +8,7 @@ use anyhow::{Context, Result, bail};
 use clap::Subcommand;
 use serde::Deserialize;
 use splashdown_config::Secrets;
-use splashdown_core::action::{Action, Plan, PlanContext};
+use splashdown_core::action::{Action, Mine, Plan, PlanContext};
 use splashdown_core::command::Command;
 use splashdown_core::{Fallback, Mode, Pipeline, PromptContext, TextJob};
 
@@ -674,6 +674,18 @@ async fn actions(cases: &[&ActionCase], verbose: bool, providers: &ProviderOpts)
             .map(String::from)
             .to_vec(),
         presets: ["Email", "Code", "Formal"].map(String::from).to_vec(),
+        mine: [
+            ("Issue", "opens an issue in Linear", true),
+            ("Deploy staging", "deploys the website to staging", false),
+            ("Next slide", "", false),
+            ("Format Drive", "", false),
+        ]
+        .map(|(name, about, takes_text)| Mine {
+            name: name.into(),
+            about: about.into(),
+            takes_text,
+        })
+        .to_vec(),
         ..plan_context(now)
     };
     eprintln!("\nActions eval · {name} · {} cases\n", cases.len());

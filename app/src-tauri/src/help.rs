@@ -182,6 +182,22 @@ pub fn sheet(settings: &Settings) -> Sheet {
                 ],
             ),
             "run_shortcut" => say("Shortcuts", &["run my Morning routine shortcut"]),
+            "my_action" => Item {
+                what: "Your actions".into(),
+                say: settings
+                    .actions
+                    .mine
+                    .iter()
+                    .map(|m| {
+                        if m.takes_text() {
+                            format!("{} …", m.name)
+                        } else {
+                            m.name.clone()
+                        }
+                    })
+                    .collect(),
+                keys: None,
+            },
             "splashdown" => {
                 let mut said = vec![
                     "start recording the meeting".to_string(),

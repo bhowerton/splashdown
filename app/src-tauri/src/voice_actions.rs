@@ -1,7 +1,8 @@
 //! Voice actions: carrying out what a spoken command was planned into
 //! (`splashdown_core::action`): opening apps and web pages, media keys and
 //! the volume, a to-do in today's note, calendar events and reminders, an
-//! email draft, a Shortcut, and Splashdown's own windows. Runs off the
+//! email draft, a Shortcut, the user's own actions (`my_actions`), and
+//! Splashdown's own windows. Runs off the
 //! session thread (an action may wait for the user's OK); the session
 //! does what touches its own state (presets, retry, hands-free).
 //!
@@ -111,6 +112,9 @@ pub fn carry_out(
             done("Email draft opened, ready for you to check and send")
         }
         Action::RunShortcut { name, input } => run_shortcut(app, settings, &name, input.as_deref()),
+        Action::MyAction { name, text } => {
+            crate::my_actions::run(app, settings, &name, text.as_deref())
+        }
     }
 }
 

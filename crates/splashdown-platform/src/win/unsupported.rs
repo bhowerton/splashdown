@@ -174,6 +174,10 @@ pub(crate) fn audio_apps() -> Vec<crate::AudioApp> {
     Vec::new()
 }
 
+pub(crate) fn press_combo(_combo: &splashdown_core::computer::Combo) -> Result<()> {
+    Err(PlatformError::Unsupported)
+}
+
 pub(crate) fn press_media_key(_key: crate::MediaKey) -> Result<()> {
     Err(PlatformError::Unsupported)
 }

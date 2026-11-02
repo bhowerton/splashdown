@@ -530,6 +530,12 @@ pub enum MediaKey {
     Previous,
 }
 
+/// Presses a key combination ("cmd+shift+4", "right") in the app in
+/// front: one of the user's own voice actions.
+pub fn press_combo(combo: &splashdown_core::computer::Combo) -> Result<()> {
+    imp::press_combo(combo)
+}
+
 pub fn press_media_key(key: MediaKey) -> Result<()> {
     // Music paused for the recording that asked for this is played again
     // first, so "pause the music" pauses it rather than starting it.

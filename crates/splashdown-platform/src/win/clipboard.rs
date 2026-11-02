@@ -22,7 +22,7 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     SendInput, VIRTUAL_KEY, VK_B, VK_BACK, VK_C, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END, VK_HOME,
     VK_I, VK_INSERT, VK_LEFT, VK_LWIN, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE,
     VK_MEDIA_PREV_TRACK, VK_MENU, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_RWIN, VK_SHIFT, VK_UP,
-    VK_V, VK_Z,
+    VK_V, VK_Z, VkKeyScanW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetClassNameW, GetForegroundWindow, GetWindowThreadProcessId,
@@ -498,6 +498,63 @@ pub(crate) fn paste_text(text: &str) -> Result<()> {
         restore(&saved);
     }
     sent
+}
+
+/// A key combination ("ctrl+shift+n", "right", "f5"); Command or Super is
+/// the Windows key. Letters and symbols go by the keyboard layout's key
+/// for them.
+pub(crate) fn press_combo(combo: &splashdown_core::computer::Combo) -> Result<()> {
+    use splashdown_core::computer::Key;
+    check_not_blocked()?;
+    wait_for_modifiers_released();
+    let unknown = || PlatformError::Failed(format!("no key for {:?}", combo.key));
+    let vk = match combo.key {
+        Key::Named(name) => VIRTUAL_KEY(match name {
+            "return" => 0x0D,
+            "tab" => 0x09,
+            "space" => 0x20,
+            "backspace" => 0x08,
+            "escape" => 0x1B,
+            "delete" => 0x2E,
+            "home" => 0x24,
+            "end" => 0x23,
+            "pageup" => 0x21,
+            "pagedown" => 0x22,
+            "left" => 0x25,
+            "up" => 0x26,
+            "right" => 0x27,
+            "down" => 0x28,
+            f => f
+                .strip_prefix('f')
+                .and_then(|n| n.parse::<u16>().ok())
+                .filter(|n| (1..=12).contains(n))
+                .map(|n| 0x6F + n)
+                .ok_or_else(unknown)?,
+        }),
+        Key::Char(c) => {
+            let unit = u16::try_from(u32::from(c)).map_err(|_| unknown())?;
+            // SAFETY: a plain value; -1 when the layout has no key for it.
+            let scan = unsafe { VkKeyScanW(unit) };
+            if scan == -1 {
+                return Err(unknown());
+            }
+            VIRTUAL_KEY((scan & 0xFF) as u16)
+        }
+    };
+    let mods: Vec<VIRTUAL_KEY> = [
+        (combo.mods.ctrl, VK_CONTROL),
+        (combo.mods.alt, VK_MENU),
+        (combo.mods.shift, VK_SHIFT),
+        (combo.mods.cmd, VK_LWIN),
+    ]
+    .into_iter()
+    .filter_map(|(on, vk)| on.then_some(vk))
+    .collect();
+    let mut inputs: Vec<INPUT> = mods.iter().map(|&m| key_input(m, false)).collect();
+    inputs.push(key_input(vk, false));
+    inputs.push(key_input(vk, true));
+    inputs.extend(mods.iter().rev().map(|&m| key_input(m, true)));
+    send(&inputs)
 }
 
 pub(crate) fn press(action: crate::KeyAction) -> Result<()> {

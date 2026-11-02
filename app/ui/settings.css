@@ -426,3 +426,14 @@ dialog.confirm::backdrop { background: rgba(0,0,0,.3); }
 /* Actions: the list while actions are off. */
 .group.dim .row { opacity: .5; }
 #ac-trusted .chip { margin: 4px 6px 0 0; }
+
+/* Your actions: the editor (Settings → Actions). */
+dialog.confirm.my-action { width: min(480px, 90vw); }
+.ma-form label { display: block; margin: 12px 0 4px; font-size: 12.5px; font-weight: 600; }
+.ma-form label small { font-weight: 400; color: var(--muted); }
+.ma-form input, .ma-form select, .ma-form textarea { width: 100%; box-sizing: border-box; }
+.ma-form textarea { min-height: 54px; resize: vertical; font-family: inherit; }
+.ma-pick { display: flex; gap: 6px; }
+.ma-pick input { flex: 1; min-width: 0; }
+.ma-error { margin: 10px 0 0; color: var(--err); font-size: 12.5px; }
+.ma-buttons { display: flex; gap: 6px; flex-shrink: 0; }

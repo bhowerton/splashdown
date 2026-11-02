@@ -2491,6 +2491,7 @@ impl Controller {
                 Vec::new()
             },
             presets: engine.presets.iter().map(|p| p.name.clone()).collect(),
+            mine: crate::my_actions::for_planner(&engine.actions),
         };
         let pipeline = engine.pipeline_for(&active.preset);
         self.ui.show(OverlayState::Message {

@@ -68,6 +68,55 @@ pub struct ActionSettings {
     pub confirm_events: bool,
     /// Shortcuts that run without asking first ("Always allow").
     pub trusted_shortcuts: Vec<String>,
+    /// Actions the user set up: a link, a script or program, keys to press.
+    pub mine: Vec<MyAction>,
+}
+
+/// One of the user's own voice actions ("Deploy staging", "Next slide").
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MyAction {
+    /// What the user says, more or less ("Deploy staging").
+    pub name: String,
+    /// What it does, for the AI that picks it (optional).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub about: String,
+    #[serde(flatten)]
+    pub does: MyActionKind,
+    /// Runs without asking first ("Always allow").
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub trusted: bool,
+}
+
+/// What one of the user's actions does. `{text}` in a link or an argument
+/// is filled with what was said for it.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "kebab-case")]
+pub enum MyActionKind {
+    /// Opens a link (`https://linear.app/acme/issue/{text}`).
+    Link { url: String },
+    /// Runs a script or program, with these arguments, never through a
+    /// shell.
+    Program {
+        path: String,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        args: Vec<String>,
+    },
+    /// Presses keys in the app in front ("cmd+shift+4", "right").
+    Keys { keys: String },
+}
+
+/// Where text said for an action goes.
+pub const TEXT_SLOT: &str = "{text}";
+
+impl MyAction {
+    /// It has a place for text.
+    pub fn takes_text(&self) -> bool {
+        match &self.does {
+            MyActionKind::Link { url } => url.contains(TEXT_SLOT),
+            MyActionKind::Program { args, .. } => args.iter().any(|a| a.contains(TEXT_SLOT)),
+            MyActionKind::Keys { .. } => false,
+        }
+    }
 }
 
 impl ActionSettings {
@@ -78,6 +127,7 @@ impl ActionSettings {
             .map(|s| s.id)
             .filter(|id| !self.off.iter().any(|o| o == id))
             .filter(|id| cfg!(target_os = "macos") || *id != "run_shortcut")
+            .filter(|id| *id != "my_action" || !self.mine.is_empty())
             .collect()
     }
 }
@@ -1526,6 +1576,49 @@ mod tests {
         // Saved again, only the new name is written.
         let text = s.to_toml().unwrap();
         assert!(text.contains("other_sounds = \"mute\"") && !text.contains("other_audio"));
+    }
+
+    #[test]
+    fn your_actions_survive_a_save() {
+        let mut s = Settings::default();
+        s.actions.mine = vec![
+            MyAction {
+                name: "Issue".into(),
+                about: "opens a Linear issue".into(),
+                does: MyActionKind::Link {
+                    url: "https://linear.app/acme/issue/{text}".into(),
+                },
+                trusted: false,
+            },
+            MyAction {
+                name: "Deploy staging".into(),
+                about: String::new(),
+                does: MyActionKind::Program {
+                    path: "/usr/local/bin/deploy".into(),
+                    args: vec!["--to".into(), "staging".into()],
+                },
+                trusted: true,
+            },
+            MyAction {
+                name: "Next slide".into(),
+                about: String::new(),
+                does: MyActionKind::Keys {
+                    keys: "right".into(),
+                },
+                trusted: false,
+            },
+        ];
+        let text = toml::to_string_pretty(&s).unwrap();
+        let back = Settings::from_toml(&text).unwrap();
+        assert_eq!(back.actions.mine, s.actions.mine);
+        assert!(s.actions.mine[0].takes_text() && !s.actions.mine[1].takes_text());
+        assert!(back.actions.enabled_ids().contains(&"my_action"));
+        assert!(
+            !Settings::default()
+                .actions
+                .enabled_ids()
+                .contains(&"my_action")
+        );
     }
 
     #[test]

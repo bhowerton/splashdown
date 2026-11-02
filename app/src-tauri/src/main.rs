@@ -16,6 +16,7 @@ mod history;
 mod insights;
 mod meeting;
 mod minibar;
+mod my_actions;
 mod notes;
 mod pill;
 mod placement;
@@ -183,6 +184,8 @@ fn main() {
             help::help_sheet,
             help::help_close,
             help::help_open_actions,
+            my_actions::my_action_problem,
+            my_actions::my_action_pick_program,
             prompt::prompt_state,
             prompt::prompt_answer,
             calls::call_offer_state,

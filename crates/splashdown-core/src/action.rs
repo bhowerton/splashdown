@@ -218,6 +218,18 @@ pub const CATALOG: &[Spec] = &[
             opt("input", Kind::Text, "text to give the Shortcut, if any"),
         ],
     },
+    Spec {
+        id: "my_action",
+        about: "run one of the actions the user set up themselves, named in the request (the list follows)",
+        params: &[
+            p("name", Kind::Text, "the action's name, from the list"),
+            opt(
+                "text",
+                Kind::Text,
+                "for an action that takes text: the text, as said",
+            ),
+        ],
+    },
 ];
 
 /// A planned action, checked and ready to carry out. Times are local,
@@ -267,6 +279,11 @@ pub enum Action {
         name: String,
         input: Option<String>,
     },
+    /// One of the user's own actions, by its name (as the user wrote it).
+    MyAction {
+        name: String,
+        text: Option<String>,
+    },
 }
 
 impl Action {
@@ -284,6 +301,7 @@ impl Action {
             Action::CreateReminder { .. } => "create_reminder",
             Action::DraftEmail { .. } => "draft_email",
             Action::RunShortcut { .. } => "run_shortcut",
+            Action::MyAction { .. } => "my_action",
         }
     }
 
@@ -335,6 +353,10 @@ impl Action {
                 add("name", Some(name));
                 add("input", input.as_ref());
             }
+            Action::MyAction { name, text } => {
+                add("name", Some(name));
+                add("text", text.as_ref());
+            }
         }
         out
     }
@@ -366,6 +388,19 @@ pub struct PlanContext {
     pub shortcuts: Vec<String>,
     /// The user's presets, if known.
     pub presets: Vec<String>,
+    /// The actions the user set up (`my_action`); without any, the action
+    /// isn't offered.
+    pub mine: Vec<Mine>,
+}
+
+/// One of the user's own actions, as the planner sees it.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Mine {
+    pub name: String,
+    /// What it does, in the user's words (may be empty).
+    pub about: String,
+    /// It has a place for text ("open issue {text}").
+    pub takes_text: bool,
 }
 
 fn enabled_specs(enabled: Option<&[&str]>) -> Vec<&'static Spec> {
@@ -406,7 +441,10 @@ Examples:
 /// The request that turns `said` into an action. `enabled` limits the
 /// catalog (all of it when `None`).
 pub fn request(said: &str, ctx: &PlanContext, enabled: Option<&[&str]>) -> TextRequest {
-    let specs = enabled_specs(enabled);
+    let specs: Vec<&Spec> = enabled_specs(enabled)
+        .into_iter()
+        .filter(|s| s.id != "my_action" || !ctx.mine.is_empty())
+        .collect();
     let mut system = String::from(
         "You turn a request spoken to a dictation app into one action on the user's computer. The request is in <request> and may be in any language. Reply with JSON only: {\"action\": \"<id>\", then the action's parameters}. Leave out optional parameters that weren't said.\n\n",
     );
@@ -433,6 +471,24 @@ pub fn request(said: &str, ctx: &PlanContext, enabled: Option<&[&str]>) -> TextR
         }
         if spec.id == "splashdown" && !ctx.presets.is_empty() {
             system.push_str(&format!(" The user's presets: {}.", ctx.presets.join(", ")));
+        }
+        if spec.id == "my_action" {
+            let list: Vec<String> = ctx
+                .mine
+                .iter()
+                .map(|m| {
+                    let mut item = format!("\"{}\"", m.name);
+                    let about = m.about.trim();
+                    match (about.is_empty(), m.takes_text) {
+                        (false, true) => item.push_str(&format!(" ({about}; takes text)")),
+                        (false, false) => item.push_str(&format!(" ({about})")),
+                        (true, true) => item.push_str(" (takes text)"),
+                        (true, false) => {}
+                    }
+                    item
+                })
+                .collect();
+            system.push_str(&format!(" The user's actions: {}.", list.join(", ")));
         }
         system.push('\n');
     }
@@ -469,14 +525,14 @@ pub fn request(said: &str, ctx: &PlanContext, enabled: Option<&[&str]>) -> TextR
         temperature: 0.0,
         // Room for an email body written from the selection.
         max_tokens: 400 + selection_chars,
-        json_schema: Some(schema(&specs)),
+        json_schema: Some(schema(&specs, &ctx.mine)),
     }
 }
 
 /// A JSON schema that only allows a well-formed call to an enabled action
 /// (strict mode: every property listed, optional ones nullable). The root
 /// can't be a choice, so the call sits under `call`.
-fn schema(specs: &[&Spec]) -> Value {
+fn schema(specs: &[&Spec], mine: &[Mine]) -> Value {
     let mut branches: Vec<Value> = specs
         .iter()
         .map(|spec| {
@@ -487,6 +543,10 @@ fn schema(specs: &[&Spec]) -> Value {
             );
             for param in spec.params {
                 let mut ty = match param.kind {
+                    // The user's actions by name: only those.
+                    Kind::Text if spec.id == "my_action" && param.name == "name" => {
+                        json!({ "type": "string", "enum": mine.iter().map(|m| &m.name).collect::<Vec<_>>() })
+                    }
                     Kind::Text | Kind::Time => json!({ "type": "string" }),
                     Kind::OneOf(words) => json!({ "type": "string", "enum": words }),
                     Kind::Number(..) => json!({ "type": "integer" }),
@@ -597,7 +657,31 @@ pub fn parse(output: &str, enabled: Option<&[&str]>) -> Plan {
 /// selection is material, never instructions), and a Shortcut must be
 /// named in what was said.
 pub fn plan(output: &str, said: &str, ctx: &PlanContext, enabled: Option<&[&str]>) -> Plan {
-    let plan = parse(output, enabled);
+    let mut plan = parse(output, enabled);
+    // A Shortcut that isn't one, but is one of the user's own actions (both
+    // are "theirs" to a model): that action. Any other unknown Shortcut is
+    // refused, when the list is known.
+    if let Plan::Do(Action::RunShortcut { name, input }) = &plan
+        && !ctx.shortcuts.is_empty()
+        && best_name(name, &ctx.shortcuts).is_none()
+    {
+        let names: Vec<String> = ctx.mine.iter().map(|m| m.name.clone()).collect();
+        plan = match best_name(name, &names) {
+            Some(i) => Plan::Do(Action::MyAction {
+                name: names[i].clone(),
+                text: input.clone(),
+            }),
+            None => return Plan::Invalid(format!("no Shortcut is called {name:?}")),
+        };
+    }
+    // One of the user's actions: it must be one of theirs, by its exact name.
+    if let Plan::Do(Action::MyAction { name, .. }) = &mut plan {
+        let names: Vec<String> = ctx.mine.iter().map(|m| m.name.clone()).collect();
+        match best_name(name, &names) {
+            Some(i) => *name = names[i].clone(),
+            None => return Plan::Invalid(format!("no action of the user's is called {name:?}")),
+        }
+    }
     let Plan::Do(action) = &plan else {
         return plan;
     };
@@ -615,13 +699,12 @@ pub fn plan(output: &str, said: &str, ctx: &PlanContext, enabled: Option<&[&str]
             ));
         }
         if name == "name" && !in_said {
-            return Plan::Invalid(format!("the Shortcut {value:?} wasn't named"));
+            return Plan::Invalid(format!("{value:?} wasn't named in what was said"));
         }
     }
     plan
 }
 
-/// Lower case, without accents, for comparing names.
 /// Whether a command asks what can be said ("what can I say?", "help"):
 /// answered with the list of commands, with no AI involved, so it works
 /// with voice actions off. Other wordings and languages reach the planner
@@ -724,6 +807,7 @@ pub fn asks_what_to_say(said: &str) -> bool {
             .all(|w| w == "commands" || w == "command" || ABOUT_COMMANDS.contains(&w.as_str()))
 }
 
+/// Lower case, without accents, for comparing names.
 pub fn fold(text: &str) -> String {
     text.to_lowercase()
         .chars()
@@ -978,6 +1062,10 @@ fn check(spec: &Spec, obj: &Map<String, Value>) -> Result<Action, String> {
             name: need(take("name")),
             input: take("input"),
         },
+        "my_action" => Action::MyAction {
+            name: need(take("name")),
+            text: take("text"),
+        },
         other => return Err(format!("{other:?} has no handler")),
     };
     Ok(action)
@@ -1226,14 +1314,90 @@ mod tests {
         );
     }
 
+    fn with_mine() -> PlanContext {
+        PlanContext {
+            shortcuts: vec!["Morning routine".into()],
+            mine: vec![
+                Mine {
+                    name: "Deploy staging".into(),
+                    about: "deploys the site".into(),
+                    takes_text: false,
+                },
+                Mine {
+                    name: "Issue".into(),
+                    about: String::new(),
+                    takes_text: true,
+                },
+            ],
+            ..ctx()
+        }
+    }
+
     #[test]
     fn the_schema_has_a_branch_per_action_and_none() {
-        let r = request("x", &ctx(), None);
-        let branches = r.json_schema.unwrap()["properties"]["call"]["anyOf"]
-            .as_array()
-            .unwrap()
-            .len();
-        assert_eq!(branches, CATALOG.len() + 1);
+        let branches = |ctx: &PlanContext| {
+            let r = request("x", ctx, None);
+            r.json_schema.unwrap()["properties"]["call"]["anyOf"]
+                .as_array()
+                .unwrap()
+                .clone()
+        };
+        // Without actions of the user's own, there's nothing to offer.
+        assert_eq!(branches(&ctx()).len(), CATALOG.len());
+        let all = branches(&with_mine());
+        assert_eq!(all.len(), CATALOG.len() + 1);
+        let mine = all
+            .iter()
+            .find(|b| b["properties"]["action"]["enum"][0] == "my_action")
+            .unwrap();
+        assert_eq!(
+            mine["properties"]["name"]["enum"],
+            json!(["Deploy staging", "Issue"])
+        );
+        let r = request("x", &with_mine(), None);
+        assert!(r.system.contains("\"Deploy staging\" (deploys the site)"));
+        assert!(r.system.contains("\"Issue\" (takes text)"));
+    }
+
+    #[test]
+    fn your_actions_go_by_their_own_names() {
+        let ctx = with_mine();
+        let planned = |reply: &str, said: &str| plan(reply, said, &ctx, None);
+        assert_eq!(
+            planned(
+                r#"{"action":"my_action","name":"deploy staging"}"#,
+                "deploy staging"
+            ),
+            Plan::Do(Action::MyAction {
+                name: "Deploy staging".into(),
+                text: None
+            })
+        );
+        assert!(matches!(
+            planned(
+                r#"{"action":"my_action","name":"Launch rockets"}"#,
+                "launch rockets"
+            ),
+            Plan::Invalid(_)
+        ));
+        // Called a Shortcut by the model, but it's one of the user's own.
+        assert_eq!(
+            planned(
+                r#"{"action":"run_shortcut","name":"Issue","input":"ENG-42"}"#,
+                "open issue ENG-42"
+            ),
+            Plan::Do(Action::MyAction {
+                name: "Issue".into(),
+                text: Some("ENG-42".into())
+            })
+        );
+        assert!(matches!(
+            planned(
+                r#"{"action":"run_shortcut","name":"Next slide"}"#,
+                "next slide"
+            ),
+            Plan::Invalid(_)
+        ));
     }
 
     #[test]

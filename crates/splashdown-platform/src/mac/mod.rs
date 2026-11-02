@@ -34,6 +34,10 @@ pub(crate) use overlay::{Overlay, play_sound, reduce_motion};
 
 pub(crate) const NAME: &str = "macos";
 
+pub(crate) fn press_combo(combo: &splashdown_core::computer::Combo) -> crate::Result<()> {
+    computer::key(combo, 1)
+}
+
 pub(crate) fn os_version() -> Option<String> {
     let v = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
     Some(format!(
