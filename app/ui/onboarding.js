@@ -395,7 +395,8 @@ function showTry() {
   $("actions-try").hidden = !t.actions;
   $("ob-actions").checked = !!state.settings.actions?.enabled;
   const box = $("practice");
-  box.value = t.start ?? (tryIndex === 0 ? "" : box.value);
+  // Each step starts afresh: empty, or with the text it works on.
+  box.value = t.start ?? "";
   const st = $("practice-status");
   st.classList.remove("ok");
   st.dataset.ready = "";
