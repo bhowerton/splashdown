@@ -37,10 +37,10 @@ const RECORD_MEETING: &str = "Record a meeting";
 
 /// The meeting item, relabeled while a meeting records.
 static MEETING_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
-/// "Retry last dictation", enabled while a failed recording is kept.
+/// Last dictation → Retry, enabled while a failed recording is kept.
 static RETRY_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
 
-/// Enables "Retry last dictation" while a failed recording is kept.
+/// Enables Last dictation → Retry while a failed recording is kept.
 pub fn show_retry(kept: bool) {
     if let Some(item) = RETRY_ITEM.get() {
         let _ = item.set_enabled(kept);
@@ -97,33 +97,20 @@ pub struct TrayMenu {
     pub status: MenuItem<Wry>,
     presets: Submenu<Wry>,
     languages: Submenu<Wry>,
-    whisper: CheckMenuItem<Wry>,
-    mini_bar: CheckMenuItem<Wry>,
-    /// "Check for updates…", or "Update to vX.Y.Z…" once one is found.
-    update: MenuItem<Wry>,
+    menu: Menu<Wry>,
+    /// "Update to vX.Y.Z…", in the menu (under the status) only while an
+    /// update is available.
+    update_ready: MenuItem<Wry>,
 }
+
+/// Where "Update to vX.Y.Z…" goes: right under the status.
+const UPDATE_READY_AT: usize = 1;
 
 /// Installs the tray icon and its menu.
 pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu> {
     let status = MenuItem::with_id(app, "status", "Starting…", false, None::<&str>)?;
     let presets = Submenu::with_id(app, "presets", "Preset", true)?;
     let languages = Submenu::with_id(app, "languages", "Language", true)?;
-    let whisper = CheckMenuItem::with_id(
-        app,
-        "whisper",
-        "Whisper mode",
-        true,
-        crate::engine::load_settings().general.whisper_mode(),
-        None::<&str>,
-    )?;
-    let mini_bar = CheckMenuItem::with_id(
-        app,
-        "mini-bar",
-        "Show mini bar",
-        true,
-        crate::engine::load_settings().general.mini_bar(),
-        None::<&str>,
-    )?;
     let current = crate::engine::load_settings().general.language;
     for (code, name) in LANGUAGES {
         languages.append(&CheckMenuItem::with_id(
@@ -138,7 +125,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
     let paste_raw = MenuItem::with_id(
         app,
         "paste-raw",
-        "Paste last raw transcript",
+        "Paste raw transcript",
         true,
         Some(PASTE_RAW_ACCELERATOR),
     )?;
@@ -149,11 +136,11 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         true,
         Some(UNDO_AI_ACCELERATOR),
     )?;
-    let copy_last = MenuItem::with_id(app, "copy-last", "Copy last result", true, None::<&str>)?;
+    let copy_last = MenuItem::with_id(app, "copy-last", "Copy result", true, None::<&str>)?;
     let retry = MenuItem::with_id(
         app,
         "retry-last",
-        "Retry last dictation",
+        "Retry",
         crate::rescue::kept().is_some(),
         None::<&str>,
     )?;
@@ -167,31 +154,43 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         Some(crate::meeting::ACCELERATOR),
     )?;
     let _ = MEETING_ITEM.set(meeting.clone());
+    let last = Submenu::with_id_and_items(
+        app,
+        "last",
+        "Last dictation",
+        true,
+        &[&undo_ai, &paste_raw, &copy_last, &retry],
+    )?;
     let what_to_say = MenuItem::with_id(app, "help", "What you can say…", true, None::<&str>)?;
-    let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
-    let update = MenuItem::with_id(app, "update", CHECK_FOR_UPDATES, true, None::<&str>)?;
     let feedback = MenuItem::with_id(app, "feedback", "Send feedback…", true, None::<&str>)?;
+    let check_updates = MenuItem::with_id(app, "update", CHECK_FOR_UPDATES, true, None::<&str>)?;
+    let help = Submenu::with_id_and_items(
+        app,
+        "help-menu",
+        "Help",
+        true,
+        &[&what_to_say, &feedback, &check_updates],
+    )?;
+    let update_ready = MenuItem::with_id(app, "update-ready", "Update…", true, None::<&str>)?;
+    let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let quit = MenuItem::with_id(app, "quit", "Quit Splashdown", true, Some("CmdOrCtrl+Q"))?;
+    // Kept short: what's used every day at the top level, the rest one
+    // level down, and set-once choices (whisper mode, the mini bar) in
+    // Settings only.
     let menu = Menu::with_items(
         app,
         &[
             &status,
             &PredefinedMenuItem::separator(app)?,
-            &presets,
-            &languages,
-            &whisper,
-            &mini_bar,
-            &undo_ai,
-            &paste_raw,
-            &copy_last,
-            &retry,
             &notes,
             &meeting,
             &PredefinedMenuItem::separator(app)?,
-            &what_to_say,
+            &presets,
+            &languages,
+            &last,
+            &PredefinedMenuItem::separator(app)?,
             &settings,
-            &update,
-            &feedback,
+            &help,
             &PredefinedMenuItem::separator(app)?,
             &quit,
         ],
@@ -224,8 +223,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                 "meeting" => crate::meeting::toggle(app),
                 "help" => crate::help::open(app),
                 "settings" => open_settings(app),
-                "mini-bar" => toggle_mini_bar(app),
-                "update" => show_updates(app),
+                "update" | "update-ready" => show_updates(app),
                 "feedback" => send_feedback(app),
                 "quit" if crate::meeting::is_running() => crate::meeting::quit(app),
                 "quit" => {
@@ -233,9 +231,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                     app.exit(0);
                 }
                 _ => {
-                    if id == "whisper" {
-                        toggle_whisper(app);
-                    } else if let Some(code) = id.strip_prefix("lang:") {
+                    if let Some(code) = id.strip_prefix("lang:") {
                         set_language(app, code);
                     } else if let Some(preset) = id.strip_prefix("preset:")
                         && let Some(state) = app.try_state::<crate::commands::AppState>()
@@ -266,9 +262,8 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         status,
         presets,
         languages,
-        whisper,
-        mini_bar,
-        update,
+        menu,
+        update_ready,
     })
 }
 
@@ -318,16 +313,6 @@ impl TrayMenu {
         }
     }
 
-    /// Ticks "Whisper mode" to match the setting.
-    pub fn show_whisper(&self, on: bool) {
-        let _ = self.whisper.set_checked(on);
-    }
-
-    /// Ticks "Show mini bar" to match the setting.
-    pub fn show_mini_bar(&self, on: bool) {
-        let _ = self.mini_bar.set_checked(on);
-    }
-
     /// Ticks the spoken language in effect (`None`: detect automatically).
     pub fn show_language(&self, language: Option<&str>) {
         let current = language.unwrap_or("");
@@ -346,45 +331,28 @@ impl TrayMenu {
         }
     }
 
-    /// Names the available update, if any, in the menu.
+    /// Shows "Update to vX.Y.Z…" under the status while an update is
+    /// available, and takes it away when there's none.
     pub fn set_update(&self, version: Option<&str>) {
-        let label = match version {
-            Some(v) => format!("Update to v{}…", v.trim_start_matches('v')),
-            None => CHECK_FOR_UPDATES.to_string(),
+        let shown = self.menu.get("update-ready").is_some();
+        let result = match version {
+            Some(v) => self
+                .update_ready
+                .set_text(format!("Update to v{}…", v.trim_start_matches('v')))
+                .and_then(|()| {
+                    if shown {
+                        Ok(())
+                    } else {
+                        self.menu.insert(&self.update_ready, UPDATE_READY_AT)
+                    }
+                }),
+            None if shown => self.menu.remove(&self.update_ready),
+            None => Ok(()),
         };
-        if let Err(e) = self.update.set_text(label) {
+        if let Err(e) = result {
             tracing::warn!("couldn't update the updates menu item: {e}");
         }
     }
-}
-
-/// Whisper mode from the menu bar: saves the new setting and rebuilds.
-fn toggle_whisper(app: &AppHandle) {
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let Some(state) = app.try_state::<crate::commands::AppState>() else {
-            return;
-        };
-        if let Err(e) = state.toggle_whisper_mode().await {
-            tracing::warn!("couldn't change whisper mode: {e}");
-        }
-        crate::commands::settings_changed_elsewhere(&app);
-    });
-}
-
-/// "Show mini bar" from the menu bar: saves the new setting.
-fn toggle_mini_bar(app: &AppHandle) {
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        let Some(state) = app.try_state::<crate::commands::AppState>() else {
-            return;
-        };
-        let on = !state.settings().general.mini_bar();
-        if let Err(e) = state.set_mini_bar(on) {
-            tracing::warn!("couldn't change the mini bar: {e}");
-        }
-        crate::commands::settings_changed_elsewhere(&app);
-    });
 }
 
 /// Saves the spoken language chosen in the menu bar and rebuilds the

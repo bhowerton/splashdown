@@ -1,6 +1,6 @@
 # Troubleshooting
 
-The common problems and their fixes. If yours isn't here, use **Send feedback** (menu bar or Settings → About): it opens a GitHub issue with your versions filled in. Attaching the log helps (Settings → About → **Show log file**); it never contains what you said or typed.
+The common problems and their fixes. If yours isn't here, use **Send feedback** (menu bar → Help, or Settings → About): it opens a GitHub issue with your versions filled in. Attaching the log helps (Settings → About → **Show log file**); it never contains what you said or typed.
 
 ## Nothing happens when I hold the key
 
@@ -28,7 +28,7 @@ If the microphone is unplugged mid-recording, Splashdown stops and types what it
 
 ## "Didn't catch that"
 
-Splashdown heard sound but no words: too short, too quiet, or only noise. Hold the key a moment before you start speaking. If you speak quietly, turn on **Whisper mode** (menu bar or Settings → General).
+Splashdown heard sound but no words: too short, too quiet, or only noise. Hold the key a moment before you start speaking. If you speak quietly, turn on **Whisper mode** (Settings → General, or say “whisper mode on”).
 
 ## The AI changed what I meant
 

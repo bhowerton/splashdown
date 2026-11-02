@@ -116,7 +116,7 @@
 
 ### Everything else
 
-- **A dictation is never lost.** If the speech service or the AI fails, or Splashdown closes mid-way, the recording is kept and **Retry last dictation** turns it into text. A cloud provider that's down is stood in for by a model on your computer.
+- **A dictation is never lost.** If the speech service or the AI fails, or Splashdown closes mid-way, the recording is kept and **Retry** (menu bar → Last dictation) turns it into text. A cloud provider that's down is stood in for by a model on your computer.
 - **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), and an always-on-screen **mini bar** for clicking instead of holding a key.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
@@ -142,7 +142,7 @@
 | Record a meeting | **⌃⌥M** (again to stop) |
 | Use another preset | While holding, press **1–9** |
 | Change the spoken language | Menu bar → **Language** (detects it automatically by default) |
-| See everything you can say | Tap **Right Shift** and say "what can I say?", or menu bar → **What you can say…** |
+| See everything you can say | Tap **Right Shift** and say "what can I say?", or menu bar → Help → **What you can say…** |
 | Cancel | **Esc** |
 | Paste exactly what you said, without the AI | **⌃⌥V** |
 | Swap the AI's version for exactly what you said | **⌃⌥Z** right after it's typed |
@@ -212,7 +212,7 @@ The speech models are the GGUF conversions published by the transcribe.cpp proje
 
 ## When something misbehaves
 
-[Troubleshooting](docs/TROUBLESHOOTING.md) covers the common fixes: the key does nothing, the microphone hears nothing, text that didn't appear, and provider errors. For anything else, use **Send feedback** in the menu bar, which opens a GitHub issue with your versions filled in.
+[Troubleshooting](docs/TROUBLESHOOTING.md) covers the common fixes: the key does nothing, the microphone hears nothing, text that didn't appear, and provider errors. For anything else, use **Send feedback** in the menu bar's Help menu, which opens a GitHub issue with your versions filled in.
 
 ## Building from source
 

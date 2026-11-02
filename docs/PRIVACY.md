@@ -38,7 +38,7 @@ Each provider handles what it receives under its own privacy policy. Local-only 
 - **Settings:** `config.toml` in Splashdown's settings folder.
 - **API keys:** the macOS Keychain or Windows Credential Manager, under "Splashdown". Never in files, never in exported settings.
 - **History:** off by default. When on, the last 300 dictations (and, optionally, their recordings), deleted after the period you choose.
-- **The recording being processed:** written to Splashdown's settings folder while it's turned into text, and deleted as soon as the text is in. If that fails (offline, a provider outage) or the app closes first, the one recording is kept for "Retry last dictation" in the menu bar until a retry works or a later dictation fails, whatever the history setting.
+- **The recording being processed:** written to Splashdown's settings folder while it's turned into text, and deleted as soon as the text is in. If that fails (offline, a provider outage) or the app closes first, the one recording is kept for Retry (menu bar → Last dictation) until a retry works or a later dictation fails, whatever the history setting.
 - **Insights:** counts only (words per day and per app), never what you said.
 - **Spending:** cost totals per month, for the spending limit.
 - **Notes:** one Markdown file per note in `Documents/Splashdown Notes` (or the folder you choose), with earlier versions in a hidden `.splashdown` folder beside them. Nothing is sent anywhere unless you send or copy a note. If that folder is in iCloud Drive, Dropbox or OneDrive (Windows often backs up Documents to OneDrive), that service keeps a copy; Settings → Privacy says so.

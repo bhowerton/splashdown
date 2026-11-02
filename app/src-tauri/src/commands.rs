@@ -32,13 +32,12 @@ pub struct AppState {
 }
 
 impl AppState {
-    /// Flips whisper mode (from the menu bar), saves, and rebuilds.
+    /// Flips whisper mode (a voice action), saves, and rebuilds.
     pub async fn toggle_whisper_mode(&self) -> Result<(), String> {
         let mut settings = self.settings();
         let on = !settings.general.whisper_mode();
         settings.general.whisper_mode = Some(on);
         settings.save(&engine::paths()?.config_file())?;
-        self.tray.show_whisper(on);
         *self.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
         if let Some(e) = self.apply().await {
             tracing::warn!("after changing whisper mode: {e}");
@@ -46,13 +45,12 @@ impl AppState {
         Ok(())
     }
 
-    /// Shows or hides the mini bar (from the menu bar or the bar's own
-    /// menu) and saves the setting. Nothing to rebuild.
+    /// Shows or hides the mini bar (from the bar's own menu) and saves
+    /// the setting. Nothing to rebuild.
     pub fn set_mini_bar(&self, on: bool) -> Result<(), String> {
         let mut settings = self.settings();
         settings.general.mini_bar = on.then_some(true);
         settings.save(&engine::paths()?.config_file())?;
-        self.tray.show_mini_bar(on);
         crate::minibar::set_visible(on);
         *self.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
         Ok(())
@@ -541,8 +539,6 @@ pub fn show_settings(app: &AppHandle, state: &AppState, settings: &Settings) {
     state
         .tray
         .show_language(settings.general.language.as_deref());
-    state.tray.show_whisper(settings.general.whisper_mode());
-    state.tray.show_mini_bar(settings.general.mini_bar());
     crate::minibar::set_visible(settings.general.mini_bar());
     crate::shortcuts::sync(app, &settings.presets(), &settings.transforms());
 }
