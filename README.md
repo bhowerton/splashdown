@@ -6,7 +6,7 @@
 
 <p align="center">
   <strong>Hold a key. Say it. It's typed.</strong><br>
-  Free, open-source dictation for Mac and Windows: speak, and clean text appears in any app. Say what to do, too: open apps, set reminders, run your own scripts. It also writes down your meetings, videos and voice memos, tells who said what, and answers questions from your notes, all on your computer if you like. No subscription, no account.
+  Free, open-source dictation for Mac and Windows: speak, and clean text appears in any app. Say what to do, too: open apps, set reminders, run your own scripts. It also reads text back to you in a natural voice, writes down your meetings, videos and voice memos, tells who said what, and answers questions from your notes, all on your computer if you like. No subscription, no account.
 </p>
 
 <p align="center">
@@ -100,6 +100,12 @@
 ### Ask a question
 
 - **Hold the key, press A, ask.** "What's the German word for deadline?", or select text first and ask "what does this say?". The answer appears in a small panel with Insert and Copy, and can draw on your notes ("what did we decide about the launch?"). Follow-ups carry on the conversation.
+
+### Hear it read back
+
+- **"Read this to me."** Select text, hold Right Option and say it, and it's read aloud. With nothing selected, tap Right Shift first and the text you're writing is read, or your last dictation (also in the menu bar: Last dictation → Read it to me).
+- **"Read me a summary of this."** Your AI writes a short summary meant for listening, and it's read as it's written, so the voice starts after the first sentence. "Read me the action items" and other questions work the same way, and the answer stays in the Ask panel, which has a Read aloud button for any answer.
+- **A natural voice, on your computer.** Phonon 31M (Gradium, Apache-2.0), a 68 MB download with 25 American and British voices, reads English with numbers, dates and amounts said properly, and starts speaking in a fraction of a second even on a slow PC. Other languages use the best system voice for that language. Music pauses while it reads, and Esc stops it. Settings → AI Models → Text to speech.
 
 ### Notes
 
@@ -212,6 +218,7 @@ Every default was chosen by measurement. The cleanup prompt is tested on 54 case
 - NVIDIA Streaming Sortformer (tells speakers apart in meetings): NVIDIA Open Model License.
 - OpenAI Whisper: MIT.
 - Qwen3 and Qwen3 Embedding (finds notes by meaning): Apache-2.0.
+- Gradium Phonon 31M and its voices (reads text aloud): Apache-2.0.
 
 Built in: Silero VAD (finds the speech in a recording), MIT. The Notes editor is built on CodeMirror and Lezer, MIT ([app/ui/vendor/editor.LICENSES.txt](app/ui/vendor/editor.LICENSES.txt)).
 
