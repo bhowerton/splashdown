@@ -1,5 +1,5 @@
-//! The Compose panel: the user says what they want to write (dictation
-//! key + C, or a spoken "draft a reply…") and a draft is written into a
+//! The Compose panel: the user says what they want to write (after the
+//! instruction key: "draft a reply…") and a draft is written into a
 //! small window, streamed as it's written. While the panel is open, a
 //! dictation changes the draft instead of being typed ("shorter", "add
 //! that I'm free Thursday"), and so do the quick changes and a typed
@@ -47,6 +47,8 @@ pub struct Shown {
     pub app: Option<String>,
     /// What it's replying to came from a selection.
     pub replying: bool,
+    /// The conversation around the field was read from the window.
+    pub read_window: bool,
     /// Instructions to an AI were left out of the material.
     pub removed: bool,
 }
@@ -90,6 +92,7 @@ pub fn start(app: &AppHandle, draft: Draft) {
             }],
             app: draft.target.as_ref().map(|(_, name)| name.clone()),
             replying: context.replying_to.is_some(),
+            read_window: context.window_text.is_some(),
             removed,
             ..Shown::default()
         };
@@ -122,7 +125,7 @@ pub fn change(app: &AppHandle, change: &str) -> Result<(), String> {
                 .get(panel.shown.at)
                 .map(|v| v.text.clone()),
         ) else {
-            return Err("Say what to write with the dictation key and C first.".into());
+            return Err("Say what to write first: tap the instruction key while dictating.".into());
         };
         let request = compose::revise(&panel.asked, &draft, change, &context);
         panel.shown.versions.push(Version {

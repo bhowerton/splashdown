@@ -33,6 +33,10 @@ pub(crate) fn is_secure_field(_el: &FocusElement) -> bool {
     false
 }
 
+pub(crate) fn surrounding_text(_el: &FocusElement, _min: usize, _max: usize) -> Option<String> {
+    None
+}
+
 pub(crate) fn field_text(_el: &FocusElement) -> Option<String> {
     None
 }

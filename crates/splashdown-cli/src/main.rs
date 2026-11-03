@@ -160,6 +160,14 @@ enum Command {
         #[arg(long)]
         voice: Option<String>,
     },
+    /// Waits, then prints the text Compose would read from the window
+    /// around the focused field (for testing how well an app exposes it).
+    #[command(hide = true)]
+    WindowText {
+        /// Seconds to wait, to click into a field first.
+        #[arg(long, default_value_t = 5)]
+        after: u64,
+    },
     /// Show the resolved configuration (never prints keys).
     Config {
         #[command(flatten)]
@@ -736,6 +744,29 @@ fn run() -> Result<()> {
         }
         #[cfg(feature = "natural-voice")]
         Command::Say { text, voice } => say(&text, voice.as_deref())?,
+        Command::WindowText { after } => {
+            eprintln!("Click into a text field; reading in {after} s…");
+            std::thread::sleep(std::time::Duration::from_secs(after));
+            let Some(focus) = splashdown_platform::Focus::capture() else {
+                anyhow::bail!(
+                    "couldn't see the focused field (does this terminal have Accessibility permission?)"
+                );
+            };
+            eprintln!(
+                "field: {} characters of its own · selection: {:?}",
+                focus.field_text().map_or(0, |t| t.chars().count()),
+                focus.selection()
+            );
+            let started = std::time::Instant::now();
+            let text = focus.surrounding_text(300, 6000);
+            eprintln!(
+                "{} · {} ms · {} characters",
+                focus.app.name,
+                started.elapsed().as_millis(),
+                text.as_deref().map_or(0, |t| t.chars().count())
+            );
+            println!("{}", text.unwrap_or_default());
+        }
         Command::Config { providers } => opts::print_config(&providers)?,
         Command::Eval { command } => rt.block_on(eval::run(command))?,
         #[cfg(target_os = "macos")]

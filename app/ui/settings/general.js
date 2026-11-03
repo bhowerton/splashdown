@@ -12,15 +12,6 @@ function askDefault(hotkeys) {
   return ["a", "k", "j", "q"].find((c) => c !== hands && c !== note) ?? "a";
 }
 
-/** The compose letter when none is set: the first of C, W, D that the
- *  other letters don't use (as `Hotkeys::compose_key`). */
-function composeDefault(hotkeys) {
-  const hands = (hotkeys.hands_free || "h").toLowerCase();
-  const note = (hotkeys.note || (hands === "n" ? "m" : "n")).toLowerCase();
-  const ask = (hotkeys.ask || askDefault(hotkeys)).toLowerCase();
-  return ["c", "w", "d"].find((c) => c !== hands && c !== note && c !== ask) ?? "c";
-}
-
 /** Fallback for a backend that doesn't send `defaults.sound_volume` yet.
  *  Matches splashdown_config's DEFAULT_SOUND_VOLUME. */
 const DEFAULT_SOUND_VOLUME = 0.12;
@@ -41,7 +32,8 @@ function renderGeneral() {
   const noteDefault = (s.hotkeys.hands_free || "h").toLowerCase() === "n" ? "m" : "n";
   setValue($("hk-note"), (s.hotkeys.note || noteDefault).toUpperCase());
   setValue($("hk-ask"), (s.hotkeys.ask || askDefault(s.hotkeys)).toUpperCase());
-  setValue($("hk-compose"), (s.hotkeys.compose || composeDefault(s.hotkeys)).toUpperCase());
+  setValue($("hk-compose"), (s.hotkeys.compose || "").toUpperCase());
+  $("hk-compose-panel").checked = s.general.compose_panel === true;
   const notes = s.notes ?? {};
   setValue($("nt-capture-to"), notes.capture_to ?? "inbox");
   $("nt-daily-row").hidden = (notes.capture_to ?? "inbox") !== "daily";

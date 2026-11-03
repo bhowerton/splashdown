@@ -23,9 +23,14 @@ use windows::Win32::System::Threading::{
 };
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomation2, IUIAutomationElement, IUIAutomationTextPattern,
-    IUIAutomationTextPattern2, IUIAutomationTextRange, IUIAutomationValuePattern,
-    TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start, TextUnit_Character,
-    UIA_DocumentControlTypeId, UIA_TextPattern2Id, UIA_TextPatternId, UIA_ValuePatternId,
+    IUIAutomationTextPattern2, IUIAutomationTextRange, IUIAutomationTreeWalker,
+    IUIAutomationValuePattern, TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start,
+    TextUnit_Character, UIA_ButtonControlTypeId, UIA_CheckBoxControlTypeId,
+    UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_HyperlinkControlTypeId,
+    UIA_ImageControlTypeId, UIA_MenuBarControlTypeId, UIA_MenuControlTypeId,
+    UIA_RadioButtonControlTypeId, UIA_ScrollBarControlTypeId, UIA_SliderControlTypeId,
+    UIA_TextControlTypeId, UIA_TextPattern2Id, UIA_TextPatternId, UIA_ToolBarControlTypeId,
+    UIA_ValuePatternId, UIA_WindowControlTypeId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     DestroyIcon, EnumWindows, GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetIconInfo,
@@ -1108,3 +1113,157 @@ fn running_exe(app_id: &str) -> Option<String> {
 
 /// Nothing to request on Windows.
 pub(crate) fn request_accessibility() {}
+
+// ---------------------------------------------------------------- the window's text
+
+/// The text around the focused field in its window: from the nearest
+/// container holding at least `min_chars` of readable text besides the
+/// field itself, the last `max_chars` of it. Each level up reads only
+/// what's beside the level below, so a field deep in a web page still
+/// reaches the thread. Bounded in nodes and time.
+pub(crate) fn surrounding_text(
+    focus: &FocusElement,
+    min_chars: usize,
+    max_chars: usize,
+) -> Option<String> {
+    if is_secure_field(focus) {
+        return None;
+    }
+    let field = usable(focus)?.clone();
+    with_uia(|uia| {
+        // SAFETY: plain calls on this thread's live client.
+        let walker = unsafe { uia.ControlViewWalker() }.ok()?;
+        let started = std::time::Instant::now();
+        let deadline = started + std::time::Duration::from_millis(WINDOW_MILLIS);
+        let mut budget = WINDOW_NODES;
+        let mut pieces: Vec<String> = Vec::new();
+        // The element read last, whose text is already in `pieces`.
+        let mut below = field.clone();
+        // SAFETY: `field` is a live element.
+        let mut node = unsafe { walker.GetParentElement(&field) }.ok();
+        let mut levels = 0;
+        while let Some(current) = node.take() {
+            levels += 1;
+            // SAFETY: a property read on a live element.
+            let kind = unsafe { current.CurrentControlType() }.unwrap_or_default();
+            let (mut before, mut after) = (Vec::new(), Vec::new());
+            let mut passed = false;
+            // SAFETY: `current` is a live element.
+            let mut child = unsafe { walker.GetFirstChildElement(&current) }.ok();
+            while let Some(c) = child {
+                // SAFETY: comparing two live elements.
+                if unsafe { uia.CompareElements(&c, &below) }.is_ok_and(|same| same.as_bool()) {
+                    passed = true;
+                } else {
+                    let side = if passed { &mut after } else { &mut before };
+                    collect(uia, &walker, &c, &field, side, &mut budget, deadline, 0);
+                }
+                // SAFETY: `c` is a live element.
+                child = unsafe { walker.GetNextSiblingElement(&c) }.ok();
+            }
+            before.append(&mut pieces);
+            before.append(&mut after);
+            pieces = before;
+            let chars: usize = pieces.iter().map(|p| p.chars().count()).sum();
+            if chars >= min_chars
+                || kind == UIA_WindowControlTypeId
+                || levels >= WINDOW_LEVELS
+                || budget == 0
+                || std::time::Instant::now() >= deadline
+            {
+                break;
+            }
+            // SAFETY: `current` is a live element.
+            node = unsafe { walker.GetParentElement(&current) }.ok();
+            below = current;
+        }
+        let text = pieces.join("\n");
+        tracing::debug!(
+            "window text: {} characters, {levels} levels up, {} nodes, {} ms",
+            text.chars().count(),
+            WINDOW_NODES - budget,
+            started.elapsed().as_millis()
+        );
+        Some(crate::keep_end(&text, max_chars)).filter(|t| !t.trim().is_empty())
+    })
+}
+
+/// Limits on reading the window: levels up from the field, elements read,
+/// and time (web pages answer slowly).
+const WINDOW_LEVELS: usize = 40;
+const WINDOW_NODES: usize = 5000;
+const WINDOW_MILLIS: u64 = 600;
+
+/// Appends the readable text under `el` (not the field's own) to `pieces`.
+#[allow(clippy::too_many_arguments)]
+fn collect(
+    uia: &IUIAutomation,
+    walker: &IUIAutomationTreeWalker,
+    el: &IUIAutomationElement,
+    field: &IUIAutomationElement,
+    pieces: &mut Vec<String>,
+    budget: &mut usize,
+    deadline: std::time::Instant,
+    depth: usize,
+) {
+    if *budget == 0 || depth > 40 || std::time::Instant::now() >= deadline {
+        return;
+    }
+    // SAFETY: comparing two live elements.
+    if unsafe { uia.CompareElements(el, field) }.is_ok_and(|same| same.as_bool()) {
+        return;
+    }
+    *budget -= 1;
+    // SAFETY: property reads on a live element.
+    let kind = unsafe { el.CurrentControlType() }.unwrap_or_default();
+    let skip = [
+        UIA_ButtonControlTypeId,
+        UIA_MenuBarControlTypeId,
+        UIA_MenuControlTypeId,
+        UIA_ToolBarControlTypeId,
+        UIA_ImageControlTypeId,
+        UIA_ScrollBarControlTypeId,
+        UIA_CheckBoxControlTypeId,
+        UIA_RadioButtonControlTypeId,
+        UIA_SliderControlTypeId,
+    ];
+    if skip.contains(&kind) {
+        return;
+    }
+    // SAFETY: property and pattern reads on a live element.
+    let password = unsafe { el.CurrentIsPassword() }.is_ok_and(|p| p.as_bool());
+    if password {
+        return;
+    }
+    if kind == UIA_TextControlTypeId || kind == UIA_HyperlinkControlTypeId {
+        // SAFETY: a property read on a live element.
+        if let Ok(name) = unsafe { el.CurrentName() } {
+            let name = name.to_string();
+            if !name.trim().is_empty() {
+                pieces.push(name.trim().to_string());
+            }
+        }
+        return;
+    }
+    if kind == UIA_EditControlTypeId {
+        // SAFETY: a pattern read on a live element.
+        let value = unsafe {
+            el.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
+                .and_then(|p| p.CurrentValue())
+        };
+        if let Ok(value) = value {
+            let value = value.to_string();
+            if !value.trim().is_empty() {
+                pieces.push(value.trim().to_string());
+            }
+        }
+        return;
+    }
+    // SAFETY: `el` is a live element.
+    let mut child = unsafe { walker.GetFirstChildElement(el) }.ok();
+    while let Some(c) = child {
+        collect(uia, walker, &c, field, pieces, budget, deadline, depth + 1);
+        // SAFETY: `c` is a live element.
+        child = unsafe { walker.GetNextSiblingElement(&c) }.ok();
+    }
+}

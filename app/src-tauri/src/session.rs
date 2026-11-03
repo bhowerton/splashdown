@@ -69,6 +69,11 @@ const WHISPER_BOOST: f32 = 5.0;
 /// At most this much text is read aloud, or summarized to be: about 45
 /// minutes of listening.
 const READ_CHARS: usize = 40_000;
+/// Compose reads the window from the nearest container around the field
+/// with at least this much text (an email, a few chat messages)…
+const WINDOW_MIN_CHARS: usize = 300;
+/// …and at most this much of it, the part nearest the field.
+const WINDOW_MAX_CHARS: usize = 6_000;
 /// Live preview: first pass after this much audio, then one pass this often.
 const PREVIEW_START: Duration = Duration::from_millis(500);
 const PREVIEW_EVERY: Duration = Duration::from_millis(600);
@@ -110,6 +115,7 @@ pub struct Keys {
     pub ask: PhysicalKey,
     /// Pressed while holding the dictation key: the dictation says what to
     /// write, and the Compose panel drafts it.
+    /// `Other` when there's no compose letter.
     pub compose: PhysicalKey,
 }
 
@@ -141,6 +147,8 @@ enum Msg {
     /// A voice action finished (`voice_actions`): what to show, and what
     /// "undo that" would take back.
     ActionDone(Result<crate::voice_actions::Done, String>),
+    /// A draft written for the field (`show_draft`), and the app it's for.
+    Composed(Result<String, String>, Option<i32>),
 }
 
 /// What a question asked in Notes needs from the engine.
@@ -576,6 +584,7 @@ impl Controller {
                     }
                     Err(e) => self.notice(Tone::Warning, &short(&e)),
                 },
+                Ok(Msg::Composed(result, pid)) => self.composed(result, pid),
                 Ok(Msg::AnswerModel(reply)) => {
                     let model = self
                         .engine
@@ -1957,6 +1966,21 @@ impl Controller {
             .and_then(Focus::field_text)
             .or_else(|| active.field_text.clone())
             .map(|t| head_chars(&t, READ_CHARS));
+        // Nothing selected: the conversation around the field, read from
+        // the window (an email thread, a chat), unless turned off.
+        let window_text = active
+            .focus
+            .as_ref()
+            .filter(|_| selection.is_none() && engine.compose_reads_window)
+            .and_then(|f| f.surrounding_text(WINDOW_MIN_CHARS, WINDOW_MAX_CHARS));
+        match &window_text {
+            Some(text) => tracing::info!(
+                "compose read {} characters from the window",
+                text.chars().count()
+            ),
+            None if selection.is_none() => tracing::info!("compose read nothing from the window"),
+            None => {}
+        }
         let tone = active.preset.tone.map(|t| match t {
             splashdown_config::Tone::Formal => "formal",
             splashdown_config::Tone::Casual => "casual",
@@ -1965,6 +1989,7 @@ impl Controller {
         let context = splashdown_core::compose::ComposeContext {
             replying_to: selection.map(|s| head_chars(&s, READ_CHARS)),
             field_text,
+            window_text,
             clipboard: active
                 .clipboard
                 .clone()
@@ -1980,6 +2005,38 @@ impl Controller {
             tone: tone.and_then(splashdown_core::compose::tone),
         };
         tracing::info!("composing, with {} matching note(s)", context.notes.len());
+        let target = active.focus.as_ref().map(|f| f.app.pid);
+        // Written straight into the field, unless the panel is on, or text
+        // is selected (pasting would replace it) or there's no field.
+        if !engine.compose_panel && context.replying_to.is_none() && target.is_some() {
+            self.ui.show(OverlayState::Working {
+                label: "Writing…".into(),
+            });
+            let tx = self.tx.clone();
+            tauri::async_runtime::spawn(async move {
+                let (context, removed) = context.defanged();
+                if removed {
+                    tracing::info!("compose left instructions to an AI out of the material");
+                }
+                let request = splashdown_core::compose::request(&asked, &context);
+                let result = model.complete(&request).await;
+                if let Ok(completion) = &result {
+                    crate::spend::shared()
+                        .record(&[(model.name(), completion.usage)], chrono::Local::now());
+                }
+                let result = result
+                    .map(|completion| splashdown_core::compose::clean(&completion.text))
+                    .map_err(|e| {
+                        errors::pipeline(
+                            &splashdown_core::PipelineError::Llm(e),
+                            None,
+                            Some(&model.name()),
+                        )
+                    });
+                let _ = tx.send(Msg::Composed(result, target));
+            });
+            return;
+        }
         crate::compose::start(
             self.ui.app(),
             crate::compose::Draft {
@@ -1993,6 +2050,35 @@ impl Controller {
             },
         );
         self.ui.hide();
+    }
+
+    /// A draft written for the field: pasted there if its app is still in
+    /// front, otherwise left on the clipboard.
+    fn composed(&mut self, result: Result<String, String>, pid: Option<i32>) {
+        let text = match result {
+            Ok(text) if !text.trim().is_empty() => text,
+            Ok(_) => return self.notice(Tone::Warning, "The draft came back empty"),
+            Err(e) => return self.notice(Tone::Warning, &short(&e)),
+        };
+        let here = splashdown_platform::frontmost_app().map(|(pid, ..)| pid);
+        if pid.is_some() && here == pid {
+            match splashdown_platform::insert_text(&text, InsertMethod::Paste) {
+                Ok(()) => {
+                    tracing::info!(
+                        "composed {} characters into the field",
+                        text.chars().count()
+                    );
+                    self.last_insert = pid.map(|pid| (pid, Instant::now()));
+                    self.last_text = text;
+                    crate::did::note(crate::did::COMPOSED, "");
+                    return self.done("Written");
+                }
+                Err(e) => tracing::warn!("couldn't paste the draft: {e}"),
+            }
+        }
+        let _ = splashdown_platform::copy_to_clipboard(&text);
+        crate::did::note(crate::did::COMPOSED, "");
+        self.notice(Tone::Info, "Draft copied · paste it where it goes");
     }
 
     /// A question, draft or change recorded on its own (after the
@@ -2590,6 +2676,10 @@ impl Controller {
             self.read_aloud(active, what, None, last);
         } else if let Command::Compose(asked) = outcome.command {
             self.show_draft(active, asked, None);
+        } else if let Command::Write(_) = outcome.command {
+            // Written by Compose from what was said, so it sees the
+            // conversation and never makes things up.
+            self.show_draft(active, spoken, None);
         } else if let Command::Do(request) = outcome.command {
             self.do_action(active, &request, None);
         } else if !still_focused {
@@ -2615,7 +2705,7 @@ impl Controller {
             // Read aloud by `read_aloud` instead (`run_command`).
             Command::Read(_) => return,
             // Drafted by `show_draft` instead (`run_command`).
-            Command::Compose(_) => return,
+            Command::Compose(_) | Command::Write(_) => return,
             // Carried out by `do_action` instead (`run_command`).
             Command::Do(_) => return,
             Command::PressEnter => {
@@ -2641,14 +2731,6 @@ impl Controller {
             Command::DeleteLastWord => {
                 return self
                     .finish_command(splashdown_platform::press(KeyAction::DeleteWord), "Deleted");
-            }
-            Command::Write(text) => {
-                let result = paste(&text);
-                if result.is_ok() {
-                    self.last_insert = target_pid.map(|pid| (pid, Instant::now()));
-                    self.last_text = text;
-                }
-                return self.finish_command(result, "Inserted");
             }
             _ => {}
         }

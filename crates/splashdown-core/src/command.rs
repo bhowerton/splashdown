@@ -25,10 +25,11 @@ pub enum Command {
     PressEnter,
     /// Undo the last dictation entirely.
     UndoLast,
-    /// Insert new text at the cursor.
+    /// Insert new text at the cursor (the app writes it with Compose, from
+    /// what was said).
     Write(String),
-    /// Draft a message for the user to check first, in the Compose panel:
-    /// what to write, as said (`Pipeline::command` sees to that).
+    /// Draft a message: what to write, as said (`Pipeline::command` sees
+    /// to that).
     Compose(String),
     /// A question for the AI: answered in the Ask panel, not typed.
     Ask(String),

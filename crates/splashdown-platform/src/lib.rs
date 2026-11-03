@@ -38,6 +38,24 @@ pub enum PlatformError {
 
 pub type Result<T> = std::result::Result<T, PlatformError>;
 
+/// The last `chars` characters of `text`, starting at a line or word
+/// where there is one close by.
+pub(crate) fn keep_end(text: &str, chars: usize) -> String {
+    let count = text.chars().count();
+    if count <= chars {
+        return text.to_string();
+    }
+    let start = text.char_indices().nth(count - chars).map_or(0, |(i, _)| i);
+    let tail = &text[start..];
+    // A clean start: the next line, or else the next word, if it's near.
+    let cut = tail
+        .find('\n')
+        .filter(|&i| i < 200)
+        .or_else(|| tail.find(' ').filter(|&i| i < 40))
+        .map_or(0, |i| i + 1);
+    tail[cut..].to_string()
+}
+
 /// Human-readable name of the platform backend compiled into this build.
 pub fn backend_name() -> &'static str {
     imp::NAME
@@ -160,6 +178,15 @@ impl Focus {
     /// long documents).
     pub fn field_text(&self) -> Option<String> {
         imp::field_text(&self.inner)
+    }
+
+    /// The text around the field in its window, besides the field's own:
+    /// usually the conversation being answered (an email thread, a chat).
+    /// Read from the nearest container holding at least `min_chars`, and
+    /// at most the last `max_chars` of it. `None` for password fields, or
+    /// where the app exposes no text.
+    pub fn surrounding_text(&self, min_chars: usize, max_chars: usize) -> Option<String> {
+        imp::surrounding_text(&self.inner, min_chars, max_chars)
     }
 
     /// The field's whole text and where the insertion point is in it (a
@@ -977,6 +1004,14 @@ impl MiniBar {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn keeps_the_end_from_a_clean_start() {
+        assert_eq!(super::keep_end("short", 100), "short");
+        let text = "first line\nsecond line\nthird line";
+        assert_eq!(super::keep_end(text, 15), "third line");
+        assert_eq!(super::keep_end("one two three four", 9), "four");
+    }
+
     use super::*;
 
     #[test]

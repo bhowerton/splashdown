@@ -22,6 +22,13 @@ function render() {
   const ready = !shown.writing && !shown.error && Boolean(version.text);
   $("cp-said").textContent = version.said ? `“${version.said}”` : "";
   $("cp-removed").hidden = !shown.removed;
+  const source = shown.replying
+    ? "Answering the text you selected"
+    : shown.read_window
+      ? "Using the conversation on screen"
+      : "";
+  $("cp-source").textContent = source;
+  $("cp-source").hidden = !source;
   const draft = $("cp-draft");
   draft.classList.toggle("waiting", !version.text && !shown.error);
   draft.classList.toggle("failed", Boolean(shown.error));

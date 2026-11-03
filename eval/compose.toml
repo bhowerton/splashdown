@@ -2,6 +2,7 @@
 # `splashdown-cli eval compose`.
 #
 # Fields: asked (what was said), replying_to (the selected message),
+# window (text read from the window around the field, nothing selected),
 # app, user, tone ("formal", "casual", "very-casual"), notes (one note's
 # text), draft + change (a revision of an earlier draft). Checks, all
 # case-insensitive: has (each must appear), has_any (one of them must),
@@ -247,3 +248,42 @@ app = "Mail"
 draft = "Hi Priya,\n\nI can't speak on the 14th.\n\nBen"
 change = "warmer"
 has = ["priya", "14"]
+
+# ── From the window (nothing selected)
+
+[[case]]
+id = "win-slack-thread"
+window = "#launch\nPriya Shah 10:02 AM\nMorning! Standup moved to 10:30 today.\nJordan Lee 10:15 AM\nCan someone review the pricing page copy before lunch? It's in the Launch doc.\nPeople\nThreads\nDrafts & sent"
+asked = "reply saying I'll take a look before noon"
+app = "Slack"
+has_any = ["pricing", "look", "before noon", "noon"]
+not = ["standup", "dear", "regards"]
+max_words = 40
+
+[[case]]
+id = "win-mail-thread"
+window = "Inbox (3)\nFlagged\nRe: Office move\nFrom: Dana Ortiz\nTo: Ben\nHi Ben, movers come Thursday at 8. Can you have your desk packed by Wednesday evening? Thanks, Dana\nOn Mon, Ben wrote: Sounds good, keep me posted."
+asked = "reply saying yes, I'll have it packed"
+app = "Mail"
+user = "Ben"
+has = ["dana"]
+has_any = ["wednesday", "packed"]
+not = ["inbox", "flagged"]
+
+
+# ── Short writes (every "write…" goes through Compose)
+
+[[case]]
+id = "en-write-polite-no"
+asked = "write a polite no"
+app = "Messages"
+not = ["here's", "here is", "dear"]
+max_words = 30
+
+[[case]]
+id = "en-add-sign-off"
+asked = "add a sign-off"
+app = "Mail"
+user = "Ben"
+has = ["ben"]
+max_words = 12

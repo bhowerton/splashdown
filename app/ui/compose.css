@@ -5,6 +5,7 @@
 .cp { height: 100vh; display: flex; flex-direction: column; background: var(--surface); }
 .cp-scroll { flex: 1; overflow-y: auto; padding: 6px 16px 10px; }
 .cp-said { margin: 8px 0 8px; font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.cp-source { margin: -4px 0 8px; font-size: 11.5px; color: var(--muted); }
 .cp-removed { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: var(--warn-soft); color: var(--warn); font-size: 12px; }
 .cp-draft {
   font-size: 14px; line-height: 1.55;

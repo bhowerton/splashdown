@@ -336,8 +336,8 @@ pub struct HotkeySettings {
     /// hands-free or the note letter is A).
     pub ask: Option<char>,
     /// The letter that, pressed while holding the dictation key, makes the
-    /// dictation a request for a draft in the Compose panel. Unset means C
-    /// (W or D if another key has C).
+    /// dictation a request for a draft. Unset means none: the instruction
+    /// key asks for drafts too ("reply saying I'm in").
     pub compose: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
     /// Claude and others use a double-tap of Option.
@@ -396,18 +396,12 @@ impl HotkeySettings {
         PhysicalKey::Letter(letter)
     }
 
-    pub fn compose_key(&self) -> PhysicalKey {
-        let taken = [self.hands_free_key(), self.note_key(), self.ask_key()];
-        let fallback = ['c', 'w', 'd']
-            .into_iter()
-            .find(|&c| !taken.contains(&PhysicalKey::Letter(c)))
-            .unwrap_or('c');
-        let letter = self
-            .compose
+    /// The compose letter, if one is set.
+    pub fn compose_key(&self) -> Option<PhysicalKey> {
+        self.compose
             .map(|c| c.to_ascii_lowercase())
             .filter(char::is_ascii_lowercase)
-            .unwrap_or(fallback);
-        PhysicalKey::Letter(letter)
+            .map(PhysicalKey::Letter)
     }
 }
 
@@ -480,6 +474,13 @@ pub struct GeneralSettings {
     /// Send what was dictated into the same app in the last few minutes
     /// along with the next dictation, for reference. Unset means on.
     pub share_recent: Option<bool>,
+    /// Compose reads the text around the field in its window (the
+    /// conversation being answered) when nothing is selected. Unset means
+    /// on.
+    pub compose_reads_window: Option<bool>,
+    /// Compose shows its draft in a panel to change and Insert, instead of
+    /// writing it straight into the field. Unset means off.
+    pub compose_panel: Option<bool>,
     /// Quiet sounds when recording starts and stops. Unset means on.
     pub sounds: Option<bool>,
     /// Sound volume, 0.0–1.0. Unset means the default (quiet).
@@ -603,6 +604,14 @@ impl GeneralSettings {
 
     pub fn share_app_name(&self) -> bool {
         self.share_app_name.unwrap_or(true)
+    }
+
+    pub fn compose_reads_window(&self) -> bool {
+        self.compose_reads_window.unwrap_or(true)
+    }
+
+    pub fn compose_panel(&self) -> bool {
+        self.compose_panel.unwrap_or(false)
     }
 
     pub fn share_recent(&self) -> bool {
@@ -823,6 +832,11 @@ impl Settings {
             Some("The hands-free and note letters must be different.")
         } else if h.ask_key() == h.hands_free_key() || h.ask_key() == h.note_key() {
             Some("The ask letter must differ from the hands-free and note letters.")
+        } else if h
+            .compose_key()
+            .is_some_and(|c| [h.hands_free_key(), h.note_key(), h.ask_key()].contains(&c))
+        {
+            Some("The compose letter must differ from the other letters.")
         } else {
             None
         }

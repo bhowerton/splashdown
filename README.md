@@ -106,8 +106,8 @@
 
 ### Write it for me
 
-- **Say what to write, not the words.** Hold Right Option, press **C** and say "reply saying I'm in and ask about parking", "tell the team the launch moved to Thursday" or "decline politely and suggest next month". A draft appears in a panel, written for the app you're in and the message you're answering (select it first, or it uses the text in the field), in your language.
-- **Change it by voice** while the panel is open ("shorter", "add that I'm free Thursday", "in German"), or with Shorter, Longer, More formal and Warmer. Every version is kept; Insert, Copy or Read aloud when it's right.
+- **Say what to write, not the words.** Hold Right Option, tap **Right Shift** and say "reply saying I'm in and ask about parking", "tell the team the launch moved to Thursday" or "decline politely and suggest next month". It's written straight into the reply, for the app you're in and the message you're answering, in your language. There's no need to select the message: Splashdown reads the conversation around where you're typing (the email thread or chat on screen), on your computer. Settings → Privacy turns reading the window off.
+- **Change it by voice:** select the draft and say "shorter" or "warmer", or "scratch that" to take it back. To check drafts first, turn on Check drafts in a panel first: you can change the draft there by voice ("add that I'm free Thursday", "in German") and every version is kept until you Insert it.
 - **No made-up facts.** Names, dates, numbers and your own details come only from what you said, the message and your notes; anything missing is left as a [placeholder]. Instructions for an AI hidden in the message you're answering are left out before anything is written.
 
 ### Hear it read back
@@ -163,7 +163,7 @@
 | Go hands-free | While holding **Right Option**, press **H**, then let go; tap Right Option once more to finish (double-tap can be turned on in Settings) |
 | Add to your notes instead of typing | While holding, press **N**; ⌃⌥Z right after takes it back |
 | Ask a question | While holding, press **A**, then ask |
-| Have a message written | While holding, press **C**, then say what to write ("reply saying I'm in"); hold the key again in the panel to change it |
+| Have a message written | While holding, tap **Right Shift**, then say what to write ("reply saying I'm in"); select it and say "shorter" to change it |
 | Hear text read aloud | Select it, hold **Right Option** and say "read this to me" (or "read me a summary of this"); **Esc** stops it. Or menu bar → Last dictation → **Read it to me** |
 | Record a meeting | **⌃⌥M** (again to stop) |
 | Use another preset | While holding, press **1–9** |

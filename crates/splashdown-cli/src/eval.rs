@@ -652,6 +652,8 @@ struct ComposeCase {
     id: String,
     asked: String,
     replying_to: Option<String>,
+    /// Text read from the window around the field (nothing selected).
+    window: Option<String>,
     app: Option<String>,
     user: Option<String>,
     tone: Option<String>,
@@ -729,6 +731,7 @@ async fn compose(cases: &[&ComposeCase], verbose: bool, providers: &ProviderOpts
         .context("this eval needs an AI provider (--ai …)")?;
     let context = |case: &ComposeCase| ComposeContext {
         replying_to: case.replying_to.clone(),
+        window_text: case.window.clone(),
         app_name: case.app.clone(),
         user_name: case.user.clone(),
         today: "Monday, 3 November 2026".into(),

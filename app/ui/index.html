@@ -66,8 +66,10 @@
           <input id="hk-note" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" data-setting></div>
         <div class="row"><span class="lbl"><label for="hk-ask">Ask</label><small>Hold the dictation key and press this letter, then ask a question: the answer shows in a panel, with Copy and Insert, instead of being typed. Select text first to ask about it.</small></span>
           <input id="hk-ask" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" data-setting></div>
-        <div class="row"><span class="lbl"><label for="hk-compose">Compose</label><small>Hold the dictation key and press this letter, then say what to write ("reply saying I'm in"): a draft shows in a panel to change by voice, then Insert. Select the message you're answering first.</small></span>
-          <input id="hk-compose" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" data-setting></div>
+        <div class="row"><span class="lbl"><label for="hk-compose">Compose</label><small>Off unless you choose a letter. You don't need one: tap the instruction key and say what to write ("reply saying I'm in"). With a letter, holding the dictation key and pressing it always writes a draft.</small></span>
+          <input id="hk-compose" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" placeholder="Off" data-setting></div>
+        <label class="row"><span class="lbl">Check drafts in a panel first<small>Compose shows the draft in a panel to change by voice, with every version kept, and you choose Insert.</small></span>
+          <input id="hk-compose-panel" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Double-tap for hands-free too<small>Off by default: Claude and some other apps use a double-tap of Option. Mouse buttons always double-click into hands-free.</small></span>
           <input id="hk-double-tap" type="checkbox" class="switch" data-setting></label>
         <div class="row note-row" id="hk-tip-row" hidden><span class="lbl"><small id="hk-tip"></small></span></div>
@@ -507,6 +509,8 @@
           <input id="pv-appname" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">What you just dictated into the same app<small>The last few minutes, so “it” and “that” make sense. Never saved.</small></span>
           <input id="pv-recent" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">The conversation on screen, when you compose<small>With nothing selected, Compose reads the text around where you're typing (the email or chat you're answering) so the draft fits it. Read on this computer, sent only with that draft.</small></span>
+          <input id="pv-window" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Your notes, when you ask a question<small>Parts of the notes that match the question (up to three), so answers can draw on them.</small></span>
           <input id="pv-ask-notes" type="checkbox" class="switch" data-setting></label>
         <div class="row"><span class="lbl">Selected text<small>Only when you select text and dictate an instruction for it, or run a transform on it.</small></span><button class="link" data-goto="words">Transforms</button></div>

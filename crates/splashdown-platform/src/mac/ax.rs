@@ -4,6 +4,7 @@
 use std::collections::HashSet;
 use std::sync::Mutex;
 
+use core_foundation::array::CFArray;
 use core_foundation::base::{CFType, CFTypeRef, TCFType};
 use core_foundation::boolean::CFBoolean;
 use core_foundation::dictionary::CFDictionary;
@@ -185,6 +186,32 @@ impl AxElement {
                 v.as_CFTypeRef(),
             )
         };
+    }
+
+    /// The element's children, in order.
+    fn children(&self) -> Vec<AxElement> {
+        let Some(list) = self
+            .attribute("AXChildren")
+            .ok()
+            .and_then(|v| v.downcast::<CFArray>())
+        else {
+            return Vec::new();
+        };
+        // SAFETY: AXUIElementGetTypeID has no preconditions.
+        let element_type = unsafe { ffi::AXUIElementGetTypeID() };
+        list.iter()
+            .filter_map(|item| {
+                // SAFETY: an array item is a live CF object owned by `list`;
+                // the get rule retains it for the new CFType.
+                let v = unsafe { CFType::wrap_under_get_rule(*item as CFTypeRef) };
+                (v.type_of() == element_type).then_some(AxElement(v))
+            })
+            .collect()
+    }
+
+    /// Whether this is the same element as `other`.
+    fn same_as(&self, other: &AxElement) -> bool {
+        self.0 == other.0
     }
 
     fn pid(&self) -> Option<i32> {
@@ -546,4 +573,129 @@ pub(crate) fn request_accessibility() {
         CFDictionary::from_CFType_pairs(&[(key.as_CFType(), CFBoolean::true_value().as_CFType())]);
     // SAFETY: `options` is a live CFDictionary for the duration of the call.
     unsafe { ffi::AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) };
+}
+
+// ---------------------------------------------------------------- the window's text
+
+/// Roles whose own text is worth reading: what people wrote and headings.
+const TEXT_ROLES: &[&str] = &["AXStaticText", "AXTextArea", "AXTextField", "AXHeading"];
+/// Limits on reading the window: levels up from the field, elements read,
+/// and time (web pages answer slowly).
+const WINDOW_LEVELS: usize = 40;
+const WINDOW_NODES: usize = 5000;
+const WINDOW_MILLIS: u64 = 600;
+/// Roles skipped with everything in them: controls and chrome.
+const SKIP_ROLES: &[&str] = &[
+    "AXButton",
+    "AXMenuBar",
+    "AXMenu",
+    "AXMenuButton",
+    "AXPopUpButton",
+    "AXToolbar",
+    "AXImage",
+    "AXSecureTextField",
+    "AXScrollBar",
+    "AXCheckBox",
+    "AXRadioButton",
+    "AXSlider",
+];
+
+/// The text around the focused field in its window: from the nearest
+/// container holding at least `min_chars` of readable text besides the
+/// field itself, the last `max_chars` of it (what's nearest the field, in a
+/// thread). Each level up reads only what's beside the level below, so a
+/// field deep in a web page (an email reply box) still reaches the thread.
+/// Bounded in nodes and time, so a huge page can't stall it.
+pub(crate) fn surrounding_text(
+    focus: &FocusElement,
+    min_chars: usize,
+    max_chars: usize,
+) -> Option<String> {
+    let field = focus.element.as_ref()?;
+    if is_secure_field(focus) {
+        return None;
+    }
+    let started = std::time::Instant::now();
+    let deadline = started + std::time::Duration::from_millis(WINDOW_MILLIS);
+    let mut budget = WINDOW_NODES;
+    let mut pieces: Vec<String> = Vec::new();
+    // The element read last, whose text is already in `pieces`.
+    let mut below: Option<AxElement> = None;
+    let mut node = field.element_attribute("AXParent");
+    let mut levels = 0;
+    while let Some(current) = node.take() {
+        levels += 1;
+        let role = current.string_attribute("AXRole").unwrap_or_default();
+        let (mut before, mut after) = (Vec::new(), Vec::new());
+        let mut passed = false;
+        for child in current.children() {
+            if below
+                .as_ref()
+                .map_or_else(|| child.same_as(field), |b| child.same_as(b))
+            {
+                passed = true;
+                continue;
+            }
+            let side = if passed { &mut after } else { &mut before };
+            collect(&child, field, side, &mut budget, deadline, 0);
+        }
+        before.append(&mut pieces);
+        before.append(&mut after);
+        pieces = before;
+        let chars: usize = pieces.iter().map(|p| p.chars().count()).sum();
+        if chars >= min_chars
+            || role == "AXWindow"
+            || levels >= WINDOW_LEVELS
+            || budget == 0
+            || std::time::Instant::now() >= deadline
+        {
+            break;
+        }
+        node = current.element_attribute("AXParent");
+        below = Some(current);
+    }
+    let text = pieces.join("\n");
+    tracing::debug!(
+        "window text: {} characters, {levels} levels up, {} nodes, {} ms",
+        text.chars().count(),
+        WINDOW_NODES - budget,
+        started.elapsed().as_millis()
+    );
+    Some(crate::keep_end(&text, max_chars)).filter(|t| !t.trim().is_empty())
+}
+
+/// Appends the readable text under `el` (not the field's own) to `pieces`.
+fn collect(
+    el: &AxElement,
+    field: &AxElement,
+    pieces: &mut Vec<String>,
+    budget: &mut usize,
+    deadline: std::time::Instant,
+    depth: usize,
+) {
+    if *budget == 0 || depth > 40 || std::time::Instant::now() >= deadline || el.same_as(field) {
+        return;
+    }
+    *budget -= 1;
+    let role = el.string_attribute("AXRole").unwrap_or_default();
+    if SKIP_ROLES.contains(&role.as_str()) {
+        return;
+    }
+    if TEXT_ROLES.contains(&role.as_str()) {
+        let text = el
+            .string_attribute("AXValue")
+            .ok()
+            .filter(|t| !t.trim().is_empty())
+            .or_else(|| el.string_attribute("AXTitle").ok());
+        if let Some(text) = text.map(|t| t.trim().to_string()).filter(|t| !t.is_empty()) {
+            pieces.push(text);
+        }
+        // A text area's children repeat its value.
+        if role != "AXHeading" {
+            return;
+        }
+    }
+    for child in el.children() {
+        collect(&child, field, pieces, budget, deadline, depth + 1);
+    }
 }

@@ -127,11 +127,9 @@ function collect() {
   const ask = $("hk-ask").value.trim().toLowerCase();
   const shownDefault = !state.settings.hotkeys.ask && ask === askDefault(state.settings.hotkeys);
   s.hotkeys.ask = /^[a-z]$/.test(ask) && ask !== askDefault(s.hotkeys) && !shownDefault ? ask : null;
-  // The same for the compose letter.
+  // The compose letter is off when empty.
   const compose = $("hk-compose").value.trim().toLowerCase();
-  const shownCompose = !state.settings.hotkeys.compose && compose === composeDefault(state.settings.hotkeys);
-  s.hotkeys.compose =
-    /^[a-z]$/.test(compose) && compose !== composeDefault(s.hotkeys) && !shownCompose ? compose : null;
+  s.hotkeys.compose = /^[a-z]$/.test(compose) ? compose : null;
   s.notes = { ...(s.notes ?? {}) };
   s.notes.capture_to = $("nt-capture-to").value;
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;
@@ -180,6 +178,8 @@ function collect() {
   s.general.local_only = $("pv-local").checked;
   s.general.share_app_name = $("pv-appname").checked ? null : false;
   s.general.share_recent = $("pv-recent").checked ? null : false;
+  s.general.compose_reads_window = $("pv-window").checked ? null : false;
+  s.general.compose_panel = $("hk-compose-panel").checked ? true : null;
   s.actions = collectActions(s.actions);
 
   const sttProvider = $("stt-provider").value;

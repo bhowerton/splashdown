@@ -53,6 +53,10 @@ pub struct Engine {
     pub share_app_name: bool,
     /// Send recent dictations into the same app along with the next one.
     pub share_recent: bool,
+    /// Compose may read the conversation around the field.
+    pub compose_reads_window: bool,
+    /// Compose shows its draft in a panel instead of writing it in.
+    pub compose_panel: bool,
     /// Type the AI's text as it streams in.
     pub stream_typing: bool,
     /// Quiet other sounds while recording.
@@ -142,7 +146,10 @@ pub fn keys(settings: &Settings) -> Keys {
         double_tap: settings.hotkeys.double_tap(),
         note: settings.hotkeys.note_key(),
         ask: settings.hotkeys.ask_key(),
-        compose: settings.hotkeys.compose_key(),
+        compose: settings
+            .hotkeys
+            .compose_key()
+            .unwrap_or(splashdown_core::gesture::PhysicalKey::Other),
     }
 }
 
@@ -274,6 +281,8 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
             OtherAudio::Mute => Some(splashdown_platform::Quieten::Mute),
             OtherAudio::Pause => Some(splashdown_platform::Quieten::Pause),
         },
+        compose_reads_window: settings.general.compose_reads_window(),
+        compose_panel: settings.general.compose_panel(),
         share_recent: settings.general.share_recent()
             && ai_choice
                 .as_ref()

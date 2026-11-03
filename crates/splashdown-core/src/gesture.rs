@@ -126,7 +126,7 @@ pub enum Action {
     /// question, answered in a panel instead of typed.
     Ask,
     /// The compose key while holding the dictation key: this recording
-    /// says what to write, and a draft is written in a panel.
+    /// says what to write, and a draft is written.
     Compose,
     /// Stop recording and process it.
     Finish,
@@ -250,7 +250,7 @@ impl Recognizer {
             swallow_capture: false,
             ask: PhysicalKey::Letter('a'),
             swallow_ask: false,
-            compose: PhysicalKey::Letter('c'),
+            compose: PhysicalKey::Other,
             swallow_compose: false,
             timing,
             state: State::Idle,

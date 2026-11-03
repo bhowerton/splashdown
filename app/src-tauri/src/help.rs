@@ -149,10 +149,9 @@ pub fn sheet(settings: &Settings) -> Sheet {
         Section {
             title: "Write it for me".into(),
             how: format!(
-                "Hold {dictation}, press {}, and say what to write. A draft appears in a panel: \
-                 hold {dictation} again and say a change, then Insert. Select the message \
-                 you're answering first.",
-                key(h.compose_key())
+                "Hold {dictation}, tap {instruction}, and say what to write. It's written where \
+                 you're typing, as a reply to the email or chat on screen. To change it, select \
+                 it and say the change."
             ),
             items: vec![
                 say(
@@ -282,12 +281,14 @@ pub fn sheet(settings: &Settings) -> Sheet {
             key(h.note_key()),
         ),
         press("Ask a question", key(h.ask_key())),
-        press("Have a message written", key(h.compose_key())),
         press(
             &format!("Go hands-free (tap {dictation} again to finish)"),
             key(h.hands_free_key()),
         ),
     ];
+    if let Some(compose) = h.compose_key() {
+        keys.push(press("Have a message written", key(compose)));
+    }
     if presets.len() > 1 {
         keys.push(press("Use another preset", "1–9"));
     }
