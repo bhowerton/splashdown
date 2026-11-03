@@ -77,6 +77,9 @@ jobs:
           # Shared with release.yml's Windows job, which restores it on a
           # tag (tags can only use caches saved on main).
           shared-key: windows-release
+          # The fast local-model helper builds outside target\ (a short
+          # path; see scripts/package-win.ps1).
+          cache-directories: ${{ runner.temp }}\llm
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-binstall
@@ -94,6 +97,8 @@ jobs:
           cache_save_if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build the installer
         shell: pwsh
+        env:
+          SPLASHDOWN_LLM_TARGET: ${{ runner.temp }}\llm
         run: scripts/package-win.ps1
       - uses: actions/upload-artifact@v7
         with:

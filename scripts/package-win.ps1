@@ -48,13 +48,16 @@ if ($env:VULKAN_SDK) {
 } else {
     Write-Host "warning: no Vulkan SDK (VULKAN_SDK); the helper won't use the graphics chip" -ForegroundColor Yellow
 }
-# Its own target folder: different compiler flags would rebuild everything.
+# Its own target folder (different compiler flags would rebuild everything),
+# and a short one: llama.cpp's Vulkan build nests a CMake project deep
+# enough under target\ to pass Windows' 260-character path limit.
+$llmTarget = if ($env:SPLASHDOWN_LLM_TARGET) { $env:SPLASHDOWN_LLM_TARGET } else { Join-Path $env:SystemDrive "\sdllm" }
 $env:RUSTFLAGS = "-C target-feature=+avx,+avx2,+fma,+f16c,+bmi2"
-cargo build --release -p splashdown-llm @llmFeatures --target-dir target\llm-avx2
+cargo build --release -p splashdown-llm @llmFeatures --target-dir $llmTarget
 $built = $LASTEXITCODE
 Remove-Item Env:RUSTFLAGS
 if ($built -ne 0) { exit $built }
-Copy-Item target\llm-avx2\release\splashdown-llm.exe "app\src-tauri\binaries\splashdown-llm-$triple.exe"
+Copy-Item (Join-Path $llmTarget "release\splashdown-llm.exe") "app\src-tauri\binaries\splashdown-llm-$triple.exe"
 
 # The updater signing key. The key itself never goes into the repository.
 $updater = $true

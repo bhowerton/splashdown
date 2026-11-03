@@ -125,6 +125,9 @@ jobs:
           # Saved on main by CI's windows-installer job, which builds the
           # same way (a tag can only use caches from main).
           shared-key: windows-release
+          # The fast local-model helper builds outside target\ (a short
+          # path; see scripts/package-win.ps1).
+          cache-directories: ${{ runner.temp }}\llm
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - uses: taiki-e/install-action@v2
         with:
@@ -167,6 +170,7 @@ jobs:
       - name: Build, code-sign and package the installer
         shell: pwsh
         env:
+          SPLASHDOWN_LLM_TARGET: ${{ runner.temp }}\llm
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # Azure Artifact Signing (the Point Dynamics certificate).
