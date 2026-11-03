@@ -49,7 +49,7 @@ kbd.keycap {
 
 /* You're ready: three things to remember. */
 .ready { list-style: none; margin: 6px 0 12px; padding: 0; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.ready li { display: flex; align-items: center; gap: 14px; padding: 10px 14px; font-size: 13.5px; }
+.ready li { display: flex; align-items: center; gap: 14px; padding: 8px 14px; font-size: 13.5px; }
 .ready li + li { border-top: 1px solid var(--border); }
 .ready li > :first-child { flex: none; width: 104px; display: flex; justify-content: center; }
 /* The menu bar icon, as it looks there: five bars. */
@@ -60,8 +60,11 @@ kbd.keycap {
 .tray-ic i:nth-child(3) { height: 16px; }
 .help-ic { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 13px; }
 .done-still { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); }
-#done-actions { margin: 0 0 12px; padding: 10px 14px; }
-#done-actions .ask-what { margin-bottom: 8px; }
+/* The question in one band: the words, then the buttons beside them. */
+#done-actions { margin: 0 0 12px; padding: 10px 14px; display: grid; grid-template-columns: 1fr auto; column-gap: 14px; align-items: center; }
+#done-actions .ask-q { grid-column: 1; }
+#done-actions .ask-what { grid-column: 1; margin: 0; }
+#done-actions .ask-buttons { grid-column: 2; grid-row: 1 / span 2; }
 
 .cards { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; }
 .card {

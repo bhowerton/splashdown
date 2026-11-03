@@ -22,6 +22,8 @@ let tryTicked = false; // the current one worked; moving on in a moment
 let actionsAnswer = null; // "yes" or "no" once asked about voice actions
 let slowAnswered = false; // chose what to do about a slow built-in model
 let wasWaiting = false; // step 4 was waiting for the downloads
+let voiceHere = false; // Phonon, the natural voice, is downloaded
+let voiceAsked = false; // its download has been started
 
 // ---------------------------------------------------------------- navigation
 
@@ -132,13 +134,14 @@ function describePlan() {
   const b = document.createElement("b");
   if (plan.cleanup === "apple") {
     b.textContent = "Also use Apple Intelligence";
-    opt.append(b, ", built into your Mac, to remove the “um”s, rewrite and answer questions. Nothing to download.");
+    opt.append(b, ", built into your Mac, to remove the “um”s, rewrite, answer questions and read text back. Only the natural voice to download (68 MB).");
   } else if (plan.cleanup === "none") {
     $("ai-opt").hidden = true;
   } else {
     b.textContent = "Also download the AI";
-    const size = aiMb ? `${gb(aiMb * 1e6)} GB` : "already here";
-    opt.append(b, ` that removes the “um”s, rewrites and answers questions (${size}). It arrives while you try things; you can dictate before it's done.`);
+    // With the natural voice it reads back in (68 MB).
+    const size = aiMb ? `${gb((aiMb + 68) * 1e6)} GB` : "already here";
+    opt.append(b, ` that removes the “um”s, rewrites, answers questions and reads text back to you (${size}). It arrives while you try things; you can dictate before it's done.`);
   }
   if (plan.too_little_space && mb > 0) {
     warning.textContent = `This computer has ${gb(plan.free_mb * 1e6)} GB of free space, and Splashdown needs about ${gb(mb * 1e6 + 1e9)} GB. Free up some space first (empty the ${state.platform === "macos" ? "Trash" : "Recycle Bin"}, or delete large files you don't need), or use an API key.`;
@@ -250,7 +253,26 @@ async function applyChoice() {
     return fail();
   }
   watchSetup();
+  fetchVoice();
   return true;
+}
+
+/** Reading back is in the tries whenever the AI is, in Phonon's natural
+ *  voice (never the system's, for English). It's small (68 MB), so it's
+ *  fetched in the background, after speech to text so it doesn't slow that
+ *  down. */
+function fetchVoice() {
+  if (voiceAsked || voiceHere || !aiPlanned()) return;
+  if (setup && !setup.speech_ready) return;
+  voiceAsked = true;
+  invoke("download_model", { id: "phonon-en" })
+    .then(() => {
+      voiceHere = true;
+      if (step === 4) renderPractice();
+    })
+    .catch(() => {
+      voiceAsked = false;
+    });
 }
 
 async function saveProviders(speech, ai) {
@@ -273,6 +295,7 @@ function watchSetup() {
 
 listen("setup-progress", (event) => {
   setup = event.payload;
+  fetchVoice();
   samples.push({ t: Date.now(), done: setup.done });
   samples = samples.filter((s) => Date.now() - s.t < 10_000);
   renderSetup();
@@ -507,7 +530,10 @@ function said(text) {
 
 function keys() {
   const letter = (state.settings.hotkeys.ask ?? "a").toUpperCase();
-  return { dict: dictationKeyLabel(state), instr: instructionKeyLabel(state), ask: letter, ret: state.platform === "macos" ? "Return" : "Enter" };
+  // The note letter: N, or M when hands-free has N (as `Hotkeys::note_key`).
+  const hands = (state.settings.hotkeys.hands_free || "h").toLowerCase();
+  const note = (state.settings.hotkeys.note || (hands === "n" ? "m" : "n")).toUpperCase();
+  return { dict: dictationKeyLabel(state), instr: instructionKeyLabel(state), ask: letter, note, ret: state.platform === "macos" ? "Return" : "Enter" };
 }
 
 /** What to try, how (as nodes), what Splashdown reports when it worked,
@@ -530,6 +556,24 @@ const TRIES = [
     did: ["rewrote"],
     start: "Our team meeting moved to Thursday afternoon.",
     ai: true,
+  },
+  {
+    title: "Hear it read back",
+    how: (k) => [
+      "Select the message in the box, hold ",
+      kbd(k.dict),
+      " and say ",
+      said("read this to me"),
+      ", or ",
+      said("read me a summary of this"),
+      ". It's read in a natural voice, on this computer; ",
+      kbd("Esc"),
+      " stops it.",
+    ],
+    did: ["read"],
+    start: "Hi Sam, the launch moved to Thursday, March 12th at 2:30 PM. Can you tell the team and book the big meeting room?",
+    ai: true,
+    voice: true,
   },
   {
     title: "Do things",
@@ -589,11 +633,14 @@ function showTry() {
   const t = tries()[tryIndex];
   $("try-count").textContent = `${tryIndex + 1} of ${tries().length}`;
   $("try-title").textContent = t.title;
-  // The AI is still on its way: say so, and let it be skipped.
-  const early = t.ai && !aiReady();
-  $("try-how").replaceChildren(
-    ...(early ? ["This one needs the AI, which is still downloading (see above). It starts by itself when the AI is here."] : t.how(keys())),
-  );
+  // The AI (or the natural voice) is still on its way: say so, and let
+  // it be skipped.
+  const early = (t.ai && !aiReady()) || (t.voice && !voiceHere);
+  const waitingFor =
+    t.ai && !aiReady()
+      ? "This one needs the AI, which is still downloading (see above). It starts by itself when the AI is here."
+      : "The natural voice is still downloading (68 MB). This starts by itself when it's here.";
+  $("try-how").replaceChildren(...(early ? [waitingFor] : t.how(keys())));
   if (early) {
     $("actions-try").hidden = true;
     $("practice").hidden = true;
@@ -622,9 +669,10 @@ function showTry() {
 function renderPractice() {
   if (tryIndex >= tries().length || tryTicked) return;
   const t = tries()[tryIndex];
-  if (t.ai && $("try-how").dataset.ai !== String(aiReady())) {
-    $("try-how").dataset.ai = String(aiReady());
-    if (aiReady()) return showTry();
+  const usable = aiReady() && (!t.voice || voiceHere);
+  if ((t.ai || t.voice) && $("try-how").dataset.ai !== String(usable)) {
+    $("try-how").dataset.ai = String(usable);
+    if (usable) return showTry();
   }
   const box = $("practice");
   const st = $("practice-status");
@@ -655,7 +703,7 @@ $("try-skip").addEventListener("click", () => nextTry("skipped"));
 async function checkTry() {
   if (step !== 4 || tryIndex >= tries().length || tryTicked || !speechReady()) return;
   const t = tries()[tryIndex];
-  if (t.ai && !aiReady()) return;
+  if ((t.ai && !aiReady()) || (t.voice && !voiceHere)) return;
   const done = await invoke("did_since", { since: trySince }).catch(() => []);
   const hit = done.find((d) => t.did.includes(d.what));
   if (!hit) return;
@@ -715,6 +763,12 @@ function renderDone() {
     b.textContent = "Splashdown is by the clock";
     home.append(b, ", at the bottom right of your screen (click ^ if you don't see it).");
   }
+  const notes = $("done-notes");
+  notes.replaceChildren();
+  const n = document.createElement("b");
+  n.textContent = "Notes and meetings: ";
+  const where = state.platform === "macos" ? "the menu bar" : "Splashdown's icon by the clock";
+  notes.append(n, "hold ", kbd(k.dict), " and press ", kbd(k.note), " to save a thought; record a meeting from ", where, ".");
   const help = $("done-help");
   help.replaceChildren();
   const h = document.createElement("b");
@@ -722,7 +776,7 @@ function renderDone() {
   help.append(h, "hold ", kbd(k.dict), ", tap ", kbd(k.instr), " and say ", said("what can I say?"), ".");
   const still = $("done-still");
   still.hidden = !setup?.working;
-  still.textContent = "The AI is still downloading. It switches on by itself when it's done, even if you close this window.";
+  still.textContent = "The AI is still downloading; it switches on by itself, even if you close this window.";
   // Never asked (that try skipped): ask here, once.
   $("done-actions").hidden = !aiPlanned() || actionsOn() || actionsAnswer === "no";
   const on = $("done-actions-on");
@@ -749,9 +803,14 @@ async function poll() {
     const fresh = await invoke("get_state");
     state.permissions = fresh.permissions;
     renderPermissions();
+    if (step === 4 && !voiceHere) {
+      voiceHere = (await invoke("reading_natural")).downloaded;
+      if (voiceHere) renderPractice();
+    }
   } catch {
     /* window closing */
   }
+  fetchVoice();
   checkTry();
 }
 
@@ -789,7 +848,7 @@ async function mockInvoke(cmd, args) {
     keys: [{ name: "openai", source: null, hint: null }, { name: "openrouter", source: null, hint: null }, { name: "anthropic", source: null, hint: null }, { name: "custom", source: null, hint: null }],
     permissions: { accessibility: false, microphone: "not-asked" },
     defaults: { local_speech: "nemotron" },
-    key_options: [{ value: "right-alt", label: "Right Option" }],
+    key_options: [{ value: "right-alt", label: "Right Option" }, { value: "right-shift", label: "Right Shift" }],
     platform: "macos",
   };
   if (cmd === "get_state") return mockInvoke.s;
@@ -799,6 +858,12 @@ async function mockInvoke(cmd, args) {
     return { state: mockInvoke.s, engine_error: null };
   }
   if (cmd === "local_setup_status") return null;
+  if (cmd === "reading_natural") return { downloaded: !!mockInvoke.voice, mb: 68 };
+  if (cmd === "download_model" && args.id === "phonon-en") {
+    await new Promise((r) => setTimeout(r, 1500));
+    mockInvoke.voice = true;
+    return { state: mockInvoke.s, engine_error: null };
+  }
   if (cmd === "local_setup_plan") return { cleanup: "local", small: false, download_mb: 2995, speech_mb: 495, ai_mb: 2500, free_mb: 80_000, too_little_space: false };
   if (cmd === "start_local_setup") {
     const total = 2_995_000_000;
