@@ -7,6 +7,7 @@ mod audio;
 mod calls;
 mod chunks;
 mod commands;
+mod compose;
 mod did;
 mod engine;
 mod errors;
@@ -183,6 +184,12 @@ fn main() {
             ask::ask_copy,
             ask::ask_close,
             ask::ask_followup,
+            compose::compose_state,
+            compose::compose_change,
+            compose::compose_version,
+            compose::compose_insert,
+            compose::compose_copy,
+            compose::compose_close,
             reading::reading_voices,
             reading::reading_natural,
             reading::reading_try,

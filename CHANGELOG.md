@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Compose: say what to write, not the words.** Hold the dictation key and press C, then say what you want: "reply saying I'm in and ask about parking", "tell the team the launch moved to Thursday", "decline politely and suggest next month". A draft appears in a panel, written for the app you're in (an email gets a greeting and your name; a chat message stays short) and for the message you're answering: select it first, or it uses the text in the field. Change it by voice while the panel is open ("shorter", "add that I'm free Thursday", "in German"), with Shorter, Longer, More formal and Warmer, or by typing; every version is kept, to go back to. Then Insert, Copy, or Read aloud. It never makes up names, dates, numbers or your details: it leaves a [placeholder] to fill in. Instructions for an AI hidden in the message you're answering are left out before anything is written, and the panel says so. Also by voice: "draft a reply…" or "write an email to Dana about…" after the instruction key; a short "write a polite no" still types at once. The key can be changed in Settings → General.
+
 ## 0.6.0 — 2026-11-03
 
 - **A clearer, quicker setup guide.**

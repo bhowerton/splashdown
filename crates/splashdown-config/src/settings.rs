@@ -335,6 +335,10 @@ pub struct HotkeySettings {
     /// dictation a question answered in the Ask panel. Unset means A (K if
     /// hands-free or the note letter is A).
     pub ask: Option<char>,
+    /// The letter that, pressed while holding the dictation key, makes the
+    /// dictation a request for a draft in the Compose panel. Unset means C
+    /// (W or D if another key has C).
+    pub compose: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
     /// Claude and others use a double-tap of Option.
     pub double_tap: Option<bool>,
@@ -386,6 +390,20 @@ impl HotkeySettings {
             .unwrap_or('a');
         let letter = self
             .ask
+            .map(|c| c.to_ascii_lowercase())
+            .filter(char::is_ascii_lowercase)
+            .unwrap_or(fallback);
+        PhysicalKey::Letter(letter)
+    }
+
+    pub fn compose_key(&self) -> PhysicalKey {
+        let taken = [self.hands_free_key(), self.note_key(), self.ask_key()];
+        let fallback = ['c', 'w', 'd']
+            .into_iter()
+            .find(|&c| !taken.contains(&PhysicalKey::Letter(c)))
+            .unwrap_or('c');
+        let letter = self
+            .compose
             .map(|c| c.to_ascii_lowercase())
             .filter(char::is_ascii_lowercase)
             .unwrap_or(fallback);

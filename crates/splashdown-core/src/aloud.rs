@@ -147,12 +147,20 @@ fn first_sentence_end(text: &str) -> Option<usize> {
 /// The language `text` is in, as a two-letter code ("de"), when it's
 /// clear enough to pick a voice by.
 pub fn language(text: &str) -> Option<&'static str> {
+    whatlang::detect(text)
+        .filter(whatlang::Info::is_reliable)
+        .and_then(|info| code(info.lang()))
+}
+
+/// The language `text` is most likely in, however short it is (for
+/// checking what a model wrote).
+pub fn language_guess(text: &str) -> Option<&'static str> {
+    whatlang::detect(text).and_then(|info| code(info.lang()))
+}
+
+fn code(lang: whatlang::Lang) -> Option<&'static str> {
     use whatlang::Lang::*;
-    let info = whatlang::detect(text)?;
-    if !info.is_reliable() {
-        return None;
-    }
-    Some(match info.lang() {
+    Some(match lang {
         Eng => "en",
         Deu => "de",
         Fra => "fr",

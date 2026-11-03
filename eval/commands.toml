@@ -216,7 +216,7 @@ expect = "press_enter"
 id = "en-write-email-at-cursor"
 said = "write a reply saying I'll be there"
 app = "Mail"
-expect = "write"
+expect = ["write", "compose"]
 
 [[case]]
 id = "en-weather-question"
@@ -372,3 +372,38 @@ expect = "read"
 id = "en-read-is-dictation"
 said = "I read the report and it looks good to me"
 expect = ["unclear", "write"]
+
+# ── Drafts for the Compose panel (longer than a line or two)
+
+[[case]]
+id = "en-compose-reply"
+said = "draft a reply saying I'm in and ask about parking"
+app = "Mail"
+expect = "compose"
+
+[[case]]
+id = "en-compose-email"
+said = "write an email to Dana about the launch moving to Thursday"
+app = "Mail"
+expect = ["compose", "do"]
+
+[[case]]
+id = "en-compose-reply-to-selection"
+said = "reply to this saying no thanks"
+last = "Hi Ben, would you like to join our running club on Saturdays? Lena"
+app = "Mail"
+expect = "compose"
+
+[[case]]
+id = "de-compose"
+said = "schreib eine Mail an Jonas, dass das Meeting verschoben ist"
+app = "Mail"
+expect = ["compose", "do"]
+
+[[case]]
+id = "en-short-write-stays"
+said = "add a sign-off"
+last = "Thanks for the update, I'll take a look tomorrow."
+app = "Mail"
+expect = "write"
+

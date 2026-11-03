@@ -144,6 +144,10 @@ pub struct Outcome {
     /// "" to read it as it is, otherwise what to answer and read out
     /// instead ("summarize this"). `text` is empty.
     pub read: Option<String>,
+    /// A Transform's instruction asked for a draft that answers the
+    /// selection ("reply to this saying I'm in"): what to write, as said.
+    /// `text` is empty.
+    pub compose: Option<String>,
 }
 
 pub struct Pipeline {
@@ -320,6 +324,11 @@ impl Pipeline {
             crate::command::Command::Ask(question) if question.is_empty() => {
                 crate::command::Command::Ask(spoken.to_string())
             }
+            // What to write as said: the interpreter's copy may be
+            // translated or reworded.
+            crate::command::Command::Compose(_) => {
+                crate::command::Command::Compose(spoken.to_string())
+            }
             // The words as said: the interpreter's copy may be translated
             // or reworded, and names and times must survive as they were.
             crate::command::Command::Do(_) => crate::command::Command::Do(spoken.to_string()),
@@ -432,6 +441,7 @@ impl Pipeline {
             llm_usage: Usage::default(),
             action: None,
             read: None,
+            compose: None,
         };
 
         // Raw mode, or nothing but a snippet was said: no AI needed.
@@ -518,6 +528,10 @@ impl Pipeline {
                     }
                     crate::command::Command::Read(what) => {
                         outcome.read = Some(what);
+                        true
+                    }
+                    crate::command::Command::Compose(asked) => {
+                        outcome.compose = Some(asked);
                         true
                     }
                     _ => false,

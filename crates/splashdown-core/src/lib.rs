@@ -8,6 +8,7 @@ pub mod aloud;
 pub mod ask;
 mod audio;
 pub mod command;
+pub mod compose;
 pub mod computer;
 pub mod fallback;
 pub mod files;

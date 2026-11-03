@@ -108,6 +108,9 @@ pub struct Keys {
     /// Pressed while holding the dictation key: the dictation is a question
     /// for the Ask panel.
     pub ask: PhysicalKey,
+    /// Pressed while holding the dictation key: the dictation says what to
+    /// write, and the Compose panel drafts it.
+    pub compose: PhysicalKey,
 }
 
 enum Msg {
@@ -383,6 +386,9 @@ struct Active {
     capture: bool,
     /// The ask key was pressed: it's a question for the Ask panel.
     ask: bool,
+    /// The compose key was pressed: it says what to write, for the Compose
+    /// panel.
+    compose: bool,
     /// When to quiet other sounds (after the start sound has played).
     quiet_due: Option<Instant>,
     /// Other sounds, quieted while recording; dropping it restores them.
@@ -473,7 +479,8 @@ impl Controller {
                 Recognizer::new(keys.dictation, keys.instruction, Timing::default())
                     .with_hands_free(keys.hands_free, keys.double_tap)
                     .with_capture(keys.note)
-                    .with_ask(keys.ask),
+                    .with_ask(keys.ask)
+                    .with_compose(keys.compose),
             )),
             ui,
             engine,
@@ -680,7 +687,8 @@ impl Controller {
         *self.lock() = Recognizer::new(keys.dictation, keys.instruction, Timing::default())
             .with_hands_free(keys.hands_free, keys.double_tap)
             .with_capture(keys.note)
-            .with_ask(keys.ask);
+            .with_ask(keys.ask)
+            .with_compose(keys.compose);
         self.preview = preview_worker(&engine, &self.tx);
         self.engine = engine;
         self.keys = keys;
@@ -824,6 +832,7 @@ impl Controller {
             }
             Action::Capture => self.start_capture(),
             Action::Ask => self.start_ask(),
+            Action::Compose => self.start_compose(),
             Action::HandsFree => {
                 if let Some(active) = &mut self.active {
                     active.hands_free = true;
@@ -1002,6 +1011,7 @@ impl Controller {
             mic_warned: false,
             capture: false,
             ask: false,
+            compose: false,
             quiet_due: self
                 .engine
                 .as_ref()
@@ -1069,7 +1079,16 @@ impl Controller {
             return;
         }
         if active.ask {
-            self.ask(active);
+            self.ask(active, Asked::Question);
+            return;
+        }
+        if active.compose {
+            self.ask(active, Asked::Draft);
+            return;
+        }
+        // While a draft is open, what's said changes it ("shorter").
+        if !active.capture && crate::compose::is_open(self.ui.app()) {
+            self.ask(active, Asked::Change);
             return;
         }
         // Only an error from this dictation's own run counts below.
@@ -1176,6 +1195,14 @@ impl Controller {
                 _ => None,
             };
             self.do_action(&active, request, selection);
+            return;
+        }
+        if let Some((outcome, _)) = &outcome
+            && let Some(asked) = &outcome.compose
+        {
+            // An instruction for the selection that asked for a reply to it.
+            crate::spend::record_outcome(outcome);
+            self.show_draft(&active, asked.clone(), selected);
             return;
         }
         if let Some((outcome, _)) = &outcome
@@ -1793,6 +1820,7 @@ impl Controller {
         };
         active.capture = true;
         active.ask = false;
+        active.compose = false;
         match &mut active.shown {
             OverlayState::Listening { preset } | OverlayState::HandsFree { preset } => {
                 *preset = Some(label);
@@ -1825,6 +1853,7 @@ impl Controller {
         };
         active.ask = true;
         active.capture = false;
+        active.compose = false;
         let label = Some("Ask".to_string());
         active.shown = if active.hands_free {
             OverlayState::HandsFree { preset: label }
@@ -1837,16 +1866,38 @@ impl Controller {
         self.ui.set_send(false);
     }
 
-    /// `finish` for a question: transcribes it and opens the Ask panel,
-    /// which answers it in the background.
-    fn ask(&mut self, mut active: Active) {
+    /// The compose key while holding the dictation key: what's said is what
+    /// to write, drafted in the Compose panel.
+    fn start_compose(&mut self) {
+        let Some(active) = &mut self.active else {
+            return;
+        };
+        active.compose = true;
+        active.capture = false;
+        active.ask = false;
+        let label = Some("Compose".to_string());
+        active.shown = if active.hands_free {
+            OverlayState::HandsFree { preset: label }
+        } else {
+            OverlayState::Listening { preset: label }
+        };
+        self.ui.show(active.shown.clone());
+        // Nothing is typed, so there's nothing to send.
+        self.lock().set_send(false);
+        self.ui.set_send(false);
+    }
+
+    /// `finish` for a question, a draft or a change to one: transcribes it
+    /// as said and hands it to the Ask or Compose panel, which work in the
+    /// background.
+    fn ask(&mut self, mut active: Active, kind: Asked) {
         let job = self.prepare(&mut active);
         let _ = self.lock().take_send();
         let Some(mut job) = job else {
             // The instruction key came before anything was said: what came
             // after it is the question.
             if let Some(clip) = self.pending_command.take() {
-                self.ask_from(&active, &clip);
+                self.ask_from(&active, &clip, kind);
             }
             return;
         };
@@ -1864,12 +1915,89 @@ impl Controller {
         if question.is_empty() {
             return self.notice(Tone::Info, "Didn't catch that");
         }
-        self.show_answer(&active, question, selection, false);
+        self.asked(&active, kind, question, selection);
         self.check_budget();
     }
 
-    /// A question recorded on its own (after the instruction key).
-    fn ask_from(&mut self, active: &Active, clip: &AudioClip) {
+    /// Where something asked goes.
+    fn asked(&mut self, active: &Active, kind: Asked, said: String, selection: Option<String>) {
+        match kind {
+            Asked::Question => self.show_answer(active, said, selection, false),
+            Asked::Draft => self.show_draft(active, said, selection),
+            Asked::Change => {
+                if let Err(message) = crate::compose::change(self.ui.app(), &said) {
+                    return self.notice(Tone::Info, &message);
+                }
+                self.ui.hide();
+            }
+        }
+    }
+
+    /// Opens the Compose panel and drafts what was asked (`asked`), for
+    /// `active`'s app; `selection` is the message it answers.
+    fn show_draft(&mut self, active: &Active, asked: String, selection: Option<String>) {
+        let Ok(engine) = &self.engine else {
+            return;
+        };
+        let Some(model) = engine.pipeline_for(&active.preset).answer_model() else {
+            return self.notice(
+                Tone::Warning,
+                "Compose needs an AI model: choose one in Settings → AI Models",
+            );
+        };
+        let notes = self
+            .notes_settings()
+            .map(|n| crate::notes::excerpts_for(&n, &asked))
+            .unwrap_or_default();
+        // The field's text is what's being answered when nothing is
+        // selected (a reply with the thread quoted under it).
+        let field_text = active
+            .focus
+            .as_ref()
+            .and_then(Focus::field_text)
+            .or_else(|| active.field_text.clone())
+            .map(|t| head_chars(&t, READ_CHARS));
+        let tone = active.preset.tone.map(|t| match t {
+            splashdown_config::Tone::Formal => "formal",
+            splashdown_config::Tone::Casual => "casual",
+            splashdown_config::Tone::VeryCasual => "very-casual",
+        });
+        let context = splashdown_core::compose::ComposeContext {
+            replying_to: selection.map(|s| head_chars(&s, READ_CHARS)),
+            field_text,
+            clipboard: active
+                .clipboard
+                .clone()
+                .filter(|_| active.preset.clipboard_context),
+            notes,
+            app_name: active
+                .focus
+                .as_ref()
+                .filter(|_| engine.share_app_name)
+                .map(|f| f.app.name.clone()),
+            user_name: engine.context.user_name.clone(),
+            today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+            tone: tone.and_then(splashdown_core::compose::tone),
+        };
+        tracing::info!("composing, with {} matching note(s)", context.notes.len());
+        crate::compose::start(
+            self.ui.app(),
+            crate::compose::Draft {
+                asked,
+                context,
+                model,
+                target: active
+                    .focus
+                    .as_ref()
+                    .map(|f| (f.app.pid, f.app.name.clone())),
+            },
+        );
+        self.ui.hide();
+    }
+
+    /// A question, draft or change recorded on its own (after the
+    /// instruction key).
+    fn ask_from(&mut self, active: &Active, clip: &AudioClip, kind: Asked) {
         let Ok(engine) = &self.engine else {
             return self.ui.hide();
         };
@@ -1880,7 +2008,7 @@ impl Controller {
         match heard {
             Ok((question, usage)) if !question.trim().is_empty() => {
                 crate::spend::shared().record(&[(stt, usage)], chrono::Local::now());
-                self.show_answer(active, question.trim().to_string(), None, false);
+                self.asked(active, kind, question.trim().to_string(), None);
             }
             Ok(_) => self.notice(Tone::Info, "Didn't catch that"),
             Err(e) => {
@@ -2460,6 +2588,8 @@ impl Controller {
             self.show_answer(active, question, None, false);
         } else if let Command::Read(what) = outcome.command {
             self.read_aloud(active, what, None, last);
+        } else if let Command::Compose(asked) = outcome.command {
+            self.show_draft(active, asked, None);
         } else if let Command::Do(request) = outcome.command {
             self.do_action(active, &request, None);
         } else if !still_focused {
@@ -2484,6 +2614,8 @@ impl Controller {
             Command::Ask(_) => return,
             // Read aloud by `read_aloud` instead (`run_command`).
             Command::Read(_) => return,
+            // Drafted by `show_draft` instead (`run_command`).
+            Command::Compose(_) => return,
             // Carried out by `do_action` instead (`run_command`).
             Command::Do(_) => return,
             Command::PressEnter => {
@@ -2989,6 +3121,17 @@ fn short(s: &str) -> String {
         Some((i, _)) => format!("{}…", &s[..i]),
         None => s.to_string(),
     }
+}
+
+/// What a spoken request is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Asked {
+    /// A question for the Ask panel.
+    Question,
+    /// What to write, for a new draft in the Compose panel.
+    Draft,
+    /// A change to the draft open in the Compose panel.
+    Change,
 }
 
 /// The first `chars` characters of `text`.

@@ -142,6 +142,7 @@ pub fn keys(settings: &Settings) -> Keys {
         double_tap: settings.hotkeys.double_tap(),
         note: settings.hotkeys.note_key(),
         ask: settings.hotkeys.ask_key(),
+        compose: settings.hotkeys.compose_key(),
     }
 }
 

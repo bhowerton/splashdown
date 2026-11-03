@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compose</title>
+<link rel="stylesheet" href="settings.css">
+<link rel="stylesheet" href="compose.css">
+</head>
+<body class="cp-body">
+<main class="cp">
+  <div class="cp-scroll">
+    <p class="cp-said" id="cp-said"></p>
+    <p class="cp-removed" id="cp-removed" hidden>The message had instructions for an AI in it; they were left out. Check the draft before inserting it.</p>
+    <div class="cp-draft" id="cp-draft" aria-live="polite" tabindex="0"></div>
+  </div>
+  <div class="cp-quick" id="cp-quick">
+    <button class="cp-chip" data-change="Make it shorter.">Shorter</button>
+    <button class="cp-chip" data-change="Make it longer and more detailed.">Longer</button>
+    <button class="cp-chip" data-change="Make it more formal.">More formal</button>
+    <button class="cp-chip" data-change="Make it warmer and friendlier.">Warmer</button>
+  </div>
+  <form class="cp-change" id="cp-change">
+    <input id="cp-change-input" type="text" placeholder="Or say a change, or type one…" aria-label="A change to the draft" autocomplete="off" spellcheck="true">
+  </form>
+  <div class="cp-hint">
+    <span id="cp-hint"></span>
+    <span class="cp-grow"></span>
+    <span class="cp-versions" id="cp-versions" hidden>
+      <button class="cp-arrow" id="cp-prev" aria-label="Earlier version">‹</button>
+      <span id="cp-ver"></span>
+      <button class="cp-arrow" id="cp-next" aria-label="Later version">›</button>
+    </span>
+  </div>
+  <footer class="cp-bar">
+    <button class="btn" id="cp-read" disabled aria-pressed="false">Read aloud</button>
+    <button class="btn" id="cp-copy" disabled>Copy</button>
+    <span class="cp-grow"></span>
+    <button class="btn primary" id="cp-insert" disabled>Insert</button>
+  </footer>
+</main>
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+<script src="common.js"></script>
+<script src="compose.js"></script>
+</body>
+</html>

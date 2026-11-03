@@ -104,6 +104,12 @@
 
 - **Hold the key, press A, ask.** "What's the German word for deadline?", or select text first and ask "what does this say?". The answer appears in a small panel with Insert and Copy, and can draw on your notes ("what did we decide about the launch?"). Follow-ups carry on the conversation.
 
+### Write it for me
+
+- **Say what to write, not the words.** Hold Right Option, press **C** and say "reply saying I'm in and ask about parking", "tell the team the launch moved to Thursday" or "decline politely and suggest next month". A draft appears in a panel, written for the app you're in and the message you're answering (select it first, or it uses the text in the field), in your language.
+- **Change it by voice** while the panel is open ("shorter", "add that I'm free Thursday", "in German"), or with Shorter, Longer, More formal and Warmer. Every version is kept; Insert, Copy or Read aloud when it's right.
+- **No made-up facts.** Names, dates, numbers and your own details come only from what you said, the message and your notes; anything missing is left as a [placeholder]. Instructions for an AI hidden in the message you're answering are left out before anything is written.
+
 ### Hear it read back
 
 - **"Read this to me."** Select text, hold Right Option and say it, and it's read aloud. With nothing selected, tap Right Shift first and the text you're writing is read, or your last dictation (also in the menu bar: Last dictation → Read it to me).
@@ -157,6 +163,7 @@
 | Go hands-free | While holding **Right Option**, press **H**, then let go; tap Right Option once more to finish (double-tap can be turned on in Settings) |
 | Add to your notes instead of typing | While holding, press **N**; ⌃⌥Z right after takes it back |
 | Ask a question | While holding, press **A**, then ask |
+| Have a message written | While holding, press **C**, then say what to write ("reply saying I'm in"); hold the key again in the panel to change it |
 | Hear text read aloud | Select it, hold **Right Option** and say "read this to me" (or "read me a summary of this"); **Esc** stops it. Or menu bar → Last dictation → **Read it to me** |
 | Record a meeting | **⌃⌥M** (again to stop) |
 | Use another preset | While holding, press **1–9** |

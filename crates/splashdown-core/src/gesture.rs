@@ -125,6 +125,9 @@ pub enum Action {
     /// The ask key while holding the dictation key: this recording is a
     /// question, answered in a panel instead of typed.
     Ask,
+    /// The compose key while holding the dictation key: this recording
+    /// says what to write, and a draft is written in a panel.
+    Compose,
     /// Stop recording and process it.
     Finish,
     /// Stop recording and throw it away. `silent` cancels (accidental tap,
@@ -214,6 +217,9 @@ pub struct Recognizer {
     ask: PhysicalKey,
     /// We swallowed the ask key's key-down: its repeats and key-up too.
     swallow_ask: bool,
+    compose: PhysicalKey,
+    /// We swallowed the compose key's key-down: its repeats and key-up too.
+    swallow_compose: bool,
     timing: Timing,
     state: State,
     /// We swallowed an Esc key-down, so swallow its key-up too.
@@ -244,6 +250,8 @@ impl Recognizer {
             swallow_capture: false,
             ask: PhysicalKey::Letter('a'),
             swallow_ask: false,
+            compose: PhysicalKey::Letter('c'),
+            swallow_compose: false,
             timing,
             state: State::Idle,
             swallow_escape_up: false,
@@ -275,6 +283,13 @@ impl Recognizer {
     /// the recording a question for the Ask panel.
     pub fn with_ask(mut self, key: PhysicalKey) -> Self {
         self.ask = key;
+        self
+    }
+
+    /// Sets the key that, pressed while holding the dictation key, makes
+    /// the recording a request for a draft.
+    pub fn with_compose(mut self, key: PhysicalKey) -> Self {
+        self.compose = key;
         self
     }
 
@@ -462,6 +477,27 @@ impl Recognizer {
             {
                 self.swallow_ask = true;
                 return (true, Some(Action::Ask));
+            }
+        }
+
+        // The compose key while holding the dictation key: the recording
+        // says what to write. Swallowed like the ask key, and a quick chord
+        // (Right Ctrl+C, copy) passes through.
+        if ev.key == self.compose
+            && ev.key != self.hands_free
+            && ev.key != self.capture
+            && ev.key != self.ask
+            && ev.key != PhysicalKey::Other
+        {
+            if self.swallow_compose {
+                self.swallow_compose = ev.down;
+                return (true, None);
+            }
+            if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
+                && now.duration_since(since) >= self.timing.hold
+            {
+                self.swallow_compose = true;
+                return (true, Some(Action::Compose));
             }
         }
 
@@ -792,6 +828,35 @@ mod tests {
             c.r.on_event(KeyEvent::down(Letter('a')), c.now),
             (false, None)
         );
+    }
+
+    #[test]
+    fn compose_key_while_holding_composes_and_is_swallowed() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default())
+            .with_ask(Letter('a'))
+            .with_compose(Letter('c'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.at(400);
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('c')), c.now),
+            (true, Some(Action::Compose))
+        );
+        assert_eq!(c.r.on_event(KeyEvent::up(Letter('c')), c.now), (true, None));
+        assert!(c.r.is_recording());
+        assert_eq!(c.at(2000).up(DICT), Some(Action::Finish));
+    }
+
+    #[test]
+    fn a_quick_chord_is_a_shortcut_not_compose() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default()).with_compose(Letter('c'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        // Right Ctrl+C, copy: reaches the app.
+        c.at(60);
+        let (swallowed, action) = c.r.on_event(KeyEvent::down(Letter('c')), c.now);
+        assert!(!swallowed);
+        assert_ne!(action, Some(Action::Compose));
     }
 
     #[test]

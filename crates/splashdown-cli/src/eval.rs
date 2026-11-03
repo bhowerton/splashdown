@@ -46,6 +46,20 @@ pub enum EvalCommand {
         #[command(flatten)]
         providers: ProviderOpts,
     },
+    /// Score Compose on eval/compose.toml: drafts written from what was
+    /// said, and changes to them.
+    Compose {
+        #[arg(long, default_value = "eval/compose.toml")]
+        cases: PathBuf,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(short, long)]
+        verbose: bool,
+        #[arg(long, value_delimiter = ',')]
+        models: Vec<String>,
+        #[command(flatten)]
+        providers: ProviderOpts,
+    },
     /// Score voice actions on eval/actions.toml: each command is
     /// interpreted, then planned into an action.
     Actions {
@@ -120,6 +134,20 @@ pub async fn run(cmd: EvalCommand) -> Result<()> {
             let cases = filtered(&file.case, filter.as_deref(), |c| &c.id);
             for run in model_runs(&models, &providers) {
                 actions(&cases, verbose, &run).await?;
+            }
+            Ok(())
+        }
+        EvalCommand::Compose {
+            cases,
+            filter,
+            verbose,
+            models,
+            providers,
+        } => {
+            let file: ComposeFile = read_cases(&cases)?;
+            let cases = filtered(&file.case, filter.as_deref(), |c| &c.id);
+            for run in model_runs(&models, &providers) {
+                compose(&cases, verbose, &run).await?;
             }
             Ok(())
         }
@@ -503,6 +531,7 @@ fn command_id(command: &Command) -> &'static str {
         Command::PressEnter => "press_enter",
         Command::UndoLast => "undo_last",
         Command::Write(_) => "write",
+        Command::Compose(_) => "compose",
         Command::Ask(_) => "ask",
         Command::Read(_) => "read",
         Command::Do(_) => "do",
@@ -514,6 +543,7 @@ fn command_text(command: &Command) -> &str {
     match command {
         Command::ReplaceLast(t)
         | Command::Write(t)
+        | Command::Compose(t)
         | Command::Ask(t)
         | Command::Read(t)
         | Command::Do(t) => t,
@@ -607,6 +637,162 @@ async fn commands(cases: &[&CommandCase], verbose: bool, providers: &ProviderOpt
             cost.cost_usd
         );
     }
+    Ok(())
+}
+
+// ---------------------------------------------------------------- compose
+
+#[derive(Deserialize)]
+struct ComposeFile {
+    case: Vec<ComposeCase>,
+}
+
+#[derive(Deserialize)]
+struct ComposeCase {
+    id: String,
+    asked: String,
+    replying_to: Option<String>,
+    app: Option<String>,
+    user: Option<String>,
+    tone: Option<String>,
+    /// One note's text; its first line is the title.
+    notes: Option<String>,
+    /// A revision: the draft so far and what to change.
+    draft: Option<String>,
+    change: Option<String>,
+    #[serde(default)]
+    has: Vec<String>,
+    #[serde(default)]
+    has_any: Vec<String>,
+    #[serde(default)]
+    not: Vec<String>,
+    lang: Option<String>,
+    max_words: Option<usize>,
+    #[serde(default)]
+    placeholder: bool,
+    #[serde(default)]
+    no_numbers: bool,
+}
+
+/// What's wrong with `draft` for `case`, if anything.
+fn compose_faults(case: &ComposeCase, draft: &str) -> Vec<String> {
+    let lower = draft.to_lowercase();
+    let mut faults = Vec::new();
+    for want in &case.has {
+        if !lower.contains(&want.to_lowercase()) {
+            faults.push(format!("missing {want:?}"));
+        }
+    }
+    if !case.has_any.is_empty()
+        && !case
+            .has_any
+            .iter()
+            .any(|w| lower.contains(&w.to_lowercase()))
+    {
+        faults.push(format!("none of {:?}", case.has_any));
+    }
+    for unwanted in &case.not {
+        if lower.contains(&unwanted.to_lowercase()) {
+            faults.push(format!("has {unwanted:?}"));
+        }
+    }
+    if let Some(lang) = &case.lang {
+        match splashdown_core::aloud::language_guess(draft) {
+            Some(got) if got == lang => {}
+            got => faults.push(format!(
+                "language {}, wanted {lang}",
+                got.unwrap_or("unclear")
+            )),
+        }
+    }
+    let words = draft.split_whitespace().count();
+    if let Some(max) = case.max_words
+        && words > max
+    {
+        faults.push(format!("{words} words, at most {max}"));
+    }
+    if case.placeholder && !(draft.contains('[') && draft.contains(']')) {
+        faults.push("no [placeholder] for the missing fact".into());
+    }
+    if case.no_numbers && draft.chars().any(|c| c.is_ascii_digit()) {
+        faults.push("a number nobody gave".into());
+    }
+    faults
+}
+
+async fn compose(cases: &[&ComposeCase], verbose: bool, providers: &ProviderOpts) -> Result<()> {
+    use splashdown_core::ask::NoteExcerpt;
+    use splashdown_core::compose::{self, ComposeContext};
+    let (name, pipeline) = text_pipeline(providers)?;
+    let model = pipeline
+        .answer_model()
+        .context("this eval needs an AI provider (--ai …)")?;
+    let context = |case: &ComposeCase| ComposeContext {
+        replying_to: case.replying_to.clone(),
+        app_name: case.app.clone(),
+        user_name: case.user.clone(),
+        today: "Monday, 3 November 2026".into(),
+        tone: case.tone.as_deref().and_then(compose::tone),
+        notes: case
+            .notes
+            .iter()
+            .map(|text| NoteExcerpt {
+                title: text.lines().next().unwrap_or_default().to_string(),
+                date: "2026-11-03".into(),
+                text: text.clone(),
+            })
+            .collect(),
+        ..ComposeContext::default()
+    };
+    // As the app does: instructions to an AI are left out of the material.
+    let request = |case: &ComposeCase| {
+        let (ctx, _) = context(case).defanged();
+        match (&case.draft, &case.change) {
+            (Some(draft), Some(change)) => compose::revise(&case.asked, draft, change, &ctx),
+            _ => compose::request(&case.asked, &ctx),
+        }
+    };
+    // Untimed warm-up so a local model's load time doesn't skew latency.
+    if let Some(first) = cases.first() {
+        let _ = model.complete(&request(first)).await;
+    }
+    eprintln!("\nCompose eval · {name}\n");
+    let mut latencies = Vec::new();
+    let (mut passed, mut errors) = (0, 0);
+    let mut cost = splashdown_core::Usage::default();
+    for case in cases {
+        let started = Instant::now();
+        let result = model.complete(&request(case)).await;
+        latencies.push(started.elapsed());
+        let (draft, faults) = match result {
+            Ok(done) => {
+                cost += done.usage;
+                let draft = compose::clean(&done.text);
+                let faults = compose_faults(case, &draft);
+                (draft, faults)
+            }
+            Err(e) => {
+                errors += 1;
+                (String::new(), vec![format!("error: {e}")])
+            }
+        };
+        let ok = faults.is_empty();
+        passed += usize::from(ok);
+        println!(
+            "{} {:<26} {:>5.2}s  {}",
+            if ok { "✓" } else { "✗" },
+            case.id,
+            started.elapsed().as_secs_f32(),
+            faults.join("; ")
+        );
+        if (verbose || !ok) && !draft.is_empty() {
+            for line in draft.lines() {
+                println!("      │ {line}");
+            }
+        }
+    }
+    summary(&name, passed, cases.len(), errors, &mut latencies);
+    println!("{name}: cost ${:.4}", cost.cost_usd);
     Ok(())
 }
 
@@ -771,7 +957,9 @@ async fn actions(cases: &[&ActionCase], verbose: bool, providers: &ProviderOpts)
                     }
                     other => {
                         shown = format!("interpreted as {}", command_id(&other));
-                        if !nothing_ok {
+                        // A case may accept another answer than an action
+                        // ("compose" for an email to write).
+                        if !nothing_ok && !expect.contains(&command_id(&other)) {
                             fails.push(format!("{}, not do", command_id(&other)));
                         }
                     }

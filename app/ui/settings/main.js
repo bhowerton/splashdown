@@ -127,6 +127,11 @@ function collect() {
   const ask = $("hk-ask").value.trim().toLowerCase();
   const shownDefault = !state.settings.hotkeys.ask && ask === askDefault(state.settings.hotkeys);
   s.hotkeys.ask = /^[a-z]$/.test(ask) && ask !== askDefault(s.hotkeys) && !shownDefault ? ask : null;
+  // The same for the compose letter.
+  const compose = $("hk-compose").value.trim().toLowerCase();
+  const shownCompose = !state.settings.hotkeys.compose && compose === composeDefault(state.settings.hotkeys);
+  s.hotkeys.compose =
+    /^[a-z]$/.test(compose) && compose !== composeDefault(s.hotkeys) && !shownCompose ? compose : null;
   s.notes = { ...(s.notes ?? {}) };
   s.notes.capture_to = $("nt-capture-to").value;
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;

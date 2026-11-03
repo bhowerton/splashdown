@@ -147,6 +147,29 @@ pub fn sheet(settings: &Settings) -> Sheet {
             actions: false,
         },
         Section {
+            title: "Write it for me".into(),
+            how: format!(
+                "Hold {dictation}, press {}, and say what to write. A draft appears in a panel: \
+                 hold {dictation} again and say a change, then Insert. Select the message \
+                 you're answering first.",
+                key(h.compose_key())
+            ),
+            items: vec![
+                say(
+                    "Draft",
+                    &[
+                        "reply saying I'm in and ask about parking",
+                        "tell the team the launch moved to Thursday",
+                    ],
+                ),
+                say(
+                    "Change it",
+                    &["shorter", "add that I'm free Thursday", "in German"],
+                ),
+            ],
+            actions: false,
+        },
+        Section {
             title: "Hear it read aloud".into(),
             how: format!(
                 "Select text, hold {dictation} and say it. With nothing selected, tap {instruction} \
@@ -259,6 +282,7 @@ pub fn sheet(settings: &Settings) -> Sheet {
             key(h.note_key()),
         ),
         press("Ask a question", key(h.ask_key())),
+        press("Have a message written", key(h.compose_key())),
         press(
             &format!("Go hands-free (tap {dictation} again to finish)"),
             key(h.hands_free_key()),

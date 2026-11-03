@@ -26,6 +26,8 @@ pub const ACTED: &str = "acted";
 pub const ASKED: &str = "asked";
 /// Had text read aloud (or a summary of it).
 pub const READ: &str = "read";
+/// A draft written in the Compose panel.
+pub const COMPOSED: &str = "composed";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Did {

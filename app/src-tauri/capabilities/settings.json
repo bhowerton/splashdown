@@ -1,12 +1,13 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "settings",
-  "description": "The Settings, setup, Notes, Ask, What you can say, call offer and meeting pill windows: app commands plus core events (download progress).",
+  "description": "The Settings, setup, Notes, Ask, Compose, What you can say, call offer and meeting pill windows: app commands plus core events (download progress).",
   "windows": [
     "settings",
     "onboarding",
     "notes",
     "ask",
+    "compose",
     "help",
     "call-offer",
     "meeting-pill",

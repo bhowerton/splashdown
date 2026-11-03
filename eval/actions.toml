@@ -418,7 +418,7 @@ params = { to = "anna@example.com", body = "frei" }
 [[case]]
 id = "fr-email-team"
 said = "envoie un mail à l'équipe pour dire que le lancement est reporté"
-action = "draft_email"
+action = ["draft_email", "compose"]
 params = { body = "report" }
 
 # ── run_shortcut

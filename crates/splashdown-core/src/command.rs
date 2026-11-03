@@ -27,6 +27,9 @@ pub enum Command {
     UndoLast,
     /// Insert new text at the cursor.
     Write(String),
+    /// Draft a message for the user to check first, in the Compose panel:
+    /// what to write, as said (`Pipeline::command` sees to that).
+    Compose(String),
     /// A question for the AI: answered in the Ask panel, not typed.
     Ask(String),
     /// Read text aloud: "" for the text as it is ("read this to me"),
@@ -50,6 +53,7 @@ const ACTIONS: &[&str] = &[
     "press_enter",
     "undo_last",
     "write",
+    "compose",
     "ask",
     "read",
     "unclear",
@@ -58,7 +62,7 @@ const ACTIONS: &[&str] = &[
 /// Added to the actions when voice actions are on.
 const DO: &str = "do";
 
-const DO_ACTION: &str = "\n- do: the command asks the computer to do something beyond this text field: open or switch to an app, search the web, open a website, play, pause or skip music, change the volume, add a calendar event, a reminder or a to-do, draft an email in the mail app (\"email Dana that…\"), run a Shortcut, or something the dictation app itself does (record a meeting, a new note, switch preset, whisper mode, retry the last dictation, or list the commands the dictation app understands when asked \"what can I say?\"). \"text\" is the command as said. Questions are ask, not do, unless they ask which commands the dictation app understands; writing at the cursor is write, not do.";
+const DO_ACTION: &str = "\n- do: the command asks the computer to do something beyond this text field: open or switch to an app, search the web, open a website, play, pause or skip music, change the volume, add a calendar event, a reminder or a to-do, draft an email in the mail app (\"email Dana that…\"), run a Shortcut, or something the dictation app itself does (record a meeting, a new note, switch preset, whisper mode, retry the last dictation, or list the commands the dictation app understands when asked \"what can I say?\"). \"text\" is the command as said. Questions in any language are ask, not do (\"¿qué hora es en Londres?\" is ask), unless they ask which commands the dictation app understands; writing at the cursor is write, not do.";
 
 const DO_EXAMPLE: &str = "\n\n<command>abre Spotify</command>\n{\"action\": \"do\", \"text\": \"abre Spotify\"}\n\n<command>remind me to call Sam at 3</command>\n{\"action\": \"do\", \"text\": \"remind me to call Sam at 3\"}";
 
@@ -78,6 +82,7 @@ Choose exactly one action and reply with JSON only: {\"action\": \"...\", \"text
 - write: the command asks you to write or compose something new at the cursor (\"write a short no\", \"add a sign-off\"). \"text\" is what to insert.
 - ask: the command is a question for you to answer, or asks you to explain or look something up, rather than to change or write text (\"what's the German word for deadline\", \"how many days until Christmas\"). \"text\" is the question as said. The answer is shown to the user, not typed.
 - read: the command asks to hear text read aloud to them (\"read this to me\", \"read me a summary of this\", \"lies mir das vor\"). \"text\" is \"\" to read the text as it is; when they want to hear a summary, the gist, or something about the text instead, \"text\" is that request (\"summarize this\"). A sentence that only mentions reading (\"I read the report\") is not a command.
+- compose: the command asks for a longer message to check before it's inserted: a reply or an email (\"draft a reply saying I'm in\", \"write an email to Dana about the launch\"). \"text\" is the command as said.
 - unclear: you can't tell what the user wants, or it isn't a command at all (just text, or a question meant for someone else, to be typed).
 
 \"That\", \"this\" or \"it\" (in any language) means the last dictation. Keep the last dictation's language unless the command asks for a translation. \"text\" is \"\" for actions that don't use it.
@@ -181,6 +186,8 @@ pub fn parse(output: &str, actions: bool) -> Command {
     match reply.action.as_str() {
         "replace_last" if !text.is_empty() => Command::ReplaceLast(text),
         "write" if !text.is_empty() => Command::Write(text),
+        // Filled in like an empty question.
+        "compose" => Command::Compose(text),
         // An empty question is filled in with what was said (see
         // `Pipeline::command`).
         "ask" => Command::Ask(text),
