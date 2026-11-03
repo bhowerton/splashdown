@@ -45,7 +45,9 @@ jobs:
         with:
           tool: cargo-binstall
       - name: Install the Tauri CLI
-        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked
+        # The Mac builds are zip files, though tauri-cli's binstall settings
+        # say tgz.
+        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
       - name: Build both architectures
         run: |
           cargo build --release --locked -p splashdown-llm --target aarch64-apple-darwin
