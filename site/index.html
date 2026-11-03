@@ -47,7 +47,7 @@
     </div>
     <p class="fine" id="fine">macOS 13+ (Apple Silicon and Intel) · Windows 10 and 11 · Signed releases</p>
     <p class="brew">or <code>brew install --cask bhowerton/tap/splashdown</code></p>
-    <p class="also">Also: <a href="#actions">voice commands</a> · <a href="#read">reads text back</a> · <a href="#notes">meeting notes</a> · <a href="#notes">ask your notes</a></p>
+    <p class="also">Also: <a href="#actions">voice commands</a> · <a href="#read">reads text back</a> · <a href="#notes">notes from any app's audio</a> · <a href="#notes">meeting notes</a></p>
     <img class="demo" src="assets/demo.svg" width="960" height="480" alt="Animation: holding Option and saying 'um, so can we meet Tuesday… actually Thursday at 3' types 'Can we meet Thursday at 3?' into an email; then tapping Shift and saying 'make it more formal' rewrites it to 'Would Thursday at 3 p.m. work for you?'">
   </section>
 
@@ -136,12 +136,17 @@
   </section>
 
   <section class="features" id="notes">
-    <h2>Notes, meetings and transcripts, built in.</h2>
+    <h2>Turn anything you hear into notes.</h2>
+    <p class="section-lede">A call, a webinar in your browser, a podcast, a YouTube video, a lecture in the room: pick the app, and what it says is written into a note as it plays, on your computer.</p>
     <picture>
       <source media="(max-width: 640px)" srcset="assets/sources-tall.svg" width="520" height="740">
       <img class="demo sources" src="assets/sources.svg" width="960" height="500" loading="lazy" alt="Animation: a video call, a podcast app, a video in the browser, the room and a file take turns; each one's sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags.">
     </picture>
     <div class="grid">
+      <article>
+        <h3>Any app's audio, as notes</h3>
+        <p>Choose an app (a browser tab's webinar, a podcast player, a call you're only listening to) and only that app's sound is recorded and transcribed. Or the room's microphone, a voice memo, a video file or a YouTube link.</p>
+      </article>
       <article>
         <h3>Notes that are just files</h3>
         <p>Every note is a Markdown file in a folder you choose, so Obsidian, iCloud and Dropbox see them too. Nested folders, #tags, ⌘K to find anything, and formatting as you write.</p>
@@ -149,10 +154,6 @@
       <article>
         <h3>Meeting notes without a bot</h3>
         <p>Record your microphone and what the call plays, turn by turn, with your own notes beside the live transcript. Each voice on the call gets its own name, and on a Mac the title comes from your calendar. A summary of decisions and action items follows, and Splashdown offers to record when a call starts.</p>
-      </article>
-      <article>
-        <h3>Transcribe anything that plays</h3>
-        <p>A webinar in your browser, a podcast app, a lecture in the room, a voice memo or a YouTube link: pick it, and it's written into a note as it plays.</p>
       </article>
       <article>
         <h3>Ask your notes</h3>
@@ -217,6 +218,10 @@
     <details>
       <summary>Does it stop my music while I talk?</summary>
       <p>It turns other sounds down while you hold the key, and puts them back when you let go. You can choose mute or pause instead, or leave them be. If your speakers' volume can't be changed from the computer (some audio interfaces), it pauses Spotify and Music on a Mac, or whatever's playing on Windows.</p>
+    </details>
+    <details>
+      <summary>Can it turn a video or podcast playing on my computer into notes?</summary>
+      <p>Yes. In Notes, choose Transcribe, then the app that's playing: a webinar in your browser, a podcast app, a video, a call you're only listening to. Only that app's sound is recorded, and what it says is written into a note as it plays, with time stamps, then a summary if you like. It also takes the room's microphone, audio and video files, and YouTube or podcast links.</p>
     </details>
     <details>
       <summary>Does it record meetings? Does a bot join the call?</summary>

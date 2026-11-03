@@ -43,7 +43,7 @@
 - **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
 - **Says what to do, not just what to write.** "Open Spotify", "remind me at 5 to stretch", "add dentist to my calendar on Thursday at 4", "pause the music", or your own: "deploy staging", "next slide". Nothing is sent, deleted or bought for you.
 - **Reads to you, too.** Select text and say "read this to me", or "read me a summary of this", and it's read aloud in a natural voice that runs on your computer.
-- **Notes, meetings and transcripts, too.** Dictate into notes that are plain Markdown files, record a call without a bot joining it, transcribe whatever an app is playing, and ask your notes questions.
+- **Turns anything you hear into notes.** Pick any app (a webinar in your browser, a podcast, a video, a call you're only listening to) and what it says is written into a note as it plays. Record meetings without a bot joining, transcribe voice memos and YouTube links, and ask your notes questions. Notes are plain Markdown files.
 - **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
 <p align="center">
@@ -120,7 +120,7 @@
 - **Ask your notes (⌘J)** about one note or all of them; answers link to the notes they came from. Turn on Find notes by meaning and Ask finds the notes about what you mean, not only ones with the same words, on your computer.
 - Pins, earlier versions you can restore, and **Paste into** (⌘↩), which pastes the note into the app you used last.
 
-### Meetings and transcripts
+### Any app's audio, meetings and transcripts
 
 <p align="center">
   <img src="docs/assets/sources.svg" width="800" alt="Animation: a video call, a podcast app, a video in the browser, the room and a file take turns; each one's sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags.">
