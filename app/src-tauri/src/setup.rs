@@ -75,6 +75,10 @@ pub struct Plan {
     small: bool,
     /// Megabytes still to download.
     download_mb: u32,
+    /// Of which speech to text, and the AI that cleans up (0 when it's
+    /// Apple's, already here, or not part of this setup).
+    speech_mb: u32,
+    ai_mb: u32,
     /// Free space where the models go, in MB, if known.
     free_mb: Option<u64>,
     /// Not enough room for the downloads, with some to spare.
@@ -92,16 +96,16 @@ fn plan(speech_only: bool) -> Result<Plan, String> {
         cleanup_for(splashdown_platform::memory_bytes(), apple)
     };
     let speech = speech_model();
-    let mut download_mb = if speech.is_downloaded(&dir) {
+    let speech_mb = if speech.is_downloaded(&dir) {
         0
     } else {
         speech.approx_mb()
     };
-    if let Cleanup::Local(m) = cleanup
-        && !m.is_downloaded(&dir)
-    {
-        download_mb += m.approx_mb();
-    }
+    let ai_mb = match cleanup {
+        Cleanup::Local(m) if !m.is_downloaded(&dir) => m.approx_mb(),
+        _ => 0,
+    };
+    let download_mb = speech_mb + ai_mb;
     // The folder may not exist yet: ask about the nearest one that does.
     let free = dir
         .ancestors()
@@ -115,6 +119,8 @@ fn plan(speech_only: bool) -> Result<Plan, String> {
         },
         small: cleanup == Cleanup::Local(LocalModel::Qwen3_4BCompact),
         download_mb,
+        speech_mb,
+        ai_mb,
         free_mb: free.map(|b| b / 1_000_000),
         too_little_space: download_mb > 0
             && free.is_some_and(|f| f < u64::from(download_mb) * 1_000_000 + SPARE),
@@ -133,6 +139,8 @@ pub struct Status {
     /// Bytes downloaded so far, and in all, over both models.
     done: u64,
     total: u64,
+    /// Of `total`, speech to text's (downloaded first).
+    speech_total: u64,
     /// Timing the tidy-up model, after its download.
     checking: bool,
     /// What that found: milliseconds for an ordinary dictation, and
@@ -200,6 +208,7 @@ pub fn start_local_setup(speech_only: bool, app: AppHandle) -> Result<Status, St
     let start = Status {
         working: true,
         total: speech_size + cleanup_size,
+        speech_total: speech_size,
         ..Status::default()
     };
     *status() = Some(start.clone());
@@ -235,6 +244,7 @@ async fn run(
             update(app, |s| {
                 s.done = done;
                 s.total = speech_total + cleanup_total;
+                s.speech_total = speech_total;
             });
         }
     })
@@ -248,6 +258,7 @@ async fn run(
         s.speech_ready = true;
         s.done = speech_total;
         s.total = speech_total + cleanup_total;
+        s.speech_total = speech_total;
     });
 
     match cleanup {

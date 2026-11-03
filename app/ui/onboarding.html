@@ -10,6 +10,7 @@
 <body class="ob-body">
 <main class="ob">
   <div class="steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+  <p class="step-of" id="step-of"></p>
   <div class="getting-ready" id="getting-ready" role="status" aria-live="polite" hidden>
     <span class="gr-text" id="gr-text"></span>
     <span class="progress wide" id="gr-progress"><i id="gr-bar"></i></span>
@@ -19,43 +20,44 @@
   <!-- 1 · Welcome -->
   <section class="ob-step" data-step="1">
     <div class="hero">
-      <div class="logo" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-      <h1>Hold a key. Say it. It's typed.</h1>
-      <p class="sub">Splashdown types what you say into any app — email, chat, documents, the browser. It tidies up “um”s and self-corrections, and can reformat on request.</p>
-      <div class="big-key"><kbd class="dict-key">Right Option</kbd><span>hold · speak · release</span></div>
+      <img class="demo" src="img/demo.svg" alt="Holding the dictation key and saying “um, so can we meet Tuesday… actually Thursday at 3” types “Can we meet Thursday at 3?” into an email.">
+      <h1>Talk instead of type.</h1>
+      <p class="sub">Hold <kbd class="keycap dict-key">Right Option</kbd> wherever you can type, say it, and let go.</p>
+      <ul class="points">
+        <li><b>In every app</b><span>email, chat, documents, the browser</span></li>
+        <li><b>Free and private</b><span>runs on your computer</span></li>
+        <li><b>Optional AI</b><span>removes the “um”s, rewrites and answers</span></li>
+      </ul>
     </div>
   </section>
 
   <!-- 2 · Get ready -->
   <section class="ob-step" data-step="2" hidden>
-    <h1>Let's get Splashdown ready</h1>
-    <p class="sub">It works right here on your computer: free, with no account, and nothing you say leaves it.</p>
-    <button class="card main-choice" data-choice="local">
-      <span class="ic" aria-hidden="true">▣</span>
-      <b>Set up on this computer</b>
-      <p id="local-blurb">Splashdown downloads what it needs to understand you and tidy up your words. It takes a few minutes, and you can carry on while it does.</p>
-      <span class="badges"><span class="badge ok">Recommended</span><span class="badge muted">Free</span><span class="badge muted">Private</span></span>
-    </button>
-    <p class="space-warning" id="space-warning" role="alert" hidden></p>
-    <button class="link more" id="show-keys" aria-expanded="false" aria-controls="ai-cards">I have an API key from OpenAI, OpenRouter or Anthropic</button>
-    <div class="cards" id="ai-cards" hidden>
-      <button class="card" data-choice="openrouter">
-        <span class="ic" aria-hidden="true">⇄</span><b>OpenRouter key</b>
-        <p>One key, many models. Best tidying up and formatting; a few cents a day even with heavy use.</p>
-        <span class="badge acc">Cloud</span>
+    <h1>How should Splashdown work?</h1>
+    <p class="sub">You can change this anytime in Settings → AI Models.</p>
+    <div class="choices" role="radiogroup" aria-label="How Splashdown works">
+      <button class="card choice" data-choice="local" role="radio">
+        <b>Free and private</b>
+        <p>Runs completely on your computer. Nothing you say leaves it. No account, no cost.</p>
+        <span class="badges"><span class="badge ok">Recommended</span><span class="badge muted" id="local-size"></span></span>
       </button>
-      <button class="card" data-choice="openai">
-        <span class="ic" aria-hidden="true">◎</span><b>OpenAI key</b>
-        <p>Accurate speech recognition and tidying up with your OpenAI account.</p>
-        <span class="badge acc">Cloud</span>
-      </button>
-      <button class="card" data-choice="anthropic">
-        <span class="ic" aria-hidden="true">✳</span><b>Anthropic key</b>
-        <p>Claude tidies up and formats your words. Your voice is understood on this computer.</p>
-        <span class="badge acc">Cloud tidy-up</span>
+      <button class="card choice" data-choice="key" role="radio">
+        <b>With your API key</b>
+        <p>The fastest and most accurate, for a few cents a day: OpenRouter, OpenAI or Anthropic.</p>
+        <span class="badges"><span class="badge acc">Cloud</span></span>
       </button>
     </div>
-    <div class="choice-detail" id="choice-detail"></div>
+    <label class="ai-opt" id="ai-opt"><input type="checkbox" id="ai-on" checked><span id="ai-opt-text"></span></label>
+    <p class="space-warning" id="space-warning" role="alert" hidden></p>
+    <div class="key-area" id="key-area" hidden>
+      <div class="seg" id="key-provider" role="radiogroup" aria-label="Who your key is from">
+        <button data-provider="openrouter" role="radio">OpenRouter</button>
+        <button data-provider="openai" role="radio">OpenAI</button>
+        <button data-provider="anthropic" role="radio">Anthropic</button>
+      </div>
+      <div class="choice-detail" id="choice-detail"></div>
+      <p class="key-note" id="key-note"></p>
+    </div>
   </section>
 
   <!-- 3 · Permissions -->
@@ -66,7 +68,7 @@
       <div class="row perm" id="ax-row">
         <span class="step-dot" id="ax-step">1</span>
         <span class="lbl">Accessibility
-          <small>Lets Splashdown notice the hotkey, see which field you're in, and type into it.</small>
+          <small>Lets Splashdown notice when you hold <span class="dict-key">Right Option</span>, and type into the app you're in.</small>
           <small class="howto" id="ax-howto" hidden>In System Settings, switch on <b>Splashdown</b>.</small>
         </span>
         <span class="state" id="ax-state"></span>
@@ -74,7 +76,7 @@
       <div class="row perm">
         <span class="step-dot" id="mic-step">2</span>
         <span class="lbl">Microphone
-          <small>Only used while you hold the hotkey.</small>
+          <small>Only used while you hold <span class="dict-key">Right Option</span>.</small>
           <small class="howto" id="mic-howto" hidden>Switch on <b>Splashdown</b> under Microphone in System Settings.</small>
         </span>
         <span class="state" id="mic-state"></span>
@@ -121,12 +123,12 @@
       <p class="slow-text" id="slow-text"></p>
       <div class="slow-choice">
         <b>Use a cloud service <span class="badge ok">Recommended</span></b>
-        <p>With an OpenRouter key, tidying up takes about a second, for a few cents a day even with heavy use. Your voice is still understood on this computer. Get a key at <b>openrouter.ai/keys</b>, then paste it here.</p>
+        <p>With an OpenRouter key, the AI's cleanup takes about a second, for a few cents a day even with heavy use. Your voice is still understood on this computer. Get a key at <b>openrouter.ai/keys</b>, then paste it here.</p>
         <div class="slow-key"><input id="slow-key" type="password" placeholder="Paste your OpenRouter key…" autocomplete="off" aria-label="OpenRouter API key"><button class="btn primary" id="slow-key-save">Use this key</button></div>
       </div>
       <div class="slow-other">
-        <button class="btn" id="slow-off">Turn tidying up off</button>
-        <span>Your words are typed as you say them, at once, with no “um”s removed.</span>
+        <button class="btn" id="slow-off">Turn the AI off</button>
+        <span>Your words are typed as you say them, at once, with the “um”s left in.</span>
       </div>
       <button class="link" id="slow-keep">Keep the built-in model anyway</button>
     </div>
@@ -149,34 +151,25 @@
       <div class="practice-status" id="practice-status" role="status" aria-live="polite"></div>
       <button class="link" id="try-skip">Skip this one</button>
     </div>
-    <div class="tips" id="try-finished" hidden>
-      <b>That's the main things.</b> Hold the dictation key, tap Right Shift and say <em>“what can I say?”</em> any time to see the rest: notes, hands-free, presets, meetings and your own actions.
-    </div>
+    <div class="tips" id="try-finished" hidden></div>
     </div>
   </section>
 
   <!-- 5 · Done -->
   <section class="ob-step" data-step="5" hidden>
-    <h1>You're all set</h1>
-    <p class="sub" id="done-sub">Splashdown lives in the menu bar. A few things worth knowing:</p>
+    <h1>You're ready</h1>
+    <ul class="ready">
+      <li><kbd class="keycap dict-key">Right Option</kbd><span><b>Hold it in any app</b> to talk instead of type.</span></li>
+      <li><span aria-hidden="true"><span class="tray-ic"><i></i><i></i><i></i><i></i><i></i></span></span><span id="done-home"><b>Splashdown is in the menu bar</b>, at the top of your screen.</span></li>
+      <li><span aria-hidden="true"><span class="help-ic">?</span></span><span id="done-help"></span></li>
+    </ul>
+    <p class="done-still" id="done-still" hidden></p>
     <div class="actions-ask" id="done-actions" hidden>
       <p class="ask-q">Want Splashdown to do things for you, not just type?</p>
-      <p class="ask-what">Say “open Spotify”, “remind me at 5 to stretch”, “add dentist to my calendar on Thursday at 4” or “pause the music”, and it's done.</p>
-      <p class="ask-note">Nothing is ever sent, deleted or bought: an email opens as a draft for you to send. You can change this any time in Settings → Actions.</p>
+      <p class="ask-what">“Open Spotify”, “remind me at 5 to stretch”, “pause the music”. Nothing is ever sent, deleted or bought.</p>
       <div class="ask-buttons"><button class="btn primary" data-actions="yes">Yes, turn it on</button><button class="btn" data-actions="no">Not now</button></div>
     </div>
     <p class="actions-on" id="done-actions-on" hidden></p>
-    <div class="group cheat">
-      <div class="row"><span class="lbl">Dictate</span><span><kbd class="dict-key">Right Option</kbd> hold</span></div>
-      <div class="row"><span class="lbl">Add an instruction (“make it an email”)</span><span>tap <kbd>Right Shift</kbd> while holding</span></div>
-      <div class="row"><span class="lbl">Rewrite selected text</span><span>select, then hold and speak</span></div>
-      <div class="row"><span class="lbl">Hands-free</span><span>while holding, press <kbd>H</kbd>, then let go; tap again to finish</span></div>
-      <div class="row"><span class="lbl">Press Return when it's typed (press again to undo)</span><span><kbd>Return</kbd> while holding, or right after</span></div>
-      <div class="row"><span class="lbl">Cancel</span><span><kbd>Esc</kbd></span></div>
-      <div class="row"><span class="lbl">Undo the AI: paste exactly what you said</span><span><kbd>⌃⌥V</kbd></span></div>
-      <div class="row"><span class="lbl">Give a command, in any language</span><span>tap <kbd>Right Shift</kbd> first, then say it: “delete that”, “make it formal”, “send it”</span></div>
-      <div class="row"><span class="lbl">See everything you can say</span><span>hold, tap <kbd>Right Shift</kbd> first, then say “what can I say?”</span></div>
-    </div>
     <label class="row login"><span class="lbl">Start Splashdown when I log in</span><input type="checkbox" class="switch" id="login" checked></label>
   </section>
 

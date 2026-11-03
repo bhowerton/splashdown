@@ -1596,6 +1596,9 @@ impl Controller {
                     outcome.raw.clone()
                 },
             });
+        // Into an app of the user's, not one of Splashdown's own windows
+        // (the setup guide's practice box).
+        let elsewhere = target_pid.is_some_and(|pid| pid as u32 != std::process::id());
         if engine_learns(&self.engine)
             && let Some(focus) = active.focus
         {
@@ -1620,6 +1623,9 @@ impl Controller {
         );
         if sent {
             crate::did::note(crate::did::SENT, &outcome.text);
+        }
+        if elsewhere {
+            crate::did::note(crate::did::ELSEWHERE, &outcome.text);
         }
         let mut status = inserted_status(
             took,

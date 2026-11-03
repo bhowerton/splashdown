@@ -10,6 +10,8 @@ use serde::Serialize;
 
 /// Kinds of things done.
 pub const DICTATED: &str = "dictated";
+/// Text went into one of the user's apps, not Splashdown's own windows.
+pub const ELSEWHERE: &str = "elsewhere";
 /// Selected text rewritten.
 pub const REWROTE: &str = "rewrote";
 /// Dictated with an instruction after the instruction key.

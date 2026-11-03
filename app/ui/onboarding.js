@@ -3,18 +3,19 @@
 // First-run setup guide (needs common.js). Opened as a plain file in a
 // browser it uses the sample data in mockInvoke, for design work.
 //
-// Written for people who've never heard of an AI model: one obvious choice
-// (set up on this computer), which starts the downloads at once and keeps
-// going in the background (the `setup` module) while the rest of the guide
-// carries on. API keys are there for those who have one.
+// Written for people who've never heard of an AI model. What matters is
+// talking instead of typing: speech to text comes first (about half a
+// gigabyte), and the AI that cleans up is optional and arrives in the
+// background while they try things. One obvious choice (free and private,
+// on this computer); API keys for those who have one.
 
 const LAST = 5;
 let step = 1;
 let state = null;
-let choice = "local"; // "local" | "openrouter" | "openai" | "anthropic" | "existing"
+let choice = "local"; // "local" | "openrouter" | "openai" | "anthropic"
 let plan = null; // what setting up on this computer would download
 let setup = null; // how it's going, once started
-let tryIndex = 0; // which of TRIES is being tried (TRIES.length: all done)
+let tryIndex = 0; // which of tries() is being tried (its length: all done)
 let trySince = 0; // when it began, so only what's done after counts
 let tryState = []; // "done" or "skipped", by index
 let tryTicked = false; // the current one worked; moving on in a moment
@@ -37,6 +38,8 @@ function go(n) {
   if (skipped(step)) step += back ? -1 : 1;
   document.querySelectorAll(".ob-step").forEach((s) => (s.hidden = Number(s.dataset.step) !== step));
   document.querySelectorAll(".steps i").forEach((i, idx) => i.classList.toggle("on", idx < step));
+  const shown = [1, 2, 3, 4, 5].filter((n) => !skipped(n));
+  $("step-of").textContent = `Step ${shown.indexOf(step) + 1} of ${shown.length}`;
   $("back").hidden = step === 1;
   if (step === 4) startPractice();
   renderSetup();
@@ -49,6 +52,7 @@ function updateFooter() {
   note.textContent = "";
   next.disabled = false;
   next.textContent = { 1: "Get started", 5: "Finish" }[step] ?? "Continue";
+  if (step === 1) note.textContent = "Takes about 2 minutes";
   if (step === 2) {
     next.disabled = !choiceReady();
     if (KEY_CHOICES[choice] && next.disabled) note.textContent = "Paste your key to continue";
@@ -62,11 +66,11 @@ function updateFooter() {
     next.disabled = true;
     next.textContent = "Continue";
     next.classList.add("primary");
-    note.textContent = waiting() ? "Splashdown needs to finish getting ready first" : "";
+    note.textContent = waiting() ? "Speech to text needs to finish downloading first" : "";
     return;
   }
   // While trying things, moving on is a quiet choice, not the main one.
-  const skipping = step === 4 && tryIndex < TRIES.length;
+  const skipping = step === 4 && tryIndex < tries().length;
   next.classList.toggle("primary", !skipping);
   if (skipping) next.textContent = "Skip the rest";
 }
@@ -87,11 +91,23 @@ const KEY_CHOICES = {
 };
 
 function existingKey() {
-  return state.keys.find((k) => k.source && k.name !== "custom");
+  return state.keys.find((k) => k.source && KEY_CHOICES[k.name]);
+}
+
+/** What each key does, in one line. */
+const KEY_NOTES = {
+  openrouter: "One key for many models: the best cleanup and formatting, a few cents a day even with heavy use.",
+  openai: "Speech to text and cleanup with your OpenAI account.",
+  anthropic: "Claude cleans up your words; speech to text runs on this computer (a 0.5 GB download).",
+};
+
+/** Download the AI that cleans up, with free and private. */
+function aiOn() {
+  return $("ai-on").checked;
 }
 
 function choiceReady() {
-  if (choice === "local" || choice === "existing") return true;
+  if (choice === "local") return true;
   if (KEY_CHOICES[choice]) return state.keys.some((k) => k.name === choice && k.source);
   return false;
 }
@@ -100,25 +116,37 @@ function gb(bytes) {
   return (bytes / 1e9).toFixed(1);
 }
 
-/** What "Set up on this computer" will do, in plain words. */
+/** What free and private downloads, in plain words: speech to text, and
+ *  the AI if it's wanted. */
 function describePlan() {
-  const blurb = $("local-blurb");
   const warning = $("space-warning");
   warning.hidden = true;
   if (!plan) return;
-  const size = `about ${gb(plan.download_mb * 1e6)} GB`;
-  if (plan.download_mb === 0) {
-    blurb.textContent = "Everything Splashdown needs is already on this computer.";
-  } else if (plan.cleanup === "apple") {
-    blurb.textContent = `Splashdown downloads what it needs to understand you (${size}), and tidies up your words with the Apple Intelligence built into your Mac. It takes a minute or two, and you can carry on while it does.`;
+  const speechMb = plan.speech_mb ?? plan.download_mb;
+  const aiMb = plan.ai_mb ?? 0;
+  const mb = speechMb + (aiOn() ? aiMb : 0);
+  // What has to come before the first dictation; the AI's size is on its line.
+  $("local-size").textContent = mb === 0 ? "Ready" : speechMb === 0 ? "Ready to dictate" : `${gb(speechMb * 1e6)} GB to start`;
+  const opt = $("ai-opt-text");
+  opt.replaceChildren();
+  const b = document.createElement("b");
+  if (plan.cleanup === "apple") {
+    b.textContent = "Also use Apple Intelligence";
+    opt.append(b, ", built into your Mac, to remove the “um”s, rewrite and answer questions. Nothing to download.");
+  } else if (plan.cleanup === "none") {
+    $("ai-opt").hidden = true;
   } else {
-    blurb.textContent = `Splashdown downloads what it needs to understand you and tidy up your words (${size}). It takes a few minutes, and you can carry on while it does.`;
+    b.textContent = "Also download the AI";
+    const size = aiMb ? `${gb(aiMb * 1e6)} GB` : "already here";
+    opt.append(b, ` that removes the “um”s, rewrites and answers questions (${size}). It arrives while you try things; you can dictate before it's done.`);
   }
-  if (plan.too_little_space) {
-    warning.textContent = `This computer has ${gb(plan.free_mb * 1e6)} GB of free space, and Splashdown needs about ${gb(plan.download_mb * 1e6 + 1e9)} GB. Free up some space first (empty the ${state.platform === "macos" ? "Trash" : "Recycle Bin"}, or delete large files you don't need), or use an API key below.`;
-    warning.hidden = false;
+  if (plan.too_little_space && mb > 0) {
+    warning.textContent = `This computer has ${gb(plan.free_mb * 1e6)} GB of free space, and Splashdown needs about ${gb(mb * 1e6 + 1e9)} GB. Free up some space first (empty the ${state.platform === "macos" ? "Trash" : "Recycle Bin"}, or delete large files you don't need), or use an API key.`;
+    warning.hidden = choice !== "local";
   }
 }
+
+$("ai-on").addEventListener("change", describePlan);
 
 function keyRow(name) {
   const info = KEY_CHOICES[name];
@@ -163,29 +191,36 @@ function keyRow(name) {
 }
 
 function renderChoice() {
-  document.querySelectorAll(".card").forEach((c) => {
-    c.classList.toggle("sel", c.dataset.choice === choice);
-    c.setAttribute("aria-pressed", String(c.dataset.choice === choice));
+  const key = choice !== "local";
+  document.querySelectorAll(".card.choice").forEach((c) => {
+    const on = (c.dataset.choice === "key") === key;
+    c.classList.toggle("sel", on);
+    c.setAttribute("aria-checked", String(on));
   });
+  $("ai-opt").hidden = key || plan?.cleanup === "none";
+  $("key-area").hidden = !key;
+  document.querySelectorAll("#key-provider button").forEach((b) => b.setAttribute("aria-checked", String(b.dataset.provider === choice)));
   const detail = $("choice-detail");
   detail.replaceChildren();
   if (KEY_CHOICES[choice]) detail.append(keyRow(choice));
+  $("key-note").textContent = KEY_NOTES[choice] ?? "";
+  describePlan();
   updateFooter();
 }
 
-function showKeys(open) {
-  $("ai-cards").hidden = !open;
-  $("show-keys").setAttribute("aria-expanded", String(open));
-}
-
-$("show-keys").onclick = () => showKeys($("ai-cards").hidden);
-
-function pick(card) {
-  choice = card.dataset.choice;
-  renderChoice();
-}
-
-document.querySelectorAll(".card").forEach((c) => c.addEventListener("click", () => pick(c)));
+document.querySelectorAll(".card.choice").forEach((c) =>
+  c.addEventListener("click", () => {
+    if (c.dataset.choice === "local") choice = "local";
+    else if (choice === "local") choice = existingKey()?.name ?? "openrouter";
+    renderChoice();
+  }),
+);
+document.querySelectorAll("#key-provider button").forEach((b) =>
+  b.addEventListener("click", () => {
+    choice = b.dataset.provider;
+    renderChoice();
+  }),
+);
 
 /** Saves the chosen setup and starts any downloads. Returns false to stay
  *  on the step. */
@@ -196,9 +231,13 @@ async function applyChoice() {
     return false;
   };
   try {
-    if (choice === "local") {
+    if (choice === "local" && aiOn()) {
       // Saved by the setup itself, as each part arrives.
       setup = await invoke("start_local_setup", { speechOnly: false });
+    } else if (choice === "local") {
+      // Just speech to text: words go in as they're said.
+      await saveProviders("auto", "off");
+      setup = await invoke("start_local_setup", { speechOnly: true });
     } else if (choice === "anthropic") {
       // Claude only tidies up; the voice is understood on this computer.
       await saveProviders("auto", "anthropic");
@@ -256,11 +295,12 @@ function speechReady() {
   return !setup || setup.speech_ready;
 }
 
-/** The strip at the top saying how getting ready is going, on step 3 (step
- *  4 has its own, bigger one). */
+/** The strip at the top saying how getting ready is going: on step 3, and
+ *  on step 4 while the AI is still on its way (step 4 waits for speech to
+ *  text on its own, bigger page). */
 function renderSetup() {
   const strip = $("getting-ready");
-  strip.hidden = !setup || step !== 3;
+  strip.hidden = !setup || !(step === 3 || (step === 4 && !waiting() && setup.working));
   if (step === 4) renderWait();
   if (step === LAST) renderDone();
   if (!setup) return;
@@ -273,14 +313,19 @@ function renderSetup() {
   strip.classList.toggle("ok", !setup.working && !setup.error);
   strip.classList.toggle("error", !!setup.error);
   const amount = setup.total ? `${gb(setup.done)} of ${gb(setup.total)} GB` : "";
+  const speechTotal = setup.speech_total ?? 0;
+  const aiAmount =
+    setup.total > speechTotal ? `${gb(Math.max(0, setup.done - speechTotal))} of ${gb(setup.total - speechTotal)} GB` : "";
   if (setup.error) {
     text.textContent = setup.error;
   } else if (!setup.working) {
     text.textContent = "✓ Splashdown is ready.";
   } else if (!setup.speech_ready) {
-    text.textContent = `Getting Splashdown ready… ${amount}${timeLeft()}`;
+    text.textContent = `Downloading speech to text… ${amount}${timeLeft()}`;
+  } else if (setup.checking) {
+    text.textContent = "✓ You can dictate now · checking how fast the AI is here…";
   } else {
-    text.textContent = `✓ You can try it now. Still downloading what tidies up your words: ${amount}${timeLeft()}`;
+    text.textContent = `✓ You can dictate now · the AI: ${aiAmount}${timeLeft()}`;
   }
 }
 
@@ -306,10 +351,20 @@ function renderPermissions() {
 
 // ---------------------------------------------------------------- step 4: getting ready
 
-/** Downloads or the speed check still going (or stopped by an error):
- *  nothing can be tried yet, and the guide waits here. */
+/** Speech to text still downloading (or stopped by an error): nothing can
+ *  be tried yet, and the guide waits here. The AI comes in the background. */
 function waiting() {
-  return !!setup && (setup.working || setup.checking || !!setup.error);
+  return !!setup && (!setup.speech_ready || !!setup.error);
+}
+
+/** The AI that cleans up is part of this setup (not turned off). */
+function aiPlanned() {
+  return state.settings.ai?.provider !== "off";
+}
+
+/** The AI is here to use: a cloud key, or the local download is done. */
+function aiReady() {
+  return aiPlanned() && (!setup || !!setup.cleanup_ready || (!setup.working && !setup.error));
 }
 
 /** The built-in model turned out too slow, and nothing's been chosen. */
@@ -334,10 +389,12 @@ function renderWait() {
   $("wait").hidden = !wait;
   $("slow").hidden = !slow;
   $("try-area").hidden = wait || slow;
-  $("try-h1").textContent = wait ? "Almost there" : slow ? "One thing first" : "Try it";
+  $("try-h1").textContent = wait ? "Getting ready" : slow ? "One thing first" : "Try it";
   if (wait) {
     wasWaiting = true;
-    const pct = setup.total ? Math.min(1, setup.done / setup.total) : 0;
+    // Waiting for speech to text alone; the AI follows in the background.
+    const speechTotal = setup.speech_total || setup.total;
+    const pct = speechTotal ? Math.min(1, setup.done / speechTotal) : 0;
     const box = $("wait");
     box.classList.toggle("landed", !!setup.checking);
     // Down from the sky to the water as the downloads go.
@@ -352,24 +409,22 @@ function renderWait() {
       $("wait-amount").textContent = "";
     } else if (setup.checking) {
       $("wait-title").textContent = "Checking how fast this computer is";
-      $("wait-sub").textContent = "Splashdown is tidying up a test dictation. This takes a few seconds.";
+      $("wait-sub").textContent = "Splashdown is cleaning up a test dictation. This takes a few seconds.";
       $("wait-amount").textContent = "";
     } else {
-      $("wait-title").textContent = "Getting Splashdown ready";
-      $("wait-sub").textContent = setup.speech_ready
-        ? "Now downloading what tidies up your words. You can try everything as soon as it's done."
-        : "Downloading what Splashdown needs to understand you and tidy up your words.";
-      $("wait-amount").textContent = setup.total
-        ? `${Math.floor(pct * 100)}% · ${gb(setup.done)} of ${gb(setup.total)} GB${timeLeft()}`
+      $("wait-title").textContent = "Downloading speech to text";
+      $("wait-sub").textContent = "So Splashdown can understand you. You can try it as soon as it's here.";
+      $("wait-amount").textContent = speechTotal
+        ? `${Math.floor(pct * 100)}% · ${gb(setup.done)} of ${gb(speechTotal)} GB${timeLeft()}`
         : "Starting…";
     }
   } else if (slow) {
-    $("slow-text").textContent = `Each dictation would take about ${secondsOf(setup.local_ms)} seconds to be tidied up here, because the built-in model needs a fast processor or graphics chip. A cloud service is much quicker.`;
+    $("slow-text").textContent = `The AI would take about ${secondsOf(setup.local_ms)} seconds to clean up each dictation here, because it needs a fast processor or graphics chip. A cloud service is much quicker.`;
   } else {
     const note = $("speed-note");
     note.hidden = setup?.speed !== "usable" || state.settings.ai?.provider !== "local";
     if (!note.hidden) {
-      note.textContent = `Tidying up takes about ${secondsOf(setup.local_ms)} seconds on this computer. A cloud key makes it quicker: Settings → AI Models.`;
+      note.textContent = `The AI's cleanup takes about ${secondsOf(setup.local_ms)} seconds on this computer. A cloud key makes it quicker: Settings → AI Models.`;
     }
     if (wasWaiting) {
       // Just finished: start the walk-through afresh.
@@ -417,11 +472,11 @@ $("slow-key-save").onclick = async () => {
     save.textContent = "Use this key";
     return;
   }
-  // Voice still understood here; only the tidying up moves.
+  // Voice still understood here; only the AI moves.
   await slowChosen((s) => {
     s.ai = { ...s.ai, provider: "openrouter", model: null };
   });
-  toast("Key verified · tidying up now uses OpenRouter");
+  toast("Key verified · the AI now uses OpenRouter");
 };
 $("slow-key").onkeydown = (e) => e.key === "Enter" && $("slow-key-save").onclick();
 $("slow-off").onclick = () =>
@@ -464,26 +519,17 @@ const TRIES = [
     did: ["dictated", "instructed", "rewrote"],
   },
   {
+    title: "In any app",
+    how: (k) => ["Now open any app you type in (Notes, Mail, a chat), click where you'd type, hold ", kbd(k.dict), ", say something, and let go. Then come back here."],
+    did: ["elsewhere"],
+    noBox: true,
+  },
+  {
     title: "Change selected text",
     how: (k) => ["Select the sentence in the box, then hold ", kbd(k.dict), " and say ", said("make it more excited"), "."],
     did: ["rewrote"],
     start: "Our team meeting moved to Thursday afternoon.",
-  },
-  {
-    title: "Add an instruction",
-    how: (k) => ["Hold ", kbd(k.dict), " and say ", said("milk, eggs and bread"), ", then tap ", kbd(k.instr), ", say ", said("as a bulleted list"), " and let go."],
-    did: ["instructed"],
-  },
-  {
-    title: "Press Return when it's typed",
-    how: (k) => ["Hold ", kbd(k.dict), ", say something, and tap ", kbd(k.ret), " before you let go. In a chat app, that sends it."],
-    did: ["sent"],
-  },
-  {
-    title: "Fix it by voice",
-    how: (k) => ["Hold ", kbd(k.dict), ", tap ", kbd(k.instr), " first, then say ", said("delete that last sentence"), "."],
-    did: ["edited"],
-    start: "This sentence stays. This one goes.",
+    ai: true,
   },
   {
     title: "Do things",
@@ -494,14 +540,15 @@ const TRIES = [
     did: ["acted"],
     actions: true,
     noBox: true,
-  },
-  {
-    title: "Ask a question",
-    how: (k) => ["Hold ", kbd(k.dict), ", press ", kbd(k.ask), ", and ask ", said("what's the German word for deadline?"), ". The answer shows in a panel; Esc closes it."],
-    did: ["asked"],
-    noBox: true,
+    ai: true,
   },
 ];
+
+/** The tries for this setup: those that need the AI only when it's part of
+ *  it. */
+function tries() {
+  return TRIES.filter((t) => !t.ai || aiPlanned());
+}
 
 function startPractice() {
   showTry();
@@ -513,7 +560,7 @@ function showTry() {
   trySince = Date.now();
   const list = $("try-list");
   list.replaceChildren(
-    ...TRIES.map((t, i) => {
+    ...tries().map((t, i) => {
       const item = document.createElement("li");
       const mark = { done: "✓", skipped: "–" }[tryState[i]] ?? String(i + 1);
       item.className = tryState[i] ?? (i === tryIndex ? "current" : "");
@@ -521,10 +568,17 @@ function showTry() {
       return item;
     }),
   );
-  const finished = tryIndex >= TRIES.length;
+  const finished = tryIndex >= tries().length;
   $("try-card").hidden = finished;
   $("try-finished").hidden = !finished;
-  $("practice").hidden = finished || !!TRIES[tryIndex]?.noBox;
+  if (finished) {
+    const tip = $("try-finished");
+    tip.replaceChildren();
+    const b = document.createElement("b");
+    b.textContent = "That's it. ";
+    tip.append(b, "To see everything else you can say, hold ", kbd(keys().dict), ", tap ", kbd(keys().instr), " and say ", said("what can I say?"), ".");
+  }
+  $("practice").hidden = finished || !!tries()[tryIndex]?.noBox;
   $("practice-status").hidden = finished;
   $("try-skip").hidden = finished;
   if (finished) {
@@ -532,10 +586,22 @@ function showTry() {
     updateFooter();
     return;
   }
-  const t = TRIES[tryIndex];
-  $("try-count").textContent = `${tryIndex + 1} of ${TRIES.length}`;
+  const t = tries()[tryIndex];
+  $("try-count").textContent = `${tryIndex + 1} of ${tries().length}`;
   $("try-title").textContent = t.title;
-  $("try-how").replaceChildren(...t.how(keys()));
+  // The AI is still on its way: say so, and let it be skipped.
+  const early = t.ai && !aiReady();
+  $("try-how").replaceChildren(
+    ...(early ? ["This one needs the AI, which is still downloading (see above). It starts by itself when the AI is here."] : t.how(keys())),
+  );
+  if (early) {
+    $("actions-try").hidden = true;
+    $("practice").hidden = true;
+    $("practice-status").hidden = true;
+    $("try-skip").hidden = false;
+    updateFooter();
+    return;
+  }
   // Asked first; once they're on, tried.
   $("actions-try").hidden = !t.actions || actionsOn();
   $("practice-status").hidden = !!t.actions && !actionsOn();
@@ -551,9 +617,15 @@ function showTry() {
   updateFooter();
 }
 
-/** Dictation can only be tried once the speech model is here. */
+/** Dictation can only be tried once the speech model is here; the AI's
+ *  tries once the AI is too. */
 function renderPractice() {
-  if (tryIndex >= TRIES.length || tryTicked) return;
+  if (tryIndex >= tries().length || tryTicked) return;
+  const t = tries()[tryIndex];
+  if (t.ai && $("try-how").dataset.ai !== String(aiReady())) {
+    $("try-how").dataset.ai = String(aiReady());
+    if (aiReady()) return showTry();
+  }
   const box = $("practice");
   const st = $("practice-status");
   const ready = speechReady();
@@ -562,7 +634,7 @@ function renderPractice() {
   st.dataset.ready = String(ready);
   st.textContent = ready
     ? "Waiting for you to try it…"
-    : "Almost ready: Splashdown is still downloading what it needs to understand you. This box switches on by itself.";
+    : "Speech to text is still downloading. This box switches on by itself.";
   if (ready) {
     trySince = Date.now();
     box.focus();
@@ -581,8 +653,9 @@ function nextTry(how) {
 $("try-skip").addEventListener("click", () => nextTry("skipped"));
 
 async function checkTry() {
-  if (step !== 4 || tryIndex >= TRIES.length || tryTicked || !speechReady()) return;
-  const t = TRIES[tryIndex];
+  if (step !== 4 || tryIndex >= tries().length || tryTicked || !speechReady()) return;
+  const t = tries()[tryIndex];
+  if (t.ai && !aiReady()) return;
   const done = await invoke("did_since", { since: trySince }).catch(() => []);
   const hit = done.find((d) => t.did.includes(d.what));
   if (!hit) return;
@@ -631,20 +704,32 @@ document.querySelectorAll("[data-actions]").forEach((b) =>
 // ---------------------------------------------------------------- step 5: done
 
 function renderDone() {
-  const home = state.platform === "macos"
-    ? "Splashdown lives in the menu bar, at the top of the screen."
-    : "Splashdown lives by the clock, at the bottom right of the screen (click ^ if you don't see it).";
-  const still = setup?.working
-    ? " It's still finishing a download: tidying up your words switches on by itself when it's done, even if you close this window."
-    : "";
-  $("done-sub").textContent = `${home}${still} A few things worth knowing:`;
-  // Never asked (step 6 skipped): ask here, once.
-  $("done-actions").hidden = actionsOn() || actionsAnswer === "no";
+  const k = keys();
+  const home = $("done-home");
+  home.replaceChildren();
+  const b = document.createElement("b");
+  if (state.platform === "macos") {
+    b.textContent = "Splashdown is in the menu bar";
+    home.append(b, ", at the top of your screen.");
+  } else {
+    b.textContent = "Splashdown is by the clock";
+    home.append(b, ", at the bottom right of your screen (click ^ if you don't see it).");
+  }
+  const help = $("done-help");
+  help.replaceChildren();
+  const h = document.createElement("b");
+  h.textContent = "Everything else: ";
+  help.append(h, "hold ", kbd(k.dict), ", tap ", kbd(k.instr), " and say ", said("what can I say?"), ".");
+  const still = $("done-still");
+  still.hidden = !setup?.working;
+  still.textContent = "The AI is still downloading. It switches on by itself when it's done, even if you close this window.";
+  // Never asked (that try skipped): ask here, once.
+  $("done-actions").hidden = !aiPlanned() || actionsOn() || actionsAnswer === "no";
   const on = $("done-actions-on");
   // Turned on here but not tried yet: how to.
-  const tried = tryState[TRIES.findIndex((t) => t.actions)] === "done";
+  const tried = tryState[tries().findIndex((t) => t.actions)] === "done";
   on.hidden = !(actionsOn() && actionsAnswer === "yes" && !tried);
-  on.textContent = `✓ Voice actions are on. Hold ${dictationKeyLabel(state)}, tap Right Shift and say “open Calculator” to try one.`;
+  on.textContent = `✓ Voice actions are on. Hold ${k.dict}, tap ${k.instr} and say “open Calculator” to try one.`;
 }
 
 async function finish() {
@@ -680,17 +765,7 @@ async function poll() {
 
   // A key that's already set up (e.g. from .env.local) is offered as-is.
   const existing = existingKey();
-  if (existing) {
-    const name = KEY_CHOICES[existing.name]?.label ?? existing.name;
-    const card = document.createElement("button");
-    card.className = "card";
-    card.dataset.choice = "existing";
-    card.innerHTML = `<span class="ic" aria-hidden="true">✓</span><b>Use my ${name} key</b><p>Already set up (…${existing.hint}).</p><span class="badge ok">Ready</span>`;
-    card.addEventListener("click", () => pick(card));
-    $("ai-cards").prepend(card);
-    showKeys(true);
-    choice = "existing";
-  }
+  if (existing) choice = existing.name;
   renderChoice();
   renderPermissions();
   go(1);
@@ -718,10 +793,10 @@ async function mockInvoke(cmd, args) {
     return { state: mockInvoke.s, engine_error: null };
   }
   if (cmd === "local_setup_status") return null;
-  if (cmd === "local_setup_plan") return { cleanup: "local", small: false, download_mb: 2995, free_mb: 80_000, too_little_space: false };
+  if (cmd === "local_setup_plan") return { cleanup: "local", small: false, download_mb: 2995, speech_mb: 495, ai_mb: 2500, free_mb: 80_000, too_little_space: false };
   if (cmd === "start_local_setup") {
     const total = 2_995_000_000;
-    const status = { working: true, speech_ready: false, cleanup_ready: false, done: 0, total, error: null };
+    const status = { working: true, speech_ready: false, cleanup_ready: false, done: 0, total, speech_total: 495_000_000, error: null };
     (async () => {
       for (let i = 1; i <= 20; i++) {
         await new Promise((r) => setTimeout(r, 400));
