@@ -413,7 +413,19 @@ pub struct AiSettings {
     /// spoken instructions and edits of selected text to a cloud model
     /// instead, if a key is saved. Plain dictation stays local.
     pub cloud_for_instructions: bool,
+    /// How long the built-in model took to tidy up a typical dictation on
+    /// this computer, in milliseconds (the setup guide measures it).
+    pub local_ms: Option<u32>,
+    /// Keep the built-in model although it's slow here: no suggestions to
+    /// use a cloud key instead.
+    pub slow_local_ok: bool,
 }
+
+/// The built-in model tidies up a typical dictation in under this many
+/// milliseconds on a computer that's fast enough for it.
+pub const LOCAL_FAST_MS: u32 = 2_000;
+/// Over this, it's too slow to be pleasant: a cloud key is suggested.
+pub const LOCAL_SLOW_MS: u32 = 5_000;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]

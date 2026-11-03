@@ -9,6 +9,10 @@
 //! about 8 GB, Apple's built-in model where the Mac has one (no download,
 //! no memory of its own, and as good in the eval), otherwise Qwen3 4B
 //! packed smaller.
+//!
+//! Once the tidy-up model is in, it's timed on an ordinary dictation: a
+//! slow computer (no graphics chip it can use, an older processor) can
+//! take many seconds, and the guide then suggests a cloud key.
 
 use std::sync::Mutex;
 use std::time::Instant;
@@ -26,6 +30,15 @@ use crate::engine;
 const ROOMY: u64 = 12 << 30;
 /// Room to leave on the disk after the downloads.
 const SPARE: u64 = 1 << 30;
+
+/// Two ordinary dictations for timing the tidy-up model: the first loads
+/// it, the second is timed (a different one, so the model can't reuse
+/// what it worked out the first time).
+const WARM_UP: &str = "um so I was thinking we could move the team meeting to thursday \
+                       afternoon, actually no, friday morning works better for everyone";
+const TIMED: &str = "hey can you send me the notes from yesterday's call when you get a \
+                     chance, and uh let me know if the budget numbers changed at all since \
+                     last week";
 
 /// How the words get tidied up.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -120,6 +133,12 @@ pub struct Status {
     /// Bytes downloaded so far, and in all, over both models.
     done: u64,
     total: u64,
+    /// Timing the tidy-up model, after its download.
+    checking: bool,
+    /// What that found: milliseconds for an ordinary dictation, and
+    /// "fast", "usable" or "slow".
+    local_ms: Option<u32>,
+    speed: Option<&'static str>,
     /// Why it stopped, in words for anyone.
     error: Option<String>,
 }
@@ -249,6 +268,20 @@ async fn run(
                 s.ai.model = (model != LocalModel::Qwen3_4B).then(|| model.id().to_string());
             })
             .await?;
+            update(app, |s| {
+                s.done = s.total;
+                s.checking = true;
+            });
+            let measured = speed_test(app).await;
+            if let Some(ms) = measured {
+                tracing::info!("the built-in model tidied up a dictation in {ms} ms");
+                remember_speed(app, ms);
+            }
+            update(app, |s| {
+                s.checking = false;
+                s.local_ms = measured;
+                s.speed = measured.map(speed_of);
+            });
         }
         Cleanup::Apple => {
             change(app, |s| {
@@ -279,6 +312,50 @@ fn update(app: &AppHandle, f: impl FnOnce(&mut Status)) {
     let _ = app.emit("setup-progress", current);
 }
 
+/// "fast", "usable" or "slow", for `ms` per ordinary dictation.
+pub fn speed_of(ms: u32) -> &'static str {
+    if ms < splashdown_config::LOCAL_FAST_MS {
+        "fast"
+    } else if ms <= splashdown_config::LOCAL_SLOW_MS {
+        "usable"
+    } else {
+        "slow"
+    }
+}
+
+/// Times an ordinary dictation through the tidy-up model now in use, after
+/// one that loads it. `None` if it couldn't run.
+async fn speed_test(app: &AppHandle) -> Option<u32> {
+    let state = app.state::<AppState>();
+    let session = state.session.clone();
+    let preset = state.settings().presets().into_iter().find(|p| p.ai)?.id;
+    tauri::async_runtime::spawn_blocking(move || {
+        session
+            .redo(WARM_UP.into(), None, preset.clone())
+            .inspect_err(|e| tracing::warn!("couldn't time the built-in model: {e}"))
+            .ok()?;
+        let started = Instant::now();
+        session.redo(TIMED.into(), None, preset).ok()?;
+        Some(u32::try_from(started.elapsed().as_millis()).unwrap_or(u32::MAX))
+    })
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Keeps the measured speed (for Settings → Providers), without rebuilding
+/// anything: it changes nothing about how dictation runs.
+fn remember_speed(app: &AppHandle, ms: u32) {
+    let state = app.state::<AppState>();
+    let mut settings = state.settings();
+    settings.ai.local_ms = Some(ms);
+    if let Ok(paths) = engine::paths()
+        && settings.save(&paths.config_file()).is_ok()
+    {
+        *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    }
+}
+
 /// Saves a change to the settings and puts it to use.
 async fn change(app: &AppHandle, f: impl FnOnce(&mut Settings)) -> Result<(), String> {
     let state = app.state::<AppState>();
@@ -296,6 +373,14 @@ async fn change(app: &AppHandle, f: impl FnOnce(&mut Settings)) -> Result<(), St
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn speeds_are_named() {
+        assert_eq!(speed_of(900), "fast");
+        assert_eq!(speed_of(3_400), "usable");
+        assert_eq!(speed_of(5_000), "usable");
+        assert_eq!(speed_of(9_400), "slow");
+    }
 
     #[test]
     fn the_best_tidy_up_the_computer_can_run() {

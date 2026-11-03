@@ -353,6 +353,14 @@ function renderLocalModels() {
       } else if (m.downloaded) {
         const inUse = s.ai.provider !== "auto" ? m.id === selected : !off;
         if (inUse || !local) st.append(badge(inUse ? "In use" : "Downloaded", "ok"));
+        // How fast it is here, as the setup guide measured it.
+        if (inUse && s.ai.local_ms) {
+          const secs = s.ai.local_ms / 1000;
+          const slow = s.ai.local_ms > 5000;
+          row.querySelector("small").append(
+            ` On this computer it tidies up a dictation in about ${secs < 10 ? secs.toFixed(1) : Math.round(secs)} s${slow ? ", which is slow: a cloud key (OpenRouter, OpenAI or Anthropic) is much quicker." : "."}`,
+          );
+        }
         else st.append(button("Use", () => chooseLocalModel(m.id)));
       } else {
         st.append(button("Download", () => downloadLocalModel(m.id)));

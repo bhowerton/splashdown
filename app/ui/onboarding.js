@@ -19,6 +19,8 @@ let trySince = 0; // when it began, so only what's done after counts
 let tryState = []; // "done" or "skipped", by index
 let tryTicked = false; // the current one worked; moving on in a moment
 let actionsAnswer = null; // "yes" or "no" once asked about voice actions
+let slowAnswered = false; // chose what to do about a slow built-in model
+let wasWaiting = false; // step 4 was waiting for the downloads
 
 // ---------------------------------------------------------------- navigation
 
@@ -54,6 +56,14 @@ function updateFooter() {
   if (step === 3 && state && !state.permissions.accessibility) {
     next.disabled = true;
     note.textContent = "Accessibility is needed for the dictation key";
+  }
+  // While getting ready, there's nothing to move on to.
+  if (step === 4 && (waiting() || tooSlow())) {
+    next.disabled = true;
+    next.textContent = "Continue";
+    next.classList.add("primary");
+    note.textContent = waiting() ? "Splashdown needs to finish getting ready first" : "";
+    return;
   }
   // While trying things, moving on is a quiet choice, not the main one.
   const skipping = step === 4 && tryIndex < TRIES.length;
@@ -246,11 +256,12 @@ function speechReady() {
   return !setup || setup.speech_ready;
 }
 
-/** The strip at the top saying how getting ready is going, from step 3 on. */
+/** The strip at the top saying how getting ready is going, on step 3 (step
+ *  4 has its own, bigger one). */
 function renderSetup() {
   const strip = $("getting-ready");
-  strip.hidden = !setup || step < 3;
-  if (step === 4) renderPractice();
+  strip.hidden = !setup || step !== 3;
+  if (step === 4) renderWait();
   if (step === LAST) renderDone();
   if (!setup) return;
   const text = $("gr-text");
@@ -292,6 +303,135 @@ function renderPermissions() {
   $("perm-title").textContent = windows ? "Allow the microphone" : "Two quick permissions";
   if (step === 3) updateFooter();
 }
+
+// ---------------------------------------------------------------- step 4: getting ready
+
+/** Downloads or the speed check still going (or stopped by an error):
+ *  nothing can be tried yet, and the guide waits here. */
+function waiting() {
+  return !!setup && (setup.working || setup.checking || !!setup.error);
+}
+
+/** The built-in model turned out too slow, and nothing's been chosen. */
+function tooSlow() {
+  return (
+    !waiting() &&
+    setup?.speed === "slow" &&
+    !slowAnswered &&
+    state.settings.ai?.provider === "local" &&
+    !state.settings.ai?.slow_local_ok
+  );
+}
+
+function secondsOf(ms) {
+  const s = ms / 1000;
+  return s < 10 ? s.toFixed(1) : String(Math.round(s));
+}
+
+function renderWait() {
+  const wait = waiting();
+  const slow = tooSlow();
+  $("wait").hidden = !wait;
+  $("slow").hidden = !slow;
+  $("try-area").hidden = wait || slow;
+  $("try-h1").textContent = wait ? "Almost there" : slow ? "One thing first" : "Try it";
+  if (wait) {
+    wasWaiting = true;
+    const pct = setup.total ? Math.min(1, setup.done / setup.total) : 0;
+    const box = $("wait");
+    box.classList.toggle("landed", !!setup.checking);
+    // Down from the sky to the water as the downloads go.
+    $("w-chute").style.transform = `translateY(${setup.checking ? 40 : -12 + pct * 48}px)`;
+    $("wait-progress").classList.toggle("indeterminate", !!setup.checking);
+    $("wait-bar").style.width = setup.checking ? "" : `${Math.floor(pct * 100)}%`;
+    $("wait-progress").hidden = !!setup.error;
+    $("wait-retry").hidden = !setup.error;
+    if (setup.error) {
+      $("wait-title").textContent = "The download stopped";
+      $("wait-sub").textContent = setup.error;
+      $("wait-amount").textContent = "";
+    } else if (setup.checking) {
+      $("wait-title").textContent = "Checking how fast this computer is";
+      $("wait-sub").textContent = "Splashdown is tidying up a test dictation. This takes a few seconds.";
+      $("wait-amount").textContent = "";
+    } else {
+      $("wait-title").textContent = "Getting Splashdown ready";
+      $("wait-sub").textContent = setup.speech_ready
+        ? "Now downloading what tidies up your words. You can try everything as soon as it's done."
+        : "Downloading what Splashdown needs to understand you and tidy up your words.";
+      $("wait-amount").textContent = setup.total
+        ? `${Math.floor(pct * 100)}% · ${gb(setup.done)} of ${gb(setup.total)} GB${timeLeft()}`
+        : "Starting…";
+    }
+  } else if (slow) {
+    $("slow-text").textContent = `Each dictation would take about ${secondsOf(setup.local_ms)} seconds to be tidied up here, because the built-in model needs a fast processor or graphics chip. A cloud service is much quicker.`;
+  } else {
+    const note = $("speed-note");
+    note.hidden = setup?.speed !== "usable" || state.settings.ai?.provider !== "local";
+    if (!note.hidden) {
+      note.textContent = `Tidying up takes about ${secondsOf(setup.local_ms)} seconds on this computer. A cloud key makes it quicker: Settings → Providers.`;
+    }
+    if (wasWaiting) {
+      // Just finished: start the walk-through afresh.
+      wasWaiting = false;
+      showTry();
+    }
+    renderPractice();
+  }
+  updateFooter();
+}
+
+$("wait-retry").onclick = () => $("gr-retry").onclick();
+
+/** Saves a change to the settings; true if it worked. */
+async function changeSettings(change) {
+  const settings = structuredClone(state.settings);
+  change(settings);
+  try {
+    state = (await invoke("save_settings", { settings })).state;
+    return true;
+  } catch (e) {
+    toast(String(e), true);
+    return false;
+  }
+}
+
+async function slowChosen(change) {
+  if (!(await changeSettings(change))) return;
+  slowAnswered = true;
+  renderWait();
+  showTry();
+}
+
+$("slow-key-save").onclick = async () => {
+  const input = $("slow-key");
+  if (!input.value.trim()) return input.focus();
+  const save = $("slow-key-save");
+  save.disabled = true;
+  save.textContent = "Checking…";
+  try {
+    state = (await invoke("save_key", { name: "openrouter", value: input.value })).state;
+  } catch (e) {
+    toast(String(e), true);
+    save.disabled = false;
+    save.textContent = "Use this key";
+    return;
+  }
+  // Voice still understood here; only the tidying up moves.
+  await slowChosen((s) => {
+    s.ai = { ...s.ai, provider: "openrouter", model: null };
+  });
+  toast("Key verified · tidying up now uses OpenRouter");
+};
+$("slow-key").onkeydown = (e) => e.key === "Enter" && $("slow-key-save").onclick();
+$("slow-off").onclick = () =>
+  slowChosen((s) => {
+    s.ai = { ...s.ai, provider: "off", model: null };
+  });
+$("slow-keep").onclick = () =>
+  slowChosen((s) => {
+    s.ai = { ...s.ai, slow_local_ok: true };
+  });
 
 // ---------------------------------------------------------------- step 4: try it
 
@@ -587,9 +727,14 @@ async function mockInvoke(cmd, args) {
         await new Promise((r) => setTimeout(r, 400));
         status.done = (total / 20) * i;
         status.speech_ready = status.done > 495_000_000;
-        if (i === 20) Object.assign(status, { working: false, cleanup_ready: true });
+        if (i === 20) Object.assign(status, { checking: true });
         mockEmit("setup-progress", { ...status });
       }
+      await new Promise((r) => setTimeout(r, 2500));
+      const ms = mockInvoke.speedMs ?? 1200;
+      mockInvoke.s.settings.ai = { ...mockInvoke.s.settings.ai, provider: "local" };
+      Object.assign(status, { working: false, checking: false, cleanup_ready: true, local_ms: ms, speed: ms < 2000 ? "fast" : ms <= 5000 ? "usable" : "slow" });
+      mockEmit("setup-progress", { ...status });
     })();
     return status;
   }

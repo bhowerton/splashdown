@@ -455,6 +455,10 @@ struct Controller {
     pipeline_error: Option<String>,
     /// What the last voice action added, and when, for "undo that".
     last_action: Option<(crate::voice_actions::Undo, Instant)>,
+    /// Dictations in a row the built-in model was slow to tidy up, and
+    /// whether a cloud key was suggested (once per run).
+    slow_local: u8,
+    suggested_cloud: bool,
 }
 
 impl Controller {
@@ -494,6 +498,8 @@ impl Controller {
             pending_audio: None,
             last_notice: None,
             mic_lost: false,
+            slow_local: 0,
+            suggested_cloud: false,
             pipeline_error: None,
             last_action: None,
         }
@@ -1601,8 +1607,42 @@ impl Controller {
         if outcome.usage.on_device_fallback {
             tracing::warn!("a cloud provider failed; a model on this computer stood in");
             status.push_str(" · done on this computer (cloud didn't answer)");
+        } else if self.local_is_slow(&outcome) {
+            status = "Inserted · tidying up is slow here: a cloud key is faster".into();
         }
         self.done(&status);
+    }
+
+    /// Whether the built-in model has now been slow several dictations in a
+    /// row, on a computer where a cloud key hasn't been suggested yet (and
+    /// the user hasn't chosen to keep it anyway). Says so once per run.
+    fn local_is_slow(&mut self, outcome: &splashdown_core::Outcome) -> bool {
+        const IN_A_ROW: u8 = 3;
+        let local = outcome
+            .llm_name
+            .as_deref()
+            .is_some_and(|n| n.starts_with("local/"));
+        if !local || self.suggested_cloud {
+            return false;
+        }
+        let slow = outcome.llm_time.as_millis() > u128::from(splashdown_config::LOCAL_SLOW_MS);
+        self.slow_local = if slow { self.slow_local + 1 } else { 0 };
+        if self.slow_local < IN_A_ROW {
+            return false;
+        }
+        let keep = tauri::Manager::try_state::<crate::commands::AppState>(self.ui.app())
+            .is_some_and(|s| s.settings().ai.slow_local_ok);
+        self.suggested_cloud = true;
+        tracing::info!(
+            "the built-in model took {} ms to tidy up, {IN_A_ROW} dictations in a row{}",
+            outcome.llm_time.as_millis(),
+            if keep {
+                " (kept anyway)"
+            } else {
+                "; suggesting a cloud key"
+            }
+        );
+        !keep
     }
 
     fn record(

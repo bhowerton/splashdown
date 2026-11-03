@@ -107,3 +107,39 @@ kbd {
 .getting-ready.ok { border-color: var(--ok); color: var(--ok); font-weight: 600; }
 .getting-ready.error { border-color: var(--warn); background: var(--warn-soft); }
 .practice:disabled { opacity: .55; }
+
+/* Getting ready (step 4 waits here): the capsule from the logo drifts down
+   as the downloads go, and bobs on the water while the speed is checked. */
+.wait { text-align: center; padding: 6px 0 4px; }
+.wait-art { display: block; width: 100%; max-width: 420px; height: auto; margin: 0 auto 16px; }
+#w-chute { transition: transform 1.2s ease-out; }
+.w-sway { transform-origin: 160px 20px; animation: w-sway 4s ease-in-out infinite; }
+@keyframes w-sway { 0%, 100% { transform: rotate(-3deg); } 50% { transform: rotate(3deg); } }
+.wait.landed .w-sway { animation: w-bob 1.6s ease-in-out infinite; }
+@keyframes w-bob { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(3px) rotate(2deg); } }
+.w-sea { animation: w-waves 3s linear infinite; }
+@keyframes w-waves { from { transform: translateX(0); } to { transform: translateX(-40px); } }
+.w-star { animation: w-twinkle 3s ease-in-out infinite; }
+.w-star:nth-of-type(2n) { animation-delay: -1.4s; }
+@keyframes w-twinkle { 0%, 100% { opacity: .9; } 50% { opacity: .3; } }
+.wait-title { margin: 0 0 4px; font-size: 17px; font-weight: 650; }
+.wait-sub { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
+.wait-progress { display: block; width: min(360px, 100%); margin: 0 auto; }
+.wait-amount { margin: 8px 0 0; color: var(--muted); font-size: 12.5px; font-variant-numeric: tabular-nums; }
+#wait-retry { margin-top: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .w-sway, .w-sea, .w-star, .wait.landed .w-sway { animation: none; }
+  #w-chute { transition: none; }
+}
+
+/* Too slow for the built-in model: the choices. */
+.slow-title { margin: 0 0 4px; font-size: 17px; font-weight: 650; }
+.slow-text { margin: 0 0 14px; color: var(--muted); font-size: 13.5px; }
+.slow-choice { padding: 14px; border: 2px solid var(--accent); border-radius: var(--radius); background: var(--surface); }
+.slow-choice b .badge { margin-left: 6px; vertical-align: 1px; }
+.slow-choice p { margin: 6px 0 10px; font-size: 13px; }
+.slow-key { display: flex; gap: 8px; }
+.slow-key input { flex: 1; min-width: 0; }
+.slow-other { display: flex; align-items: center; gap: 12px; margin: 14px 0 10px; font-size: 12.5px; color: var(--muted); }
+.slow-other .btn { flex-shrink: 0; }
+.speed-note { margin: 0 0 12px; padding: 8px 12px; border-radius: var(--radius); background: var(--surface-2); font-size: 12.5px; color: var(--muted); }

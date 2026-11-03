@@ -4,6 +4,9 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
+- **The setup guide checks whether this computer is fast enough for the built-in model.** Once it's downloaded, Splashdown times it on an ordinary dictation. If tidying up would take more than about 5 seconds (common on older PCs, where it runs on the processor alone), the guide says so and offers a cloud key (OpenRouter: about a second, a few cents a day), turning tidying up off, or keeping it anyway. Between 2 and 5 seconds, it mentions that a cloud key is quicker. Settings → Providers shows the measured speed, and if real dictations turn out slow too, Splashdown suggests a cloud key once.
+- **The setup guide waits until Splashdown is ready.** While the models download and the speed is checked, Try it shows the progress, with a capsule drifting down under its parachute, and can't be skipped past: there's nothing to try until it's done.
+
 - **The setup guide asks whether you want voice actions.** Instead of a switch inside a step, the Do things step asks plainly ("Want Splashdown to do things for you, not just type?") with Yes, turn it on and Not now, and the last page asks once more if you skipped past it.
 
 ## 0.5.0 — 2026-11-02
