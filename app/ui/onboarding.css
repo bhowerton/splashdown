@@ -20,11 +20,16 @@ kbd {
 /* A key on the keyboard, not a button: light, with a raised edge, pressed
    now and then. */
 kbd.keycap {
-  padding: 1px 10px; border: 1px solid #c9ced8; border-bottom: 3px solid #a9b0bd; border-radius: 7px;
+  padding: 1px 10px; border: 1px solid #c9ced8; border-radius: 7px;
   background: linear-gradient(#fdfdfe, #eceef3); color: #1f2937; font-size: 13.5px; vertical-align: 1px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, .12); white-space: nowrap; animation: press 3.2s ease-in-out infinite;
+  /* The raised edge is a shadow, and the press a transform: neither
+     changes the layout, so nothing around the key moves. */
+  box-shadow: 0 3px 0 #a9b0bd, 0 4px 4px rgba(0, 0, 0, .12); white-space: nowrap; animation: press 3.2s ease-in-out infinite;
 }
-@keyframes press { 0%, 62%, 100% { transform: translateY(0); border-bottom-width: 3px; } 70%, 92% { transform: translateY(2px); border-bottom-width: 1px; } }
+@keyframes press {
+  0%, 62%, 100% { transform: translateY(0); box-shadow: 0 3px 0 #a9b0bd, 0 4px 4px rgba(0, 0, 0, .12); }
+  70%, 92% { transform: translateY(2px); box-shadow: 0 1px 0 #a9b0bd, 0 1px 2px rgba(0, 0, 0, .12); }
+}
 @media (prefers-reduced-motion: reduce) { kbd.keycap { animation: none; } }
 .points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-width: 560px; margin: 0 auto; padding: 0; list-style: none; text-align: left; }
 .points li { padding: 10px 12px; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--border); font-size: 12.5px; color: var(--muted); }
@@ -104,7 +109,7 @@ kbd.keycap {
 /* The voice actions question (step 6, and the last page if unanswered). */
 .actions-ask { margin-top: 10px; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-soft); }
 .actions-ask .ask-q { margin: 0 0 4px; font-weight: 650; font-size: 14px; }
-.actions-ask .ask-what { margin: 0 0 4px; font-size: 13px; }
+.actions-ask .ask-what { margin: 0 0 10px; font-size: 13px; }
 .actions-ask .ask-note { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
 .actions-ask .ask-buttons { display: flex; gap: 8px; }
 .actions-on { margin: 0 0 14px; color: var(--ok); font-size: 13px; font-weight: 600; }

@@ -507,7 +507,7 @@ function said(text) {
 
 function keys() {
   const letter = (state.settings.hotkeys.ask ?? "a").toUpperCase();
-  return { dict: dictationKeyLabel(state), instr: "Right Shift", ask: letter, ret: state.platform === "macos" ? "Return" : "Enter" };
+  return { dict: dictationKeyLabel(state), instr: instructionKeyLabel(state), ask: letter, ret: state.platform === "macos" ? "Return" : "Enter" };
 }
 
 /** What to try, how (as nodes), what Splashdown reports when it worked,
@@ -758,6 +758,12 @@ async function poll() {
 (async () => {
   state = await invoke("get_state");
   showDictationKey(state);
+  // The demo with the keys of this computer.
+  if (state.platform !== "macos") {
+    const demo = document.querySelector(".demo");
+    demo.src = "img/demo-win.svg";
+    demo.alt = demo.alt.replace("the dictation key", "Right Ctrl");
+  }
   // Opened again while getting ready: carry on showing it.
   setup = await invoke("local_setup_status").catch(() => null);
   plan = await invoke("local_setup_plan", { speechOnly: false }).catch(() => null);

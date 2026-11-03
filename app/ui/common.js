@@ -147,6 +147,13 @@ function dictationKeyLabel(snapshot) {
   return key ? key.label : "the dictation key";
 }
 
+/** The chosen instruction key's label, e.g. "Right Shift". */
+function instructionKeyLabel(snapshot) {
+  const value = snapshot.settings.hotkeys.instruction ?? "right-shift";
+  const key = snapshot.key_options.find((k) => k.value === value);
+  return key ? key.label : "the instruction key";
+}
+
 /** Fills every `.dict-key` placeholder in the page. */
 function showDictationKey(snapshot) {
   const label = dictationKeyLabel(snapshot);
