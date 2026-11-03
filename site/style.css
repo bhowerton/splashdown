@@ -69,14 +69,16 @@ h1 span {
   background-clip: text;
   color: transparent;
 }
-.lede { max-width: 560px; margin: 0 auto 18px; font-size: 21px; color: var(--muted); }
+.lede { max-width: 600px; margin: 0 auto 18px; font-size: 21px; color: var(--muted); }
+/* The four things, each a way into its section. */
+.lede a { color: var(--ink); border-bottom: 1px solid rgba(255, 154, 61, 0.55); }
+.lede a:hover { text-decoration: none; border-bottom-color: var(--orange-light); }
 /* Three short facts under the subhead, each with a check. */
 .proof { display: flex; gap: 8px 22px; justify-content: center; flex-wrap: wrap; margin: 0 0 30px; padding: 0; list-style: none; font-size: 15px; font-weight: 600; }
 .proof li::before { content: "✓"; margin-right: 7px; color: var(--orange-light); }
-/* What else it does, as links to the sections, above the demo. */
+/* How it works, in a line, above the demo. */
 .also { margin: 0 0 22px; font-size: 15px; color: var(--muted); }
-.also a { color: var(--ink); border-bottom: 1px solid rgba(255, 154, 61, 0.5); }
-.also a:hover { text-decoration: none; border-bottom-color: var(--orange-light); }
+
 
 .cta { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
 .btn {
