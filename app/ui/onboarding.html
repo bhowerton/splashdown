@@ -89,9 +89,11 @@
     <div class="try-card" id="try-card">
       <div class="try-head"><b id="try-title"></b><span class="try-count" id="try-count"></span></div>
       <p class="try-how" id="try-how"></p>
-      <div class="actions-try" id="actions-try" hidden>
-        <label class="row"><span class="lbl">Let spoken commands do things<small>Open apps, search the web, play music, add reminders and events. Nothing is ever sent, deleted or bought, and you can turn it off in Settings → Actions.</small></span>
-          <input type="checkbox" class="switch" id="ob-actions"></label>
+      <div class="actions-ask" id="actions-try" hidden>
+        <p class="ask-q">Want Splashdown to do things for you, not just type?</p>
+        <p class="ask-what">Say “open Spotify”, “remind me at 5 to stretch”, “add dentist to my calendar on Thursday at 4” or “pause the music”, and it's done.</p>
+        <p class="ask-note">Nothing is ever sent, deleted or bought: an email opens as a draft for you to send. You can change this any time in Settings → Actions.</p>
+        <div class="ask-buttons"><button class="btn primary" data-actions="yes">Yes, turn it on</button><button class="btn" data-actions="no">Not now</button></div>
       </div>
     </div>
     <textarea id="practice" class="practice" rows="4" aria-label="Practice box" placeholder="Your words will appear here"></textarea>
@@ -108,6 +110,13 @@
   <section class="ob-step" data-step="5" hidden>
     <h1>You're all set</h1>
     <p class="sub" id="done-sub">Splashdown lives in the menu bar. A few things worth knowing:</p>
+    <div class="actions-ask" id="done-actions" hidden>
+      <p class="ask-q">Want Splashdown to do things for you, not just type?</p>
+      <p class="ask-what">Say “open Spotify”, “remind me at 5 to stretch”, “add dentist to my calendar on Thursday at 4” or “pause the music”, and it's done.</p>
+      <p class="ask-note">Nothing is ever sent, deleted or bought: an email opens as a draft for you to send. You can change this any time in Settings → Actions.</p>
+      <div class="ask-buttons"><button class="btn primary" data-actions="yes">Yes, turn it on</button><button class="btn" data-actions="no">Not now</button></div>
+    </div>
+    <p class="actions-on" id="done-actions-on" hidden></p>
     <div class="group cheat">
       <div class="row"><span class="lbl">Dictate</span><span><kbd class="dict-key">Right Option</kbd> hold</span></div>
       <div class="row"><span class="lbl">Add an instruction (“make it an email”)</span><span>tap <kbd>Right Shift</kbd> while holding</span></div>

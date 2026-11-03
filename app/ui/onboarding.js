@@ -18,6 +18,7 @@ let tryIndex = 0; // which of TRIES is being tried (TRIES.length: all done)
 let trySince = 0; // when it began, so only what's done after counts
 let tryState = []; // "done" or "skipped", by index
 let tryTicked = false; // the current one worked; moving on in a moment
+let actionsAnswer = null; // "yes" or "no" once asked about voice actions
 
 // ---------------------------------------------------------------- navigation
 
@@ -346,7 +347,10 @@ const TRIES = [
   },
   {
     title: "Do things",
-    how: (k) => ["Turn this on, then hold ", kbd(k.dict), ", tap ", kbd(k.instr), " first, and say ", said("open Calculator"), "."],
+    how: (k) =>
+      actionsOn()
+        ? ["Hold ", kbd(k.dict), ", tap ", kbd(k.instr), " first, and say ", said("open Calculator"), "."]
+        : ["Splashdown can also open apps, set reminders, play music and more, when you say so."],
     did: ["acted"],
     actions: true,
     noBox: true,
@@ -392,8 +396,11 @@ function showTry() {
   $("try-count").textContent = `${tryIndex + 1} of ${TRIES.length}`;
   $("try-title").textContent = t.title;
   $("try-how").replaceChildren(...t.how(keys()));
-  $("actions-try").hidden = !t.actions;
-  $("ob-actions").checked = !!state.settings.actions?.enabled;
+  // Asked first; once they're on, tried.
+  $("actions-try").hidden = !t.actions || actionsOn();
+  $("practice-status").hidden = !!t.actions && !actionsOn();
+  // While asking, Not now is the way past.
+  $("try-skip").hidden = !!t.actions && !actionsOn();
   const box = $("practice");
   // Each step starts afresh: empty, or with the text it works on.
   box.value = t.start ?? "";
@@ -449,18 +456,37 @@ async function checkTry() {
   }, 1500);
 }
 
-$("ob-actions").addEventListener("change", async () => {
-  const on = $("ob-actions").checked;
-  const settings = structuredClone(state.settings);
-  settings.actions = { ...(settings.actions ?? {}), enabled: on };
-  try {
-    state = (await invoke("save_settings", { settings })).state;
-  } catch (e) {
-    $("ob-actions").checked = !on;
-    toast(String(e), true);
+// ---------------------------------------------------------------- voice actions
+
+function actionsOn() {
+  return !!state.settings.actions?.enabled;
+}
+
+/** Yes turns voice actions on; Not now leaves them off. Either way, the
+ *  question isn't asked again in this guide. */
+async function answerActions(yes) {
+  actionsAnswer = yes ? "yes" : "no";
+  if (yes) {
+    const settings = structuredClone(state.settings);
+    settings.actions = { ...(settings.actions ?? {}), enabled: true };
+    try {
+      state = (await invoke("save_settings", { settings })).state;
+    } catch (e) {
+      actionsAnswer = null;
+      toast(String(e), true);
+      return;
+    }
   }
-  trySince = Date.now();
-});
+  if (step === 4) {
+    if (yes) showTry();
+    else nextTry("skipped");
+  }
+  if (step === LAST) renderDone();
+}
+
+document.querySelectorAll("[data-actions]").forEach((b) =>
+  b.addEventListener("click", () => answerActions(b.dataset.actions === "yes")),
+);
 
 // ---------------------------------------------------------------- step 5: done
 
@@ -472,6 +498,13 @@ function renderDone() {
     ? " It's still finishing a download: tidying up your words switches on by itself when it's done, even if you close this window."
     : "";
   $("done-sub").textContent = `${home}${still} A few things worth knowing:`;
+  // Never asked (step 6 skipped): ask here, once.
+  $("done-actions").hidden = actionsOn() || actionsAnswer === "no";
+  const on = $("done-actions-on");
+  // Turned on here but not tried yet: how to.
+  const tried = tryState[TRIES.findIndex((t) => t.actions)] === "done";
+  on.hidden = !(actionsOn() && actionsAnswer === "yes" && !tried);
+  on.textContent = `✓ Voice actions are on. Hold ${dictationKeyLabel(state)}, tap Right Shift and say “open Calculator” to try one.`;
 }
 
 async function finish() {

@@ -67,8 +67,14 @@ kbd {
 .try-count { font-size: 12px; color: var(--muted); }
 .try-how { margin: 6px 0 0; font-size: 13.5px; line-height: 1.6; }
 .try-how kbd { font-size: 12px; }
-.actions-try { margin-top: 10px; }
-.actions-try .row { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface-2); }
+/* The voice actions question (step 6, and the last page if unanswered). */
+.actions-ask { margin-top: 10px; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-soft); }
+.actions-ask .ask-q { margin: 0 0 4px; font-weight: 650; font-size: 14px; }
+.actions-ask .ask-what { margin: 0 0 4px; font-size: 13px; }
+.actions-ask .ask-note { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+.actions-ask .ask-buttons { display: flex; gap: 8px; }
+#done-actions { margin: 0 0 14px; }
+.actions-on { margin: 0 0 14px; color: var(--ok); font-size: 13px; font-weight: 600; }
 .try-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .try-foot .practice-status { flex: 1; }
 

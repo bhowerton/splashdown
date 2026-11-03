@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **The setup guide asks whether you want voice actions.** Instead of a switch inside a step, the Do things step asks plainly ("Want Splashdown to do things for you, not just type?") with Yes, turn it on and Not now, and the last page asks once more if you skipped past it.
+
 ## 0.5.0 — 2026-11-02
 
 - **Voice actions: say what to do, not just what to write.** Turn on Settings → Actions, hold the dictation key, tap the instruction key and say "open Spotify", "search YouTube for paella recipes", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "pause the music", "add milk to my to-dos", "email Dana that I'll be ten minutes late" or "start recording the meeting", in any language. Select text first and "email this to Sam" or "add this to my to-dos" uses it. Nothing is ever sent, deleted or bought: an email opens as a draft for you to send, a Shortcut asks before it runs (unless you choose Always allow), and "undo that" takes back an event, reminder or to-do. Each action can be turned off. Works with the built-in model on your computer as well as cloud ones. Events go to your calendar and reminders to Reminders on a Mac; on Windows an event opens in your calendar app to save, and a reminder becomes a to-do in today's note.
