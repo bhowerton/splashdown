@@ -470,6 +470,7 @@ impl Overlay {
                 Some(RED),
             ),
             OverlayState::Working { label } => (BLUE, label.clone(), None),
+            OverlayState::Reading { label } => (GREEN, label.clone(), None),
             OverlayState::Message { tone, text } => {
                 let c = match tone {
                     Tone::Info => GRAY,

@@ -166,6 +166,9 @@ function collect() {
   s.general.check_for_updates = $("gen-updates").checked ? null : false;
   s.general.sounds = $("gen-sounds").checked ? null : false;
   s.general.sound_volume = Number($("gen-volume").value) / 100;
+  s.general.read_voice = $("gen-read-voice").value || null;
+  const readSpeed = Number($("gen-read-speed").value) / 100;
+  s.general.read_speed = readSpeed === 1 ? null : readSpeed;
   s.general.microphone = $("gen-mic").value || null;
   s.general.microphone_backup = (s.general.microphone && $("gen-mic-backup").value) || null;
   s.general.budget = collectBudget();

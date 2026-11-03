@@ -137,6 +137,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         Some(UNDO_AI_ACCELERATOR),
     )?;
     let copy_last = MenuItem::with_id(app, "copy-last", "Copy result", true, None::<&str>)?;
+    let read_last = MenuItem::with_id(app, "read-last", "Read it to me", true, None::<&str>)?;
     let retry = MenuItem::with_id(
         app,
         "retry-last",
@@ -159,7 +160,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         "last",
         "Last dictation",
         true,
-        &[&undo_ai, &paste_raw, &copy_last, &retry],
+        &[&undo_ai, &paste_raw, &copy_last, &read_last, &retry],
     )?;
     let what_to_say = MenuItem::with_id(app, "help", "What you can say…", true, None::<&str>)?;
     let feedback = MenuItem::with_id(app, "feedback", "Send feedback…", true, None::<&str>)?;
@@ -209,6 +210,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
             match id {
                 "paste-raw" => actions::paste_last_raw(&history),
                 "copy-last" => actions::copy_last(&history),
+                "read-last" => actions::read_last(&history),
                 "retry-last" => {
                     if let Some(state) = app.try_state::<crate::commands::AppState>() {
                         state.session.retry_last();

@@ -139,6 +139,19 @@ impl Ui {
         });
     }
 
+    /// Which show or hide came last, for `hide_if_unchanged`.
+    pub fn generation(&self) -> u64 {
+        self.generation.load(Ordering::SeqCst)
+    }
+
+    /// Hides the overlay unless something else was shown (or hidden) since
+    /// `generation`.
+    pub fn hide_if_unchanged(&self, generation: u64) {
+        if self.generation() == generation {
+            self.hide();
+        }
+    }
+
     pub fn hide(&self) {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         crate::minibar::working(false);
@@ -241,6 +254,7 @@ fn announcement(state: &OverlayState) -> String {
         OverlayState::HandsFree { .. } => "Hands-free".into(),
         OverlayState::Question { text } => format!("Question: {text}"),
         OverlayState::Working { label } => label.trim_end_matches('…').into(),
+        OverlayState::Reading { label } => label.clone(),
         OverlayState::Message { text, .. } => text.clone(),
     }
 }

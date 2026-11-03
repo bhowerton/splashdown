@@ -24,6 +24,7 @@ mod placement;
 mod preview;
 mod project;
 mod prompt;
+mod reading;
 mod recent;
 mod replacements;
 mod rescue;
@@ -182,6 +183,11 @@ fn main() {
             ask::ask_copy,
             ask::ask_close,
             ask::ask_followup,
+            reading::reading_voices,
+            reading::reading_try,
+            reading::reading_toggle,
+            reading::reading_state,
+            reading::reading_stop,
             help::help_sheet,
             help::help_close,
             help::help_open_actions,
@@ -232,12 +238,9 @@ fn main() {
                 tracing::warn!("dictation isn't set up: {e}");
             }
             let updates = updates::Updates::new(tray_menu.clone());
-            let session = session::spawn(
-                ui::Ui::new(app.handle().clone(), tray_menu.clone()),
-                built,
-                engine::keys(&settings),
-                history.clone(),
-            );
+            let ui = ui::Ui::new(app.handle().clone(), tray_menu.clone());
+            reading::init(ui.clone());
+            let session = session::spawn(ui, built, engine::keys(&settings), history.clone());
             let only_copy = triggers::serve(session.clone());
             // The session asks for a rebuild when spending crosses a limit.
             let handle = app.handle().clone();

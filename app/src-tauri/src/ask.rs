@@ -27,6 +27,9 @@ pub struct Question {
     pub model: Arc<dyn TextModel>,
     /// The app it was asked from (pid and name), for Insert.
     pub target: Option<(i32, String)>,
+    /// Read the answer aloud as it's written ("read me a summary of
+    /// this"); `context.spoken` should be set too.
+    pub speak: bool,
 }
 
 /// An earlier question and its answer, shown above the current one.
@@ -115,10 +118,27 @@ pub fn ask(app: &AppHandle, mut q: Question) {
     let request = splashdown_core::ask::request(&q.question, &q.context);
     open(app);
     changed(app);
+    // A new question ends the reading of an earlier answer.
+    let reader = if q.speak {
+        Some(crate::reading::start("Reading the answer"))
+    } else {
+        crate::reading::stop();
+        None
+    };
 
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
+        // How much of the answer has gone to be read: whole sentences, as
+        // they're written.
+        let mut read_to = 0;
         let mut on_text = |so_far: &str| {
+            if let Some(reader) = &reader
+                && let Some(rest) = so_far.get(read_to..)
+                && let Some(end) = splashdown_core::aloud::sentence_end(rest)
+            {
+                reader.push(&rest[..end]);
+                read_to += end;
+            }
             let mut panel = panel();
             if panel.asked == asked {
                 panel.shown.answer = so_far.to_string();
@@ -127,6 +147,17 @@ pub fn ask(app: &AppHandle, mut q: Question) {
             }
         };
         let result = q.model.complete_streaming(&request, &mut on_text).await;
+        if let Some(reader) = reader {
+            match &result {
+                Ok(completion) => {
+                    if let Some(rest) = completion.text.get(read_to..) {
+                        reader.push(rest);
+                    }
+                    reader.close();
+                }
+                Err(_) => reader.cancel(),
+            }
+        }
         let usage = match &result {
             Ok(completion) => Some(completion.usage),
             Err(splashdown_core::ProviderError::Interrupted { usage, .. }) => Some(*usage),
@@ -259,6 +290,7 @@ pub fn ask_followup(question: String, app: AppHandle) -> Result<(), String> {
     let (Some(mut context), Some(model)) = (context, model) else {
         return Err("Ask a question with the dictation key and A first.".into());
     };
+    let context_spoken = context.spoken;
     context.notes = app
         .try_state::<crate::commands::AppState>()
         .map(|s| crate::notes::excerpts_for(&s.settings().notes, &question))
@@ -270,6 +302,8 @@ pub fn ask_followup(question: String, app: AppHandle) -> Result<(), String> {
             context,
             model,
             target,
+            // Read too, when the conversation's answers are being read.
+            speak: context_spoken,
         },
     );
     Ok(())

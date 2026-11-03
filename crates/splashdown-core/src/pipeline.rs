@@ -16,6 +16,20 @@ use crate::{AudioClip, Mode};
 
 const TEMPERATURE: f32 = 0.2;
 
+/// Checking an instruction for selected text (is it "read this to me", or
+/// an action?) only needs the start of the selection, and a short reply:
+/// the answers that matter are short, and a cut-off one counts as neither.
+const CHECK_SELECTION_CHARS: usize = 300;
+const CHECK_TOKENS: u32 = 120;
+
+/// The first `chars` characters of `text`.
+fn head(text: &str, chars: usize) -> String {
+    match text.char_indices().nth(chars) {
+        Some((at, _)) => format!("{}…", &text[..at]),
+        None => text.to_string(),
+    }
+}
+
 #[derive(Debug, thiserror::Error)]
 pub enum PipelineError {
     #[error("didn't catch that — no speech found")]
@@ -126,6 +140,10 @@ pub struct Outcome {
     /// something ("email this to Sam") rather than to change the
     /// selection: the words as said, for `plan_action`. `text` is empty.
     pub action: Option<String>,
+    /// A Transform's instruction asked to hear the selection read aloud:
+    /// "" to read it as it is, otherwise what to answer and read out
+    /// instead ("summarize this"). `text` is empty.
+    pub read: Option<String>,
 }
 
 pub struct Pipeline {
@@ -272,8 +290,23 @@ impl Pipeline {
         ctx: &PromptContext,
         actions: bool,
     ) -> Result<CommandOutcome, PipelineError> {
+        self.interpret(spoken, last, ctx, actions, None).await
+    }
+
+    /// `command`, with the reply cut off after `max_tokens` if given.
+    async fn interpret(
+        &self,
+        spoken: &str,
+        last: Option<&str>,
+        ctx: &PromptContext,
+        actions: bool,
+        max_tokens: Option<u32>,
+    ) -> Result<CommandOutcome, PipelineError> {
         let llm = self.command_llm()?;
         let mut request = crate::command::request(spoken, last, ctx, actions);
+        if let Some(max) = max_tokens {
+            request.max_tokens = request.max_tokens.min(max);
+        }
         if !llm.supports_json_schema() {
             request.json_schema = None;
         }
@@ -398,6 +431,7 @@ impl Pipeline {
             usage: Usage::default(),
             llm_usage: Usage::default(),
             action: None,
+            read: None,
         };
 
         // Raw mode, or nothing but a snippet was said: no AI needed.
@@ -428,26 +462,13 @@ impl Pipeline {
 
         let selection = job.selection.as_deref().unwrap_or_default();
         let instruction = job.instruction.as_deref().unwrap_or_default();
-        if self.actions
-            && job.mode == Mode::Transform
+        // An instruction for selected text may ask to hear it read aloud,
+        // or (with voice actions on) to do something with it ("email this
+        // to Sam") rather than to change it. That's checked alongside the
+        // transform, so it takes no longer.
+        let check = job.mode == Mode::Transform
             && !selection.trim().is_empty()
-            && !instruction.trim().is_empty()
-        {
-            // An error here leaves it a transform, as without actions.
-            if let Ok(command) = self
-                .command(instruction, Some(selection), &job.context, true)
-                .await
-            {
-                outcome.usage += command.usage;
-                outcome.llm_usage += command.usage;
-                outcome.llm_time = command.llm_time;
-                if let crate::command::Command::Do(request) = command.command {
-                    outcome.action = Some(request);
-                    outcome.text = String::new();
-                    return Ok(outcome);
-                }
-            }
-        }
+            && !instruction.trim().is_empty();
         let task = match job.mode {
             Mode::Transform if selection.is_empty() => return Err(PipelineError::NoSelection),
             Mode::Transform => PromptTask::Transform {
@@ -474,30 +495,70 @@ impl Pipeline {
         let source = [job.content.as_str(), instruction, selection].join("\n");
         let started = Instant::now();
         let streams = matches!(job.mode, Mode::Dictate | Mode::DictateInstruct) && used.is_empty();
-        let result = match on_text.filter(|_| streams) {
-            Some(on_text) => {
-                // Stops passing the reply on once the guard would reject it.
-                let mut passing = true;
-                let mut forward = |so_far: &str| {
-                    if !passing {
-                        return;
+        let result = if check {
+            let (command, result) = futures_util::future::join(
+                self.interpret(
+                    instruction,
+                    Some(&head(selection, CHECK_SELECTION_CHARS)),
+                    &job.context,
+                    self.actions,
+                    Some(CHECK_TOKENS),
+                ),
+                llm.complete(&request),
+            )
+            .await;
+            // An error here leaves it a transform.
+            if let Ok(command) = command {
+                outcome.usage += command.usage;
+                outcome.llm_usage += command.usage;
+                let other = match command.command {
+                    crate::command::Command::Do(request) => {
+                        outcome.action = Some(request);
+                        true
                     }
-                    match guard::partial(task.mode(), &source, so_far) {
-                        guard::Partial::Show => on_text(so_far),
-                        guard::Partial::Wait => {}
-                        guard::Partial::Stop => passing = false,
+                    crate::command::Command::Read(what) => {
+                        outcome.read = Some(what);
+                        true
                     }
+                    _ => false,
                 };
-                llm.complete_streaming(&request, &mut forward).await
+                if other {
+                    if let Ok(transformed) = &result {
+                        outcome.usage += transformed.usage;
+                        outcome.llm_usage += transformed.usage;
+                    }
+                    outcome.llm_time = started.elapsed();
+                    outcome.text = String::new();
+                    return Ok(outcome);
+                }
             }
-            None => llm.complete(&request).await,
+            result
+        } else {
+            match on_text.filter(|_| streams) {
+                Some(on_text) => {
+                    // Stops passing the reply on once the guard would reject it.
+                    let mut passing = true;
+                    let mut forward = |so_far: &str| {
+                        if !passing {
+                            return;
+                        }
+                        match guard::partial(task.mode(), &source, so_far) {
+                            guard::Partial::Show => on_text(so_far),
+                            guard::Partial::Wait => {}
+                            guard::Partial::Stop => passing = false,
+                        }
+                    };
+                    llm.complete_streaming(&request, &mut forward).await
+                }
+                None => llm.complete(&request).await,
+            }
         };
         outcome.llm_time = started.elapsed();
 
         let output = match result {
             Ok(completion) => {
                 outcome.usage += completion.usage;
-                outcome.llm_usage = completion.usage;
+                outcome.llm_usage += completion.usage;
                 completion.text
             }
             // Keep the user's words rather than losing them; instructions
@@ -993,6 +1054,19 @@ mod tests {
         assert_eq!(out.text, reply);
         let asked = llm.unwrap().1.lock().unwrap().clone().unwrap();
         assert!(!asked.system.contains("- do:"), "no command interpreter");
+    }
+
+    #[test]
+    fn an_instruction_for_a_selection_can_ask_to_hear_it() {
+        let mut job = audio_job(Mode::Transform, false);
+        job.selection = Some("Q3 numbers are in.".into());
+        // Without voice actions too.
+        let reply = r#"{"action": "read", "text": "Summarize this"}"#;
+        let (p, _) = pipeline(&["read me a summary"], Some(Ok(reply)));
+        let out = block_on(p.run(job)).unwrap();
+        assert_eq!(out.read.as_deref(), Some("Summarize this"));
+        assert_eq!(out.action, None);
+        assert_eq!(out.text, "");
     }
 
     #[test]

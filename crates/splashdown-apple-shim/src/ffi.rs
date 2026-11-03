@@ -74,6 +74,15 @@ unsafe extern "C" {
         ctx: *mut c_void,
         callback: Callback,
     );
+    pub fn splashdown_speak(
+        text: *const c_char,
+        voice: *const c_char,
+        language: *const c_char,
+        speed: f64,
+    );
+    pub fn splashdown_speak_stop();
+    pub fn splashdown_speaking() -> bool;
+    pub fn splashdown_voices(ctx: *mut c_void, callback: Callback);
     pub fn splashdown_apple_transcribe(
         path: *const c_char,
         locale: *const c_char,

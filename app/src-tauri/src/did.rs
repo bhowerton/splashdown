@@ -22,6 +22,8 @@ pub const EDITED: &str = "edited";
 pub const ACTED: &str = "acted";
 /// A question asked (the Ask panel).
 pub const ASKED: &str = "asked";
+/// Had text read aloud (or a summary of it).
+pub const READ: &str = "read";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct Did {

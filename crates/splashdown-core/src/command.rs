@@ -29,6 +29,9 @@ pub enum Command {
     Write(String),
     /// A question for the AI: answered in the Ask panel, not typed.
     Ask(String),
+    /// Read text aloud: "" for the text as it is ("read this to me"),
+    /// otherwise what to answer and read out instead ("summarize this").
+    Read(String),
     /// Something to do beyond the text field ("open Spotify"): the command
     /// as said (`Pipeline::command` sees to that), planned by
     /// `crate::action`. Only when voice actions are on.
@@ -48,6 +51,7 @@ const ACTIONS: &[&str] = &[
     "undo_last",
     "write",
     "ask",
+    "read",
     "unclear",
 ];
 
@@ -73,6 +77,7 @@ Choose exactly one action and reply with JSON only: {\"action\": \"...\", \"text
 - undo_last: remove the last dictation entirely.
 - write: the command asks you to write or compose something new at the cursor (\"write a short no\", \"add a sign-off\"). \"text\" is what to insert.
 - ask: the command is a question for you to answer, or asks you to explain or look something up, rather than to change or write text (\"what's the German word for deadline\", \"how many days until Christmas\"). \"text\" is the question as said. The answer is shown to the user, not typed.
+- read: the command asks to hear text read aloud to them (\"read this to me\", \"read me a summary of this\", \"lies mir das vor\"). \"text\" is \"\" to read the text as it is; when they want to hear a summary, the gist, or something about the text instead, \"text\" is that request (\"summarize this\"). A sentence that only mentions reading (\"I read the report\") is not a command.
 - unclear: you can't tell what the user wants, or it isn't a command at all (just text, or a question meant for someone else, to be typed).
 
 \"That\", \"this\" or \"it\" (in any language) means the last dictation. Keep the last dictation's language unless the command asks for a translation. \"text\" is \"\" for actions that don't use it.
@@ -94,7 +99,10 @@ Examples:
 {\"action\": \"delete_last_sentence\", \"text\": \"\"}
 
 <command>envíalo</command>
-{\"action\": \"press_enter\", \"text\": \"\"}";
+{\"action\": \"press_enter\", \"text\": \"\"}
+
+<command>read me the gist of this</command>
+{\"action\": \"read\", \"text\": \"What's the gist of this?\"}";
 
 /// The request that interprets `spoken`, given the last dictation.
 /// `actions`: voice actions are on, so `do` is one of the choices.
@@ -176,6 +184,7 @@ pub fn parse(output: &str, actions: bool) -> Command {
         // An empty question is filled in with what was said (see
         // `Pipeline::command`).
         "ask" => Command::Ask(text),
+        "read" => Command::Read(text),
         // Filled in like an empty question.
         DO if actions => Command::Do(text),
         "delete_last_word" => Command::DeleteLastWord,

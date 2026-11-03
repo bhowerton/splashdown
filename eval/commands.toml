@@ -328,3 +328,47 @@ said = "translate this into German"
 last = "The meeting moved to Thursday at 3."
 expect = "replace_last"
 text = ["Donnerstag"]
+
+# ── Reading aloud
+
+[[case]]
+id = "en-read"
+said = "read this to me"
+last = "Thanks for the update. I'll look at the numbers tomorrow and get back to you before the call."
+expect = "read"
+
+[[case]]
+id = "en-read-back"
+said = "read that back to me"
+last = "Can we move the review to Thursday afternoon?"
+expect = "read"
+
+[[case]]
+id = "en-read-summary"
+said = "read me a summary of this"
+last = "I wanted to let you know that I've been thinking about the proposal you sent over last week and I think overall it looks really good but there are a few small things I'd like to go over with you when you have a moment."
+expect = "read"
+text = ["summar"]
+
+[[case]]
+id = "en-read-gist"
+said = "what's the gist of this, read it out"
+last = "Quarterly revenue grew 12 percent, mostly from the new enterprise plan, while churn stayed flat at 3 percent."
+expect = "read"
+
+[[case]]
+id = "de-read"
+said = "lies mir das vor"
+last = "Wir treffen uns am Donnerstag um zehn im großen Besprechungsraum."
+expect = "read"
+
+[[case]]
+id = "es-read-summary"
+said = "léeme un resumen de esto"
+last = "El equipo terminó la migración el viernes y el lunes empezamos las pruebas con los primeros clientes."
+expect = "read"
+
+[[case]]
+id = "en-read-is-dictation"
+said = "I read the report and it looks good to me"
+expect = ["unclear", "write"]

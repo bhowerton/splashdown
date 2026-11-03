@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Splashdown reads to you.** Select text, hold the dictation key and say "read this to me", and your computer's own voice reads it, with nothing sent anywhere. With nothing selected, tap the instruction key first and the text you're writing is read, or your last dictation. Say "read me a summary of this" (or "read me the action items", "what's the gist of this, read it out") and your AI writes a short answer meant for listening, which is read as it's written, so the voice starts after the first sentence; it also shows in the Ask panel. The Ask panel has a Read aloud button for any answer, and Last dictation → Read it to me checks your last dictation by ear. Music pauses while it reads, and Esc or starting a dictation stops it. Settings → General → Reading aloud picks the voice and speed; text in another language gets a voice for that language. Works without voice actions turned on.
+
 ## 0.5.1 — 2026-11-02
 
 - **A much faster built-in model on Windows, and on Intel Macs.** It was built for the oldest x86 processors, without the instructions (AVX2, FMA) it relies on, so it ran several times slower than the processor could. Windows now gets two builds: one for processors from about 2013 on that can also use the graphics chip (Vulkan), and one for older processors; Splashdown picks the one that runs, and falls back to the other if the first fails. Intel Macs get the faster instructions too (every Mac macOS 13 supports has them).

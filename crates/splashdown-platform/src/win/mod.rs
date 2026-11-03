@@ -22,6 +22,8 @@ mod shell;
 #[cfg(windows)]
 mod sound;
 #[cfg(windows)]
+pub mod speech;
+#[cfg(windows)]
 mod uia;
 
 #[cfg(windows)]

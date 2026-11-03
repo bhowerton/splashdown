@@ -503,6 +503,12 @@ pub struct GeneralSettings {
     /// and "mute" carry over (`Settings::load`).
     #[serde(rename = "other_audio", skip_serializing)]
     pub legacy_other_audio: Option<OtherAudio>,
+    /// The voice that reads text aloud (the system's id for it). Unset
+    /// means the system's own voice for the text's language.
+    pub read_voice: Option<String>,
+    /// How fast text is read aloud, 1.0 being the voice's usual pace.
+    /// Unset means 1.0.
+    pub read_speed: Option<f32>,
 }
 
 /// Other sounds while recording.
@@ -536,6 +542,11 @@ impl GeneralSettings {
     /// What happens to other sounds while recording.
     pub fn other_sounds(&self) -> OtherAudio {
         self.other_sounds.unwrap_or(OtherAudio::Lower)
+    }
+
+    /// How fast text is read aloud, from half to twice the usual pace.
+    pub fn read_speed(&self) -> f32 {
+        self.read_speed.unwrap_or(1.0).clamp(0.5, 2.0)
     }
 
     pub fn whisper_mode(&self) -> bool {

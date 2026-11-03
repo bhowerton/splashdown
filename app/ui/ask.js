@@ -6,6 +6,16 @@
 
 /** What the panel shows (`ask::Shown`). */
 let shown = { earlier: [], question: "", answer: "", done: false, error: null, app: null, notes: 0 };
+/** Something is being read aloud (`reading.rs`). */
+let reading = false;
+
+function renderRead() {
+  const button = $("ak-read");
+  const ready = shown.done && !shown.error && Boolean(shown.answer);
+  button.disabled = !reading && !ready;
+  button.textContent = reading ? "Stop reading" : "Read aloud";
+  button.setAttribute("aria-pressed", String(reading));
+}
 
 function render() {
   const earlier = $("ak-earlier");
@@ -35,6 +45,7 @@ function render() {
   $("ak-insert").textContent = shown.app ? `Insert into ${shown.app}` : "Insert";
   const notes = shown.notes ? `Used ${shown.notes} matching note${shown.notes === 1 ? "" : "s"}` : "";
   $("ak-note").textContent = notes;
+  renderRead();
   const follow = $("ak-follow-input");
   follow.disabled = !shown.done;
   if (!shown.done) $("ak-scroll").scrollTop = $("ak-scroll").scrollHeight;
@@ -72,6 +83,17 @@ async function copy() {
   }
 }
 
+async function readAloud() {
+  if ($("ak-read").disabled) return;
+  try {
+    reading = await invoke("reading_toggle", { text: shown.answer });
+    renderRead();
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+$("ak-read").addEventListener("click", readAloud);
 $("ak-insert").addEventListener("click", insert);
 $("ak-copy").addEventListener("click", copy);
 document.addEventListener("keydown", (e) => {
@@ -93,6 +115,16 @@ document.addEventListener("keydown", (e) => {
   }
 });
 
+listen("reading-changed", (event) => {
+  reading = Boolean(event.payload);
+  renderRead();
+});
+invoke("reading_state")
+  .then((on) => {
+    reading = Boolean(on);
+    renderRead();
+  })
+  .catch(() => {});
 listen("ask-changed", (event) => {
   shown = event.payload;
   render();

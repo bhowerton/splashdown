@@ -34,3 +34,13 @@ pub fn copy_last(history: &Arc<History>) {
         tracing::warn!("copy last failed: {e}");
     }
 }
+
+/// Reads the last result aloud, to check it by ear.
+pub fn read_last(history: &Arc<History>) {
+    let Some(last) = history.last() else {
+        return;
+    };
+    if let Err(e) = crate::reading::read(&last.text, "Reading your last dictation") {
+        tracing::info!("read last: {e}");
+    }
+}

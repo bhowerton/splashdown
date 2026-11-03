@@ -1540,6 +1540,7 @@ pub async fn notes_ask(
         today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
         earlier,
         cite_numbers: true,
+        spoken: false,
         ..Default::default()
     };
     let request = splashdown_core::ask::request(&question, &context);

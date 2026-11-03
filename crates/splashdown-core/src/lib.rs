@@ -4,6 +4,7 @@
 //! defaults and key names (`gesture::PhysicalKey`).
 
 pub mod action;
+pub mod aloud;
 pub mod ask;
 mod audio;
 pub mod command;

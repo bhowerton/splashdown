@@ -83,6 +83,7 @@ function renderGeneral() {
   const volume = s.general.sound_volume ?? state.defaults.sound_volume ?? DEFAULT_SOUND_VOLUME;
   setValue($("gen-volume"), Math.round(volume * 100));
   $("gen-volume").disabled = !$("gen-sounds").checked;
+  renderReading();
   $("gen-live").checked = s.general.live_preview !== false;
   $("gen-stream").checked = s.general.stream_typing !== false;
   const note = $("gen-live-note");
@@ -480,6 +481,69 @@ function renderMicrophones() {
 $("gen-volume").addEventListener("change", (e) => {
   save();
   invoke("preview_sound", { volume: Number(e.target.value) / 100 }).catch(() => {});
+});
+
+// ---------------------------------------------------------------- reading aloud
+
+/** The system's voices (`reading::Voice`), once loaded. */
+let readVoices = null;
+
+function renderReading() {
+  const s = state.settings;
+  setValue($("gen-read-speed"), Math.round((s.general.read_speed ?? 1) * 100));
+  $("gen-read-note").textContent =
+    state.platform === "windows"
+      ? "More voices: Windows Settings → Time & language → Speech → Add voices."
+      : "More natural voices: System Settings → Accessibility → Spoken Content → System voice → Manage Voices. Look for Enhanced and Premium.";
+  if (readVoices) {
+    showVoices(s.general.read_voice ?? "");
+    return;
+  }
+  invoke("reading_voices")
+    .then((voices) => {
+      readVoices = voices;
+      showVoices(state.settings.general.read_voice ?? "");
+    })
+    .catch(() => {});
+}
+
+/** The voices by language, with the chosen one selected. */
+function showVoices(chosen) {
+  const select = $("gen-read-voice");
+  const names = new Intl.DisplayNames(["en"], { type: "language" });
+  const languageName = (code) => {
+    try {
+      return names.of(code.replace("_", "-")) ?? code;
+    } catch {
+      return code;
+    }
+  };
+  const groups = new Map();
+  for (const voice of readVoices) {
+    const language = languageName(voice.language);
+    if (!groups.has(language)) groups.set(language, []);
+    groups.get(language).push(voice);
+  }
+  const automatic = new Option("Automatic (best voice for the text's language)", "");
+  const optgroups = [...groups.keys()].sort().map((language) => {
+    const group = document.createElement("optgroup");
+    group.label = language;
+    for (const voice of groups.get(language)) {
+      const quality = voice.quality ? ` (${voice.quality})` : "";
+      group.append(new Option(`${voice.name}${quality}`, voice.id));
+    }
+    return group;
+  });
+  select.replaceChildren(automatic, ...optgroups);
+  // A voice that's since been removed reads as Automatic.
+  select.value = readVoices.some((v) => v.id === chosen) ? chosen : "";
+}
+
+$("gen-read-try").addEventListener("click", () => {
+  invoke("reading_try", {
+    voice: $("gen-read-voice").value || null,
+    speed: Number($("gen-read-speed").value) / 100,
+  }).catch((e) => toast(String(e), true));
 });
 
 // ---------------------------------------------------------------- vocabulary suggestions

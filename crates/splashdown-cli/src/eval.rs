@@ -504,6 +504,7 @@ fn command_id(command: &Command) -> &'static str {
         Command::UndoLast => "undo_last",
         Command::Write(_) => "write",
         Command::Ask(_) => "ask",
+        Command::Read(_) => "read",
         Command::Do(_) => "do",
         Command::Unclear => "unclear",
     }
@@ -511,7 +512,11 @@ fn command_id(command: &Command) -> &'static str {
 
 fn command_text(command: &Command) -> &str {
     match command {
-        Command::ReplaceLast(t) | Command::Write(t) | Command::Ask(t) | Command::Do(t) => t,
+        Command::ReplaceLast(t)
+        | Command::Write(t)
+        | Command::Ask(t)
+        | Command::Read(t)
+        | Command::Do(t) => t,
         _ => "",
     }
 }

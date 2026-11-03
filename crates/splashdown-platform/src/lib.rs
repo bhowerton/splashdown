@@ -17,6 +17,11 @@ mod players;
 pub use launch::{InstalledApp, installed_apps, open_app};
 pub use machine::{free_disk_bytes, memory_bytes};
 
+/// Reading text aloud with Windows' own voices (on macOS it's the Apple
+/// shim's).
+#[cfg(windows)]
+pub use imp::speech;
+
 #[cfg(not(target_os = "macos"))]
 #[path = "win/mod.rs"]
 mod imp;
@@ -827,6 +832,10 @@ pub enum OverlayState {
         text: String,
     },
     Working {
+        label: String,
+    },
+    /// Text being read aloud.
+    Reading {
         label: String,
     },
     Message {

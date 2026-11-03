@@ -25,6 +25,9 @@ pub struct AskContext {
     /// Number the notes and cite them by number, `[2]`, so the answer can
     /// link to them (Ask in the Notes window).
     pub cite_numbers: bool,
+    /// The answer is read aloud ("read me a summary of this"), so it's
+    /// written to be heard.
+    pub spoken: bool,
 }
 
 /// Part of a note that matches the question.
@@ -50,6 +53,8 @@ What's in <selection> (text the user selected), <context> (text around their cur
 
 When the answer comes from a note, say which one by its title. If the notes don't cover the question, answer from what you know, and if it matters, say that their notes don't mention it. If you can't answer, say so in one sentence.";
 
+const SPOKEN: &str = "\n\nThe answer will be read aloud to the user, so write it to be heard: two to four short sentences (about 30 seconds) unless they ask for more, in plain sentences with no lists, headings, Markdown, links or symbols. Write numbers, dates and abbreviations the way they're said. Don't start with \"Here is a summary\" or the like; start with what matters most. Only say what the material says; if it doesn't cover the question, say so.";
+
 /// The request that answers `question`.
 pub fn request(question: &str, ctx: &AskContext) -> TextRequest {
     let mut system = SYSTEM.to_string();
@@ -61,6 +66,9 @@ pub fn request(question: &str, ctx: &AskContext) -> TextRequest {
     }
     if let Some(app) = ctx.app_name.as_deref().filter(|a| !a.is_empty()) {
         system.push_str(&format!(" They're in the app {app}."));
+    }
+    if ctx.spoken {
+        system.push_str(SPOKEN);
     }
     if ctx.cite_numbers && !ctx.notes.is_empty() {
         system.push_str("\n\nEach note in <notes> starts with its number in square brackets. Where part of the answer comes from a note, put that number in square brackets right after it, like [2], instead of naming the note.");
@@ -129,6 +137,28 @@ fn escape(text: &str, tag: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_answer_to_be_heard_is_written_for_it() {
+        let ctx = AskContext {
+            selection: Some("Long email.".into()),
+            ..AskContext::default()
+        };
+        assert!(
+            !request("summarize this", &ctx)
+                .system
+                .contains("read aloud")
+        );
+        let spoken = AskContext {
+            spoken: true,
+            ..ctx
+        };
+        assert!(
+            request("summarize this", &spoken)
+                .system
+                .contains("read aloud")
+        );
+    }
 
     #[test]
     fn notes_are_numbered_when_the_answer_cites_them() {

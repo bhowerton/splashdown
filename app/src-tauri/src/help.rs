@@ -146,6 +146,22 @@ pub fn sheet(settings: &Settings) -> Sheet {
             )],
             actions: false,
         },
+        Section {
+            title: "Hear it read aloud".into(),
+            how: format!(
+                "Select text, hold {dictation} and say it. With nothing selected, tap {instruction} \
+                 first and the text you're writing is read. A summary is written by your AI first."
+            ),
+            items: vec![
+                say("Read it", &["read this to me"]),
+                say(
+                    "Hear a summary",
+                    &["read me a summary of this", "read me the action items"],
+                ),
+                press("Stop reading", "Esc"),
+            ],
+            actions: false,
+        },
     ];
 
     let actions_off = !settings.actions.enabled;

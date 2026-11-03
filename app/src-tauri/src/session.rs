@@ -66,6 +66,9 @@ const MIC_SILENT_NOTICE: &str =
 /// How much the level meter (and hands-free's speech check) is raised in
 /// whisper mode.
 const WHISPER_BOOST: f32 = 5.0;
+/// At most this much text is read aloud, or summarized to be: about 45
+/// minutes of listening.
+const READ_CHARS: usize = 40_000;
 /// Live preview: first pass after this much audio, then one pass this often.
 const PREVIEW_START: Duration = Duration::from_millis(500);
 const PREVIEW_EVERY: Duration = Duration::from_millis(600);
@@ -601,7 +604,7 @@ impl Controller {
         // auto-send badge is updated from here.
         let ui = self.ui.clone();
         let paused_until = self.paused_until.clone();
-        let handler = Box::new(move |ev| {
+        let handler = Box::new(move |ev: splashdown_platform::KeyEvent| {
             let paused = paused_until
                 .lock()
                 .is_ok_and(|p| p.is_some_and(|until| Instant::now() < until));
@@ -609,6 +612,13 @@ impl Controller {
                 return false;
             }
             let mut r = recognizer.lock().unwrap_or_else(|e| e.into_inner());
+            // Esc stops a reading aloud, unless it's for a recording.
+            if ev.key == PhysicalKey::Escape
+                && !r.is_recording()
+                && crate::reading::on_escape(ev.down)
+            {
+                return true;
+            }
             let (swallow, action) = r.on_event(ev, Instant::now());
             if let Some(Action::ToggleSend(on)) = action {
                 ui.set_send(on);
@@ -792,6 +802,9 @@ impl Controller {
     fn handle(&mut self, action: Action) {
         match action {
             Action::Start => {
+                // The app mustn't hear itself, and a new dictation means
+                // the user has moved on.
+                crate::reading::stop();
                 self.start();
                 self.refresh_tray();
             }
@@ -1109,6 +1122,8 @@ impl Controller {
             .zip(focus)
             .map(|(typer, focus)| move |so_far: &str| typer.offer(focus, so_far));
         let on_text = on_text.as_mut().map(|f| f as &mut OnText<'_>);
+        // For an instruction that asks to hear the selection read aloud.
+        let selected = job.as_ref().and_then(|j| j.selection.clone());
         let outcome = job
             .map(|job| with_file_names(job, files.as_deref()))
             .and_then(|job| self.run_pipeline(job, &active.preset, on_text))
@@ -1161,6 +1176,14 @@ impl Controller {
                 _ => None,
             };
             self.do_action(&active, request, selection);
+            return;
+        }
+        if let Some((outcome, _)) = &outcome
+            && let Some(what) = &outcome.read
+        {
+            // An instruction for the selection that asked to hear it.
+            crate::spend::record_outcome(outcome);
+            self.read_aloud(&active, what.clone(), selected, None);
             return;
         }
         if let Some((outcome, took)) = outcome {
@@ -1835,7 +1858,7 @@ impl Controller {
         if question.is_empty() {
             return self.notice(Tone::Info, "Didn't catch that");
         }
-        self.show_answer(&active, question, selection);
+        self.show_answer(&active, question, selection, false);
         self.check_budget();
     }
 
@@ -1851,7 +1874,7 @@ impl Controller {
         match heard {
             Ok((question, usage)) if !question.trim().is_empty() => {
                 crate::spend::shared().record(&[(stt, usage)], chrono::Local::now());
-                self.show_answer(active, question.trim().to_string(), None);
+                self.show_answer(active, question.trim().to_string(), None, false);
             }
             Ok(_) => self.notice(Tone::Info, "Didn't catch that"),
             Err(e) => {
@@ -1862,7 +1885,15 @@ impl Controller {
     }
 
     /// Opens the Ask panel on `question`, asked from `active`'s app.
-    fn show_answer(&mut self, active: &Active, question: String, selection: Option<String>) {
+    /// `speak`: read the answer aloud as it's written ("read me a summary of
+    /// this"), with `selection` as what it's about.
+    fn show_answer(
+        &mut self,
+        active: &Active,
+        question: String,
+        selection: Option<String>,
+        speak: bool,
+    ) {
         if splashdown_core::action::asks_what_to_say(&question) {
             return self.what_to_say();
         }
@@ -1875,8 +1906,11 @@ impl Controller {
                 "Asking needs an AI model: choose one in Settings → Providers",
             );
         };
+        // Notes that match "summarize this" are beside the point.
         let notes = self
             .notes_settings()
+            .ok()
+            .filter(|_| !speak)
             .map(|n| crate::notes::excerpts_for(&n, &question))
             .unwrap_or_default();
         let context = splashdown_core::ask::AskContext {
@@ -1899,6 +1933,7 @@ impl Controller {
             today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
             earlier: Vec::new(),
             cite_numbers: false,
+            spoken: speak,
         };
         tracing::info!("asking, with {} matching note(s)", context.notes.len());
         crate::did::note(crate::did::ASKED, &question);
@@ -1912,9 +1947,43 @@ impl Controller {
                     .focus
                     .as_ref()
                     .map(|f| (f.app.pid, f.app.name.clone())),
+                speak,
             },
         );
-        self.ui.hide();
+        // Reading shows its own pill.
+        if !speak {
+            self.ui.hide();
+        }
+    }
+
+    /// "Read this to me" (`what` is "") or "read me a summary of this"
+    /// (`what` is what to answer and read out): about the selection, or
+    /// else the field's text, or else `last`, the last dictation.
+    fn read_aloud(
+        &mut self,
+        active: &Active,
+        what: String,
+        selection: Option<String>,
+        last: Option<String>,
+    ) {
+        let text = selection
+            .or_else(|| active.focus.as_ref().and_then(Focus::field_text))
+            .or(last)
+            .filter(|t| !t.trim().is_empty());
+        let Some(text) = text else {
+            return self.notice(Tone::Info, "Nothing to read · select the text first");
+        };
+        let text = head_chars(&text, READ_CHARS);
+        if what.trim().is_empty() {
+            tracing::info!("reading {} characters aloud", text.chars().count());
+            crate::did::note(crate::did::READ, "");
+            if let Err(message) = crate::reading::read(&text, "Reading aloud") {
+                self.notice(Tone::Info, &message);
+            }
+            return;
+        }
+        crate::did::note(crate::did::READ, "");
+        self.show_answer(active, what, Some(text), true);
     }
 
     /// A captured dictation: added to the note instead of the field.
@@ -2382,7 +2451,9 @@ impl Controller {
         );
         let still_focused = active.focus.as_ref().is_none_or(Focus::is_current);
         if let Command::Ask(question) = outcome.command {
-            self.show_answer(active, question, None);
+            self.show_answer(active, question, None, false);
+        } else if let Command::Read(what) = outcome.command {
+            self.read_aloud(active, what, None, last);
         } else if let Command::Do(request) = outcome.command {
             self.do_action(active, &request, None);
         } else if !still_focused {
@@ -2405,6 +2476,8 @@ impl Controller {
             }
             // Answered in the Ask panel instead (`run_command`).
             Command::Ask(_) => return,
+            // Read aloud by `read_aloud` instead (`run_command`).
+            Command::Read(_) => return,
             // Carried out by `do_action` instead (`run_command`).
             Command::Do(_) => return,
             Command::PressEnter => {
@@ -2909,6 +2982,14 @@ fn short(s: &str) -> String {
     match s.char_indices().nth(MAX) {
         Some((i, _)) => format!("{}…", &s[..i]),
         None => s.to_string(),
+    }
+}
+
+/// The first `chars` characters of `text`.
+fn head_chars(text: &str, chars: usize) -> String {
+    match text.char_indices().nth(chars) {
+        Some((at, _)) => text[..at].to_string(),
+        None => text.to_string(),
     }
 }
 

@@ -10,6 +10,7 @@ mod calendar;
 mod ffi;
 mod providers;
 mod screenshot;
+mod speak;
 mod tap;
 
 pub use calendar::{
@@ -17,6 +18,7 @@ pub use calendar::{
 };
 pub use providers::{AppleLanguageModel, AppleSpeech};
 pub use screenshot::{Screenshot, ScreenshotError, screenshot, zoom};
+pub use speak::{Voice, speak, speaking, stop_speaking, voices};
 pub use tap::{app_audio, system_audio};
 
 use std::ffi::CString;
