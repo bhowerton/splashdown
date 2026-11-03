@@ -5,7 +5,7 @@
 <h1 align="center">Splashdown</h1>
 
 <p align="center">
-  <strong>Hold a key. Say it. It's typed.</strong><br>
+  <strong>Talk instead of type.</strong><br>
   Free, open-source dictation for Mac and Windows: speak, and clean text appears in any app. Say what to do, too: open apps, set reminders, run your own scripts. It also reads text back to you in a natural voice, writes down your meetings, videos and voice memos, tells who said what, and answers questions from your notes, all on your computer if you like. No subscription, no account.
 </p>
 
