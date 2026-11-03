@@ -42,6 +42,7 @@
 - **Works everywhere you type.** Email, Slack, Messages, docs, the browser, your terminal or code editor: any text field in any app.
 - **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
 - **Says what to do, not just what to write.** "Open Spotify", "remind me at 5 to stretch", "add dentist to my calendar on Thursday at 4", "pause the music", or your own: "deploy staging", "next slide". Nothing is sent, deleted or bought for you.
+- **Reads to you, too.** Select text and say "read this to me", or "read me a summary of this", and it's read aloud in a natural voice that runs on your computer.
 - **Notes, meetings and transcripts, too.** Dictate into notes that are plain Markdown files, record a call without a bot joining it, transcribe whatever an app is playing, and ask your notes questions.
 - **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
@@ -68,7 +69,7 @@
 - **Hands-free** for long dictations: hold the key and press **H**, then let go. Stops on its own after 3 minutes of silence.
 - **Straight into a note:** hold the key and press **N**, and what you say is added to your Inbox (or today's daily note) instead of typed. ⌃⌥Z takes it back.
 - **Music steps aside.** Other sounds are turned down while you speak, as with Siri, or muted or paused if you prefer. On audio interfaces whose volume can't be changed, the music is paused instead.
-- **Whisper mode** for speaking quietly, and **mixed languages** in one sentence.
+- **Whisper mode** for speaking quietly, **mixed languages** in one sentence, and **background noise removed** (fans, traffic, café chatter) on your computer before your speech is transcribed, if you turn it on.
 
 ### Talk to it
 
@@ -89,11 +90,13 @@
 - **Presets** switch on their own by app, window title or website: Default, Email, Texting, Work chat, Code & Terminal, Notes, and your own. Each sets the tone, cleanup level, spoken language, translation, its own AI model, and whether to press Return when done.
 - **Context, only if you want it.** A preset can read the text around the cursor or your clipboard so names are spelled like the thread. Both are off unless you turn them on.
 - **Words that stick.** A vocabulary list that learns from your corrections, snippets with fill-ins (`{date}`, `{clipboard}`), and find-and-replace rules.
+- **Bring your words, share your presets.** Settings → Words & language → Import… brings the vocabulary, corrections and snippets from another dictation app's export, a word list or a CSV file. Share… on a preset saves it as a small file anyone can import.
 
 ### On your computer or in the cloud
 
 - **Your own key:** OpenAI, OpenRouter or Anthropic, with a monthly spending limit. Typical use costs cents a month.
 - **Fully on your computer:** Apple's on-device speech and language models (Apple Silicon, macOS 26), or local speech-to-text (Nemotron, which writes as you speak, or Parakeet and Whisper) plus Splashdown's built-in local model, a free download with nothing else to install. Ollama and LM Studio work too.
+- **Quick even on an older PC.** The built-in model uses the processor's fast instructions on Windows and Intel Macs, and the graphics chip on Windows (Vulkan) where there is one. Setup times it on your computer, and if it's slow, says so and suggests a cloud key.
 - **A stand-in when the cloud fails.** If your provider is offline or out of credit, the dictation is retried on your computer, and the result says so.
 - Smaller on-device models handle cleanup well but follow instructions less reliably than cloud models, so instructions can be sent to the cloud while plain dictation stays local.
 
@@ -112,7 +115,7 @@
 - **⌃⌥N opens Notes**, for when there's no text field around. Every note is a plain Markdown file in a folder you choose, so Obsidian, iCloud Drive and Dropbox work, and nothing is locked in.
 - **Folders and tags.** Nested folders (the real ones on disk) and Obsidian-style `#tags`, nested with `/`, in a column with counts. Drag a note onto a folder, or use Move to….
 - **Formatting as you write:** headings, bullets and checkboxes you can click, with the Markdown marks out of the way.
-- **⌘K** finds any note, folder or tag, and anything the window can do.
+- **⌘K** finds any note, folder or tag, and anything the window can do. **⌘T** opens today's note, and beside Pinned there are To do (notes with an unticked box), Changed today and Untagged.
 - **Rewrites you check before keeping.** Clean up, Summary, To-dos, Email, Prompt for an AI, or your own; the result shows what changed, and you keep it or say what to change ("warmer", "in French"). Give one a shortcut to use it on selected text in any app.
 - **Ask your notes (⌘J)** about one note or all of them; answers link to the notes they came from. Turn on Find notes by meaning and Ask finds the notes about what you mean, not only ones with the same words, on your computer.
 - Pins, earlier versions you can restore, and **Paste into** (⌘↩), which pastes the note into the app you used last.
@@ -134,7 +137,7 @@
 - **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), and an always-on-screen **mini bar** for clicking instead of holding a key.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
-- **A setup guide that has you try it.** The first run gets Splashdown ready on your computer, then walks you through the main things one at a time (dictate, rewrite, instruct, send, fix by voice, do things, ask), ticking each off as it works. Skip any of it.
+- **A setup guide that has you try it.** The first run shows what Splashdown does, gets speech to text ready in about a minute (the AI follows in the background, and is optional), then has you try the main things one at a time: dictate, dictate in one of your own apps, change selected text, hear it read back, and do things. Each ticks off when it works, and any can be skipped.
 
 ### For developers
 
@@ -154,6 +157,7 @@
 | Go hands-free | While holding **Right Option**, press **H**, then let go; tap Right Option once more to finish (double-tap can be turned on in Settings) |
 | Add to your notes instead of typing | While holding, press **N**; ⌃⌥Z right after takes it back |
 | Ask a question | While holding, press **A**, then ask |
+| Hear text read aloud | Select it, hold **Right Option** and say "read this to me" (or "read me a summary of this"); **Esc** stops it. Or menu bar → Last dictation → **Read it to me** |
 | Record a meeting | **⌃⌥M** (again to stop) |
 | Use another preset | While holding, press **1–9** |
 | Change the spoken language | Menu bar → **Language** (detects it automatically by default) |
@@ -162,12 +166,12 @@
 | Paste exactly what you said, without the AI | **⌃⌥V** |
 | Swap the AI's version for exactly what you said | **⌃⌥Z** right after it's typed |
 | Dictate a note with no text field around | **⌃⌥N** opens Notes; **Paste into** (⌘↩) pastes the note into the app you were in |
-| Get around Notes | **⌘K** any note, folder, tag or action · **⌘J** Ask · **⌘N** new note · **⌘O** transcribe a file · **⌘L** a link · **⌘E** hide the list · **⌘⇧E** hide folders and tags |
+| Get around Notes | **⌘K** any note, folder, tag or action · **⌘J** Ask · **⌘T** today's note · **⌘N** new note · **⌘O** transcribe a file · **⌘L** a link · **⌘E** hide the list · **⌘⇧E** hide folders and tags |
 | Dictate with the mouse | Choose **Mouse button 4** or **5** as the dictation key in Settings; hold it or double-click it like a key |
 | Start or finish from Raycast, Alfred or Shortcuts | Open `splashdown://toggle` (also `start`, `stop`, `cancel`) |
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
 | Add to your notes from a terminal or launcher | `splashdown-cli note buy oat milk`, or `splashdown-cli note` (and `splashdown://note`) to dictate one hands-free |
-| Script Splashdown | `splashdown-cli status --json`; `settings get`, `set`, `unset` and `list` by key (`general.language`); `models list`, `download` and `use`; `history <words>`. Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running, 4 no such setting or model |
+| Script Splashdown | `splashdown-cli status --json`; `settings get`, `set`, `unset` and `list` by key (`general.language`); `models list`, `download` and `use`; `history <words>`; `say "…"` reads text in the natural voice. Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running, 4 no such setting or model |
 
 On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 
@@ -197,7 +201,7 @@ To remove everything it stored, including API keys, see [Deleting everything](do
 
 ## Private by default
 
-Splashdown has no servers, no account and no analytics. Your recording and text go only to the provider you chose, directly from your computer, or nowhere at all with on-device models. The only other connections are ones you can see: the daily update check (which can be turned off), model downloads you start, and feedback you choose to send. API keys live in the system keychain, history is off by default, and logs never contain what you said. Local-only mode refuses every cloud provider, even with a key saved.
+Splashdown has no servers, no account and no analytics. Your recording and text go only to the provider you chose, directly from your computer, or nowhere at all with on-device models. The only other connections are ones you can see: the daily update check (which can be turned off), model downloads you start, and feedback you choose to send. API keys live in the system keychain, history is off by default, and logs never contain what you said. Local-only mode refuses every cloud provider, even with a key saved. Reading aloud happens on your computer; a spoken summary is written by the AI you chose.
 
 Settings → Privacy shows where your words go for your current settings. The full list is in [docs/PRIVACY.md](docs/PRIVACY.md).
 

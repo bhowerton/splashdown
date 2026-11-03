@@ -170,7 +170,7 @@
 
   <section class="privacy" id="privacy">
     <h2>Private by default</h2>
-    <p>Splashdown has no servers, no account and no analytics. Your voice and text go only to the provider you choose, straight from your computer, or nowhere at all with on-device models. API keys stay in your system keychain, history is off unless you turn it on, and the logs never contain what you said.</p>
+    <p>Splashdown has no servers, no account and no analytics. Your voice and text go only to the provider you choose, straight from your computer, or nowhere at all with on-device models. API keys stay in your system keychain, history is off unless you turn it on, and the logs never contain what you said. Reading aloud happens on your computer.</p>
     <p><a href="privacy">Everything that leaves your computer, and everything it keeps →</a></p>
   </section>
 
@@ -182,7 +182,7 @@
     </details>
     <details>
       <summary>What do I need to run it fully offline?</summary>
-      <p>On an Apple Silicon Mac with macOS 26, Apple's built-in speech and language models. On any other Mac or PC, local speech-to-text (Nemotron writes as you speak) plus Splashdown's built-in local model, a free download with nothing else to install. Local-only mode then refuses every cloud provider.</p>
+      <p>On an Apple Silicon Mac with macOS 26, Apple's built-in speech and language models. On any other Mac or PC, local speech-to-text (Nemotron writes as you speak) plus Splashdown's built-in local model, a free download with nothing else to install. Local-only mode then refuses every cloud provider. Text is read aloud on your computer too, in a natural voice that's a small download.</p>
     </details>
     <details>
       <summary>Which languages does it understand?</summary>
@@ -190,7 +190,7 @@
     </details>
     <details>
       <summary>How is it different from built-in dictation?</summary>
-      <p>Built-in dictation types your words as spoken. Splashdown also cleans them up, follows instructions ("make it a list"), edits by voice, adapts its style per app, and learns your vocabulary.</p>
+      <p>Built-in dictation types your words as spoken. Splashdown also cleans them up, follows instructions ("make it a list"), edits by voice, adapts its style per app, learns your vocabulary, does things when you ask, and reads text back to you.</p>
     </details>
     <details>
       <summary>I'm switching from another dictation app. Can I bring my words?</summary>
@@ -199,6 +199,14 @@
     <details>
       <summary>Can it do things on my computer, not just type?</summary>
       <p>Yes, when you turn on voice actions in Settings → Actions. Hold the dictation key, tap Right Shift and say what to do: open an app, search, control music and volume, add a reminder, event or to-do, draft an email, run a Shortcut on a Mac, or one of your own actions (a link, a script or keys to press). It never sends, deletes or buys anything, and Shortcuts and your own actions ask before they run.</p>
+    </details>
+    <details>
+      <summary>Can it read text to me?</summary>
+      <p>Yes. Select text, hold the dictation key and say "read this to me", or "read me a summary of this" for a short summary written for listening. English is read in Phonon, an open-source voice that sounds like a person and runs on your computer; other languages use your system's best voice. Esc stops it, and music pauses while it reads.</p>
+    </details>
+    <details>
+      <summary>Will it run well on an older or slower PC?</summary>
+      <p>Speech to text runs well almost anywhere. The built-in AI that cleans up your words needs more: it uses the processor's fast instructions, and the graphics chip on Windows where there is one. Setup times it on your computer, and if it's slow, says so and suggests a cloud key, which takes about a second for a few cents a day. You can also turn the AI off and have your words typed exactly as you say them.</p>
     </details>
     <details>
       <summary>Does it stop my music while I talk?</summary>
