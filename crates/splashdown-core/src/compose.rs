@@ -257,12 +257,48 @@ pub fn clean(draft: &str) -> String {
             }
         }
     }
-    text.to_string()
+    undash(text)
+}
+
+/// Dashes between words (— and a spaced –) become commas: they read as
+/// written by an AI, and small models use them however they're told.
+/// A dash starting a line ("— Ben") is dropped; ranges ("9–5") stay.
+fn undash(text: &str) -> String {
+    text.lines()
+        .map(|line| {
+            let line = line
+                .replace(" — ", ", ")
+                .replace(" – ", ", ")
+                .replace('—', ", ")
+                .replace(" ,", ",")
+                .replace(",,", ",")
+                .replace(", .", ".")
+                .replace(",.", ".");
+            match line.strip_prefix(", ") {
+                Some(rest) => rest.trim_start().to_string(),
+                None => line.trim_end_matches(", ").to_string(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dashes_between_words_become_commas() {
+        assert_eq!(
+            clean("Thanks Sam — I'm in. See you at 7—looking forward to it.\n— Ben"),
+            "Thanks Sam, I'm in. See you at 7, looking forward to it.\nBen"
+        );
+        assert_eq!(
+            clean("Free 9–5, or later – your call."),
+            "Free 9–5, or later, your call."
+        );
+        assert_eq!(clean("Count me in —"), "Count me in");
+    }
 
     #[test]
     fn a_reply_carries_what_it_answers_as_material() {

@@ -719,6 +719,10 @@ fn compose_faults(case: &ComposeCase, draft: &str) -> Vec<String> {
     if case.no_numbers && draft.chars().any(|c| c.is_ascii_digit()) {
         faults.push("a number nobody gave".into());
     }
+    // Every case: dashes between words read as written by an AI.
+    if draft.contains('—') || draft.contains(" – ") {
+        faults.push("a dash between words".into());
+    }
     faults
 }
 

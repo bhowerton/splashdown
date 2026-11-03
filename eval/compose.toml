@@ -1,6 +1,8 @@
 # Compose: a draft written from what the user said they want to say.
 # `splashdown-cli eval compose`.
 #
+# Every case fails on a dash between words (— or a spaced –).
+#
 # Fields: asked (what was said), replying_to (the selected message),
 # window (text read from the window around the field, nothing selected),
 # app, user, tone ("formal", "casual", "very-casual"), notes (one note's
