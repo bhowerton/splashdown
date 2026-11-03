@@ -2,13 +2,11 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.5.1 — 2026-11-02
 
 - **A much faster built-in model on Windows, and on Intel Macs.** It was built for the oldest x86 processors, without the instructions (AVX2, FMA) it relies on, so it ran several times slower than the processor could. Windows now gets two builds: one for processors from about 2013 on that can also use the graphics chip (Vulkan), and one for older processors; Splashdown picks the one that runs, and falls back to the other if the first fails. Intel Macs get the faster instructions too (every Mac macOS 13 supports has them).
-
 - **The setup guide checks whether this computer is fast enough for the built-in model.** Once it's downloaded, Splashdown times it on an ordinary dictation. If tidying up would take more than about 5 seconds (common on older PCs, where it runs on the processor alone), the guide says so and offers a cloud key (OpenRouter: about a second, a few cents a day), turning tidying up off, or keeping it anyway. Between 2 and 5 seconds, it mentions that a cloud key is quicker. Settings → Providers shows the measured speed, and if real dictations turn out slow too, Splashdown suggests a cloud key once.
 - **The setup guide waits until Splashdown is ready.** While the models download and the speed is checked, Try it shows the progress, with a capsule drifting down under its parachute, and can't be skipped past: there's nothing to try until it's done.
-
 - **The setup guide asks whether you want voice actions.** Instead of a switch inside a step, the Do things step asks plainly ("Want Splashdown to do things for you, not just type?") with Yes, turn it on and Not now, and the last page asks once more if you skipped past it.
 
 ## 0.5.0 — 2026-11-02
