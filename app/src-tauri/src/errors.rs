@@ -20,7 +20,7 @@ pub fn pipeline(e: &PipelineError, stt: Option<&str>, llm: Option<&str>) -> Stri
         PipelineError::Stt(p) => provider(p, provider_label(stt), "speech-to-text"),
         PipelineError::Llm(p) => provider(p, provider_label(llm), "AI"),
         PipelineError::NoModel(_) => {
-            "Instructions need an AI provider: choose one in Settings › Providers".into()
+            "Instructions need an AI provider: choose one in Settings › AI Models".into()
         }
         PipelineError::NoSelection => "Select some text first".into(),
         PipelineError::NoSpeech => "Didn't catch that".into(),
@@ -29,14 +29,14 @@ pub fn pipeline(e: &PipelineError, stt: Option<&str>, llm: Option<&str>) -> Stri
 
 fn provider(e: &ProviderError, who: &str, what: &str) -> String {
     match e {
-        ProviderError::Auth => format!("{who} rejected the API key: check Settings › Providers"),
+        ProviderError::Auth => format!("{who} rejected the API key: check Settings › AI Models"),
         ProviderError::Api(msg) => api_message(msg, who),
         ProviderError::Network(msg) if msg.contains("timed out") => {
             format!("No answer from {who}: check your connection")
         }
         ProviderError::Network(_) => format!("Can't reach {who}: are you offline?"),
         ProviderError::Unavailable(msg) if msg.contains("download") => {
-            "The speech model isn't downloaded: see Settings › Providers".into()
+            "The speech model isn't downloaded: see Settings › AI Models".into()
         }
         ProviderError::Unavailable(msg) => format!("{who} unavailable: {msg}"),
         ProviderError::TooLong => format!("Too long for this {what} model"),
@@ -91,7 +91,7 @@ mod tests {
         let e = |p| PipelineError::Llm(p);
         assert_eq!(
             pipeline(&e(ProviderError::Auth), None, OR),
-            "OpenRouter rejected the API key: check Settings › Providers"
+            "OpenRouter rejected the API key: check Settings › AI Models"
         );
         assert_eq!(
             pipeline(
@@ -129,7 +129,7 @@ mod tests {
                 Some("local/nemotron-en"),
                 None
             ),
-            "The speech model isn't downloaded: see Settings › Providers"
+            "The speech model isn't downloaded: see Settings › AI Models"
         );
     }
 

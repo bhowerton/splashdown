@@ -1903,7 +1903,7 @@ impl Controller {
         let Some(model) = engine.pipeline_for(&active.preset).answer_model() else {
             return self.notice(
                 Tone::Warning,
-                "Asking needs an AI model: choose one in Settings → Providers",
+                "Asking needs an AI model: choose one in Settings → AI Models",
             );
         };
         // Notes that match "summarize this" are beside the point.

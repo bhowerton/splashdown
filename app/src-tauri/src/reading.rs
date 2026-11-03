@@ -27,6 +27,8 @@ pub const CHANGED: &str = "reading-changed";
 
 /// A chosen voice that's one of the natural voices: `natural:Harper`.
 pub const NATURAL: &str = "natural:";
+/// The natural voice that reads English when no voice is chosen.
+const NATURAL_DEFAULT: &str = "Harper";
 
 /// How often the voice is checked on.
 const POLL: Duration = Duration::from_millis(80);
@@ -207,11 +209,16 @@ fn read_all(n: u64) {
     else {
         return;
     };
-    let natural = voice
-        .as_deref()
-        .and_then(|v| v.strip_prefix(NATURAL))
-        .filter(|_| language.is_none_or(|l| l == "en"))
-        .and_then(|name| natural_speech().map(|speech| (speech, name.to_string())));
+    let automatic = voice.is_none();
+    let name = natural_name(voice.as_deref(), language).map(str::to_string);
+    let mut speech = name.as_ref().and_then(|_| natural_speech());
+    if speech.is_none() && name.is_some() && automatic && offer_download(n) {
+        speech = natural_speech();
+    }
+    if !current(n) {
+        return;
+    }
+    let natural = speech.zip(name);
     let result = match natural {
         Some((speech, name)) => {
             let pieces = std::iter::once(first).chain(std::iter::from_fn(|| next_piece(n)));
@@ -265,6 +272,87 @@ fn read_all(n: u64) {
             ui.hide_if_unchanged(shown);
         }
     }
+}
+
+/// The natural voice to read in, when it's English (or the language isn't
+/// known) and a natural voice is chosen, or none is (Automatic: Harper).
+/// `None`: a system voice reads it.
+fn natural_name<'a>(voice: Option<&'a str>, language: Option<&str>) -> Option<&'a str> {
+    if language.is_some_and(|l| l != "en") {
+        return None;
+    }
+    match voice {
+        None => Some(NATURAL_DEFAULT),
+        Some(v) => v.strip_prefix(NATURAL),
+    }
+}
+
+/// Asks once, the first time English is read without the natural voices,
+/// whether to download them; if so, downloads them (the pill shows how
+/// it's going). Whether they're here now.
+fn offer_download(n: u64) -> bool {
+    let Some(ui) = UI.get() else {
+        return false;
+    };
+    let app = ui.app().clone();
+    let Some(state) = tauri::Manager::try_state::<crate::commands::AppState>(&app) else {
+        return false;
+    };
+    if state.settings().general.natural_voice_offered {
+        return false;
+    }
+    let answer = crate::prompt::ask(
+        &app,
+        "Read in a natural voice?",
+        "Splashdown can read English in a voice that sounds like a person, run on this \
+         computer: a one-time download of 68 MB.",
+        &["Download", "Use the system voice"],
+    );
+    if answer.is_some() {
+        let mut settings = state.settings();
+        settings.general.natural_voice_offered = true;
+        let saved = crate::engine::paths().and_then(|p| settings.save(&p.config_file()));
+        match saved {
+            Ok(()) => {
+                *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+                crate::commands::settings_changed_elsewhere(&app);
+            }
+            Err(e) => tracing::warn!("couldn't save that the natural voices were offered: {e}"),
+        }
+    }
+    if answer != Some(0) || !current(n) {
+        return false;
+    }
+    let shown = |text: String| {
+        ui.show(OverlayState::Reading {
+            label: format!("{text} · Esc to stop"),
+        });
+        if let Some(r) = reading().as_mut().filter(|r| r.n == n) {
+            r.shown = ui.generation();
+        }
+    };
+    shown("Downloading the natural voices…".into());
+    let fetched = tauri::async_runtime::block_on(crate::commands::fetch_model(
+        &app,
+        splashdown_providers::NaturalVoice::ID,
+        |done, total| {
+            if let Some(total) = total.filter(|t| *t > 0)
+                && current(n)
+            {
+                shown(format!(
+                    "Downloading the natural voices… {}%",
+                    done * 100 / total
+                ));
+            }
+        },
+    ));
+    if let Err(e) = &fetched {
+        tracing::warn!("couldn't download the natural voices: {e}");
+    }
+    if current(n) {
+        shown("Reading aloud".into());
+    }
+    fetched.is_ok()
 }
 
 /// The natural voice, loaded the first time it's needed (and kept), if
@@ -450,7 +538,7 @@ pub struct NaturalStatus {
 
 // ---------------------------------------------------------------- commands
 
-/// The voices for Settings → General → Reading aloud.
+/// The voices for Settings → AI Models → Reading aloud.
 #[tauri::command]
 pub async fn reading_voices() -> Vec<Voice> {
     tauri::async_runtime::spawn_blocking(voices)
@@ -519,4 +607,23 @@ pub fn reading_state() -> bool {
 #[tauri::command]
 pub fn reading_stop() {
     stop();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn english_gets_a_natural_voice_unless_a_system_one_is_chosen() {
+        assert_eq!(natural_name(None, Some("en")), Some("Harper"));
+        assert_eq!(natural_name(None, None), Some("Harper"));
+        assert_eq!(
+            natural_name(Some("natural:Maeve"), Some("en")),
+            Some("Maeve")
+        );
+        assert_eq!(natural_name(Some("natural:Maeve"), Some("de")), None);
+        assert_eq!(natural_name(None, Some("es")), None);
+        let samantha = "com.apple.voice.compact.en-US.Samantha";
+        assert_eq!(natural_name(Some(samantha), Some("en")), None);
+    }
 }

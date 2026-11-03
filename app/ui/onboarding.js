@@ -369,7 +369,7 @@ function renderWait() {
     const note = $("speed-note");
     note.hidden = setup?.speed !== "usable" || state.settings.ai?.provider !== "local";
     if (!note.hidden) {
-      note.textContent = `Tidying up takes about ${secondsOf(setup.local_ms)} seconds on this computer. A cloud key makes it quicker: Settings → Providers.`;
+      note.textContent = `Tidying up takes about ${secondsOf(setup.local_ms)} seconds on this computer. A cloud key makes it quicker: Settings → AI Models.`;
     }
     if (wasWaiting) {
       // Just finished: start the walk-through afresh.

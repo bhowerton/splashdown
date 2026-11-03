@@ -1490,7 +1490,7 @@ pub async fn notes_ask(
     let setup = tauri::async_runtime::spawn_blocking(move || session.answer_model())
         .await
         .map_err(|e| e.to_string())??
-        .ok_or("Asking needs an AI model: choose one in Settings → Providers.")?;
+        .ok_or("Asking needs an AI model: choose one in Settings → AI Models.")?;
     let (store, _) = store(&state)?;
     let (notes, sources): (Vec<_>, Vec<_>) = match &path {
         Some(path) => {

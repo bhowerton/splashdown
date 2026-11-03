@@ -585,7 +585,7 @@ function modelRow(p) {
   const options = state.preset_ai_options ?? [];
   const current = p.model?.provider ?? null;
   const known = options.some((o) => o.value === current);
-  const providers = [[null, "Same as Providers"], ...options.map((o) => [o.value, o.label])];
+  const providers = [[null, "Same as AI Models"], ...options.map((o) => [o.value, o.label])];
   if (current && !known) providers.push([current, `${current} (not available now)`]);
   const sel = presetSelect(providers, current, (v) => updatePreset(p.id, (x) => (x.model = v ? { provider: v, model: null } : null)), "AI model for this preset");
   sel.disabled = !p.ai;

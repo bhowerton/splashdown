@@ -343,7 +343,7 @@ async fn speed_test(app: &AppHandle) -> Option<u32> {
     .flatten()
 }
 
-/// Keeps the measured speed (for Settings → Providers), without rebuilding
+/// Keeps the measured speed (for Settings → AI Models), without rebuilding
 /// anything: it changes nothing about how dictation runs.
 fn remember_speed(app: &AppHandle, ms: u32) {
     let state = app.state::<AppState>();

@@ -47,7 +47,7 @@ pub struct Preset {
     /// General → language.
     pub language: Option<String>,
     /// A different AI model for this preset. `None` uses the one chosen
-    /// under Providers.
+    /// under AI Models.
     pub model: Option<PresetModel>,
     /// A global shortcut that starts a hands-free dictation with this
     /// preset, e.g. `Ctrl+Alt+KeyE` (see `tauri-plugin-global-shortcut`).
@@ -81,7 +81,7 @@ impl Tone {
     }
 }
 
-/// A preset's own AI model: a provider (as under Providers) and,
+/// A preset's own AI model: a provider (as under AI Models) and,
 /// optionally, a model name (`None`: the provider's default).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PresetModel {

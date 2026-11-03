@@ -34,7 +34,7 @@ Splashdown heard sound but no words: too short, too quiet, or only noise. Hold t
 
 - Press **⌃⌥Z** (Ctrl+Alt+Z on Windows) right after it's typed to swap in exactly what you said.
 - Lower the cleanup level for that app's preset: **Light** fixes only punctuation and obvious slips, **None** types your words as spoken.
-- Smaller on-device models follow instructions less reliably than cloud models. For instructions and commands, turn on Settings → Providers → "Send instructions to the cloud", if you use a cloud key.
+- Smaller on-device models follow instructions less reliably than cloud models. For instructions and commands, turn on Settings → AI Models → "Send instructions to the cloud", if you use a cloud key.
 
 ## Spoken commands don't work
 
@@ -42,7 +42,7 @@ Commands start with a tap of **Right Shift** before you say anything. They need 
 
 ## A provider error
 
-The pill names the provider and the fix: a rejected key (check it in Settings → Providers), no credit left, rate limits, or the provider being down. If an on-device model is installed, Splashdown retries the dictation on your computer and the result says **"done on this computer"**.
+The pill names the provider and the fix: a rejected key (check it in Settings → AI Models), no credit left, rate limits, or the provider being down. If an on-device model is installed, Splashdown retries the dictation on your computer and the result says **"done on this computer"**.
 
 ## Windows says "Windows protected your PC"
 

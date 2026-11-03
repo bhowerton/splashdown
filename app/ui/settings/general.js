@@ -59,7 +59,7 @@ function renderGeneral() {
   const englishOnly = !!state.speech_models.find((m) => m.id === localId)?.english_only;
   const other = s.general.language && s.general.language !== "en";
   $("gen-language-note").hidden = !(englishOnly && other);
-  $("gen-language-note").textContent = "Your speech model only understands English. Choose Nemotron 3.5 or Whisper large-v3-turbo under Providers → Speech to text → On this computer.";
+  $("gen-language-note").textContent = "Your speech model only understands English. Choose Nemotron 3.5 or Whisper large-v3-turbo under AI Models → Speech to text → On this computer.";
   // One per line, so a term with a comma in it ("Smith, Jones & Co")
   // comes back whole.
   setValue($("gen-vocab"), s.general.vocabulary.join("\n"));
@@ -83,7 +83,6 @@ function renderGeneral() {
   const volume = s.general.sound_volume ?? state.defaults.sound_volume ?? DEFAULT_SOUND_VOLUME;
   setValue($("gen-volume"), Math.round(volume * 100));
   $("gen-volume").disabled = !$("gen-sounds").checked;
-  renderReading();
   $("gen-live").checked = s.general.live_preview !== false;
   $("gen-stream").checked = s.general.stream_typing !== false;
   const note = $("gen-live-note");
@@ -92,7 +91,7 @@ function renderGeneral() {
   const resolved = "Ok" in state.resolved_speech ? state.resolved_speech.Ok : "";
   const ready = resolved.startsWith("On this computer");
   note.textContent = !ready && $("gen-live").checked
-    ? "Works when speech-to-text runs on this computer: choose it under Providers → Speech to text"
+    ? "Works when speech-to-text runs on this computer: choose it under AI Models → Speech to text"
     : "Shown in the status pill as you speak";
   note.classList.toggle("warn-text", !ready && $("gen-live").checked);
 }
@@ -481,114 +480,6 @@ function renderMicrophones() {
 $("gen-volume").addEventListener("change", (e) => {
   save();
   invoke("preview_sound", { volume: Number(e.target.value) / 100 }).catch(() => {});
-});
-
-// ---------------------------------------------------------------- reading aloud
-
-/** The system's voices (`reading::Voice`), once loaded. */
-let readVoices = null;
-
-function renderReading() {
-  const s = state.settings;
-  setValue($("gen-read-speed"), Math.round((s.general.read_speed ?? 1) * 100));
-  $("gen-read-note").textContent =
-    state.platform === "windows"
-      ? "More voices: Windows Settings → Time & language → Speech → Add voices."
-      : "More natural voices: System Settings → Accessibility → Spoken Content → System voice → Manage Voices. Look for Enhanced and Premium.";
-  $("gen-read-speed-note").hidden = !(s.general.read_voice ?? "").startsWith("natural:");
-  invoke("reading_natural")
-    .then((natural) => {
-      $("gen-natural-row").hidden = natural.downloaded;
-      if (!natural.downloaded) $("gen-natural-get").textContent = `Download (${natural.mb} MB)`;
-    })
-    .catch(() => {});
-  if (readVoices) {
-    showVoices(s.general.read_voice ?? "");
-    return;
-  }
-  loadVoices();
-}
-
-async function loadVoices() {
-  readVoices = await invoke("reading_voices").catch(() => []);
-  showVoices(state.settings.general.read_voice ?? "");
-}
-
-/** The voices by language, with the chosen one selected. */
-function showVoices(chosen) {
-  const select = $("gen-read-voice");
-  const names = new Intl.DisplayNames(["en"], { type: "language" });
-  const languageName = (code) => {
-    try {
-      return names.of(code.replace("_", "-")) ?? code;
-    } catch {
-      return code;
-    }
-  };
-  const groups = new Map();
-  for (const voice of readVoices) {
-    const language = voice.quality === "Natural" ? NATURAL_GROUP : languageName(voice.language);
-    if (!groups.has(language)) groups.set(language, []);
-    groups.get(language).push(voice);
-  }
-  const automatic = new Option("Automatic (best voice for the text's language)", "");
-  // The natural voices first.
-  const order = [...groups.keys()].sort((a, b) => (b === NATURAL_GROUP) - (a === NATURAL_GROUP) || a.localeCompare(b));
-  const optgroups = order.map((language) => {
-    const group = document.createElement("optgroup");
-    group.label = language;
-    for (const voice of groups.get(language)) {
-      const label =
-        voice.quality === "Natural"
-          ? `${voice.name} · ${voice.language === "en-GB" ? "British" : "American"}`
-          : `${voice.name}${voice.quality ? ` (${voice.quality})` : ""}`;
-      const option = new Option(label, voice.id);
-      if (voice.about) option.title = voice.about;
-      group.append(option);
-    }
-    return group;
-  });
-  select.replaceChildren(automatic, ...optgroups);
-  // A voice that's since been removed reads as Automatic.
-  select.value = readVoices.some((v) => v.id === chosen) ? chosen : "";
-}
-
-/** The heading the natural voices are listed under. */
-const NATURAL_GROUP = "Natural voices · English, on this computer";
-/** The natural voice chosen when it's first downloaded. */
-const NATURAL_DEFAULT = "natural:Harper";
-
-// Downloads the natural voices, then reads with one.
-$("gen-natural-get").addEventListener("click", async (e) => {
-  const button = e.target;
-  const note = $("gen-natural-note");
-  const before = note.textContent;
-  button.disabled = true;
-  const stop = await listen("model-download", (ev) => {
-    if (ev.payload.id !== "phonon-en" || !ev.payload.total) return;
-    note.textContent = `Downloading the natural voices… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
-  });
-  try {
-    await invoke("download_model", { id: "phonon-en" });
-    await loadVoices();
-    $("gen-read-voice").value = NATURAL_DEFAULT;
-    $("gen-natural-row").hidden = true;
-    await save();
-    toast("Natural voices ready: English is read in Harper. Choose another under Voice.");
-  } catch (err) {
-    toast(`Couldn't download the natural voices: ${err}`, true);
-  } finally {
-    stop();
-    note.textContent = before;
-    button.disabled = false;
-  }
-});
-
-$("gen-read-try").addEventListener("click", () => {
-  invoke("reading_try", {
-    voice: $("gen-read-voice").value || null,
-    speed: Number($("gen-read-speed").value) / 100,
-  }).catch((e) => toast(String(e), true));
 });
 
 // ---------------------------------------------------------------- vocabulary suggestions

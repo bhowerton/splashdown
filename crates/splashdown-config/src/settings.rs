@@ -509,6 +509,9 @@ pub struct GeneralSettings {
     /// How fast text is read aloud, 1.0 being the voice's usual pace.
     /// Unset means 1.0.
     pub read_speed: Option<f32>,
+    /// The natural voices were offered (and downloaded, or not) the first
+    /// time something was read without them.
+    pub natural_voice_offered: bool,
 }
 
 /// Other sounds while recording.

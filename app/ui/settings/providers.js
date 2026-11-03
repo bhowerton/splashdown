@@ -1,7 +1,8 @@
 "use strict";
 
-// Providers tab: API keys, speech-to-text (cloud, local model downloads,
-// Apple on-device), cleanup & formatting, and the "Try it" box.
+// AI Models tab: API keys, speech-to-text (cloud, local model downloads,
+// Apple on-device), cleanup & formatting, the "Try it" box, and reading
+// aloud (the voices, their download, speed).
 
 /** Suggestions shown in the model fields. Any model id can be typed. */
 const SUGGESTIONS = {
@@ -30,6 +31,7 @@ const KEY_INFO = {
 
 function renderProviders() {
   const s = state.settings;
+  renderReading();
   const err = $("engine-error");
   err.hidden = !state.engine_error;
   err.textContent = state.engine_error ? `Dictation isn't ready: ${state.engine_error}` : "";
@@ -472,3 +474,120 @@ async function tryIt() {
 
 $("try-btn").addEventListener("click", tryIt);
 $("try-text").addEventListener("keydown", (e) => e.key === "Enter" && tryIt());
+
+// ---------------------------------------------------------------- reading aloud
+
+/** The system's voices (`reading::Voice`), once loaded. */
+let readVoices = null;
+/** The natural voices are downloaded. */
+let naturalHere = false;
+
+function renderReading() {
+  const s = state.settings;
+  setValue($("gen-read-speed"), Math.round((s.general.read_speed ?? 1) * 100));
+  invoke("reading_natural")
+    .then((natural) => {
+      naturalHere = natural.downloaded;
+      $("gen-natural-row").hidden = natural.downloaded;
+      if (!natural.downloaded) $("gen-natural-get").textContent = `Download (${natural.mb} MB)`;
+      if (readVoices) showVoices($("gen-read-voice").value);
+    })
+    .catch(() => {});
+  if (readVoices) {
+    showVoices(s.general.read_voice ?? "");
+    return;
+  }
+  loadVoices();
+}
+
+async function loadVoices() {
+  readVoices = await invoke("reading_voices").catch(() => []);
+  showVoices(state.settings.general.read_voice ?? "");
+}
+
+/** The voices by language, with the chosen one selected. */
+function showVoices(chosen) {
+  const select = $("gen-read-voice");
+  const names = new Intl.DisplayNames(["en"], { type: "language" });
+  const languageName = (code) => {
+    try {
+      return names.of(code.replace("_", "-")) ?? code;
+    } catch {
+      return code;
+    }
+  };
+  const groups = new Map();
+  for (const voice of readVoices) {
+    const language = voice.quality === "Natural" ? NATURAL_GROUP : languageName(voice.language);
+    if (!groups.has(language)) groups.set(language, []);
+    groups.get(language).push(voice);
+  }
+  const automatic = new Option(
+    naturalHere
+      ? "Automatic (Harper for English)"
+      : "Automatic",
+    "",
+  );
+  // The natural voices first.
+  const order = [...groups.keys()].sort((a, b) => (b === NATURAL_GROUP) - (a === NATURAL_GROUP) || a.localeCompare(b));
+  const optgroups = order.map((language) => {
+    const group = document.createElement("optgroup");
+    group.label = language;
+    for (const voice of groups.get(language)) {
+      const label =
+        voice.quality === "Natural"
+          ? `${voice.name} · ${voice.language === "en-GB" ? "British" : "American"}`
+          : `${voice.name}${voice.quality ? ` (${voice.quality})` : ""}`;
+      const option = new Option(label, voice.id);
+      if (voice.about) option.title = voice.about;
+      group.append(option);
+    }
+    return group;
+  });
+  select.replaceChildren(automatic, ...optgroups);
+  // A voice that's since been removed reads as Automatic.
+  select.value = readVoices.some((v) => v.id === chosen) ? chosen : "";
+  const natural = select.value.startsWith("natural:") || (naturalHere && !select.value);
+  $("gen-read-speed-note").hidden = !natural;
+}
+
+$("gen-read-voice").addEventListener("change", () => showVoices($("gen-read-voice").value));
+
+/** The heading the natural voices are listed under. */
+const NATURAL_GROUP = "Natural voices · English, on this computer";
+
+// Downloads the natural voices, then reads with one.
+$("gen-natural-get").addEventListener("click", async (e) => {
+  const button = e.target;
+  const note = $("gen-natural-note");
+  const before = note.textContent;
+  button.disabled = true;
+  const stop = await listen("model-download", (ev) => {
+    if (ev.payload.id !== "phonon-en" || !ev.payload.total) return;
+    note.textContent = `Downloading the natural voices… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
+  });
+  try {
+    await invoke("download_model", { id: "phonon-en" });
+    naturalHere = true;
+    $("gen-natural-row").hidden = true;
+    await loadVoices();
+    toast(
+      $("gen-read-voice").value
+        ? "Natural voices ready. Choose one under Voice."
+        : "Natural voices ready: English is now read in Harper. Choose another under Voice.",
+    );
+  } catch (err) {
+    toast(`Couldn't download the natural voices: ${err}`, true);
+  } finally {
+    stop();
+    note.textContent = before;
+    button.disabled = false;
+  }
+});
+
+$("gen-read-try").addEventListener("click", () => {
+  invoke("reading_try", {
+    voice: $("gen-read-voice").value || null,
+    speed: Number($("gen-read-speed").value) / 100,
+  }).catch((e) => toast(String(e), true));
+});

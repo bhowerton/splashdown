@@ -158,7 +158,7 @@ pub fn run(rt: &tokio::runtime::Runtime, args: ComputerArgs) -> Result<()> {
     let secrets = Secrets::from_env();
     let Some(key) = secrets.get(KeyName::Anthropic).map(str::to_string) else {
         bail!(
-            "computer use needs an Anthropic API key: add one in Splashdown → Settings → Providers, or set ANTHROPIC_API_KEY"
+            "computer use needs an Anthropic API key: add one in Splashdown → Settings → AI Models, or set ANTHROPIC_API_KEY"
         );
     };
     let tasks: Vec<Task> = match (&args.tasks, &args.task) {

@@ -33,7 +33,7 @@
       <a href="#actions" data-tab="actions"><span class="tile t-actions" aria-hidden="true"><svg><use href="#i-actions"/></svg></span>Actions</a>
     </div>
     <div class="side-group" role="group" aria-labelledby="sg-ai"><div class="side-h" id="sg-ai">AI</div>
-      <a href="#providers" data-tab="providers"><span class="tile t-providers" aria-hidden="true"><svg><use href="#i-providers"/></svg></span>Providers</a>
+      <a href="#providers" data-tab="providers"><span class="tile t-providers" aria-hidden="true"><svg><use href="#i-providers"/></svg></span>AI Models</a>
       <a href="#spending" data-tab="spending"><span class="tile t-spending" aria-hidden="true"><svg><use href="#i-spending"/></svg></span>Spending</a>
     </div>
     <div class="side-group" role="group" aria-labelledby="sg-data"><div class="side-h" id="sg-data">Your data</div>
@@ -149,17 +149,6 @@
           </select></label>
         <label class="row"><span class="lbl">Show mini bar<small>A small button that stays on screen, if you'd rather click than hold a key: click it to start dictating into the field you're typing in, and again to finish. Drag it anywhere.</small></span>
           <input id="gen-mini-bar" type="checkbox" class="switch" data-setting></label>
-      </div>
-      <div class="group">
-        <div class="gh">Reading aloud</div>
-        <div class="row" id="gen-natural-row" hidden><span class="lbl">Natural voices<small id="gen-natural-note">Far more natural English voices, American and British, that run on this computer (Phonon, open source).</small></span>
-          <button class="btn" id="gen-natural-get" type="button">Download</button></div>
-        <label class="row"><span class="lbl">Voice<small>Select text, hold the dictation key and say “read this to me”, or “read me a summary of this”. With nothing selected, tap <b class="instr-key">the instruction key</b> first and the text you're writing is read. Reading happens on this computer; a summary is written by your AI first. Text in another language gets a voice for that language.</small></span>
-          <select id="gen-read-voice" data-setting><option value="">Automatic</option></select></label>
-        <label class="row"><span class="lbl">Speed<small id="gen-read-speed-note" hidden>For the system's voices: the natural voices read at their own pace.</small></span>
-          <span class="volume"><span aria-hidden="true">Slower</span><input id="gen-read-speed" type="range" min="50" max="200" step="10" aria-label="Reading speed"><span aria-hidden="true">Faster</span></span></label>
-        <div class="row"><span class="lbl">Hear it<small id="gen-read-note"></small></span>
-          <button class="btn" id="gen-read-try" type="button">Try it</button></div>
       </div>
     </section>
 
@@ -284,11 +273,11 @@
       </div>
     </section>
 
-    <!-- ================= Providers ================= -->
+    <!-- ================= AI Models ================= -->
     <section id="tab-providers" class="tab" hidden>
       <header class="page-head">
         <span class="tile big t-providers" aria-hidden="true"><svg><use href="#i-providers"/></svg></span>
-        <div><h1>Providers</h1><p>Who turns your speech into text, and who tidies it up.</p></div>
+        <div><h1>AI Models</h1><p>What turns your speech into text, tidies it up, and reads text back to you.</p></div>
       </header>
       <div class="banner warn" id="engine-error" hidden></div>
       <div class="banner warn" id="budget-banner" hidden>Your spending limit is reached, so Splashdown is using models on this computer until it resets. Raise the limit under <button class="link" data-goto="spending">Spending</button> to switch back.</div>
@@ -351,6 +340,17 @@
           </div>
           <div id="try-out" class="try-out" hidden></div>
         </div>
+      </div>
+
+      <div class="group">
+        <div class="gh">Reading aloud <span class="gh-note">on this computer</span></div>
+        <div class="row" id="gen-natural-row" hidden><span class="lbl">Natural voices<small>American and British English</small></span>
+          <button class="btn" id="gen-natural-get" type="button">Download</button></div>
+        <div class="row"><label class="lbl" for="gen-read-voice">Voice</label>
+          <span class="try"><select id="gen-read-voice" data-setting><option value="">Automatic</option></select><button class="btn" id="gen-read-try" type="button">Try it</button></span></div>
+        <label class="row"><span class="lbl">Speed<small id="gen-read-speed-note" hidden>System voices only</small></span>
+          <span class="volume"><span aria-hidden="true">Slower</span><input id="gen-read-speed" type="range" min="50" max="200" step="10" aria-label="Reading speed"><span aria-hidden="true">Faster</span></span></label>
+        <div class="row note-row"><span class="lbl"><small>Select text and say “read this to me” or “read me a summary of this”.</small></span></div>
       </div>
     </section>
 
