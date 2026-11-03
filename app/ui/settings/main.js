@@ -166,7 +166,7 @@ function collect() {
   s.general.check_for_updates = $("gen-updates").checked ? null : false;
   s.general.sounds = $("gen-sounds").checked ? null : false;
   s.general.sound_volume = Number($("gen-volume").value) / 100;
-  s.general.read_voice = $("gen-read-voice").value || null;
+  s.general.read_voice = ttsVoice();
   const readSpeed = Number($("gen-read-speed").value) / 100;
   s.general.read_speed = readSpeed === 1 ? null : readSpeed;
   s.general.microphone = $("gen-mic").value || null;

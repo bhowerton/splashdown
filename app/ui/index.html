@@ -343,14 +343,20 @@
       </div>
 
       <div class="group">
-        <div class="gh">Reading aloud <span class="gh-note">on this computer</span></div>
-        <div class="row" id="gen-natural-row" hidden><span class="lbl">Natural voices<small>American and British English</small></span>
+        <div class="gh">Text to speech</div>
+        <div class="row"><label class="lbl" for="tts-provider">Provider</label>
+          <span class="try"><select id="tts-provider">
+            <option value="auto">Automatic</option>
+            <option value="natural">On this computer: Phonon 31M (natural, English)</option>
+            <option value="system" id="tts-system-option">Apple, built into macOS</option>
+          </select><button class="btn" id="gen-read-try" type="button">Try it</button></span></div>
+        <div class="row" id="gen-natural-row" hidden><span class="lbl">Phonon 31M<small>~68 MB · Apache-2.0 · 25 American and British voices</small></span>
           <button class="btn" id="gen-natural-get" type="button">Download</button></div>
-        <div class="row"><label class="lbl" for="gen-read-voice">Voice</label>
-          <span class="try"><select id="gen-read-voice" data-setting><option value="">Automatic</option></select><button class="btn" id="gen-read-try" type="button">Try it</button></span></div>
-        <label class="row"><span class="lbl">Speed<small id="gen-read-speed-note" hidden>System voices only</small></span>
+        <label class="row" id="tts-voice-row"><span class="lbl">Voice</span>
+          <select id="gen-read-voice" data-setting></select></label>
+        <label class="row" id="tts-speed-row"><span class="lbl">Speed<small id="gen-read-speed-note" hidden></small></span>
           <span class="volume"><span aria-hidden="true">Slower</span><input id="gen-read-speed" type="range" min="50" max="200" step="10" aria-label="Reading speed"><span aria-hidden="true">Faster</span></span></label>
-        <div class="row note-row"><span class="lbl"><small>Select text and say “read this to me” or “read me a summary of this”.</small></span></div>
+        <div class="row note-row"><span class="lbl"><small>Using now: <b id="resolved-tts"></b></small></span></div>
       </div>
     </section>
 

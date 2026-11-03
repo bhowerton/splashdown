@@ -475,26 +475,44 @@ async function tryIt() {
 $("try-btn").addEventListener("click", tryIt);
 $("try-text").addEventListener("keydown", (e) => e.key === "Enter" && tryIt());
 
-// ---------------------------------------------------------------- reading aloud
+// ---------------------------------------------------------------- text to speech
 
-/** The system's voices (`reading::Voice`), once loaded. */
+/** The voices (`reading::Voice`): Phonon's once downloaded, then the
+ *  system's. Loaded once. */
 let readVoices = null;
-/** The natural voices are downloaded. */
+/** Phonon is downloaded. */
 let naturalHere = false;
+/** A saved voice: `natural:<name>` (Phonon), `system:` (the system's best
+ *  for each language), a system voice's id, or none (Automatic). */
+const NATURAL = "natural:";
+const SYSTEM = "system:";
+/** The Phonon voice Automatic reads English in. */
+const NATURAL_DEFAULT = "Harper";
+
+/** The system's voices, by who makes them. */
+function systemName() {
+  return state.platform === "windows" ? "Windows, built in" : "Apple, built into macOS";
+}
+
+/** Which provider a saved voice belongs to. */
+function ttsProvider(voice) {
+  if (!voice) return "auto";
+  return voice.startsWith(NATURAL) ? "natural" : "system";
+}
 
 function renderReading() {
   const s = state.settings;
+  $("tts-system-option").textContent = systemName();
   setValue($("gen-read-speed"), Math.round((s.general.read_speed ?? 1) * 100));
   invoke("reading_natural")
     .then((natural) => {
       naturalHere = natural.downloaded;
-      $("gen-natural-row").hidden = natural.downloaded;
-      if (!natural.downloaded) $("gen-natural-get").textContent = `Download (${natural.mb} MB)`;
-      if (readVoices) showVoices($("gen-read-voice").value);
+      $("gen-natural-get").textContent = `Download (${natural.mb} MB)`;
+      showReading(state.settings.general.read_voice ?? "");
     })
     .catch(() => {});
   if (readVoices) {
-    showVoices(s.general.read_voice ?? "");
+    showReading(s.general.read_voice ?? "");
     return;
   }
   loadVoices();
@@ -502,12 +520,41 @@ function renderReading() {
 
 async function loadVoices() {
   readVoices = await invoke("reading_voices").catch(() => []);
-  showVoices(state.settings.general.read_voice ?? "");
+  showReading(state.settings.general.read_voice ?? "");
 }
 
-/** The voices by language, with the chosen one selected. */
-function showVoices(chosen) {
+/** The provider, its voices with `voice` selected, the speed (for the
+ *  system's voices) and what's used now. */
+function showReading(voice) {
+  const provider = ttsProvider(voice);
+  setValue($("tts-provider"), provider);
+  $("gen-natural-row").hidden = naturalHere || provider === "system";
+  const voices = (readVoices ?? []).filter((v) => (provider === "natural") === (v.quality === "Natural"));
   const select = $("gen-read-voice");
+  if (provider === "natural") {
+    select.replaceChildren(
+      ...voices.map((v) => {
+        const option = new Option(`${v.name} · ${v.language === "en-GB" ? "British" : "American"}`, v.id);
+        if (v.about) option.title = v.about;
+        return option;
+      }),
+    );
+  } else {
+    select.replaceChildren(new Option("The best voice for each language", SYSTEM), ...systemVoiceGroups(voices));
+  }
+  select.value = [...select.options].some((o) => o.value === voice) ? voice : select.options[0]?.value ?? "";
+  $("tts-voice-row").hidden = provider === "auto" || (provider === "natural" && !naturalHere);
+  // Phonon has no speed of its own.
+  const phonon = naturalHere && provider !== "system";
+  $("tts-speed-row").hidden = provider === "natural" && naturalHere;
+  const note = $("gen-read-speed-note");
+  note.hidden = !(phonon && provider === "auto");
+  note.textContent = `For ${state.platform === "windows" ? "Windows" : "Apple"} voices; Phonon reads at its own pace`;
+  $("resolved-tts").textContent = usingNow(provider, select);
+}
+
+/** The system's voices as option groups, by language. */
+function systemVoiceGroups(voices) {
   const names = new Intl.DisplayNames(["en"], { type: "language" });
   const languageName = (code) => {
     try {
@@ -517,77 +564,83 @@ function showVoices(chosen) {
     }
   };
   const groups = new Map();
-  for (const voice of readVoices) {
-    const language = voice.quality === "Natural" ? NATURAL_GROUP : languageName(voice.language);
+  for (const voice of voices) {
+    const language = languageName(voice.language);
     if (!groups.has(language)) groups.set(language, []);
     groups.get(language).push(voice);
   }
-  const automatic = new Option(
-    naturalHere
-      ? "Automatic (Harper for English)"
-      : "Automatic",
-    "",
-  );
-  // The natural voices first.
-  const order = [...groups.keys()].sort((a, b) => (b === NATURAL_GROUP) - (a === NATURAL_GROUP) || a.localeCompare(b));
-  const optgroups = order.map((language) => {
+  return [...groups.keys()].sort().map((language) => {
     const group = document.createElement("optgroup");
     group.label = language;
     for (const voice of groups.get(language)) {
-      const label =
-        voice.quality === "Natural"
-          ? `${voice.name} · ${voice.language === "en-GB" ? "British" : "American"}`
-          : `${voice.name}${voice.quality ? ` (${voice.quality})` : ""}`;
-      const option = new Option(label, voice.id);
-      if (voice.about) option.title = voice.about;
-      group.append(option);
+      group.append(new Option(`${voice.name}${voice.quality ? ` (${voice.quality})` : ""}`, voice.id));
     }
     return group;
   });
-  select.replaceChildren(automatic, ...optgroups);
-  // A voice that's since been removed reads as Automatic.
-  select.value = readVoices.some((v) => v.id === chosen) ? chosen : "";
-  const natural = select.value.startsWith("natural:") || (naturalHere && !select.value);
-  $("gen-read-speed-note").hidden = !natural;
 }
 
-$("gen-read-voice").addEventListener("change", () => showVoices($("gen-read-voice").value));
+/** What reads text now, as the other groups say it. */
+function usingNow(provider, select) {
+  const others = `${state.platform === "windows" ? "Windows" : "Apple"} voices for other languages`;
+  const system = `${systemName()} · `;
+  if (provider !== "system" && naturalHere) {
+    const name = provider === "natural" ? select.selectedOptions[0]?.text.split(" · ")[0] : NATURAL_DEFAULT;
+    return `On this computer · Phonon 31M · ${name ?? NATURAL_DEFAULT} for English · ${others}`;
+  }
+  if (provider === "natural") return `${system}the best voice for each language, until Phonon 31M is downloaded`;
+  if (provider === "system" && select.value !== SYSTEM) return system + select.selectedOptions[0]?.text;
+  return `${system}the best voice for each language`;
+}
 
-/** The heading the natural voices are listed under. */
-const NATURAL_GROUP = "Natural voices · English, on this computer";
+/** The voice to save: none for Automatic, else the one chosen (Phonon's
+ *  default or the system's best before there's a list to choose from). */
+function ttsVoice() {
+  const provider = $("tts-provider").value;
+  if (provider === "auto") return null;
+  return $("gen-read-voice").value || voiceFor(provider);
+}
 
-// Downloads the natural voices, then reads with one.
+/** The voice to save for the provider chosen. */
+function voiceFor(provider) {
+  if (provider === "natural") return `${NATURAL}${NATURAL_DEFAULT}`;
+  if (provider === "system") return SYSTEM;
+  return "";
+}
+
+$("tts-provider").addEventListener("change", async (e) => {
+  showReading(voiceFor(e.target.value));
+  await save();
+});
+
+$("gen-read-voice").addEventListener("change", () => showReading($("gen-read-voice").value));
+
+// Downloads Phonon, then reads English in it.
 $("gen-natural-get").addEventListener("click", async (e) => {
   const button = e.target;
-  const note = $("gen-natural-note");
-  const before = note.textContent;
+  const label = button.textContent;
   button.disabled = true;
   const stop = await listen("model-download", (ev) => {
     if (ev.payload.id !== "phonon-en" || !ev.payload.total) return;
-    note.textContent = `Downloading the natural voices… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
+    button.textContent = `Downloading… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
   });
   try {
     await invoke("download_model", { id: "phonon-en" });
     naturalHere = true;
-    $("gen-natural-row").hidden = true;
     await loadVoices();
-    toast(
-      $("gen-read-voice").value
-        ? "Natural voices ready. Choose one under Voice."
-        : "Natural voices ready: English is now read in Harper. Choose another under Voice.",
-    );
+    toast(`Phonon 31M is ready: English is read in ${NATURAL_DEFAULT}.`);
   } catch (err) {
-    toast(`Couldn't download the natural voices: ${err}`, true);
+    toast(`Couldn't download Phonon 31M: ${err}`, true);
   } finally {
     stop();
-    note.textContent = before;
+    button.textContent = label;
     button.disabled = false;
   }
 });
 
 $("gen-read-try").addEventListener("click", () => {
+  const provider = $("tts-provider").value;
   invoke("reading_try", {
-    voice: $("gen-read-voice").value || null,
+    voice: provider === "auto" ? null : $("gen-read-voice").value || null,
     speed: Number($("gen-read-speed").value) / 100,
   }).catch((e) => toast(String(e), true));
 });

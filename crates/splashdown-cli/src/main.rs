@@ -151,7 +151,7 @@ enum Command {
         #[command(subcommand)]
         command: ModelsCommand,
     },
-    /// Read text aloud in the natural voice (`models download phonon-en`
+    /// Read text aloud with Phonon 31M (`models download phonon-en`
     /// first), and print how long it took.
     #[cfg(feature = "natural-voice")]
     Say {
@@ -703,7 +703,7 @@ fn run() -> Result<()> {
                     let s = state(splashdown_providers::NaturalVoice::is_downloaded(
                         &models_dir,
                     ));
-                    println!("Reading aloud (natural voice, English):");
+                    println!("Text to speech (Phonon 31M, English):");
                     let mb = splashdown_providers::NaturalVoice::APPROX_MB;
                     println!("  {id:<22} ~{mb:>4} MB  {s}");
                     println!("\nModels folder: {}", models_dir.display());

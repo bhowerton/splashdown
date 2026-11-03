@@ -27,6 +27,8 @@ pub const CHANGED: &str = "reading-changed";
 
 /// A chosen voice that's one of the natural voices: `natural:Harper`.
 pub const NATURAL: &str = "natural:";
+/// The system's voices chosen, the best one for each language: `system:`.
+pub const SYSTEM: &str = "system:";
 /// The natural voice that reads English when no voice is chosen.
 const NATURAL_DEFAULT: &str = "Harper";
 
@@ -231,7 +233,7 @@ fn read_all(n: u64) {
         None => {
             // A natural voice chosen, but English isn't what's read (or it
             // isn't there): the system's voice for the language.
-            let voice = voice.filter(|v| !v.starts_with(NATURAL));
+            let voice = voice.filter(|v| !v.starts_with(NATURAL) && v != SYSTEM);
             let mut piece = Some(first);
             let mut result = Ok(());
             while let Some(text) = piece.take() {
@@ -303,9 +305,9 @@ fn offer_download(n: u64) -> bool {
     }
     let answer = crate::prompt::ask(
         &app,
-        "Read in a natural voice?",
-        "Splashdown can read English in a voice that sounds like a person, run on this \
-         computer: a one-time download of 68 MB.",
+        "Download Phonon 31M?",
+        "Splashdown can read English in Phonon 31M, a text-to-speech model that sounds \
+         like a person and runs on this computer: a one-time download of 68 MB.",
         &["Download", "Use the system voice"],
     );
     if answer.is_some() {
@@ -331,7 +333,7 @@ fn offer_download(n: u64) -> bool {
             r.shown = ui.generation();
         }
     };
-    shown("Downloading the natural voices…".into());
+    shown("Downloading Phonon 31M…".into());
     let fetched = tauri::async_runtime::block_on(crate::commands::fetch_model(
         &app,
         splashdown_providers::NaturalVoice::ID,
@@ -339,10 +341,7 @@ fn offer_download(n: u64) -> bool {
             if let Some(total) = total.filter(|t| *t > 0)
                 && current(n)
             {
-                shown(format!(
-                    "Downloading the natural voices… {}%",
-                    done * 100 / total
-                ));
+                shown(format!("Downloading Phonon 31M… {}%", done * 100 / total));
             }
         },
     ));
@@ -538,7 +537,7 @@ pub struct NaturalStatus {
 
 // ---------------------------------------------------------------- commands
 
-/// The voices for Settings → AI Models → Reading aloud.
+/// The voices for Settings → AI Models → Text to speech.
 #[tauri::command]
 pub async fn reading_voices() -> Vec<Voice> {
     tauri::async_runtime::spawn_blocking(voices)
@@ -578,7 +577,7 @@ pub fn reading_try(voice: Option<String>, speed: f32) {
     let reader = start("Trying the voice");
     if let Some(r) = reading().as_mut().filter(|r| r.n == reader.0) {
         // The chosen voice whatever the sentence's language.
-        r.detect = voice.is_none();
+        r.detect = voice.as_deref().is_none_or(|v| v == SYSTEM);
         r.voice = voice;
         r.speed = speed.clamp(0.5, 2.0);
     }
@@ -625,5 +624,6 @@ mod tests {
         assert_eq!(natural_name(None, Some("es")), None);
         let samantha = "com.apple.voice.compact.en-US.Samantha";
         assert_eq!(natural_name(Some(samantha), Some("en")), None);
+        assert_eq!(natural_name(Some(SYSTEM), Some("en")), None);
     }
 }
