@@ -32,11 +32,29 @@ if ($triple -ne "x86_64-pc-windows-msvc") {
 }
 
 # The helper that runs the built-in local text model ships next to the app
-# (Tauri's "external binary", named for the target).
+# (Tauri's "external binary", named for the target), in two builds, and the
+# app picks one when it starts (local_llm.rs):
+# - splashdown-llm: for processors with AVX2 (nearly every PC since 2013),
+#   which llama.cpp leans on, with its Vulkan backend for the graphics chip
+#   when the Vulkan SDK is installed (VULKAN_SDK; CI installs it);
+# - splashdown-llm-basic: for any x64 processor, processor only.
+New-Item -ItemType Directory -Force app\src-tauri\binaries | Out-Null
 cargo build --release -p splashdown-llm
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-New-Item -ItemType Directory -Force app\src-tauri\binaries | Out-Null
-Copy-Item target\release\splashdown-llm.exe "app\src-tauri\binaries\splashdown-llm-$triple.exe"
+Copy-Item target\release\splashdown-llm.exe "app\src-tauri\binaries\splashdown-llm-basic-$triple.exe"
+$llmFeatures = @()
+if ($env:VULKAN_SDK) {
+    $llmFeatures = @("--features", "vulkan")
+} else {
+    Write-Host "warning: no Vulkan SDK (VULKAN_SDK); the helper won't use the graphics chip" -ForegroundColor Yellow
+}
+# Its own target folder: different compiler flags would rebuild everything.
+$env:RUSTFLAGS = "-C target-feature=+avx,+avx2,+fma,+f16c,+bmi2"
+cargo build --release -p splashdown-llm @llmFeatures --target-dir target\llm-avx2
+$built = $LASTEXITCODE
+Remove-Item Env:RUSTFLAGS
+if ($built -ne 0) { exit $built }
+Copy-Item target\llm-avx2\release\splashdown-llm.exe "app\src-tauri\binaries\splashdown-llm-$triple.exe"
 
 # The updater signing key. The key itself never goes into the repository.
 $updater = $true
@@ -50,7 +68,8 @@ if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
         $updater = $false
     }
 }
-$configs = @("--config", "app/src-tauri/tauri.release.conf.json")
+$configs = @("--config", "app/src-tauri/tauri.release.conf.json",
+    "--config", '{"bundle":{"externalBin":["binaries/splashdown-llm","binaries/splashdown-llm-basic"]}}')
 if (-not $updater) { $configs += @("--config", '{"bundle":{"createUpdaterArtifacts":false}}') }
 
 # Tauri runs signCommand on every binary it bundles and on the installer,

@@ -17,3 +17,8 @@ splashdown-core.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 llama-cpp-2 = { workspace = true, features = ["metal"] }
+
+[features]
+# llama.cpp's Vulkan backend, for graphics chips on Windows (needs the
+# Vulkan SDK at build time; scripts/package-win.ps1 uses it when present).
+vulkan = ["llama-cpp-2/vulkan"]

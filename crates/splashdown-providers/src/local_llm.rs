@@ -21,6 +21,10 @@ use splashdown_core::{Completion, ProviderError, ProviderResult, TextModel, Text
 
 /// The helper's file name, next to the app's executable.
 const HELPER: &str = "splashdown-llm";
+/// On Windows, a second build for any x64 processor, used when the first
+/// (built for AVX2 and with the Vulkan backend) can't run here.
+#[cfg(windows)]
+const BASIC_HELPER: &str = "splashdown-llm-basic";
 
 pub struct LocalLlm {
     model: PathBuf,
@@ -30,7 +34,12 @@ pub struct LocalLlm {
 }
 
 struct Helper {
-    path: PathBuf,
+    /// The builds to try, best first: one is dropped if it fails before it
+    /// has ever answered (`request`).
+    paths: Vec<PathBuf>,
+    /// A build has answered, so a failure now is a crash or an idle exit,
+    /// not a build that can't run here.
+    worked: bool,
     process: Option<Process>,
 }
 
@@ -78,7 +87,7 @@ impl LocalLlm {
                 model.display()
             )));
         }
-        let helper = helper_path()?;
+        let helper = helper_paths()?;
         let stem = model
             .file_stem()
             .and_then(|s| s.to_str())
@@ -88,7 +97,8 @@ impl LocalLlm {
             model: model.to_path_buf(),
             cpu_only,
             helper: Arc::new(Mutex::new(Helper {
-                path: helper,
+                paths: helper,
+                worked: false,
                 process: None,
             })),
         })
@@ -186,7 +196,8 @@ impl LocalEmbedder {
         Ok(Self {
             model: model.to_path_buf(),
             helper: Mutex::new(Helper {
-                path: helper_path()?,
+                paths: helper_paths()?,
+                worked: false,
                 process: None,
             }),
         })
@@ -226,20 +237,42 @@ impl LocalEmbedder {
 impl Helper {
     /// Sends one request and waits for its reply, starting the helper if
     /// it isn't running. A helper that has exited (idle, or crashed) is
-    /// restarted once.
+    /// restarted once. A build that fails before it has ever answered (it
+    /// can't start, or its graphics driver fails) is given up for the
+    /// next one, if there is one.
     fn request(&mut self, request: &LocalLlmRequest) -> ProviderResult<LocalLlmReply> {
         let line = serde_json::to_string(request)
             .map_err(|e| ProviderError::InvalidResponse(e.to_string()))?;
-        for attempt in 0..2 {
-            if self.process.is_none() {
-                self.process = Some(self.spawn()?);
-            }
-            let process = self.process.as_mut().expect("just started");
-            match process.round_trip(&line) {
-                Ok(reply) => return Ok(reply),
+        let mut attempt = 0;
+        loop {
+            let result = match self.process.as_mut() {
+                Some(process) => process.round_trip(&line).map_err(|e| e.to_string()),
+                None => match self.spawn() {
+                    Ok(process) => {
+                        let process = self.process.insert(process);
+                        process.round_trip(&line).map_err(|e| e.to_string())
+                    }
+                    Err(e) => Err(e.to_string()),
+                },
+            };
+            match result {
+                Ok(reply) => {
+                    self.worked = true;
+                    return Ok(reply);
+                }
                 Err(e) => {
                     self.stop();
-                    if attempt == 1 {
+                    if !self.worked && self.paths.len() > 1 {
+                        let failed = self.paths.remove(0);
+                        tracing::warn!(
+                            "{} failed before answering ({e}); using {} instead",
+                            failed.display(),
+                            self.paths[0].display()
+                        );
+                        continue;
+                    }
+                    attempt += 1;
+                    if attempt == 2 {
                         return Err(ProviderError::Unavailable(format!(
                             "local model stopped: {e}"
                         )));
@@ -247,11 +280,10 @@ impl Helper {
                 }
             }
         }
-        unreachable!("the loop returns")
     }
 
     fn spawn(&self) -> ProviderResult<Process> {
-        let mut command = Command::new(&self.path);
+        let mut command = Command::new(&self.paths[0]);
         // The helper is a console program: no console window on Windows.
         #[cfg(windows)]
         {
@@ -316,7 +348,45 @@ impl Drop for Helper {
 
 /// Whether the helper is where the app will look for it.
 pub(crate) fn helper_installed() -> bool {
-    helper_path().is_ok()
+    helper_paths().is_ok()
+}
+
+/// The helper builds to use here, best first. On Windows the main build
+/// needs AVX2 and the Vulkan loader (from the graphics driver; without it,
+/// Windows would show an error box for the missing `vulkan-1.dll`), so the
+/// basic build goes first where those are missing, and second otherwise.
+fn helper_paths() -> ProviderResult<Vec<PathBuf>> {
+    let main = helper_path()?;
+    #[cfg(windows)]
+    {
+        let basic = main.with_file_name(format!("{BASIC_HELPER}{}", std::env::consts::EXE_SUFFIX));
+        if basic.is_file() && std::env::var_os("SPLASHDOWN_LLM_HELPER").is_none() {
+            return Ok(if fast_build_runs_here() {
+                vec![main, basic]
+            } else {
+                tracing::info!("using the basic local model helper (no AVX2 or Vulkan here)");
+                vec![basic]
+            });
+        }
+    }
+    Ok(vec![main])
+}
+
+/// The processor has what the main Windows build was compiled for, and
+/// there's a Vulkan loader to link to.
+#[cfg(windows)]
+fn fast_build_runs_here() -> bool {
+    #[cfg(target_arch = "x86_64")]
+    let cpu = std::arch::is_x86_feature_detected!("avx2")
+        && std::arch::is_x86_feature_detected!("fma")
+        && std::arch::is_x86_feature_detected!("f16c")
+        && std::arch::is_x86_feature_detected!("bmi2");
+    #[cfg(not(target_arch = "x86_64"))]
+    let cpu = false;
+    let vulkan = std::env::var_os("SystemRoot")
+        .map(PathBuf::from)
+        .is_some_and(|root| root.join("System32").join("vulkan-1.dll").is_file());
+    cpu && vulkan
 }
 
 /// `splashdown-llm` next to the running executable (inside the app bundle,

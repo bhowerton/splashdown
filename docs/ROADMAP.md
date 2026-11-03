@@ -109,7 +109,7 @@ Cheap features that close visible gaps.
   - UIPI detection (admin windows): insertion fails and the text is copied instead.
   - Terminal-safe copy fallback (console window classes).
   - Microphone privacy check from the privacy settings' registry values (only an explicit "Deny" is reported).
-- ⬜ Local text model on Windows: llama.cpp's Vulkan backend (`llama-cpp-2` feature `vulkan`) needs the Vulkan SDK at build time, so it isn't enabled; CPU only for now.
+- 🟡 **A fast built-in model on Windows** (started 2026-11-02): on a slow PC the built-in model took many seconds per dictation. Two causes: llama.cpp was built for the baseline x86-64 processor (SSE2 only: no AVX, AVX2 or FMA, which it leans on), and only the processor is used. ⬜ Build the helper for processors with AVX2 (nearly every PC since 2013) and keep a baseline one for older ones, chosen when it starts; ⬜ add llama.cpp's Vulkan backend (the graphics chip, through the GPU driver; needs the Vulkan SDK at build time) with a fall-back to the processor when there's no Vulkan driver; ⬜ measure both on a slow PC and in CI. The Intel half of the Mac app had the same baseline build: every Mac macOS 13 supports has AVX2, so it gets those instructions too.
 
 ### 5. Identity, distribution and trust → M6 beta
 - ✅ **App icon:** a hand-drawn vector capsule under a parachute over a night ocean (`app/src-tauri/icons/source/`), with menu bar template glyphs at 1× and 2×.
@@ -176,6 +176,10 @@ Notes as Markdown files in a folder the user picks, replacing the scratchpad. St
 
 ### 7c. Other planned features
 The working list of improvements after 0.1.1, in rough order. Mark items here as they land.
+
+**Next (planned 2026-11-02):**
+- ⬜ **Compose:** for longer writing, hold the dictation key with a modifier and a draft opens by the cursor; keep speaking to revise it ("make the second paragraph shorter", "add that I'm free Thursday"), and insert it when it's right. Builds on Notes' rewrites.
+- ⬜ **Read it back:** select text (or an Ask answer), hold the key and say "read this to me": the system's own voice reads it, on the computer (AVSpeechSynthesizer on a Mac, the Windows speech API). For proofreading, long messages and accessibility.
 
 **Quick wins (2026-10-31; ⬜ still to try each in the running app):**
 - ✅ **Keep recording briefly after release** (2026-10-31): 200 ms more audio after the key is let go (not after Esc), before the stop sound, so the last word isn't cut off (`AudioWorker::finish`).

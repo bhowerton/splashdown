@@ -11,6 +11,7 @@ on:
     branches: [main]
     paths:
       - "Cargo.lock"
+      - ".cargo/config.toml"
       - ".github/workflows/release-cache.yml"
   schedule:
     # Weekly, so a new stable Rust (part of the cache key) is picked up.

@@ -157,6 +157,13 @@ jobs:
             Start-Sleep -Seconds (10 * $try)
           }
           if (-not (Test-Path $dll)) { throw "couldn't fetch the signing client" }
+      - uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          # For llama.cpp's Vulkan backend in the local-model helper; pinned
+          # so the action's cache stays valid.
+          vulkan_version: 1.4.363.1
+          install_runtime: false
+          cache: true
       - name: Build, code-sign and package the installer
         shell: pwsh
         env:

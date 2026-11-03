@@ -8,3 +8,10 @@ MACOSX_DEPLOYMENT_TARGET = "13.0"
 # older systems; the Swift shim checks availability before using it.
 [target.'cfg(target_os = "macos")']
 rustflags = ["-C", "link-arg=-Wl,-weak_framework,FoundationModels"]
+
+# The Intel half of the universal Mac app: every Mac that macOS 13 supports
+# has AVX2, which llama.cpp (the built-in text model) leans on; without
+# these it's built for the baseline x86-64 processor and runs several times
+# slower. Joined with the flags above.
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "target-feature=+avx,+avx2,+fma,+f16c,+bmi2"]

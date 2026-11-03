@@ -84,6 +84,14 @@ jobs:
         # A prebuilt binary (compiling it took 6–10 minutes); cargo-binstall
         # compiles it only if there's none for this platform.
         run: cargo binstall tauri-cli --version "^2" --no-confirm --locked
+      - uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          # For llama.cpp's Vulkan backend in the local-model helper; pinned
+          # so the action's cache stays valid.
+          vulkan_version: 1.4.363.1
+          install_runtime: false
+          cache: true
+          cache_save_if: ${{ github.ref == 'refs/heads/main' }}
       - name: Build the installer
         shell: pwsh
         run: scripts/package-win.ps1
