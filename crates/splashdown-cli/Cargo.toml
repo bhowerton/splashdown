@@ -41,5 +41,6 @@ splashdown-apple-shim.workspace = true
 cua-driver-sdk = { git = "https://github.com/trycua/cua", rev = "50242387d74cf82ccbed20846fc134e7a49ffa7c" }
 
 [features]
-default = ["local-speech"]
+default = ["local-speech", "natural-voice"]
 local-speech = ["splashdown-providers/local-speech"]
+natural-voice = ["splashdown-providers/natural-voice"]

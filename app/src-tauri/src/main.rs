@@ -184,6 +184,7 @@ fn main() {
             ask::ask_close,
             ask::ask_followup,
             reading::reading_voices,
+            reading::reading_natural,
             reading::reading_try,
             reading::reading_toggle,
             reading::reading_state,

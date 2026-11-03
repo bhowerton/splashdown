@@ -1,7 +1,9 @@
-//! Reading text aloud with the system's voices: "read this to me", "read
-//! me a summary of this" (an Ask answer, read as it's written), the Ask
-//! panel's speaker button, and Last dictation → Read it to me. Nothing
-//! read this way leaves the computer.
+//! Reading text aloud: "read this to me", "read me a summary of this" (an
+//! Ask answer, read as it's written), the Ask panel's speaker button, and
+//! Last dictation → Read it to me. English is read in the natural voice
+//! when it's downloaded and chosen (Phonon, run here); other languages, or
+//! without it, in the system's voices. Nothing read this way leaves the
+//! computer.
 //!
 //! While it reads, music is paused, the status pill says so, and Esc (or
 //! starting a dictation) stops it. Text is read a few sentences at a time,
@@ -23,6 +25,9 @@ use crate::ui::Ui;
 /// panel's speaker button.
 pub const CHANGED: &str = "reading-changed";
 
+/// A chosen voice that's one of the natural voices: `natural:Harper`.
+pub const NATURAL: &str = "natural:";
+
 /// How often the voice is checked on.
 const POLL: Duration = Duration::from_millis(80);
 /// How long a warning stays in the pill.
@@ -43,6 +48,8 @@ struct Reading {
     speed: f32,
     /// The pill shown for it, to hide only if nothing replaced it.
     shown: u64,
+    /// Set when it's stopped, for the natural voice's playback.
+    stop: std::sync::Arc<AtomicBool>,
     /// Music paused while it reads; dropping it plays it again.
     _quiet: Option<splashdown_platform::QuietOutput>,
 }
@@ -122,6 +129,7 @@ pub fn start(label: &str) -> Reader {
         voice: general.read_voice.clone().filter(|v| !v.is_empty()),
         speed: general.read_speed(),
         shown: ui.generation(),
+        stop: std::sync::Arc::default(),
         _quiet: splashdown_platform::quiet_output(Quieten::Pause),
     });
     changed(true);
@@ -169,52 +177,120 @@ pub fn on_escape(down: bool) -> bool {
     true
 }
 
-/// Reads reading `n`'s pieces one after another until they run out and no
-/// more are coming, or it's stopped.
-fn read_all(n: u64) {
+/// The next piece of reading `n` to read, waiting for one; `None` once it
+/// has been stopped, or nothing more is coming.
+fn next_piece(n: u64) -> Option<String> {
+    let mut slot = reading();
     loop {
-        let piece = {
-            let mut slot = reading();
-            loop {
-                let Some(r) = slot.as_mut().filter(|r| r.n == n) else {
-                    return;
-                };
-                if let Some(piece) = r.queue.pop_front() {
-                    break (piece, r.voice.clone(), r.language, r.speed);
-                }
-                if r.closed {
-                    drop(slot);
-                    finish(n);
-                    return;
-                }
-                slot = WAKE.wait(slot).unwrap_or_else(|e| e.into_inner());
-            }
-        };
-        let (text, voice, language, speed) = piece;
-        if let Err(e) = speak(&text, voice.as_deref(), language, speed) {
-            tracing::warn!("couldn't read aloud: {e}");
-            finish(n);
-            if let Some(ui) = UI.get() {
-                ui.show(OverlayState::Message {
-                    tone: splashdown_platform::Tone::Warning,
-                    text: "Couldn't read that aloud".into(),
-                });
-                let shown = ui.generation();
-                std::thread::sleep(WARNING_FOR);
-                ui.hide_if_unchanged(shown);
-            }
-            return;
+        let r = slot.as_mut().filter(|r| r.n == n)?;
+        if let Some(piece) = r.queue.pop_front() {
+            return Some(piece);
         }
-        // Stopped while the speech was being made (Windows makes it first).
-        if !current(n) {
-            stop_speaking();
-            return;
+        if r.closed {
+            return None;
         }
-        while speaking() {
-            if !current(n) {
-                return;
+        slot = WAKE.wait(slot).unwrap_or_else(|e| e.into_inner());
+    }
+}
+
+/// Reads reading `n`'s pieces one after another until they run out and no
+/// more are coming, or it's stopped: in the natural voice when it's chosen
+/// and the text is English, otherwise in a system voice.
+fn read_all(n: u64) {
+    let Some(first) = next_piece(n) else {
+        return finish(n);
+    };
+    let Some((voice, language, speed, stop)) = reading()
+        .as_ref()
+        .filter(|r| r.n == n)
+        .map(|r| (r.voice.clone(), r.language, r.speed, r.stop.clone()))
+    else {
+        return;
+    };
+    let natural = voice
+        .as_deref()
+        .and_then(|v| v.strip_prefix(NATURAL))
+        .filter(|_| language.is_none_or(|l| l == "en"))
+        .and_then(|name| natural_speech().map(|speech| (speech, name.to_string())));
+    let result = match natural {
+        Some((speech, name)) => {
+            let pieces = std::iter::once(first).chain(std::iter::from_fn(|| next_piece(n)));
+            let samples = pieces.flat_map(|piece| match speech.speak(&piece, Some(&name)) {
+                Ok(samples) => Box::new(samples) as Box<dyn Iterator<Item = _>>,
+                Err(e) => Box::new(std::iter::once(Err(e))),
+            });
+            splashdown_audio::playback::play(samples, speech.sample_rate(), &stop)
+        }
+        None => {
+            // A natural voice chosen, but English isn't what's read (or it
+            // isn't there): the system's voice for the language.
+            let voice = voice.filter(|v| !v.starts_with(NATURAL));
+            let mut piece = Some(first);
+            let mut result = Ok(());
+            while let Some(text) = piece.take() {
+                result = speak(&text, voice.as_deref(), language, speed);
+                if result.is_err() {
+                    break;
+                }
+                // Stopped while the speech was being made (Windows makes it
+                // first).
+                if !current(n) {
+                    stop_speaking();
+                    return;
+                }
+                while speaking() {
+                    if !current(n) {
+                        return;
+                    }
+                    std::thread::sleep(POLL);
+                }
+                piece = next_piece(n);
             }
-            std::thread::sleep(POLL);
+            result
+        }
+    };
+    let failed = result.is_err() && current(n);
+    finish(n);
+    if let Err(e) = result
+        && failed
+    {
+        tracing::warn!("couldn't read aloud: {e}");
+        if let Some(ui) = UI.get() {
+            ui.show(OverlayState::Message {
+                tone: splashdown_platform::Tone::Warning,
+                text: "Couldn't read that aloud".into(),
+            });
+            let shown = ui.generation();
+            std::thread::sleep(WARNING_FOR);
+            ui.hide_if_unchanged(shown);
+        }
+    }
+}
+
+/// The natural voice, loaded the first time it's needed (and kept), if
+/// it's been downloaded.
+fn natural_speech() -> Option<std::sync::Arc<splashdown_providers::NaturalSpeech>> {
+    static LOADED: Mutex<Option<std::sync::Arc<splashdown_providers::NaturalSpeech>>> =
+        Mutex::new(None);
+    let mut loaded = LOADED.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(speech) = loaded.as_ref() {
+        return Some(speech.clone());
+    }
+    let models = crate::engine::paths().ok()?.models_dir;
+    if !splashdown_providers::NaturalVoice::is_downloaded(&models) {
+        return None;
+    }
+    let started = std::time::Instant::now();
+    match splashdown_providers::NaturalSpeech::load(&models) {
+        Ok(speech) => {
+            tracing::info!("natural voice loaded in {:?}", started.elapsed());
+            let speech = std::sync::Arc::new(speech);
+            *loaded = Some(speech.clone());
+            Some(speech)
+        }
+        Err(e) => {
+            tracing::warn!("couldn't load the natural voice: {e}");
+            None
         }
     }
 }
@@ -230,6 +306,7 @@ fn finish(n: u64) {
         return;
     };
     WAKE.notify_all();
+    ended.stop.store(true, Ordering::SeqCst);
     stop_speaking();
     if let Some(ui) = UI.get() {
         ui.hide_if_unchanged(ended.shown);
@@ -292,8 +369,11 @@ pub struct Voice {
     pub id: String,
     pub name: String,
     pub language: String,
-    /// "Premium", "Enhanced" or "" (macOS only).
+    /// "Natural" (the downloaded natural voices), "Premium", "Enhanced"
+    /// or "" (macOS only).
     pub quality: &'static str,
+    /// What it sounds like (natural voices).
+    pub about: Option<String>,
 }
 
 /// The voices that can read text, best first within each language.
@@ -313,6 +393,7 @@ pub fn voices() -> Vec<Voice> {
                     name: v.name,
                     language: v.language,
                     quality,
+                    about: None,
                 },
                 v.quality,
             )
@@ -328,6 +409,7 @@ pub fn voices() -> Vec<Voice> {
                     name: v.name,
                     language: v.language,
                     quality: "",
+                    about: None,
                 },
                 1,
             )
@@ -341,7 +423,29 @@ pub fn voices() -> Vec<Voice> {
             .then(qb.cmp(qa))
             .then(a.name.cmp(&b.name))
     });
-    voices.into_iter().map(|(v, _)| v).collect()
+    // The natural voices first, once they're downloaded.
+    let natural = crate::engine::paths()
+        .map(|p| splashdown_providers::NaturalVoice::voices(&p.models_dir))
+        .unwrap_or_default()
+        .into_iter()
+        .map(|v| Voice {
+            id: format!("{NATURAL}{}", v.name),
+            name: v.name,
+            language: match v.locale.as_str() {
+                "en-gb" => "en-GB".into(),
+                _ => "en-US".into(),
+            },
+            quality: "Natural",
+            about: v.description,
+        });
+    natural.chain(voices.into_iter().map(|(v, _)| v)).collect()
+}
+
+/// Whether the natural voice is downloaded, and its size.
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct NaturalStatus {
+    pub downloaded: bool,
+    pub mb: u32,
 }
 
 // ---------------------------------------------------------------- commands
@@ -352,6 +456,16 @@ pub async fn reading_voices() -> Vec<Voice> {
     tauri::async_runtime::spawn_blocking(voices)
         .await
         .unwrap_or_default()
+}
+
+/// Settings: whether the natural voice is here to choose.
+#[tauri::command]
+pub fn reading_natural() -> NaturalStatus {
+    NaturalStatus {
+        downloaded: crate::engine::paths()
+            .is_ok_and(|p| splashdown_providers::NaturalVoice::is_downloaded(&p.models_dir)),
+        mb: splashdown_providers::NaturalVoice::APPROX_MB,
+    }
 }
 
 /// Settings' "Try it": reads a sentence with `voice` at `speed`, without

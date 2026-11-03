@@ -152,9 +152,11 @@
       </div>
       <div class="group">
         <div class="gh">Reading aloud</div>
+        <div class="row" id="gen-natural-row" hidden><span class="lbl">Natural voices<small id="gen-natural-note">Far more natural English voices, American and British, that run on this computer (Phonon, open source).</small></span>
+          <button class="btn" id="gen-natural-get" type="button">Download</button></div>
         <label class="row"><span class="lbl">Voice<small>Select text, hold the dictation key and say “read this to me”, or “read me a summary of this”. With nothing selected, tap <b class="instr-key">the instruction key</b> first and the text you're writing is read. Reading happens on this computer; a summary is written by your AI first. Text in another language gets a voice for that language.</small></span>
           <select id="gen-read-voice" data-setting><option value="">Automatic</option></select></label>
-        <label class="row"><span class="lbl">Speed</span>
+        <label class="row"><span class="lbl">Speed<small id="gen-read-speed-note" hidden>For the system's voices: the natural voices read at their own pace.</small></span>
           <span class="volume"><span aria-hidden="true">Slower</span><input id="gen-read-speed" type="range" min="50" max="200" step="10" aria-label="Reading speed"><span aria-hidden="true">Faster</span></span></label>
         <div class="row"><span class="lbl">Hear it<small id="gen-read-note"></small></span>
           <button class="btn" id="gen-read-try" type="button">Try it</button></div>

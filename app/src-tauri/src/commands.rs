@@ -696,7 +696,9 @@ pub async fn fetch_model(
     use splashdown_providers::models::{Diarizer, Embedder};
     let dir = engine::paths()?.models_dir;
     let here = |dir: &std::path::Path| {
-        if id == Diarizer::ID {
+        if id == splashdown_providers::NaturalVoice::ID {
+            Some(splashdown_providers::NaturalVoice::is_downloaded(dir))
+        } else if id == Diarizer::ID {
             Some(Diarizer::is_downloaded(dir))
         } else if id == Embedder::ID {
             Some(Embedder::is_downloaded(dir))

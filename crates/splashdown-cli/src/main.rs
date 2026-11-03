@@ -151,6 +151,15 @@ enum Command {
         #[command(subcommand)]
         command: ModelsCommand,
     },
+    /// Read text aloud in the natural voice (`models download phonon-en`
+    /// first), and print how long it took.
+    #[cfg(feature = "natural-voice")]
+    Say {
+        text: String,
+        /// One of the voices (`--voice list` lists them).
+        #[arg(long)]
+        voice: Option<String>,
+    },
     /// Show the resolved configuration (never prints keys).
     Config {
         #[command(flatten)]
@@ -690,6 +699,13 @@ fn run() -> Result<()> {
                         let s = state(m.is_downloaded(&models_dir));
                         println!("  {:<22} ~{:>4} MB  {s}", m.id(), m.approx_mb());
                     }
+                    let id = splashdown_providers::NaturalVoice::ID;
+                    let s = state(splashdown_providers::NaturalVoice::is_downloaded(
+                        &models_dir,
+                    ));
+                    println!("Reading aloud (natural voice, English):");
+                    let mb = splashdown_providers::NaturalVoice::APPROX_MB;
+                    println!("  {id:<22} ~{mb:>4} MB  {s}");
                     println!("\nModels folder: {}", models_dir.display());
                 }
                 ModelsCommand::Download { id, language } if id == "apple" => {
@@ -698,7 +714,10 @@ fn run() -> Result<()> {
                     println!("Apple's speech model for {language} is ready.");
                 }
                 ModelsCommand::Download { id, .. } => {
-                    if SpeechModel::from_id(&id).is_none() && LocalModel::from_id(&id).is_none() {
+                    if SpeechModel::from_id(&id).is_none()
+                        && LocalModel::from_id(&id).is_none()
+                        && id != splashdown_providers::NaturalVoice::ID
+                    {
                         return Err(manage::CliError::NotFound(format!(
                             "unknown model \"{id}\" — see `splashdown-cli models list`"
                         ))
@@ -715,6 +734,8 @@ fn run() -> Result<()> {
                 ModelsCommand::Use { id, config } => manage::use_model(&id, config)?,
             }
         }
+        #[cfg(feature = "natural-voice")]
+        Command::Say { text, voice } => say(&text, voice.as_deref())?,
         Command::Config { providers } => opts::print_config(&providers)?,
         Command::Eval { command } => rt.block_on(eval::run(command))?,
         #[cfg(target_os = "macos")]
@@ -977,4 +998,52 @@ fn load_speech(
         start.elapsed().as_millis()
     );
     Ok(prepared)
+}
+
+/// `say`: loads the natural voice, reads `text` and reports the timings.
+#[cfg(feature = "natural-voice")]
+fn say(text: &str, voice: Option<&str>) -> Result<()> {
+    use std::time::Instant;
+    let models_dir = opts::paths()?.models_dir;
+    let started = Instant::now();
+    let speech = splashdown_providers::NaturalSpeech::load(&models_dir).map_err(|e| {
+        anyhow::anyhow!("{e} — download it with `splashdown-cli models download phonon-en`")
+    })?;
+    eprintln!(
+        "loaded in {:.0} ms",
+        started.elapsed().as_secs_f64() * 1000.0
+    );
+    if voice == Some("list") {
+        for v in splashdown_providers::NaturalVoice::voices(&models_dir) {
+            println!(
+                "{:<12} {} {}",
+                v.name,
+                v.locale,
+                v.description.unwrap_or_default()
+            );
+        }
+        return Ok(());
+    }
+    let started = Instant::now();
+    let rate = speech.sample_rate();
+    let mut first = None;
+    let mut samples = 0usize;
+    let pieces = speech
+        .speak(text, voice)
+        .map_err(anyhow::Error::msg)?
+        .inspect(|p| {
+            first.get_or_insert_with(|| started.elapsed());
+            if let Ok(p) = p {
+                samples += p.len();
+            }
+        });
+    let stop = std::sync::atomic::AtomicBool::new(false);
+    splashdown_audio::playback::play(pieces, rate, &stop).map_err(anyhow::Error::msg)?;
+    let first = first.unwrap_or_default();
+    eprintln!(
+        "first sound after {:.0} ms; {:.1} s of speech",
+        first.as_secs_f64() * 1000.0,
+        samples as f64 / f64::from(rate)
+    );
+    Ok(())
 }

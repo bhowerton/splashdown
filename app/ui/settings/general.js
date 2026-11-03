@@ -495,16 +495,23 @@ function renderReading() {
     state.platform === "windows"
       ? "More voices: Windows Settings → Time & language → Speech → Add voices."
       : "More natural voices: System Settings → Accessibility → Spoken Content → System voice → Manage Voices. Look for Enhanced and Premium.";
+  $("gen-read-speed-note").hidden = !(s.general.read_voice ?? "").startsWith("natural:");
+  invoke("reading_natural")
+    .then((natural) => {
+      $("gen-natural-row").hidden = natural.downloaded;
+      if (!natural.downloaded) $("gen-natural-get").textContent = `Download (${natural.mb} MB)`;
+    })
+    .catch(() => {});
   if (readVoices) {
     showVoices(s.general.read_voice ?? "");
     return;
   }
-  invoke("reading_voices")
-    .then((voices) => {
-      readVoices = voices;
-      showVoices(state.settings.general.read_voice ?? "");
-    })
-    .catch(() => {});
+  loadVoices();
+}
+
+async function loadVoices() {
+  readVoices = await invoke("reading_voices").catch(() => []);
+  showVoices(state.settings.general.read_voice ?? "");
 }
 
 /** The voices by language, with the chosen one selected. */
@@ -520,17 +527,24 @@ function showVoices(chosen) {
   };
   const groups = new Map();
   for (const voice of readVoices) {
-    const language = languageName(voice.language);
+    const language = voice.quality === "Natural" ? NATURAL_GROUP : languageName(voice.language);
     if (!groups.has(language)) groups.set(language, []);
     groups.get(language).push(voice);
   }
   const automatic = new Option("Automatic (best voice for the text's language)", "");
-  const optgroups = [...groups.keys()].sort().map((language) => {
+  // The natural voices first.
+  const order = [...groups.keys()].sort((a, b) => (b === NATURAL_GROUP) - (a === NATURAL_GROUP) || a.localeCompare(b));
+  const optgroups = order.map((language) => {
     const group = document.createElement("optgroup");
     group.label = language;
     for (const voice of groups.get(language)) {
-      const quality = voice.quality ? ` (${voice.quality})` : "";
-      group.append(new Option(`${voice.name}${quality}`, voice.id));
+      const label =
+        voice.quality === "Natural"
+          ? `${voice.name} · ${voice.language === "en-GB" ? "British" : "American"}`
+          : `${voice.name}${voice.quality ? ` (${voice.quality})` : ""}`;
+      const option = new Option(label, voice.id);
+      if (voice.about) option.title = voice.about;
+      group.append(option);
     }
     return group;
   });
@@ -538,6 +552,37 @@ function showVoices(chosen) {
   // A voice that's since been removed reads as Automatic.
   select.value = readVoices.some((v) => v.id === chosen) ? chosen : "";
 }
+
+/** The heading the natural voices are listed under. */
+const NATURAL_GROUP = "Natural voices · English, on this computer";
+/** The natural voice chosen when it's first downloaded. */
+const NATURAL_DEFAULT = "natural:Harper";
+
+// Downloads the natural voices, then reads with one.
+$("gen-natural-get").addEventListener("click", async (e) => {
+  const button = e.target;
+  const note = $("gen-natural-note");
+  const before = note.textContent;
+  button.disabled = true;
+  const stop = await listen("model-download", (ev) => {
+    if (ev.payload.id !== "phonon-en" || !ev.payload.total) return;
+    note.textContent = `Downloading the natural voices… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
+  });
+  try {
+    await invoke("download_model", { id: "phonon-en" });
+    await loadVoices();
+    $("gen-read-voice").value = NATURAL_DEFAULT;
+    $("gen-natural-row").hidden = true;
+    await save();
+    toast("Natural voices ready: English is read in Harper. Choose another under Voice.");
+  } catch (err) {
+    toast(`Couldn't download the natural voices: ${err}`, true);
+  } finally {
+    stop();
+    note.textContent = before;
+    button.disabled = false;
+  }
+});
 
 $("gen-read-try").addEventListener("click", () => {
   invoke("reading_try", {

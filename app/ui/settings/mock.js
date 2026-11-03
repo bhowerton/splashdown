@@ -85,8 +85,12 @@ async function mockInvoke(cmd, args) {
       return { state: mockInvoke.state, engine_error: null };
     case "list_microphones":
       return { devices: [{ name: "MacBook Pro Microphone", bluetooth: false, built_in: true, is_default: true }, { name: "AirPods Pro", bluetooth: true, built_in: false, is_default: false }], automatic: "MacBook Pro Microphone" };
+    case "reading_natural":
+      return { downloaded: false, mb: 68 };
     case "reading_voices":
       return [
+        { id: "natural:Harper", name: "Harper", language: "en-US", quality: "Natural", about: "Modern, confident and friendly." },
+        { id: "natural:Maeve", name: "Maeve", language: "en-GB", quality: "Natural", about: "Sparky and attentive." },
         { id: "com.apple.voice.premium.en-GB.Serena", name: "Serena", language: "en-GB", quality: "Premium" },
         { id: "com.apple.voice.compact.en-US.Samantha", name: "Samantha", language: "en-US", quality: "" },
         { id: "com.apple.voice.enhanced.de-DE.Anna", name: "Anna", language: "de-DE", quality: "Enhanced" },

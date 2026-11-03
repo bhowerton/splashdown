@@ -507,12 +507,146 @@ impl Embedder {
     }
 }
 
+/// The natural reading voice: Gradium's Phonon 31M, English, run in
+/// process by `ptts` (feature `natural-voice`). Apache-2.0, about 68 MB:
+/// the weights (8-bit), the tokenizer, and the British and American voices,
+/// each a small embedding. Pinned to a revision of each repo, so what's
+/// downloaded doesn't change under us.
+pub struct NaturalVoice;
+
+/// One of the natural voice's voices, from its catalog.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct NaturalVoiceEntry {
+    pub name: String,
+    /// The file, relative to the catalog.
+    pub filename: String,
+    pub language: String,
+    /// "en-us" or "en-gb".
+    pub locale: String,
+    #[serde(default)]
+    pub gender: Option<String>,
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+impl NaturalVoice {
+    pub const ID: &'static str = "phonon-en";
+    pub const DIR: &'static str = "phonon-31m-en";
+    /// Approximate download size in MB, for UI.
+    pub const APPROX_MB: u32 = 68;
+    const MODEL_REPO: &'static str = "gradium/phonon-31m-en";
+    const MODEL_REVISION: &'static str = "92741c5b07d085ff840e26fea8ce43110b87852f";
+    const VOICES_REPO: &'static str = "gradium/phonon-voices";
+    const VOICES_REVISION: &'static str = "0ee17205f254b5abc43b266c8a0f215565c352f7";
+    /// The model's files and their sizes, the weights last but one (the
+    /// voice catalog, written last, marks the download complete).
+    const FILES: [(&'static str, u64); 4] = [
+        ("config.json", 4_634),
+        ("tokenizer.json", 277_967),
+        ("default-voice.safetensors", 256_136),
+        ("model.q8.gguf", 64_512_352),
+    ];
+    const VOICE_BYTES: u64 = 256_136;
+    /// The catalog of the voices we keep.
+    pub const CATALOG: &'static str = "voices.jsonl";
+
+    pub fn dir_in(models_dir: &Path) -> PathBuf {
+        models_dir.join(Self::DIR)
+    }
+
+    pub fn is_downloaded(models_dir: &Path) -> bool {
+        let dir = Self::dir_in(models_dir);
+        dir.join(Self::CATALOG).is_file() && Self::FILES.iter().all(|(f, _)| dir.join(f).is_file())
+    }
+
+    /// The voices that were downloaded, British and American.
+    pub fn voices(models_dir: &Path) -> Vec<NaturalVoiceEntry> {
+        let path = Self::dir_in(models_dir).join(Self::CATALOG);
+        std::fs::read_to_string(path)
+            .map(|text| Self::readable_voices(&text))
+            .unwrap_or_default()
+    }
+
+    /// The catalog's British and American voices (not the character
+    /// voices, which aren't for reading text back).
+    fn readable_voices(catalog: &str) -> Vec<NaturalVoiceEntry> {
+        catalog
+            .lines()
+            .filter_map(|line| serde_json::from_str::<NaturalVoiceEntry>(line).ok())
+            .filter(|v| {
+                v.language == "en"
+                    && matches!(v.locale.as_str(), "en-us" | "en-gb")
+                    && !v.filename.contains("..")
+            })
+            .collect()
+    }
+
+    fn url(repo: &str, revision: &str, file: &str) -> String {
+        format!("https://huggingface.co/{repo}/resolve/{revision}/{file}")
+    }
+
+    /// Downloads the model and its voices into `models_dir`. `progress`
+    /// receives `(downloaded_bytes, total_bytes)` across all the files.
+    pub async fn download(
+        models_dir: &Path,
+        mut progress: impl FnMut(u64, Option<u64>),
+    ) -> Result<PathBuf, ProviderError> {
+        let dir = Self::dir_in(models_dir);
+        std::fs::create_dir_all(dir.join("voices")).map_err(io_error)?;
+        let all = dir.join("voices.all.jsonl");
+        download_file(
+            &Self::url(Self::VOICES_REPO, Self::VOICES_REVISION, "voices.jsonl"),
+            &all,
+            |_, _| {},
+        )
+        .await?;
+        let catalog = std::fs::read_to_string(&all).map_err(io_error)?;
+        let voices = Self::readable_voices(&catalog);
+        if voices.is_empty() {
+            return Err(ProviderError::Unavailable(
+                "the voice list had no English voices".into(),
+            ));
+        }
+        let total = Self::FILES.iter().map(|(_, n)| n).sum::<u64>()
+            + Self::VOICE_BYTES * voices.len() as u64;
+        let mut done = 0;
+        let files = Self::FILES
+            .iter()
+            .map(|(f, n)| (Self::url(Self::MODEL_REPO, Self::MODEL_REVISION, f), *f, *n));
+        let voice_files = voices.iter().map(|v| {
+            (
+                Self::url(Self::VOICES_REPO, Self::VOICES_REVISION, &v.filename),
+                v.filename.as_str(),
+                Self::VOICE_BYTES,
+            )
+        });
+        for (url, file, size) in voice_files.chain(files) {
+            download_file(&url, &dir.join(file), |got, _| {
+                progress(done + got.min(size), Some(total))
+            })
+            .await?;
+            done += size;
+        }
+        let kept = voices
+            .iter()
+            .filter_map(|v| serde_json::to_string(v).ok())
+            .collect::<Vec<_>>()
+            .join("\n");
+        std::fs::write(dir.join(Self::CATALOG), kept + "\n").map_err(io_error)?;
+        let _ = std::fs::remove_file(&all);
+        progress(total, Some(total));
+        Ok(dir)
+    }
+}
+
 pub async fn download_by_id(
     id: &str,
     models_dir: &Path,
     progress: impl FnMut(u64, Option<u64>),
 ) -> Result<PathBuf, ProviderError> {
-    if id == Diarizer::ID {
+    if id == NaturalVoice::ID {
+        NaturalVoice::download(models_dir, progress).await
+    } else if id == Diarizer::ID {
         download_file(&Diarizer::url(), &Diarizer::path_in(models_dir), progress).await
     } else if id == Embedder::ID {
         download_file(&Embedder::url(), &Embedder::path_in(models_dir), progress).await
@@ -534,6 +668,23 @@ fn io_error(e: std::io::Error) -> ProviderError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keeps_the_british_and_american_voices() {
+        let catalog = concat!(
+            r#"{"filename": "voices/a.safetensors", "name": "Zoey", "language": "en", "locale": "en-us", "gender": "female", "description": "Upbeat."}"#,
+            "\n",
+            r#"{"filename": "voices/b.safetensors", "name": "Pirate", "language": "en", "locale": "characters"}"#,
+            "\n",
+            r#"{"filename": "voices/c.safetensors", "name": "Léa", "language": "fr", "locale": "fr-fr"}"#,
+            "\n",
+            r#"{"filename": "../x.safetensors", "name": "Sneaky", "language": "en", "locale": "en-gb"}"#,
+        );
+        let voices = NaturalVoice::readable_voices(catalog);
+        assert_eq!(voices.len(), 1);
+        assert_eq!(voices[0].name, "Zoey");
+        assert_eq!(voices[0].gender.as_deref(), Some("female"));
+    }
 
     #[test]
     fn ids_round_trip() {
