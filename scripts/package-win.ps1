@@ -44,18 +44,39 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Copy-Item target\release\splashdown-llm.exe "app\src-tauri\binaries\splashdown-llm-basic-$triple.exe"
 $llmFeatures = @()
 if ($env:VULKAN_SDK) {
-    $llmFeatures = @("--features", "vulkan")
+    # MSBuild in Visual Studio 2026 runs the steps of llama.cpp's shader
+    # generator (a CMake sub-project) side by side, installing it before
+    # it's built, so the Vulkan build uses Ninja, which Visual Studio's
+    # developer shell puts on the path along with its compiler.
+    if (-not (Get-Command ninja -ErrorAction SilentlyContinue) -or -not (Get-Command cl -ErrorAction SilentlyContinue)) {
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} "Microsoft Visual Studio\Installer\vswhere.exe"
+        $vs = if (Test-Path $vswhere) {
+            & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+        }
+        if ($vs) {
+            Import-Module (Join-Path $vs "Common7\Tools\Microsoft.VisualStudio.DevShell.dll")
+            Enter-VsDevShell -VsInstallPath $vs -SkipAutomaticLocation -DevCmdArguments "-arch=x64 -host_arch=x64" | Out-Null
+        }
+    }
+    if (Get-Command ninja -ErrorAction SilentlyContinue) {
+        $llmFeatures = @("--features", "vulkan")
+        $env:CMAKE_GENERATOR = "Ninja"
+    } else {
+        Write-Host "warning: no Ninja (Visual Studio's C++ CMake tools); the helper won't use the graphics chip" -ForegroundColor Yellow
+    }
 } else {
     Write-Host "warning: no Vulkan SDK (VULKAN_SDK); the helper won't use the graphics chip" -ForegroundColor Yellow
 }
 # Its own target folder (different compiler flags would rebuild everything),
 # and a short one: llama.cpp's Vulkan build nests a CMake project deep
-# enough under target\ to pass Windows' 260-character path limit.
+# enough under target\ (274 characters) to pass Windows' 260-character
+# limit, which some build tools still keep to.
 $llmTarget = if ($env:SPLASHDOWN_LLM_TARGET) { $env:SPLASHDOWN_LLM_TARGET } else { Join-Path $env:SystemDrive "\sdllm" }
 $env:RUSTFLAGS = "-C target-feature=+avx,+avx2,+fma,+f16c,+bmi2"
 cargo build --release -p splashdown-llm @llmFeatures --target-dir $llmTarget
 $built = $LASTEXITCODE
 Remove-Item Env:RUSTFLAGS
+Remove-Item Env:CMAKE_GENERATOR -ErrorAction SilentlyContinue
 if ($built -ne 0) { exit $built }
 Copy-Item (Join-Path $llmTarget "release\splashdown-llm.exe") "app\src-tauri\binaries\splashdown-llm-$triple.exe"
 
