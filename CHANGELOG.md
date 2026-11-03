@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.6.0 — 2026-11-03
 
 - **A clearer, quicker setup guide.**
   - The first page shows what Splashdown is: the demo of a sentence said and typed into an email, "Talk instead of type.", and the dictation key drawn as a key on your keyboard rather than a button.
