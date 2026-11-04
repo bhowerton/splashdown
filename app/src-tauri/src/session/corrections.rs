@@ -1,5 +1,7 @@
 //! Watching the field after an insertion for names and terms the user
-//! corrects, and learning them (`crate::learning`).
+//! corrects, and learning them (`crate::learning`). After a Compose draft,
+//! also what the user sent instead, for their writing style
+//! (`crate::style`).
 
 use super::*;
 
@@ -24,6 +26,12 @@ impl Controller {
         if reading != check.last {
             check.changed = now;
         }
+        // For a draft: what was sent, if this turns out to be the end.
+        let sent = if gone {
+            check.last.clone()
+        } else {
+            reading.clone()
+        };
         // What to look at now, if anything: the reading before the field
         // was sent or cleared, or a settled one, or this one when it's the
         // last look.
@@ -39,6 +47,7 @@ impl Controller {
             _ => None,
         };
         let words = settled
+            .filter(|_| engine.learn_vocabulary)
             .map(|text| {
                 splashdown_core::vocab::corrections(
                     &check.inserted,
@@ -47,23 +56,29 @@ impl Controller {
                 )
             })
             .unwrap_or_default();
-        // Keep watching while the dictation is still in the field.
-        if !moving_on && !gone {
-            if now < check.until {
-                self.correction_check = Some(PendingCorrectionCheck {
+        // Keep watching while the dictation is still in the field: until
+        // `until`, then (unless that was the second look) once more.
+        let more = !moving_on
+            && !gone
+            && (now < check.until || (!check.again && check.focus.is_current()));
+        if more {
+            self.correction_check = Some(if now < check.until {
+                PendingCorrectionCheck {
                     due: now + CORRECTION_POLL,
                     last: reading,
                     ..check
-                });
-            } else if !check.again && check.focus.is_current() {
-                self.correction_check = Some(PendingCorrectionCheck {
+                }
+            } else {
+                PendingCorrectionCheck {
                     due: now + CORRECTION_CHECK_AGAIN,
                     until: now,
                     last: reading,
                     again: true,
                     ..check
-                });
-            }
+                }
+            });
+        } else if let (Some(kind), Some(sent)) = (check.draft, sent.as_deref()) {
+            crate::style::record(self.ui.app(), kind, &check.inserted, sent);
         }
         if words.is_empty() {
             return;
@@ -101,6 +116,9 @@ pub(super) struct PendingCorrectionCheck {
     pub(super) changed: Instant,
     /// The second look: there's no third.
     pub(super) again: bool,
+    /// A Compose draft, for the writing style of this kind of app: what's
+    /// sent instead of it is kept (`crate::style::record`).
+    pub(super) draft: Option<splashdown_core::style::Kind>,
 }
 
 /// How long "Learned “Priya”" shows.
@@ -116,3 +134,5 @@ pub(super) const CORRECTION_WATCH: Duration = Duration::from_secs(30);
 pub(super) const CORRECTION_CHECK_AGAIN: Duration = Duration::from_secs(120);
 
 pub(super) const CORRECTION_SETTLE: Duration = Duration::from_secs(2);
+/// How long a Compose draft is watched: an email takes a while to edit.
+pub(super) const DRAFT_WATCH: Duration = Duration::from_secs(600);

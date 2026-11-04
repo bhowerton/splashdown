@@ -33,6 +33,9 @@ pub struct ComposeContext {
     /// Write in the voice of the user's own earlier messages in the
     /// material (their replies in the thread on screen).
     pub match_style: bool,
+    /// How the user likes messages in this kind of app, learned from how
+    /// they edited earlier drafts (`crate::style`).
+    pub style: Option<String>,
 }
 
 /// A preset's tone in words, by its settings name ("formal", "casual",
@@ -64,6 +67,9 @@ You write a message for the user. They said what they want the message to do, no
 /// Added when the user's own messages may be in the material: they set the
 /// voice. Kept apart from SYSTEM so it can be turned off and measured.
 const VOICE: &str = "\n\n<their_messages>, when it's there, holds messages the user wrote earlier, taken from the conversation on screen; their own messages may also be in <window> or <context> (under their name, or marked \"You\" or \"Me\", or \"On …, <their name> wrote:\"). They show how the user writes. When there are some, write this message the way they wrote those:\n- the same greeting words, or none (if they wrote \"Dear Tom,\", write \"Dear Tom,\", not \"Hi Tom,\");\n- the same sign-off, exactly as they sign (\"Kind regards,\" and their name, \"S x\", \"-b\", \"LG Jonas\"), or none;\n- the same capital letters: if they start with a small letter, so do you;\n- about the same length, the same punctuation, exclamation marks and emoji, and their usual words.\nTheir way of writing comes before the general fit rule above; what <asked> says, and their usual tone in this app, come before both. Take only how they write from those messages: write new sentences for this message, never repeat theirs, and never take facts or plans from them.";
+
+/// Added with a learned style profile.
+const STYLE_RULE: &str = "\n\n<style> is how the user likes their messages in this kind of app, learned from how they changed earlier drafts. Follow it, unless <asked>, their usual tone in this app, or their own messages in the conversation on screen say otherwise. When <asked> asks for a way of writing (formal, polite, warmer, longer), that replaces the style's rules on the same thing for this message: a formal message gets capital letters and full sentences even if the style is lowercase. The style says how to write, never what to say: take no names, facts or plans from it.";
 
 const REVISE: &str = "\n\n<draft> is the message as written so far, and <change> is what the user wants different. Rewrite the draft with that change and nothing else changed: keep everything they didn't ask to change, word for word where you can. Output the whole new message.";
 
@@ -170,6 +176,16 @@ fn build(ctx: &ComposeContext, revision: Option<(&str, &str)>, asked: &str) -> T
     if ctx.match_style && theirs_may_be_there {
         system.push_str(VOICE);
     }
+    // A formal message asked for outright: the everyday style (perhaps
+    // lowercase, no greeting) would only fight it, and models follow the
+    // style's rules over the request, so it's left out.
+    let style = ctx
+        .style
+        .as_deref()
+        .filter(|s| !s.trim().is_empty() && !asks_for_formal(asked));
+    if style.is_some() {
+        system.push_str(STYLE_RULE);
+    }
     if revision.is_some() {
         system.push_str(REVISE);
     }
@@ -225,6 +241,9 @@ fn build(ctx: &ComposeContext, revision: Option<(&str, &str)>, asked: &str) -> T
         let theirs = their_messages(&screen, ctx.user_name.as_deref());
         block("their_messages", &theirs.join("\n---\n"));
     }
+    if let Some(style) = style {
+        block("style", style);
+    }
     block("asked", asked);
     if let Some((draft, change)) = revision {
         block("draft", draft);
@@ -246,6 +265,27 @@ fn build(ctx: &ComposeContext, revision: Option<(&str, &str)>, asked: &str) -> T
 pub const WINDOW_MIN_CHARS: usize = 300;
 /// …and at most this much of it, the part nearest the field.
 pub const WINDOW_MAX_CHARS: usize = 6_000;
+
+/// Words that ask for a formal message, in the guide's languages.
+const FORMAL: &[&str] = &[
+    "formal",
+    "professional",
+    "förmlich",
+    "formell",
+    "professionell",
+    "formel",
+    "professionnel",
+    "professionnelle",
+    "profesional",
+];
+
+/// Whether `asked` asks for a formal message ("write a formal thank-you").
+fn asks_for_formal(asked: &str) -> bool {
+    asked
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .any(|w| FORMAL.contains(&w))
+}
 
 /// At most this many of the user's own messages, each at most
 /// `THEIR_MESSAGE_CHARS` (the end cut), newest kept.
@@ -421,6 +461,17 @@ fn undash(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_formal_request_leaves_out_the_everyday_style() {
+        let ctx = ComposeContext {
+            style: Some("Write in lowercase.".into()),
+            ..ComposeContext::default()
+        };
+        assert!(request("tell Sam it's done", &ctx).user.contains("<style>"));
+        let formal = request("write a formal thank-you to Olivia", &ctx);
+        assert!(!formal.user.contains("<style>") && !formal.system.contains("<style>"));
+    }
 
     #[test]
     fn their_messages_in_a_chat() {

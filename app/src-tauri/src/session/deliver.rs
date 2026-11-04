@@ -421,6 +421,7 @@ impl Controller {
                 last: None,
                 changed: Instant::now(),
                 again: false,
+                draft: None,
             });
         }
         let mut sent = false;

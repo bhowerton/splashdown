@@ -1,5 +1,6 @@
-//! `eval style`: drafts in the user's own voice, against drafts without
-//! it, judged by another model (eval/style.toml).
+//! `eval style`: drafts in the user's own voice (their messages on screen,
+//! and the style learned from how they edited earlier drafts), against
+//! drafts without it, judged by another model (eval/style.toml).
 
 use super::*;
 
@@ -22,6 +23,39 @@ pub(super) struct StyleCase {
     pub(super) starts_lower: Option<bool>,
     /// Has an emoji (true) or none (false).
     pub(super) emoji: Option<bool>,
+    /// Earlier drafts and what the user sent instead (`[draft, sent]`):
+    /// a style profile is written from them, as the app does, and Compose
+    /// follows it.
+    #[serde(default)]
+    pub(super) edits: Vec<[String; 2]>,
+    /// A profile as the user wrote it, when there are no `edits`.
+    pub(super) profile: Option<String>,
+}
+
+/// The profile `case` drafts with: written from its edits by `model`, as
+/// the app does, or given.
+async fn profile_for(case: &StyleCase, model: &dyn splashdown_core::TextModel) -> Option<String> {
+    use splashdown_core::style;
+    if case.edits.is_empty() {
+        return case.profile.clone();
+    }
+    let edits: Vec<style::Edit> = case
+        .edits
+        .iter()
+        .map(|[draft, sent]| style::Edit {
+            draft: draft.clone(),
+            sent: sent.clone(),
+        })
+        .collect();
+    let kind = splashdown_config::style_kind(&splashdown_config::AppContext {
+        app_id: "",
+        app_name: case.base.app.as_deref().unwrap_or(""),
+        title: None,
+        url: None,
+    });
+    let request = style::profile_request(kind, "", &edits);
+    let done = model.complete(&request).await.ok()?;
+    Some(style::clean_profile(&done.text)).filter(|p| !p.is_empty())
 }
 
 pub(super) fn style_faults(case: &StyleCase, draft: &str) -> Vec<String> {
@@ -95,7 +129,7 @@ pub(super) async fn style(
     let model = pipeline
         .answer_model()
         .context("this eval needs an AI provider (--ai …)")?;
-    let request = |case: &StyleCase, match_style: bool| {
+    let request = |case: &StyleCase, match_style: bool, style: Option<String>| {
         let ctx = ComposeContext {
             replying_to: case.base.replying_to.clone(),
             window_text: case.base.window.clone(),
@@ -104,12 +138,13 @@ pub(super) async fn style(
             today: "Monday, 3 November 2026".into(),
             tone: case.base.tone.as_deref().and_then(compose::tone),
             match_style,
+            style: style.filter(|_| match_style),
             ..ComposeContext::default()
         };
         compose::request(&case.base.asked, &ctx.defanged().0)
     };
     if let Some(first) = cases.first() {
-        let _ = model.complete(&request(first, true)).await;
+        let _ = model.complete(&request(first, true, None)).await;
     }
     eprintln!("\nStyle eval · {name}\n");
     let mut latencies = Vec::new();
@@ -120,10 +155,11 @@ pub(super) async fn style(
     // The rules, passed by the drafts without the voice: the baseline.
     let mut plain_passed = 0;
     for case in cases {
+        let profile = profile_for(case, model.as_ref()).await;
         let started = Instant::now();
-        let styled = model.complete(&request(case, true)).await;
+        let styled = model.complete(&request(case, true, profile.clone())).await;
         latencies.push(started.elapsed());
-        let plain = model.complete(&request(case, false)).await;
+        let plain = model.complete(&request(case, false, None)).await;
         let (styled, plain) = match (styled, plain) {
             (Ok(s), Ok(p)) => (compose::clean(&s.text), compose::clean(&p.text)),
             (Err(e), _) | (_, Err(e)) => {
@@ -139,9 +175,16 @@ pub(super) async fn style(
         let mut verdict = String::new();
         if styled.trim() == plain.trim() {
             verdict = "same".into();
-        } else if !case.voice.is_empty() {
-            let first = judged_first(judge, &case.voice, &styled, &plain).await;
-            let second = judged_first(judge, &case.voice, &plain, &styled).await;
+        } else if !case.voice.is_empty() || !case.edits.is_empty() {
+            // The user's own writing: on screen, or what they sent.
+            let samples: Vec<String> = case
+                .voice
+                .iter()
+                .cloned()
+                .chain(case.edits.iter().map(|[_, sent]| sent.clone()))
+                .collect();
+            let first = judged_first(judge, &samples, &styled, &plain).await;
+            let second = judged_first(judge, &samples, &plain, &styled).await;
             let won = usize::from(first == Some(true)) + usize::from(second == Some(false));
             points += won;
             possible += 2;
@@ -155,6 +198,11 @@ pub(super) async fn style(
             verdict,
             faults.join("; ")
         );
+        if verbose && let Some(profile) = &profile {
+            for line in profile.lines() {
+                println!("      ✎ {line}");
+            }
+        }
         if verbose || !ok {
             for line in styled.lines() {
                 println!("      │ {line}");

@@ -203,6 +203,27 @@ fn lower(s: &str) -> String {
     s.to_lowercase()
 }
 
+/// Which kind of app a style is kept for, by the built-in presets' app and
+/// site lists (email, work chat, texts), whatever the user's own presets.
+pub fn style_kind(ctx: &AppContext<'_>) -> splashdown_core::style::Kind {
+    use splashdown_core::style::Kind;
+    let builtin = builtin_presets();
+    let is = |id: &str| {
+        builtin
+            .iter()
+            .any(|p| p.id == id && p.rules.iter().any(|r| r.matches(ctx)))
+    };
+    if is("email") {
+        Kind::Email
+    } else if is("chat") {
+        Kind::Chat
+    } else if is("texting") {
+        Kind::Texts
+    } else {
+        Kind::Other
+    }
+}
+
 /// The first preset (other than the fallback) with a matching rule, else
 /// the `default` preset, else the first one.
 pub fn match_preset<'a>(presets: &'a [Preset], ctx: &AppContext<'_>) -> Option<&'a Preset> {
@@ -372,6 +393,15 @@ pub fn preset_from_file(text: &str) -> Result<Preset, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn styles_are_kept_by_kind_of_app() {
+        use splashdown_core::style::Kind;
+        assert_eq!(style_kind(&ctx("com.apple.mail", None)), Kind::Email);
+        assert_eq!(style_kind(&ctx("slack.exe", None)), Kind::Chat);
+        assert_eq!(style_kind(&ctx("com.apple.MobileSMS", None)), Kind::Texts);
+        assert_eq!(style_kind(&ctx("com.apple.Notes", None)), Kind::Other);
+    }
 
     #[test]
     fn presets_go_to_files_and_back() {

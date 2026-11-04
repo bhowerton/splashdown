@@ -42,6 +42,7 @@ mod snapshot;
 mod spend;
 mod state;
 mod stream_typing;
+mod style;
 mod tray;
 mod triggers;
 mod ui;
@@ -127,6 +128,9 @@ fn main() {
             commands::finish_onboarding,
             commands::open_onboarding,
             commands::forget_learned_word,
+            style::style_profiles,
+            style::style_set_profile,
+            style::style_forget,
             commands::pause_hotkeys,
             commands::preview_sound,
             commands::list_microphones,

@@ -53,6 +53,9 @@ pub struct GeneralSettings {
     /// Compose writes the way the user does in their own earlier messages
     /// on screen. Unset means on.
     pub compose_style: Option<bool>,
+    /// Keep the drafts Compose writes and what the user sends instead (on
+    /// this computer), to learn their style. Unset means on.
+    pub learn_style: Option<bool>,
     /// Compose shows its draft in a panel to change and Insert, instead of
     /// writing it straight into the field. Unset means off.
     pub compose_panel: Option<bool>,
@@ -210,6 +213,10 @@ impl GeneralSettings {
 
     pub fn compose_style(&self) -> bool {
         self.compose_style.unwrap_or(true)
+    }
+
+    pub fn learn_style(&self) -> bool {
+        self.learn_style.unwrap_or(true)
     }
 
     pub fn compose_panel(&self) -> bool {

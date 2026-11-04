@@ -166,6 +166,7 @@ function collect() {
   s.general.other_sounds = $("gen-other-audio").value === "lower" ? null : $("gen-other-audio").value;
   s.general.insights = $("ins-keep").checked ? null : false;
   s.general.learn_vocabulary = $("gen-learn").checked ? null : false;
+  s.general.learn_style = $("gen-learn-style").checked ? null : false;
   s.general.check_for_updates = $("gen-updates").checked ? null : false;
   s.general.sounds = $("gen-sounds").checked ? null : false;
   s.general.sound_volume = Number($("gen-volume").value) / 100;

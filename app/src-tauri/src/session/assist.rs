@@ -124,6 +124,19 @@ impl Controller {
             today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
             tone: tone.and_then(splashdown_core::compose::tone),
             match_style: engine.compose_style,
+            // Learned from how the user edited earlier drafts here.
+            style: active
+                .focus
+                .as_ref()
+                .filter(|_| engine.compose_style)
+                .and_then(|f| {
+                    crate::style::profile(splashdown_config::style_kind(&AppContext {
+                        app_id: &f.app.id,
+                        app_name: &f.app.name,
+                        title: f.app.window_title.as_deref(),
+                        url: f.app.url.as_deref(),
+                    }))
+                }),
         };
         tracing::info!("composing, with {} matching note(s)", context.notes.len());
         let target = active.focus.as_ref().map(|f| f.app.pid);
@@ -190,6 +203,7 @@ impl Controller {
                         text.chars().count()
                     );
                     self.last_insert = pid.map(|pid| (pid, Instant::now()));
+                    self.watch_draft(&text, pid);
                     self.last_text = text;
                     crate::did::note(crate::did::COMPOSED, "");
                     return self.done("Written");
@@ -200,6 +214,39 @@ impl Controller {
         let _ = splashdown_platform::copy_to_clipboard(&text);
         crate::did::note(crate::did::COMPOSED, "");
         self.notice(Tone::Info, "Draft copied · paste it where it goes");
+    }
+
+    /// Watches the field a draft was just pasted into: names the user fixes
+    /// are learned, and what they send instead of the draft is kept for
+    /// their writing style in this kind of app.
+    fn watch_draft(&mut self, draft: &str, pid: Option<i32>) {
+        let Ok(engine) = &self.engine else {
+            return;
+        };
+        if !engine.learn_style && !engine.learn_vocabulary {
+            return;
+        }
+        let Some(focus) = Focus::capture().filter(|f| Some(f.app.pid) == pid) else {
+            return;
+        };
+        let kind = splashdown_config::style_kind(&AppContext {
+            app_id: &focus.app.id,
+            app_name: &focus.app.name,
+            title: focus.app.window_title.as_deref(),
+            url: focus.app.url.as_deref(),
+        });
+        let now = Instant::now();
+        self.correction_check = Some(PendingCorrectionCheck {
+            focus,
+            inserted: draft.to_string(),
+            due: now + CORRECTION_POLL,
+            until: now + DRAFT_WATCH,
+            last: None,
+            changed: now,
+            // No second look: by then the draft has been sent or left.
+            again: true,
+            draft: engine.learn_style.then_some(kind),
+        });
     }
 
     /// A question, draft or change recorded on its own (after the

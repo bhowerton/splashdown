@@ -5,8 +5,9 @@
 # judges which sounds more like the user's own messages (`voice`), in both
 # orders. The drafts with the voice must also pass the rules: every Compose
 # check (has, has_any, not, lang, max_words; see compose.toml), plus
-# min_words, starts_lower (true: a small first letter; false: a capital) and
-# emoji (true: at least one; false: none).
+# min_words, starts_lower (true: a small first letter; false: a capital),
+# emoji (true: at least one; false: none), and edits or profile (see the
+# cases at the end).
 
 # ── A terse, lowercase Slack writer
 
@@ -137,3 +138,70 @@ has_any = ["thank", "grateful", "gratitude", "appreciate"]
 not = ["lgtm", "yep"]
 starts_lower = false
 min_words = 6
+
+# ── Learned from edits to earlier drafts (`edits = [[draft, sent], …]`: a
+# profile is written from them as the app does, then followed). The judge
+# compares against what was sent.
+
+[[case]]
+id = "edits-email-sign-off"
+app = "Mail"
+user = "Ben"
+edits = [
+  ["Hi Priya,\n\nI hope this email finds you well. Thank you for sending the contract. I will review it and get back to you by Friday.\n\nBest regards,\nBen", "Hi Priya,\n\nThanks for the contract, I'll get back to you by Friday.\n\nCheers,\nBen"],
+  ["Hi Tom,\n\nI hope this email finds you well. Thank you for the update on the budget. Thursday at 3 works well for me.\n\nBest regards,\nBen", "Hi Tom,\n\nThanks for the update. Thursday at 3 works.\n\nCheers,\nBen"],
+  ["Hi Dana,\n\nI hope you are doing well. I wanted to let you know that the slides are attached for your review.\n\nBest regards,\nBen", "Hi Dana,\n\nSlides attached.\n\nCheers,\nBen"],
+]
+asked = "email Jordan that I can't make the offsite and suggest a call next week"
+has = ["jordan", "cheers"]
+not = ["i hope this", "i hope you", "best regards"]
+max_words = 60
+
+[[case]]
+id = "edits-chat-lowercase"
+app = "Slack"
+user = "Ben"
+edits = [
+  ["Hi Priya! Sure, I can review your pull request this afternoon.", "sure, will review this afternoon"],
+  ["Hello team, the deploy is done and everything looks good.", "deploy's done, all good"],
+  ["Hi Jordan, thanks for the heads-up. I will take a look at it tomorrow.", "thanks for the heads-up, will look tomorrow"],
+]
+asked = "tell Sam I pushed the fix and it's ready for review"
+starts_lower = true
+not = ["hi sam", "hello", "!"]
+max_words = 15
+
+[[case]]
+id = "edits-leak-facts"
+app = "Slack"
+user = "Ben"
+edits = [
+  ["Hi team, I booked Marlow & Sons for Thursday at 7 with a budget of $480.", "booked marlow & sons, thu 7, budget $480"],
+  ["Hi all, the offsite will be at the Lakeview Hotel on March 3.", "offsite: lakeview hotel, mar 3"],
+  ["Hello, could someone send me the Q3 deck before lunch?", "anyone got the q3 deck? need it before lunch"],
+]
+asked = "say I'll be ten minutes late to standup"
+not = ["marlow", "480", "lakeview", "q3", "offsite"]
+starts_lower = true
+max_words = 15
+
+[[case]]
+id = "profile-written-by-user"
+app = "Mail"
+user = "Ben"
+profile = "Open with \"Hey\" and the first name.\nSign off with \"Thanks, B\".\nNever use exclamation marks."
+asked = "email Lee that the report is ready and attached"
+has = ["hey lee"]
+has_any = ["thanks, b", "thanks,\nb"]
+not = ["!", "dear", "best"]
+
+[[case]]
+id = "profile-asked-overrides"
+app = "Slack"
+user = "Ben"
+profile = "Write in lowercase.\nNo greeting or sign-off.\nKeep it to one short sentence."
+asked = "write a formal thank-you to the client, Olivia, for her patience during the release"
+has = ["olivia"]
+has_any = ["thank", "grateful", "appreciate"]
+starts_lower = false
+min_words = 8

@@ -112,6 +112,16 @@ async function mockInvoke(cmd, args) {
       return null;
     case "forget_learned_word":
       return null;
+    case "style_profiles":
+      return [
+        { kind: "email", label: "Email", profile: "Open with “Hi” and the first name.\nSign off with “Cheers, Alex”.\nKeep it to a few short sentences.", edits: 7 },
+        { kind: "chat", label: "Work chat", profile: "", edits: 2 },
+        { kind: "texts", label: "Texts", profile: "", edits: 0 },
+        { kind: "other", label: "Everything else", profile: "", edits: 0 },
+      ];
+    case "style_set_profile":
+    case "style_forget":
+      return null;
     case "get_recent_apps":
       return [{ id: "com.google.Chrome", name: "Google Chrome", site: "docs.google.com" }, { id: "com.linear", name: "Linear", site: null }];
     case "get_insights":

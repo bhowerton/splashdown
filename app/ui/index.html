@@ -252,6 +252,14 @@
           <input type="file" id="words-import-file" accept=".json,.csv,.txt,.tsv" hidden></div>
       </div>
       <div class="group">
+        <div class="gh">Your writing style</div>
+        <label class="row"><span class="lbl">Learn my style from how I edit drafts<small>When Compose writes into a reply and you change it before sending, the draft and what you sent are kept on this computer (the last 20 for each kind of app), and every few edits a short description of your style is written from them. Compose follows it. Only that description is sent, with each draft.</small></span>
+          <input id="gen-learn-style" type="checkbox" class="switch" data-setting></label>
+        <div id="style-kinds"></div>
+        <div class="row"><span class="lbl">Forget my style<small>Deletes every description and every kept draft.</small></span>
+          <button class="btn" id="style-forget">Forget</button></div>
+      </div>
+      <div class="group">
         <div class="gh">Snippets</div>
         <div class="row column">
           <span class="lbl">Say a phrase, get saved text<small>e.g. say “my address” to insert your full address. Works mid-sentence too; the AI never rewords the saved text. Fill-ins: <code>{date}</code>, <code>{day}</code>, <code>{time}</code>, <code>{iso-date}</code> and <code>{clipboard}</code>.</small></span>

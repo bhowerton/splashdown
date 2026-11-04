@@ -82,6 +82,8 @@ function renderGeneral() {
   $("ins-keep").checked = s.general.insights !== false;
   $("hist-audio").disabled = !$("hist-keep").checked;
   $("gen-learn").checked = s.general.learn_vocabulary !== false;
+  $("gen-learn-style").checked = s.general.learn_style !== false;
+  loadStyles();
   $("gen-updates").checked = s.general.check_for_updates !== false;
   $("gen-sounds").checked = s.general.sounds !== false;
   const volume = s.general.sound_volume ?? state.defaults.sound_volume ?? DEFAULT_SOUND_VOLUME;
@@ -484,6 +486,60 @@ function renderMicrophones() {
 $("gen-volume").addEventListener("change", (e) => {
   save();
   invoke("preview_sound", { volume: Number(e.target.value) / 100 }).catch(() => {});
+});
+
+// ---------------------------------------------------------------- writing style
+
+/** The style learned for each kind of app (`style.rs`): an editable
+ *  description, saved when it's changed, and how many edited drafts it
+ *  came from. Kinds with nothing learned yet are left out. */
+async function loadStyles() {
+  const host = $("style-kinds");
+  const kinds = await invoke("style_profiles").catch(() => []);
+  const shown = kinds.filter((k) => k.profile || k.edits);
+  if (!shown.length) {
+    const none = document.createElement("div");
+    none.className = "row";
+    none.innerHTML = '<span class="lbl"><small>Nothing learned yet. Edit a few drafts Compose writes into a reply, then send them.</small></span>';
+    host.replaceChildren(none);
+    return;
+  }
+  host.replaceChildren(
+    ...shown.map((k) => {
+      const row = document.createElement("div");
+      row.className = "row column";
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      const small = document.createElement("small");
+      small.textContent = k.profile
+        ? `From ${k.edits} edited draft${k.edits === 1 ? "" : "s"}. Change it as you like: the next update starts from your wording.`
+        : `${k.edits} edited draft${k.edits === 1 ? "" : "s"} so far; a description is written after a few more.`;
+      lbl.append(k.label, small);
+      const text = document.createElement("textarea");
+      text.rows = 3;
+      text.value = k.profile;
+      text.placeholder = "Sign off with “Cheers, Ben”.";
+      text.setAttribute("aria-label", `${k.label} style`);
+      text.addEventListener("change", () =>
+        invoke("style_set_profile", { kind: k.kind, profile: text.value })
+          .then(() => toast("Saved"))
+          .catch((e) => toast(String(e), true))
+      );
+      row.append(lbl, text);
+      return row;
+    })
+  );
+}
+
+$("style-forget").addEventListener("click", async () => {
+  const ok = await askConfirm("Forget your writing style?", {
+    detail: "Every description and every kept draft is deleted. Compose starts learning again from your next edits.",
+    action: "Forget",
+  });
+  if (!ok) return;
+  await call("style_forget");
+  loadStyles();
+  toast("Forgotten");
 });
 
 // ---------------------------------------------------------------- learned words
