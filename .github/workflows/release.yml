@@ -75,7 +75,12 @@ jobs:
         # compiles it only if there's none for this platform.
         # The Mac builds are zip files, though tauri-cli's binstall settings
         # say tgz.
-        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
+        env:
+          # binstall asks GitHub's API for the prebuilt binary; without a
+          # token that's rate limited, and it waits, then compiles instead.
+          GITHUB_TOKEN: ${{ github.token }}
+        # Usually already there, from the cache.
+        run: command -v cargo-tauri >/dev/null || cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
       - name: Clippy
         # Release profile and the release's Apple Silicon target, so the
         # build below reuses what this and the tests compile.
@@ -147,7 +152,15 @@ jobs:
       - name: Install the Tauri CLI
         # A prebuilt binary (compiling it took 6–10 minutes); cargo-binstall
         # compiles it only if there's none for this platform.
-        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked
+        env:
+          # binstall asks GitHub's API for the prebuilt binary; without a
+          # token that's rate limited, and it waits, then compiles instead.
+          GITHUB_TOKEN: ${{ github.token }}
+        # Usually already there, from the cache.
+        run: |
+          if (-not (Get-Command cargo-tauri -ErrorAction SilentlyContinue)) {
+            cargo binstall tauri-cli --version "^2" --no-confirm --locked
+          }
       - name: Clippy
         # Release profile, so the build below reuses what this and the
         # tests compile.
@@ -158,6 +171,10 @@ jobs:
         # It has no prebuilt binary, so it's compiled (4–5 minutes) unless
         # the cache brought it.
         shell: pwsh
+        env:
+          # binstall asks GitHub's API for the prebuilt binary; without a
+          # token that's rate limited, and it waits, then compiles instead.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           if (-not (Get-Command artifact-signing-cli -ErrorAction SilentlyContinue)) {
             cargo binstall artifact-signing-cli --no-confirm --locked

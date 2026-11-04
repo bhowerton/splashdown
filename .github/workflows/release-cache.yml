@@ -54,6 +54,10 @@ jobs:
       - name: Install the Tauri CLI
         # The Mac builds are zip files, though tauri-cli's binstall settings
         # say tgz.
+        env:
+          # binstall asks GitHub's API for the prebuilt binary; without a
+          # token that's rate limited, and it waits, then compiles instead.
+          GITHUB_TOKEN: ${{ github.token }}
         run: cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
       - name: Clippy and tests, as the release runs them
         run: |
@@ -85,6 +89,10 @@ jobs:
       # Installed after the cache step, so they're saved with it.
       - name: Install the Tauri CLI and the signing tool
         shell: pwsh
+        env:
+          # binstall asks GitHub's API for the prebuilt binary; without a
+          # token that's rate limited, and it waits, then compiles instead.
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           cargo binstall tauri-cli --version "^2" --no-confirm --locked
           if (-not (Get-Command artifact-signing-cli -ErrorAction SilentlyContinue)) {
