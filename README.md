@@ -107,6 +107,7 @@
 ### Write it for me
 
 - **Say what to write, not the words.** Hold Right Option, tap **Right Shift** and say "reply saying I'm in and ask about parking", "tell the team the launch moved to Thursday" or "decline politely and suggest next month". It's written straight into the reply, for the app you're in and the message you're answering, in your language. There's no need to select the message: Splashdown reads the conversation around where you're typing (the email thread or chat on screen), on your computer. Settings → Privacy turns reading the window off.
+- **Sounds like you.** Drafts follow your own messages in the conversation (your greeting, sign-off, capitals, emoji), and Compose learns from how you edit its drafts before sending, separately for email, work chat and texts. Settings → Words & language shows what it learned, to change or forget.
 - **Change it by voice:** select the draft and say "shorter" or "warmer", or "scratch that" to take it back. To check drafts first, turn on Check drafts in a panel first: you can change the draft there by voice ("add that I'm free Thursday", "in German") and every version is kept until you Insert it.
 - **No made-up facts.** Names, dates, numbers and your own details come only from what you said, the message and your notes; anything missing is left as a [placeholder]. Instructions for an AI hidden in the message you're answering are left out before anything is written.
 
