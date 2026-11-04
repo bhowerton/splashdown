@@ -143,7 +143,7 @@ The interpreter's prompt is shared by commands and voice actions, so a change to
 ## How to add…
 
 **A setting**
-1. A field in the right struct in `crates/splashdown-config/src/settings.rs`, as an `Option` documented with what unset means, and an accessor that applies the default (`compose_style()` is `compose_style.unwrap_or(true)`). Unset stays out of `config.toml`, so the default can change later.
+1. A field in the right section's struct in `crates/splashdown-config/src/settings/` (`general.rs` for most; the opening comment of `settings.rs` maps them), as an `Option` documented with what unset means, and an accessor that applies the default (`compose_style()` is `compose_style.unwrap_or(true)`). Unset stays out of `config.toml`, so the default can change later.
 2. If the session needs it, a field in `Engine` (`app/src-tauri/src/engine.rs`), filled in `engine::build`. Saving rebuilds the engine, so the session sees the change.
 3. A control in `app/ui/index.html`, in its tab, marked `data-setting` so a change saves the whole form.
 4. A line in `collect()` in `app/ui/settings/main.js` that reads the control (save the default as `null`), and a line in the tab's render function (`renderGeneral` in `settings/general.js`, `renderPrivacy` in `settings/privacy.js`, …) that shows it.

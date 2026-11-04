@@ -12,7 +12,7 @@ A suggested reading order for your first look at the code:
 4. `crates/splashdown-core/src/prompt.rs` and `guard.rs`: what the AI is asked, and when its answer is thrown away.
 5. `crates/splashdown-core/src/gesture.rs`: how key presses become actions.
 6. `crates/splashdown-platform/src/lib.rs`: the one OS API (focus, insertion, keys); `mac/` and `win/` implement it.
-7. `crates/splashdown-config/src/settings.rs`: `config.toml`, and how "Automatic" picks providers.
+7. `crates/splashdown-config/src/settings.rs`: `config.toml`, one file per section in `settings/`; `settings/resolve.rs` is how "Automatic" picks providers.
 8. `app/ui/common.js`, then `app/ui/settings/main.js`: how the windows talk to Rust.
 
 Every Rust file starts with a `//!` comment saying what it owns, so opening a file and reading its first lines is a quick way to find your way around.
@@ -156,7 +156,7 @@ Control requests go through the same `Recognizer` as the key: `start_hands_free`
 
 ## Providers and "Automatic"
 
-`splashdown-config::Settings::resolve_speech_with` / `resolve_ai_with` turn the saved settings plus available keys and on-device models into a concrete `SpeechChoice` / `AiChoice`. `splashdown-providers::factory` turns those into trait objects. The order for "Automatic" is: a saved key (the user chose that provider; for the AI pass, OpenAI, then OpenRouter, then Anthropic) → the built-in models, when downloaded (Nemotron, Qwen3 4B; they beat Apple's in the eval) → Apple's on-device models → local speech-to-text with no AI pass. Local-only mode is enforced here, in one place. The models that can be downloaded, with their sizes and licenses, are listed in `splashdown-providers/src/models.rs`.
+`splashdown-config::Settings::resolve_speech_with` / `resolve_ai_with` (`settings/resolve.rs`) turn the saved settings plus available keys and on-device models into a concrete `SpeechChoice` / `AiChoice`. `splashdown-providers::factory` turns those into trait objects. The order for "Automatic" is: a saved key (the user chose that provider; for the AI pass, OpenAI, then OpenRouter, then Anthropic) → the built-in models, when downloaded (Nemotron, Qwen3 4B; they beat Apple's in the eval) → Apple's on-device models → local speech-to-text with no AI pass. Local-only mode is enforced here, in one place. The models that can be downloaded, with their sizes and licenses, are listed in `splashdown-providers/src/models.rs`.
 
 ## The Apple shim
 
