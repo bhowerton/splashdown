@@ -191,7 +191,9 @@ Each window is a page in `app/ui` with its own script, loaded after `common.js`,
 
 **The pages are compiled into the app** (`frontendDist` in `tauri.conf.json`), so a change in `app/ui` shows up only after a rebuild: `scripts/run-mac-app.sh` or `scripts\run-win-app.ps1` does it.
 
-**Opened directly in a browser**, `invoke` goes to the page's `mockInvoke` instead, so a page can be styled without the app. Only Settings (`settings/mock.js`), the setup guide and Notes (a `mockInvoke` at the end of `onboarding.js` and `notes.js`) have one; the other windows need the app.
+**The Notes window's script** is split into `app/ui/notes/`, one file per part (the list, folders, the note, meetings, rewrites, Ask, ⌘K, …), loaded in order by `notes.html`. They're classic scripts sharing one global scope (so the window still opens as a plain file): a later file may use an earlier one's names when it loads, not the reverse; pass a later function as `(...args) => later(...args)`.
+
+**Opened directly in a browser**, `invoke` goes to the page's `mockInvoke` instead, so a page can be styled without the app. Only Settings (`settings/mock.js`), the setup guide and Notes (a `mockInvoke` at the end of `onboarding.js`, and `notes/preview.js`) have one; the other windows need the app.
 
 ## Where a user's data lives
 

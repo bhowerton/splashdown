@@ -153,7 +153,7 @@ The interpreter's prompt is shared by commands and voice actions, so a change to
 1. A `#[tauri::command]` function in the module that owns the feature (it can take `State<'_, AppState>` and `AppHandle`), returning `Result<T, String>` with a message the user can read. Make it `async` and move slow work off the main thread.
 2. Its name in `invoke_handler` in `app/src-tauri/src/main.rs`.
 3. A call from the page: `invoke("my_command", { someArg })` (camelCase in JavaScript, snake_case in Rust).
-4. A `case` in the page's `mockInvoke`, if it has one (`settings/mock.js`, `onboarding.js`, `notes.js`).
+4. A `case` in the page's `mockInvoke`, if it has one (`settings/mock.js`, `onboarding.js`, `notes/preview.js`).
 
 **A voice action**
 1. A `Spec` in `CATALOG` in `crates/splashdown-core/src/action.rs`, with its parameters and what each takes, a variant of `Action` (with its `id` and `fields`), and its arm where the planner's answer is turned into an `Action`. Parameters are checked here; nothing in the catalog may send, delete or pay.
