@@ -90,11 +90,21 @@ const SHOW_NOTICE: Duration = Duration::from_millis(3000);
 /// isn't cut off.
 const QUIET_AFTER_SOUND: Duration = Duration::from_millis(300);
 
-/// An insertion to re-check for corrections a little later.
+/// An insertion being watched for corrections: its field is read every
+/// `CORRECTION_POLL` until `CORRECTION_WATCH` is up, so a fix made just
+/// before the message is sent is still seen.
 struct PendingCorrectionCheck {
     focus: Focus,
     inserted: String,
+    /// The next reading.
     due: Instant,
+    /// When watching ends (then one more look, `CORRECTION_CHECK_AGAIN`).
+    until: Instant,
+    /// The last reading, to look at once the field is sent or cleared.
+    last: Option<String>,
+    /// When the reading last changed: it's looked at once it has stayed
+    /// the same for `CORRECTION_SETTLE` (not halfway through a word).
+    changed: Instant,
     /// The second look: there's no third.
     again: bool,
 }
@@ -102,11 +112,13 @@ struct PendingCorrectionCheck {
 /// How long "Learned “Priya”" shows.
 const LEARNED_SHOWN: Duration = Duration::from_secs(3);
 
-/// How long after an insertion to look for corrections, and, while the
-/// field is still the one in use and nothing was corrected yet, how long
-/// after that to look once more.
-const CORRECTION_CHECK_AFTER: Duration = Duration::from_secs(20);
+/// How often the field is read after an insertion, and for how long; then,
+/// while the field is still the one in use, one more look after
+/// `CORRECTION_CHECK_AGAIN`.
+const CORRECTION_POLL: Duration = Duration::from_millis(500);
+const CORRECTION_WATCH: Duration = Duration::from_secs(30);
 const CORRECTION_CHECK_AGAIN: Duration = Duration::from_secs(120);
+const CORRECTION_SETTLE: Duration = Duration::from_secs(2);
 
 pub struct Keys {
     pub dictation: PhysicalKey,
@@ -548,6 +560,9 @@ impl Controller {
             }
             if self.active.is_some() {
                 wake = wake.min(now + LEVEL_TICK);
+            }
+            if let Some(check) = &self.correction_check {
+                wake = wake.min(check.due);
             }
 
             match self.rx.recv_timeout(wake.saturating_duration_since(now)) {
@@ -1663,10 +1678,20 @@ impl Controller {
         if engine_learns(&self.engine)
             && let Some(focus) = active.focus
         {
+            match focus.field_text() {
+                Some(_) => tracing::info!("watching the field in {} for corrections", focus.app.id),
+                None => tracing::info!(
+                    "{} doesn't let Splashdown read the field: corrections there can't be learned",
+                    focus.app.id
+                ),
+            }
             self.correction_check = Some(PendingCorrectionCheck {
                 focus,
                 inserted: outcome.text.clone(),
-                due: Instant::now() + CORRECTION_CHECK_AFTER,
+                due: Instant::now() + CORRECTION_POLL,
+                until: Instant::now() + CORRECTION_WATCH,
+                last: None,
+                changed: Instant::now(),
                 again: false,
             });
         }
@@ -2488,29 +2513,64 @@ impl Controller {
         }
     }
 
-    /// Compares the field now with what we inserted and learns the names
-    /// and terms the user corrected ("Pria" → "Priya"), saying so.
+    /// Reads the watched field and learns the names and terms the user
+    /// corrected ("Pria" → "Priya"), saying so. A reading is looked at
+    /// once it's settled (unchanged for `CORRECTION_SETTLE`), or,
+    /// when the field was sent or cleared, the reading before that.
     /// `moving_on`: a new dictation is starting, so this is the last look.
     fn check_corrections(&mut self, moving_on: bool) {
-        let Some(check) = self.correction_check.take() else {
+        let Some(mut check) = self.correction_check.take() else {
             return;
         };
         let Ok(engine) = &self.engine else {
             return;
         };
-        let Some(now) = check.focus.field_text() else {
-            return;
+        let now = Instant::now();
+        let reading = check.focus.field_text();
+        let gone = reading
+            .as_deref()
+            .is_none_or(|t| !splashdown_core::vocab::still_there(&check.inserted, t));
+        if reading != check.last {
+            check.changed = now;
+        }
+        // What to look at now, if anything: the reading before the field
+        // was sent or cleared, or a settled one, or this one when it's the
+        // last look.
+        let settled = match (&reading, gone) {
+            (_, true) => check.last.take(),
+            (Some(text), false)
+                if moving_on
+                    || check.again
+                    || now.duration_since(check.changed) >= CORRECTION_SETTLE =>
+            {
+                Some(text.clone())
+            }
+            _ => None,
         };
-        let words =
-            splashdown_core::vocab::suggest(&check.inserted, &now, &engine.context.vocabulary);
-        if words.is_empty() {
-            if !moving_on && !check.again && check.focus.is_current() {
+        let words = settled
+            .map(|text| {
+                splashdown_core::vocab::suggest(&check.inserted, &text, &engine.context.vocabulary)
+            })
+            .unwrap_or_default();
+        // Keep watching while the dictation is still in the field.
+        if !moving_on && !gone {
+            if now < check.until {
                 self.correction_check = Some(PendingCorrectionCheck {
-                    due: Instant::now() + CORRECTION_CHECK_AGAIN,
+                    due: now + CORRECTION_POLL,
+                    last: reading,
+                    ..check
+                });
+            } else if !check.again && check.focus.is_current() {
+                self.correction_check = Some(PendingCorrectionCheck {
+                    due: now + CORRECTION_CHECK_AGAIN,
+                    until: now,
+                    last: reading,
                     again: true,
                     ..check
                 });
             }
+        }
+        if words.is_empty() {
             return;
         }
         let learned = crate::learning::learn(self.ui.app(), words);

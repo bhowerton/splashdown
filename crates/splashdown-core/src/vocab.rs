@@ -2,6 +2,21 @@
 //! retypes an inserted word into something close that looks like a name or
 //! term ("Pria" → "Priya"), suggest adding it to the vocabulary.
 
+/// Whether most of `inserted` is still in `field_now`: false once the
+/// field was sent, cleared or replaced, when only an earlier reading can
+/// show a correction.
+pub fn still_there(inserted: &str, field_now: &str) -> bool {
+    let field: std::collections::HashSet<String> =
+        words(field_now).iter().map(|w| w.to_lowercase()).collect();
+    let long: Vec<String> = words(inserted)
+        .into_iter()
+        .filter(|w| w.chars().count() >= 3)
+        .map(|w| w.to_lowercase())
+        .collect();
+    let kept = long.iter().filter(|w| field.contains(*w)).count();
+    long.is_empty() || kept * 2 >= long.len()
+}
+
 /// Suggests words from `field_now` that look like corrections of words in
 /// `inserted`. `known` is the current vocabulary (never re-suggested).
 pub fn suggest(inserted: &str, field_now: &str, known: &[String]) -> Vec<String> {
@@ -15,14 +30,27 @@ pub fn suggest(inserted: &str, field_now: &str, known: &[String]) -> Vec<String>
         if original.chars().count() < 3 || field_words.contains(original) {
             continue;
         }
+        let lower = original.to_lowercase();
         let best = field_words
             .iter()
             .filter(|w| !inserted_words.contains(w) && looks_like_term(w) && !is_known(w))
+            // Partway through deleting it ("Pri"), not a correction.
+            .filter(|w| {
+                let w = w.to_lowercase();
+                !(lower.len() > w.len() && lower.starts_with(&w))
+            })
             .filter(|w| !out.contains(w))
-            .map(|w| (distance(&original.to_lowercase(), &w.to_lowercase()), w))
-            // Distance 0 here means only the capitalization changed, which
-            // still counts ("tauri" → "Tauri"); `w` differs from `original`.
-            .filter(|(d, w)| *d <= max_distance(original, w))
+            // Spelled close, or sounding the same ("trucks" → "TRUX"): how
+            // speech recognition gets a name wrong. The closer, the better.
+            .filter_map(|w| {
+                let spelled = distance(&lower, &w.to_lowercase());
+                let sounded = distance(&sound(&lower), &sound(w));
+                // Distance 0 here means only the capitalization changed,
+                // which still counts ("tauri" → "Tauri"); `w` differs from
+                // `original`.
+                (spelled <= max_distance(original, w) || sounded == 0)
+                    .then_some((spelled.min(sounded), w))
+            })
             .min_by_key(|(d, _)| *d);
         if let Some((_, w)) = best {
             out.push(w.clone());
@@ -246,6 +274,49 @@ const COMMON: &[&str] = &[
     "you'll",
 ];
 
+/// A rough key for how an English word sounds, so spellings of the same
+/// sound match: "trucks" and "TRUX" are both "truks", "Kaitlyn" and
+/// "Caitlin" both "katlin". Letters that are often silent or doubled are
+/// folded together; vowels stay, so different words stay apart.
+fn sound(word: &str) -> String {
+    let w: Vec<char> = word.to_lowercase().chars().collect();
+    let mut out = String::new();
+    let mut i = 0;
+    while i < w.len() {
+        let next = w.get(i + 1).copied();
+        let (piece, skip): (&str, usize) = match (w[i], next) {
+            ('p', Some('h')) => ("f", 2),
+            ('c', Some('k')) => ("k", 2),
+            ('q', Some('u')) => ("kw", 2),
+            ('c', Some('e' | 'i' | 'y')) => ("s", 1),
+            ('c' | 'q', _) => ("k", 1),
+            ('x', _) => ("ks", 1),
+            ('z', _) => ("s", 1),
+            ('y', _) => ("i", 1),
+            // Silent or near-silent after another letter: "Sarah", "Kaitlyn".
+            ('h', _) if i > 0 => ("", 1),
+            _ => ("", 0),
+        };
+        if skip == 0 {
+            out.push(w[i]);
+            i += 1;
+        } else {
+            out.push_str(piece);
+            i += skip;
+        }
+    }
+    // Doubled letters and vowel pairs sound like one: "Ann" "An", "ai" "a".
+    let mut folded = String::new();
+    for c in out.chars() {
+        let vowel = |c: char| "aeiou".contains(c);
+        match folded.chars().last() {
+            Some(last) if last == c || (vowel(last) && vowel(c)) => {}
+            _ => folded.push(c),
+        }
+    }
+    folded
+}
+
 fn max_distance(a: &str, b: &str) -> usize {
     (a.chars().count().max(b.chars().count()) / 3).clamp(1, 3)
 }
@@ -309,6 +380,46 @@ mod tests {
                 .iter()
                 .all(|t| t != "Movers")
         );
+    }
+
+    #[test]
+    fn a_sent_or_cleared_field_no_longer_has_the_dictation() {
+        let inserted = "Thanks Pria, I'll look at it before lunch.";
+        assert!(still_there(
+            inserted,
+            "Thanks Priya, I'll look at it before lunch."
+        ));
+        assert!(!still_there(inserted, ""));
+        assert!(!still_there(inserted, "Something else entirely now"));
+    }
+
+    #[test]
+    fn a_correction_that_sounds_the_same_is_learned() {
+        assert_eq!(
+            suggest(
+                "I parked at trucks parking.",
+                "I parked at TRUX parking.",
+                &[]
+            ),
+            vec!["TRUX"]
+        );
+        assert_eq!(
+            suggest("Ask Caitlin about it.", "Ask Kaitlyn about it.", &[]),
+            vec!["Kaitlyn"]
+        );
+        assert_eq!(
+            suggest("Send it to Jon.", "Send it to John.", &[]),
+            vec!["John"]
+        );
+        assert_eq!(sound("trucks"), sound("TRUX"));
+        // Sounding different stays different.
+        assert!(suggest("meet at the docks", "meet at the Dexter", &[]).is_empty());
+        assert!(suggest("call Mark later", "call Marcy later", &[]).is_empty());
+    }
+
+    #[test]
+    fn a_word_partway_through_deletion_is_not_a_correction() {
+        assert!(suggest("Thanks Pria, see you", "Thanks Pri", &[]).is_empty());
     }
 
     #[test]
