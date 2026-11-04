@@ -47,9 +47,13 @@ pub fn corrections(inserted: &str, field_now: &str, known: &[String]) -> Vec<Str
             .filter_map(|w| {
                 let spelled = distance(&lower, &w.to_lowercase());
                 let sounded = distance(&sound(&lower), &sound(w));
-                // Distance 0 here means only the capitalization changed,
-                // which still counts ("tauri" → "Tauri"); `w` differs from
-                // `original`.
+                // Distance 0 here means only the capitalization changed.
+                // That counts mid-sentence ("the tauri app" → "the Tauri
+                // app"), but a capital to start a sentence ("lol" → "Lol")
+                // is just writing, not a name.
+                if spelled == 0 && only_starts_sentences(field_now, w) {
+                    return None;
+                }
                 (spelled <= max_distance(original, w) || sounded == 0)
                     .then_some((spelled.min(sounded), w))
             })
@@ -323,12 +327,47 @@ fn max_distance(a: &str, b: &str) -> usize {
     (a.chars().count().max(b.chars().count()) / 3).clamp(1, 3)
 }
 
+/// The words of `text`, a possessive taken off ("Erika's" → "Erika"), so
+/// a name is learned as the name.
 fn words(text: &str) -> Vec<String> {
     text.split(|c: char| !(c.is_alphanumeric() || c == '\'' || c == '-'))
         .map(|w| w.trim_matches(|c: char| c == '\'' || c == '-'))
+        .map(|w| {
+            w.strip_suffix("'s")
+                .or_else(|| w.strip_suffix("'S"))
+                .unwrap_or(w)
+        })
         .filter(|w| !w.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+/// Whether every time `word` is in `text`, it starts a sentence (or a
+/// line): then its capital says nothing about it being a name.
+fn only_starts_sentences(text: &str, word: &str) -> bool {
+    let mut seen = false;
+    let mut at_start = true;
+    for piece in text.split_inclusive(|c: char| c.is_whitespace()) {
+        let token = piece.trim();
+        let bare = token.trim_matches(|c: char| !c.is_alphanumeric());
+        let bare = bare
+            .strip_suffix("'s")
+            .or_else(|| bare.strip_suffix("'S"))
+            .unwrap_or(bare);
+        if bare == word {
+            if !at_start {
+                return false;
+            }
+            seen = true;
+        }
+        if !token.is_empty() {
+            at_start = token.ends_with(['.', '!', '?']);
+        }
+        if piece.ends_with('\n') {
+            at_start = true;
+        }
+    }
+    seen
 }
 
 /// Levenshtein distance over characters.
@@ -393,6 +432,29 @@ mod tests {
         ));
         assert!(!still_there(inserted, ""));
         assert!(!still_there(inserted, "Something else entirely now"));
+    }
+
+    #[test]
+    fn a_capital_to_start_a_sentence_is_not_a_correction() {
+        assert!(corrections("lol that's great", "Lol that's great", &[]).is_empty());
+        assert!(corrections("Done. lol ok", "Done. Lol ok", &[]).is_empty());
+        assert!(corrections("hi\nlol", "hi\nLol", &[]).is_empty());
+        // Mid-sentence, a capital still makes a name.
+        assert_eq!(
+            corrections("Deploy the tauri app.", "Deploy the Tauri app.", &[]),
+            vec!["Tauri"]
+        );
+    }
+
+    #[test]
+    fn a_possessive_is_learned_as_the_name() {
+        assert_eq!(
+            corrections("I took erica's car", "I took Erika's car", &[]),
+            vec!["Erika"]
+        );
+        let terms = terms_on_screen("See you at Priya's? Priya said noon.", 5);
+        assert_eq!(terms[0], "Priya");
+        assert!(!terms.iter().any(|t| t.contains('\'')), "{terms:?}");
     }
 
     #[test]
