@@ -1,0 +1,380 @@
+//! Downloading a model file: fetched in parts that resume, retried when a
+//! connection drops or stalls, written beside the target and moved into
+//! place only when whole (even while another program holds the old file
+//! open, on Windows).
+
+use std::io::{BufWriter, Write};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use splashdown_core::ProviderError;
+
+/// How long a download may go without receiving anything before it
+/// counts as stalled (and is tried again).
+pub(super) const STALL: Duration = Duration::from_secs(45);
+
+/// Tries per download. A connection that drops or stalls carries on from
+/// where it stopped, so a big model isn't started over.
+pub(super) const ATTEMPTS: u32 = 5;
+
+/// Downloads `url` to `dest` (via a `.part` file, so an interrupted
+/// download never looks complete), unless it's already there. A `.part`
+/// left by an earlier try (the app closed, the network dropped) is
+/// carried on from, not started over.
+pub(super) async fn download_file(
+    url: &str,
+    dest: &Path,
+    progress: impl FnMut(u64, Option<u64>),
+) -> Result<PathBuf, ProviderError> {
+    download_with(url, dest, STALL, Duration::from_secs(2), progress).await
+}
+
+pub(super) async fn download_with(
+    url: &str,
+    dest: &Path,
+    stall: Duration,
+    pause: Duration,
+    mut progress: impl FnMut(u64, Option<u64>),
+) -> Result<PathBuf, ProviderError> {
+    if dest.is_file() {
+        return Ok(dest.to_path_buf());
+    }
+    if let Some(dir) = dest.parent() {
+        std::fs::create_dir_all(dir).map_err(io_error)?;
+    }
+    let mut part = dest.as_os_str().to_owned();
+    part.push(".part");
+    let part = PathBuf::from(part);
+
+    let client = reqwest::Client::builder()
+        .connect_timeout(Duration::from_secs(20))
+        .build()
+        .map_err(|e| ProviderError::Network(e.to_string()))?;
+    let mut attempt = 1;
+    loop {
+        match fetch(&client, url, &part, stall, &mut progress).await {
+            Ok(()) => break,
+            Err(Failed::Again(e)) if attempt < ATTEMPTS => {
+                tracing::info!("model download, try {attempt} of {ATTEMPTS}: {e}; trying again");
+                tokio::time::sleep(pause * attempt).await;
+                attempt += 1;
+            }
+            Err(Failed::Again(e) | Failed::Stop(e)) => return Err(e),
+        }
+    }
+    rename(&part, dest).await?;
+    Ok(dest.to_path_buf())
+}
+
+/// Why one try at a download failed.
+pub(super) enum Failed {
+    /// The network: worth trying again, from where it stopped.
+    Again(ProviderError),
+    /// Not worth trying again (no such file, the disk is full).
+    Stop(ProviderError),
+}
+
+/// One try: fetches what `part` doesn't have yet and adds it.
+pub(super) async fn fetch(
+    client: &reqwest::Client,
+    url: &str,
+    part: &Path,
+    stall: Duration,
+    progress: &mut impl FnMut(u64, Option<u64>),
+) -> Result<(), Failed> {
+    let again = |e: String| Failed::Again(ProviderError::Network(e));
+    let have = std::fs::metadata(part).map_or(0, |m| m.len());
+    let mut request = client.get(url);
+    if have > 0 {
+        request = request.header(reqwest::header::RANGE, format!("bytes={have}-"));
+    }
+    let mut resp = tokio::time::timeout(stall, request.send())
+        .await
+        .map_err(|_| again("the server didn't answer".into()))?
+        .map_err(|e| again(e.to_string()))?;
+    let status = resp.status();
+    if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
+        // The partial file is no use (the file changed?): start over.
+        let _ = std::fs::remove_file(part);
+        return Err(again("the partial download didn't match".into()));
+    }
+    if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
+        return Err(again(format!("the server answered {status}")));
+    }
+    if !status.is_success() {
+        return Err(Failed::Stop(ProviderError::Network(format!(
+            "the server answered {status}"
+        ))));
+    }
+    // Only carry on from `have` if the server sends the rest from there.
+    let resumed = status == reqwest::StatusCode::PARTIAL_CONTENT
+        && resp
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with(&format!("bytes {have}-")));
+    let start = if resumed { have } else { 0 };
+    let total = resp.content_length().map(|n| n + start);
+    let file = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .append(resumed)
+        .truncate(!resumed)
+        .open(part)
+        .map_err(|e| Failed::Stop(io_error(e)))?;
+    let mut file = BufWriter::with_capacity(1 << 20, file);
+    let mut done = start;
+    progress(done, total);
+    loop {
+        let chunk = tokio::time::timeout(stall, resp.chunk())
+            .await
+            .map_err(|_| again("the download stalled".into()))?
+            .map_err(|e| again(e.to_string()))?;
+        let Some(chunk) = chunk else { break };
+        file.write_all(&chunk)
+            .map_err(|e| Failed::Stop(io_error(e)))?;
+        done += chunk.len() as u64;
+        progress(done, total);
+    }
+    file.flush().map_err(|e| Failed::Stop(io_error(e)))?;
+    if total.is_some_and(|t| t != done) {
+        return Err(again("the download was cut off".into()));
+    }
+    Ok(())
+}
+
+/// Moves the finished download into place. Windows can refuse for a
+/// moment while a virus scanner reads the new file, so this tries a few
+/// times.
+pub(super) async fn rename(part: &Path, dest: &Path) -> Result<(), ProviderError> {
+    let mut tries = 0;
+    loop {
+        match std::fs::rename(part, dest) {
+            Ok(()) => return Ok(()),
+            Err(e) if tries < 20 && in_use(&e) => {
+                tries += 1;
+                tokio::time::sleep(Duration::from_millis(250)).await;
+            }
+            Err(e) => return Err(io_error(e)),
+        }
+    }
+}
+
+/// Whether a file operation failed because another program (a virus
+/// scanner, the search indexer, a sync app) has the file open for a
+/// moment: access denied, or Windows' sharing and lock violations
+/// (errors 32 and 33), which Rust doesn't count as denied.
+pub fn in_use(e: &std::io::Error) -> bool {
+    e.kind() == std::io::ErrorKind::PermissionDenied || matches!(e.raw_os_error(), Some(32 | 33))
+}
+
+/// `std::fs::rename`, tried again for up to `wait` while the file is in
+/// use (`in_use`).
+pub fn rename_patiently(from: &Path, to: &Path, wait: Duration) -> std::io::Result<()> {
+    let started = std::time::Instant::now();
+    loop {
+        match std::fs::rename(from, to) {
+            Err(e) if in_use(&e) && started.elapsed() < wait => {
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            other => return other,
+        }
+    }
+}
+
+pub(super) fn io_error(e: std::io::Error) -> ProviderError {
+    ProviderError::Unavailable(format!("couldn't write model file: {e}"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::Diarizer;
+    use std::time::Duration;
+
+    /// What the test server does with each request, in turn (the last one
+    /// repeats).
+    #[derive(Clone, Copy)]
+    enum Serve {
+        /// The file, or the rest of it from a `Range`.
+        Rest,
+        /// The whole file whatever was asked for.
+        Whole,
+        /// Promises the file but sends this many bytes and hangs up.
+        CutAfter(usize),
+        /// Sends this many bytes, then nothing for a second.
+        StallAfter(usize),
+        NotFound,
+    }
+
+    /// A one-file HTTP server on localhost; returns the file's address.
+    fn server(body: Vec<u8>, script: Vec<Serve>) -> String {
+        use std::io::{BufRead, BufReader};
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let url = format!("http://{}/model.gguf", listener.local_addr().unwrap());
+        std::thread::spawn(move || {
+            for (i, conn) in listener.incoming().enumerate() {
+                let Ok(mut conn) = conn else { return };
+                let mut from = 0;
+                let mut reader = BufReader::new(conn.try_clone().unwrap());
+                let mut line = String::new();
+                while reader.read_line(&mut line).is_ok_and(|n| n > 2) {
+                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("range: bytes=") {
+                        from = v.trim().trim_end_matches('-').parse().unwrap();
+                    }
+                    line.clear();
+                }
+                let len = body.len();
+                let head = |status: &str, from: usize| {
+                    let range = if from > 0 {
+                        format!("Content-Range: bytes {from}-{}/{len}\r\n", len - 1)
+                    } else {
+                        String::new()
+                    };
+                    format!(
+                        "HTTP/1.1 {status}\r\nContent-Length: {}\r\n{range}Connection: close\r\n\r\n",
+                        len - from
+                    )
+                };
+                let ok = |from: usize| {
+                    if from > 0 {
+                        "206 Partial Content"
+                    } else {
+                        "200 OK"
+                    }
+                };
+                let _ = match script[i.min(script.len() - 1)] {
+                    Serve::Rest => conn
+                        .write_all(head(ok(from), from).as_bytes())
+                        .and_then(|()| conn.write_all(&body[from..])),
+                    Serve::Whole => conn
+                        .write_all(head("200 OK", 0).as_bytes())
+                        .and_then(|()| conn.write_all(&body)),
+                    Serve::CutAfter(n) => conn
+                        .write_all(head(ok(from), from).as_bytes())
+                        .and_then(|()| conn.write_all(&body[from..from + n])),
+                    Serve::StallAfter(n) => conn
+                        .write_all(head(ok(from), from).as_bytes())
+                        .and_then(|()| conn.write_all(&body[from..from + n]))
+                        .map(|()| std::thread::sleep(Duration::from_secs(1))),
+                    Serve::NotFound => conn.write_all(
+                        b"HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+                    ),
+                };
+            }
+        });
+        url
+    }
+
+    /// An empty folder of its own for one test.
+    fn scratch(name: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("splashdown-download-{}-{name}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn file() -> Vec<u8> {
+        (0..200_000u32).map(|i| (i * 7 % 251) as u8).collect()
+    }
+
+    async fn get(url: &str, dest: &Path) -> Result<PathBuf, ProviderError> {
+        let short = Duration::from_millis(300);
+        download_with(url, dest, short, Duration::from_millis(10), |_, _| {}).await
+    }
+
+    #[tokio::test]
+    async fn a_dropped_download_carries_on_where_it_stopped() {
+        let dir = scratch("dropped");
+        let dest = dir.join("model.gguf");
+        let url = server(file(), vec![Serve::CutAfter(70_000), Serve::Rest]);
+        get(&url, &dest).await.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), file());
+        assert!(!dir.join("model.gguf.part").exists());
+    }
+
+    #[tokio::test]
+    async fn a_stalled_download_is_tried_again() {
+        let dir = scratch("stalled");
+        let dest = dir.join("model.gguf");
+        let url = server(file(), vec![Serve::StallAfter(50_000), Serve::Rest]);
+        get(&url, &dest).await.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), file());
+    }
+
+    #[tokio::test]
+    async fn a_part_from_an_earlier_run_is_carried_on_from() {
+        let dir = scratch("part");
+        let dest = dir.join("model.gguf");
+        std::fs::write(dir.join("model.gguf.part"), &file()[..120_000]).unwrap();
+        let url = server(file(), vec![Serve::Rest]);
+        let mut first = None;
+        download_with(&url, &dest, STALL, Duration::ZERO, |done, _| {
+            first.get_or_insert(done);
+        })
+        .await
+        .unwrap();
+        assert_eq!(first, Some(120_000), "carried on from the part");
+        assert_eq!(std::fs::read(&dest).unwrap(), file());
+    }
+
+    #[tokio::test]
+    async fn a_server_that_cant_resume_starts_over() {
+        let dir = scratch("restart");
+        let dest = dir.join("model.gguf");
+        std::fs::write(dir.join("model.gguf.part"), b"something else").unwrap();
+        let url = server(file(), vec![Serve::Whole]);
+        get(&url, &dest).await.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), file());
+    }
+
+    #[tokio::test]
+    async fn a_missing_file_fails_at_once_and_leaves_nothing() {
+        let dir = scratch("missing");
+        let dest = dir.join("model.gguf");
+        let url = server(file(), vec![Serve::NotFound, Serve::Rest]);
+        let e = get(&url, &dest).await.unwrap_err();
+        assert!(e.to_string().contains("404"), "{e}");
+        assert!(!dest.exists());
+    }
+
+    #[tokio::test]
+    async fn a_download_that_keeps_failing_gives_up() {
+        let dir = scratch("gives-up");
+        let dest = dir.join("model.gguf");
+        let url = server(file(), vec![Serve::CutAfter(10)]);
+        assert!(get(&url, &dest).await.is_err());
+        assert!(!dest.exists(), "never looks complete");
+    }
+
+    /// The real thing: a model from Hugging Face, cut off part way, then
+    /// carried on. `cargo test -p splashdown-providers -- --ignored
+    /// --nocapture resumes_a_real_download`.
+    #[tokio::test]
+    #[ignore = "downloads about 139 MB"]
+    async fn resumes_a_real_download() {
+        let dir = scratch("real");
+        let dest = Diarizer::path_in(&dir);
+        let cut = tokio::time::timeout(
+            Duration::from_secs(3),
+            download_file(&Diarizer::url(), &dest, |_, _| {}),
+        )
+        .await;
+        assert!(cut.is_err(), "finished in 3 s: make the cut sooner");
+        let had = std::fs::metadata(dir.join(format!("{}.part", Diarizer::FILE)))
+            .unwrap()
+            .len();
+        let mut first = None;
+        download_file(&Diarizer::url(), &dest, |done, total| {
+            first.get_or_insert((done, total));
+        })
+        .await
+        .unwrap();
+        let (from, total) = first.unwrap();
+        println!("cut at {had} bytes; carried on from {from} of {total:?}");
+        assert_eq!(from, had);
+        assert_eq!(std::fs::metadata(&dest).unwrap().len(), total.unwrap());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

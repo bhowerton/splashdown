@@ -4,6 +4,7 @@
 mod anthropic;
 pub mod apple;
 mod chat;
+mod download;
 mod endpoint;
 pub mod factory;
 mod local_llm;
