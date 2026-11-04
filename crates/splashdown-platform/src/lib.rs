@@ -245,6 +245,13 @@ pub fn request_accessibility() {
     imp::request_accessibility()
 }
 
+/// Shows the system's microphone prompt (macOS) and waits for the answer:
+/// whether it was allowed. None where there's no such prompt (Windows),
+/// where opening the microphone is what asks.
+pub fn request_microphone() -> Option<bool> {
+    imp::request_microphone()
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PermissionKind {
     Accessibility,

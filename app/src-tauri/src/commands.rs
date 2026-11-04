@@ -218,11 +218,15 @@ pub fn request_accessibility() {
     splashdown_platform::request_accessibility();
 }
 
-/// Opens the microphone for a moment, which makes macOS show its
-/// microphone prompt now rather than during the first dictation.
+/// Asks for the microphone now rather than during the first dictation:
+/// the system's prompt on macOS; elsewhere, opening the microphone for a
+/// moment.
 #[tauri::command]
 pub async fn request_microphone() -> Result<(), String> {
     tauri::async_runtime::spawn_blocking(|| {
+        if splashdown_platform::request_microphone().is_some() {
+            return Ok(());
+        }
         let recorder = splashdown_audio::Recorder::start(None).map_err(|e| e.to_string())?;
         std::thread::sleep(Duration::from_millis(300));
         recorder.stop();

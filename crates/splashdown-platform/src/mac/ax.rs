@@ -406,6 +406,44 @@ pub(crate) fn is_current(app: &AppInfo, focus: &FocusElement) -> bool {
     same_window && now.attribute("AXSelectedTextRange").is_ok()
 }
 
+pub(crate) fn takes_text(focus: &FocusElement) -> Option<bool> {
+    // Roles that never take text. Not AXGroup or AXScrollArea, which some
+    // editors and terminals use for their text view.
+    const NOT_TEXT: &[&str] = &[
+        "AXApplication",
+        "AXBrowser",
+        "AXButton",
+        "AXCell",
+        "AXCheckBox",
+        "AXImage",
+        "AXLink",
+        "AXList",
+        "AXMenuButton",
+        "AXMenuItem",
+        "AXOutline",
+        "AXPopUpButton",
+        "AXRadioButton",
+        "AXRow",
+        "AXStaticText",
+        "AXTabGroup",
+        "AXTable",
+        "AXToolbar",
+        "AXWebArea",
+        "AXWindow",
+    ];
+    let el = focus.element.as_ref()?;
+    // Inside an editable part of a web page (Safari and Chromium say so).
+    if el.attribute("AXEditableAncestor").is_ok() {
+        return Some(true);
+    }
+    let role = el.string_attribute("AXRole").ok()?;
+    match role.as_str() {
+        "AXTextField" | "AXTextArea" | "AXComboBox" => Some(true),
+        r if NOT_TEXT.contains(&r) => Some(false),
+        _ => None,
+    }
+}
+
 pub(crate) fn selection(focus: &FocusElement) -> Selection {
     let Some(el) = &focus.element else {
         return Selection::Unknown;
@@ -559,6 +597,28 @@ fn microphone_access() -> Access {
         AVAuthorizationStatus::NotDetermined => Access::NotAsked,
         _ => Access::Denied,
     }
+}
+
+/// Asks for the microphone with the system's prompt and waits for the
+/// answer. Asking through AVFoundation, rather than by opening the
+/// microphone, also updates the status this process reads afterwards;
+/// otherwise it can stay "not asked" until the app restarts.
+pub(crate) fn request_microphone() -> Option<bool> {
+    // SAFETY: as in `microphone_access`.
+    let audio = unsafe { AVMediaTypeAudio }?;
+    let (tx, rx) = std::sync::mpsc::channel();
+    let answered = block2::RcBlock::new(move |granted: objc2::runtime::Bool| {
+        let _ = tx.send(granted.as_bool());
+    });
+    // SAFETY: `audio` is a valid media type and the block lives until the
+    // call returns (AVFoundation copies it); the handler may run on any
+    // thread, which the channel allows.
+    unsafe { AVCaptureDevice::requestAccessForMediaType_completionHandler(audio, &answered) };
+    // The user may take a while to answer; don't wait forever.
+    Some(
+        rx.recv_timeout(std::time::Duration::from_secs(300))
+            .unwrap_or(false),
+    )
 }
 
 pub(crate) fn request_accessibility() {

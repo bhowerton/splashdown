@@ -336,6 +336,10 @@ impl Controller {
                     .and_then(|f| f.field_text().map(|t| (f, t)))
             })
             .flatten();
+        // Nothing to type into (a web page outside any field, a list): the
+        // keys go nowhere, so the text stays on the clipboard to paste.
+        let no_field = active.focus.as_ref().and_then(Focus::takes_text) == Some(false);
+        let mut lost = false;
         let mut inserted = match &mut typer {
             Some(typer) => match active.focus.as_ref() {
                 Some(focus) => typer.finish(focus, &text),
@@ -355,12 +359,32 @@ impl Controller {
                     "second paste into {app_id}: {}",
                     if landed { "landed" } else { "still not seen" }
                 );
+                lost = !landed;
             }
         }
         if let Err(e) = inserted {
             tracing::warn!("insert into {app_id} failed: {e}");
             let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
             self.notice(Tone::Warning, "Couldn't type it — copied to clipboard");
+            return;
+        }
+
+        if no_field || lost {
+            tracing::info!(
+                "{} in {app_id}: copied instead",
+                if no_field {
+                    "no text field"
+                } else {
+                    "the paste didn't show up"
+                }
+            );
+            let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
+            self.last_text = outcome.text.clone();
+            let note = if send { " (not sent)" } else { "" };
+            self.notice(
+                Tone::Warning,
+                &format!("No text box — copied to clipboard{note}"),
+            );
             return;
         }
 

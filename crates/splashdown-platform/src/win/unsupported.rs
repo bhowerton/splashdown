@@ -29,6 +29,10 @@ pub(crate) fn selection(_el: &FocusElement) -> Selection {
     Selection::Unknown
 }
 
+pub(crate) fn takes_text(_el: &FocusElement) -> Option<bool> {
+    None
+}
+
 pub(crate) fn is_secure_field(_el: &FocusElement) -> bool {
     false
 }
@@ -94,6 +98,11 @@ pub(crate) fn permissions() -> Permissions {
 }
 
 pub(crate) fn request_accessibility() {}
+
+/// Windows has no prompt to show: opening the microphone is what asks.
+pub(crate) fn request_microphone() -> Option<bool> {
+    None
+}
 
 pub(crate) fn refresh_shortcut_keys() {}
 

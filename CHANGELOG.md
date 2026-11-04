@@ -2,6 +2,11 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Dictating with no text field selected.** When the cursor isn't in a text field (a web page outside any box, a list of files), the text is left on the clipboard and "No text box — copied to clipboard" shows, instead of "Inserted" with the words gone. The same happens when a paste into a browser field doesn't show up.
+- **Microphone permission.** After you allow the microphone in the setup guide, it now shows as allowed straight away. Before, it could keep showing Allow… until Splashdown restarted.
+
 ## 0.7.0 — 2026-11-04
 
 - **Word for word.** A new built-in preset types exactly what you say, with no AI tidying: hold the dictation key and press 2 ("What can I say?" shows its number). It's never picked by app, only when you ask for it. Settings with your own preset list get it once; delete it and it stays gone. The other built-in presets move up one number (Email is now 3).

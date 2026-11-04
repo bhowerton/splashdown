@@ -102,6 +102,13 @@ impl Focus {
         imp::field_text(&self.inner)
     }
 
+    /// Whether the focused element takes typed text. `Some(false)` only when
+    /// it clearly doesn't (a button, a list, a web page outside any field),
+    /// `None` when that can't be told, as in apps that expose nothing.
+    pub fn takes_text(&self) -> Option<bool> {
+        imp::takes_text(&self.inner)
+    }
+
     /// The text around the field in its window, besides the field's own:
     /// usually the conversation being answered (an email thread, a chat).
     /// Read from the nearest container holding at least `min_chars`, and

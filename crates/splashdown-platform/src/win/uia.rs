@@ -15,10 +15,12 @@ use windows::Win32::UI::Accessibility::{
     IUIAutomationValuePattern, TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start,
     TextUnit_Character, UIA_ButtonControlTypeId, UIA_CheckBoxControlTypeId,
     UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_HyperlinkControlTypeId,
-    UIA_ImageControlTypeId, UIA_MenuBarControlTypeId, UIA_MenuControlTypeId,
+    UIA_ImageControlTypeId, UIA_ListControlTypeId, UIA_ListItemControlTypeId,
+    UIA_MenuBarControlTypeId, UIA_MenuControlTypeId, UIA_MenuItemControlTypeId,
     UIA_RadioButtonControlTypeId, UIA_ScrollBarControlTypeId, UIA_SliderControlTypeId,
-    UIA_TextControlTypeId, UIA_TextPattern2Id, UIA_TextPatternId, UIA_ToolBarControlTypeId,
-    UIA_ValuePatternId, UIA_WindowControlTypeId,
+    UIA_TabItemControlTypeId, UIA_TextControlTypeId, UIA_TextPattern2Id, UIA_TextPatternId,
+    UIA_ToolBarControlTypeId, UIA_TreeItemControlTypeId, UIA_ValuePatternId,
+    UIA_WindowControlTypeId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetWindowTextW, GetWindowThreadProcessId,
@@ -537,6 +539,33 @@ fn range_holds(range: &IUIAutomationTextRange, wanted: &str) -> bool {
     unsafe { range.GetText(-1) }.is_ok_and(|t| t == wanted)
 }
 
+pub(crate) fn takes_text(focus: &FocusElement) -> Option<bool> {
+    let el = usable(focus)?;
+    // SAFETY: a property read on a live element, on an MTA thread.
+    let kind = unsafe { el.CurrentControlType() }.ok()?;
+    if kind == UIA_EditControlTypeId || kind == UIA_DocumentControlTypeId {
+        return Some(true);
+    }
+    // Controls that never take text; panes and custom controls may.
+    let not_text = [
+        UIA_ButtonControlTypeId,
+        UIA_CheckBoxControlTypeId,
+        UIA_HyperlinkControlTypeId,
+        UIA_ImageControlTypeId,
+        UIA_ListControlTypeId,
+        UIA_ListItemControlTypeId,
+        UIA_MenuItemControlTypeId,
+        UIA_RadioButtonControlTypeId,
+        UIA_TabItemControlTypeId,
+        UIA_TreeItemControlTypeId,
+    ];
+    if not_text.contains(&kind) {
+        Some(false)
+    } else {
+        None
+    }
+}
+
 pub(crate) fn is_secure_field(focus: &FocusElement) -> bool {
     usable(focus)
         // SAFETY: a property read on a live element, on an MTA thread.
@@ -579,6 +608,11 @@ pub(crate) fn is_chromium(app_id: &str) -> bool {
 
 /// Nothing to request on Windows.
 pub(crate) fn request_accessibility() {}
+
+/// Windows has no prompt to show: opening the microphone is what asks.
+pub(crate) fn request_microphone() -> Option<bool> {
+    None
+}
 
 // ---------------------------------------------------------------- the window's text
 
