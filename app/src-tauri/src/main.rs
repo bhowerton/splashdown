@@ -23,6 +23,7 @@ mod insights;
 mod learning;
 mod meeting;
 mod minibar;
+mod models;
 mod my_actions;
 mod notes;
 mod pill;
@@ -37,7 +38,9 @@ mod rescue;
 mod session;
 mod setup;
 mod shortcuts;
+mod snapshot;
 mod spend;
+mod state;
 mod stream_typing;
 mod tray;
 mod triggers;
@@ -97,28 +100,28 @@ fn main() {
             commands::save_key,
             commands::delete_key,
             commands::test_ai,
-            commands::download_model,
+            models::download_model,
             setup::local_setup_plan,
             setup::local_setup_status,
             setup::start_local_setup,
-            commands::prepare_apple_speech,
+            models::prepare_apple_speech,
             commands::show_log_file,
             commands::open_limits_page,
             commands::open_permission,
             commands::request_accessibility,
             commands::request_microphone,
-            commands::get_history,
-            commands::delete_history,
-            commands::retranscribe_history,
-            commands::clear_history,
-            commands::pin_history,
+            history::get_history,
+            history::delete_history,
+            history::retranscribe_history,
+            history::clear_history,
+            history::pin_history,
             commands::try_preset,
             commands::get_insights,
             commands::clear_insights,
             commands::app_info,
-            commands::copy_text,
-            commands::get_recent_apps,
-            commands::redo_history,
+            history::copy_text,
+            history::get_recent_apps,
+            history::redo_history,
             commands::get_launch_at_login,
             commands::set_launch_at_login,
             commands::finish_onboarding,
@@ -257,7 +260,7 @@ fn main() {
             app.listen_any(ui::REBUILD_ENGINE, move |_| {
                 let handle = handle.clone();
                 tauri::async_runtime::spawn(async move {
-                    let state = handle.state::<commands::AppState>();
+                    let state = handle.state::<crate::state::AppState>();
                     if let Some(e) = state.apply().await {
                         tracing::warn!("rebuilding after a spending change: {e}");
                     }
@@ -265,7 +268,7 @@ fn main() {
             });
             let presets = settings.presets();
             let transforms = settings.transforms();
-            app.manage(commands::AppState {
+            app.manage(crate::state::AppState {
                 settings: Mutex::new(settings),
                 session,
                 engine_error: Mutex::new(engine_error),

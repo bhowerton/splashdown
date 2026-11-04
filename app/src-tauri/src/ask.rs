@@ -293,7 +293,7 @@ pub fn ask_followup(question: String, app: AppHandle) -> Result<(), String> {
     };
     let context_spoken = context.spoken;
     context.notes = app
-        .try_state::<crate::commands::AppState>()
+        .try_state::<crate::state::AppState>()
         .map(|s| crate::notes::excerpts_for(&s.settings().notes, &question))
         .unwrap_or_default();
     ask(

@@ -24,8 +24,8 @@ use splashdown_config::{Destination, MeetingSummary, Secrets, Settings};
 use splashdown_core::meeting::{Meeting, Paragraph, Segment, Side, Turn};
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::commands::AppState;
 use crate::notes::store::{Origin, Store};
+use crate::state::AppState;
 
 /// Start or stop a meeting; shown in the menu, registered in `shortcuts.rs`.
 pub const ACCELERATOR: &str = "Ctrl+Alt+M";

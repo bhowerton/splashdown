@@ -22,8 +22,8 @@ use splashdown_config::{AiProvider, Settings, SpeechProvider};
 use splashdown_providers::{LocalModel, SpeechModel};
 use tauri::{AppHandle, Emitter, Manager};
 
-use crate::commands::AppState;
 use crate::engine;
+use crate::state::AppState;
 
 /// Below this much memory, Qwen3 4B (about 3 GB while in use) would
 /// crowd out everything else.
@@ -237,7 +237,7 @@ async fn run(
     let mut speech_total = speech_size;
     let mut cleanup_total = cleanup_size;
     let mut last = Instant::now();
-    crate::commands::fetch_model(app, speech.id(), |done, total| {
+    crate::models::fetch_model(app, speech.id(), |done, total| {
         speech_total = total.unwrap_or(speech_total);
         if last.elapsed().as_millis() >= 250 {
             last = Instant::now();
@@ -263,7 +263,7 @@ async fn run(
 
     match cleanup {
         Cleanup::Local(model) => {
-            crate::commands::fetch_model(app, model.id(), |done, total| {
+            crate::models::fetch_model(app, model.id(), |done, total| {
                 cleanup_total = total.unwrap_or(cleanup_total);
                 if last.elapsed().as_millis() >= 250 {
                     last = Instant::now();

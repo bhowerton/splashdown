@@ -20,8 +20,8 @@ use tauri_plugin_dialog::DialogExt;
 
 use super::store::Origin;
 use super::{WINDOW, store};
-use crate::commands::AppState;
 use crate::engine;
+use crate::state::AppState;
 
 /// App event with the running job (`Status`), or null when there's none.
 const PROGRESS: &str = "notes-transcribing";

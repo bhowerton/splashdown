@@ -112,7 +112,7 @@ pub fn start(app: &AppHandle) {
 
 /// Automatic checks are on and the last answer was a day ago (or never).
 fn check_due(app: &AppHandle) -> bool {
-    let Some(state) = app.try_state::<crate::commands::AppState>() else {
+    let Some(state) = app.try_state::<crate::state::AppState>() else {
         return false;
     };
     if !state.settings().general.check_for_updates() {
@@ -130,7 +130,7 @@ fn check_due(app: &AppHandle) -> bool {
 /// one. Only a check the user asked for (`manual`) reports a failure in
 /// Settings; automatic ones just log it.
 pub async fn check(app: &AppHandle, manual: bool) -> Result<Option<String>, String> {
-    let updates = &app.state::<crate::commands::AppState>().inner().updates;
+    let updates = &app.state::<crate::state::AppState>().inner().updates;
     if updates.busy.swap(true, Ordering::SeqCst) {
         return Ok(updates.available());
     }
@@ -191,7 +191,7 @@ async fn find(app: &AppHandle) -> Result<Option<Update>, Error> {
 /// Downloads and installs the update found by the last check, then
 /// relaunches. Only ever called from the user's click.
 pub async fn install(app: &AppHandle) -> Result<(), String> {
-    let updates = &app.state::<crate::commands::AppState>().inner().updates;
+    let updates = &app.state::<crate::state::AppState>().inner().updates;
     let update = updates
         .pending
         .lock()

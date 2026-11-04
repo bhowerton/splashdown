@@ -6,8 +6,8 @@
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
-use crate::commands::AppState;
 use crate::meeting::Status;
+use crate::state::AppState;
 
 pub const WINDOW: &str = "meeting-pill";
 /// The same event the Notes window gets, with the same `Status`.

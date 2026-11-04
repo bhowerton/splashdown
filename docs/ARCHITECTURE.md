@@ -6,7 +6,7 @@ How Splashdown fits together, for people changing it: where each part of the app
 
 A suggested reading order for your first look at the code:
 
-1. `app/src-tauri/src/main.rs`: what starts at launch, the shared `AppState`, and every command the windows can call.
+1. `app/src-tauri/src/main.rs`: what starts at launch and every command the windows can call; then `state.rs`, the shared `AppState`.
 2. `app/src-tauri/src/session.rs`: the dictation controller. Read `Controller::run` and `handle` there, then `start` (`session/recording.rs`), `finish` and `deliver` (`session/deliver.rs`). Its opening comment maps the files in `session/`.
 3. `crates/splashdown-core/src/pipeline.rs`: speech-to-text, the AI pass and the sanity guard.
 4. `crates/splashdown-core/src/prompt.rs` and `guard.rs`: what the AI is asked, and when its answer is thrown away.
@@ -65,7 +65,10 @@ Rules of thumb:
 - `updates.rs`, `feedback.rs`, `errors.rs`: update checks, Send feedback, and turning failures into one short line.
 
 **Settings**
-- `commands.rs`: `AppState`, `get_state` / `save_settings` and most of the Settings window's commands.
+- `state.rs`: `AppState`, and `AppState::update`, the one way to change settings outside the Settings window.
+- `snapshot.rs`: what Settings and the setup guide show (`Snapshot`), with everything worked out from the settings.
+- `commands.rs`: `get_state` / `save_settings` and the Settings window's other commands that no feature owns.
+- `models.rs`: downloading models, with progress for every window.
 - `engine.rs`: builds the `Engine` (providers, pipelines, and the settings the session needs) from settings; rebuilt whenever they change.
 - `setup.rs` and `did.rs`: the setup guide's downloads, and what the user just did for its walk-through.
 - `export.rs`: exporting history and settings, and importing them.
@@ -76,7 +79,7 @@ Rules of thumb:
 - `preview.rs`, `chunks.rs`, `stream_typing.rs`: live words in the overlay, transcribing a long dictation in pieces while the user speaks, and typing the AI's text as it's written.
 - `recent.rs`, `project.rs`, `replacements.rs`: context for the AI (recent dictations, a coding project's files) and snippet fill-ins and find-and-replace.
 - `rescue.rs`: keeping a failed recording for "Retry last dictation".
-- `history.rs`, `insights.rs`, `spend.rs`: history, usage numbers, and costs with the spending limit.
+- `history.rs` (with its commands), `insights.rs`, `spend.rs`: history, usage numbers, and costs with the spending limit.
 - `learning.rs`: words learned from corrections, and forgetting them.
 
 **Features beyond dictation**
@@ -89,7 +92,7 @@ Rules of thumb:
 - `notes/`: the Notes window and its commands (`mod.rs`), notes as Markdown files (`store.rs`), transcribing files and page links (`files.rs`, `link_helper.rs`), finding notes by meaning for Ask (`meaning.rs`), and serving recordings to the player (`media.rs`).
 - `meeting.rs`, `calls.rs`, `pill.rs`: recording a meeting into a note, offering to when a call starts, and the meeting pill.
 
-**Where state lives.** `AppState` (in `commands.rs`, handed to Tauri with `app.manage`) holds what commands share: the settings, the session's `Handle`, why the engine can't run (if it can't), history, the tray menu and update status. Commands get it as `State<'_, AppState>`; other code with `app.state::<AppState>()`. The session thread owns its own state and the `Engine`; everything else reaches it only by sending it a message through `session::Handle`. What one feature owns lives in a static in its own module: the Compose and Ask panels (`PANEL`), the reading in progress (`reading.rs`), the meeting in progress (`meeting.rs`), spending (`spend.rs`), the last learned word (`learning.rs`). `config.toml` is the truth for settings: a command changes `AppState`'s copy, saves the file, and calls `AppState::apply`, which rebuilds the engine and sends it to the session.
+**Where state lives.** `AppState` (in `state.rs`, handed to Tauri with `app.manage`) holds what commands share: the settings, the session's `Handle`, why the engine can't run (if it can't), history, the tray menu and update status. Commands get it as `State<'_, AppState>`; other code with `app.state::<AppState>()`. The session thread owns its own state and the `Engine`; everything else reaches it only by sending it a message through `session::Handle`. What one feature owns lives in a static in its own module: the Compose and Ask panels (`PANEL`), the reading in progress (`reading.rs`), the meeting in progress (`meeting.rs`), spending (`spend.rs`), the last learned word (`learning.rs`). `config.toml` is the truth for settings: the Settings window saves through `save_settings`; anything else changes them with `AppState::update` (which saves, refreshes the menu bar and shortcuts, and tells an open Settings window), then calls `AppState::apply` when dictation needs the change, which rebuilds the engine and sends it to the session.
 
 ## Threads
 

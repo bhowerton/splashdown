@@ -297,7 +297,7 @@ fn offer_download(n: u64) -> bool {
         return false;
     };
     let app = ui.app().clone();
-    let Some(state) = tauri::Manager::try_state::<crate::commands::AppState>(&app) else {
+    let Some(state) = tauri::Manager::try_state::<crate::state::AppState>(&app) else {
         return false;
     };
     if state.settings().general.natural_voice_offered {
@@ -327,7 +327,7 @@ fn offer_download(n: u64) -> bool {
         }
     };
     shown("Downloading Phonon 31M…".into());
-    let fetched = tauri::async_runtime::block_on(crate::commands::fetch_model(
+    let fetched = tauri::async_runtime::block_on(crate::models::fetch_model(
         &app,
         splashdown_providers::NaturalVoice::ID,
         |done, total| {

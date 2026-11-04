@@ -229,13 +229,13 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                 "copy-last" => actions::copy_last(&history),
                 "read-last" => actions::read_last(&history),
                 "retry-last" => {
-                    if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                    if let Some(state) = app.try_state::<crate::state::AppState>() {
                         state.session.retry_last();
                     }
                 }
                 "forget-learned" => crate::learning::forget_last(app),
                 "undo-ai" => {
-                    if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                    if let Some(state) = app.try_state::<crate::state::AppState>() {
                         state.session.undo_ai_edit();
                     }
                 }
@@ -254,7 +254,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                     if let Some(code) = id.strip_prefix("lang:") {
                         set_language(app, code);
                     } else if let Some(preset) = id.strip_prefix("preset:")
-                        && let Some(state) = app.try_state::<crate::commands::AppState>()
+                        && let Some(state) = app.try_state::<crate::state::AppState>()
                     {
                         state
                             .session
@@ -381,7 +381,7 @@ fn set_language(app: &AppHandle, code: &str) {
     let language = (!code.is_empty()).then(|| code.to_string());
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let Some(state) = app.try_state::<crate::commands::AppState>() else {
+        let Some(state) = app.try_state::<crate::state::AppState>() else {
             return;
         };
         if let Err(e) = state.set_language(&app, language).await {
@@ -434,7 +434,7 @@ pub fn open_settings_tab(app: &AppHandle, tab: &str) {
 fn show_updates(app: &AppHandle) {
     open_settings_tab(app, "about");
     let has_update = app
-        .try_state::<crate::commands::AppState>()
+        .try_state::<crate::state::AppState>()
         .is_some_and(|s| s.updates.available().is_some());
     if !has_update {
         let app = app.clone();
@@ -449,7 +449,7 @@ fn show_updates(app: &AppHandle) {
 fn send_feedback(app: &AppHandle) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        if let Some(state) = app.try_state::<crate::commands::AppState>()
+        if let Some(state) = app.try_state::<crate::state::AppState>()
             && let Err(e) = state.send_feedback()
         {
             tracing::warn!("couldn't open the feedback page: {e}");

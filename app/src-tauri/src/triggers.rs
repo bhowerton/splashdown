@@ -8,8 +8,8 @@ use std::sync::Arc;
 use splashdown_control::{ClientError, Reply, Request};
 use tauri::Manager;
 
-use crate::commands::AppState;
 use crate::session::Handle;
+use crate::state::AppState;
 
 /// Asks a copy of the app that's already running to show Settings. True
 /// if one answered: this copy should quit, or both would answer the

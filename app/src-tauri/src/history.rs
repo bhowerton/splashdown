@@ -11,6 +11,11 @@ use serde::{Deserialize, Serialize};
 use splashdown_core::AudioClip;
 use splashdown_core::Mode;
 
+use tauri::State;
+
+use crate::engine;
+use crate::state::AppState;
+
 /// Entries kept; older ones are dropped.
 const MAX_ENTRIES: usize = 300;
 const DAY_MS: u64 = 24 * 60 * 60 * 1000;
@@ -653,4 +658,108 @@ mod tests {
         assert_eq!(reopened.list("").len(), 1);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
+}
+
+// ---------------------------------------------------------------- commands
+
+#[tauri::command]
+pub fn get_history(query: String, state: State<'_, AppState>) -> Vec<Entry> {
+    state.history.list(&query)
+}
+
+#[derive(Serialize)]
+pub struct Retranscribed {
+    /// The new final text.
+    pub(super) text: String,
+    /// What the speech model heard.
+    pub(super) raw: String,
+    pub(super) stt: String,
+}
+
+/// Transcribes a kept recording again with the current speech-to-text and
+/// AI settings, and returns the result (the history entry is unchanged).
+#[tauri::command]
+pub async fn retranscribe_history(
+    at: u64,
+    state: State<'_, AppState>,
+) -> Result<Retranscribed, String> {
+    let entry = state.history.find(at).ok_or("That entry is gone.")?;
+    if entry.mode == splashdown_core::Mode::Transform {
+        return Err("Edits of selected text can't be redone: the selection isn't stored.".into());
+    }
+    let (speech, instruction) = state
+        .history
+        .audio(at)
+        .ok_or("The recording for this entry wasn't kept.")?;
+    let settings = state.settings();
+    let engine = tauri::async_runtime::spawn_blocking(move || engine::build(&settings))
+        .await
+        .map_err(|e| e.to_string())??;
+    let outcome = engine
+        .pipeline
+        .run(splashdown_core::AudioJob {
+            mode: entry.mode,
+            speech,
+            instruction_speech: instruction,
+            selection: None,
+            context: engine.context.clone(),
+            hints: engine.hints.clone(),
+            standing_instruction: None,
+            prefix: None,
+        })
+        .await
+        .map_err(|e| e.to_string())?;
+    crate::spend::record_outcome(&outcome);
+    Ok(Retranscribed {
+        text: outcome.text,
+        raw: outcome.raw,
+        stt: engine.pipeline.stt_name(),
+    })
+}
+
+#[tauri::command]
+pub fn delete_history(at: u64, state: State<'_, AppState>) -> Result<(), String> {
+    state.history.delete(at).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn pin_history(at: u64, pinned: bool, state: State<'_, AppState>) -> Result<(), String> {
+    state.history.pin(at, pinned).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn clear_history(state: State<'_, AppState>) -> Result<(), String> {
+    state.history.clear().map_err(|e| e.to_string())
+}
+
+/// Copies text from the Settings window (the webview's own clipboard API
+/// needs extra permissions).
+#[tauri::command]
+pub fn copy_text(text: String) -> Result<(), String> {
+    splashdown_platform::copy_to_clipboard(&text).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn get_recent_apps(state: State<'_, AppState>) -> Vec<crate::history::RecentApp> {
+    state.history.recent_apps()
+}
+
+/// Re-runs the AI pass on a history entry's words with another preset and
+/// returns the new text (nothing is inserted).
+#[tauri::command]
+pub async fn redo_history(
+    at: u64,
+    preset_id: String,
+    state: State<'_, AppState>,
+) -> Result<String, String> {
+    let entry = state.history.find(at).ok_or("That entry is gone.")?;
+    if entry.mode == splashdown_core::Mode::Transform {
+        return Err("Transforms can't be redone: the original selection isn't stored.".into());
+    }
+    let session = state.session.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        session.redo(entry.raw, entry.instruction, preset_id)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }

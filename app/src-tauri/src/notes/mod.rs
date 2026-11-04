@@ -21,8 +21,8 @@ use tauri::{
 };
 use tauri_plugin_dialog::DialogExt;
 
-use crate::commands::AppState;
 use crate::engine;
+use crate::state::AppState;
 use splashdown_config::{CaptureTo, NotesSettings};
 use store::{Appended, Note, Origin, Saved, Store, Summary, Target, Version};
 

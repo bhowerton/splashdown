@@ -8,7 +8,7 @@ use std::sync::Mutex;
 
 use tauri::{AppHandle, Manager};
 
-use crate::commands::{self, AppState};
+use crate::state::AppState;
 
 /// The words learned last, for the menu bar's Forget item.
 static LAST: Mutex<Vec<String>> = Mutex::new(Vec::new());
@@ -43,7 +43,7 @@ pub fn learn(app: &AppHandle, words: Vec<String>) -> Vec<String> {
     if added.is_empty() {
         return added;
     }
-    commands::rebuild_in_background(app);
+    crate::state::rebuild_in_background(app);
     tracing::info!("learned {} word(s) from corrections", added.len());
     *LAST.lock().unwrap_or_else(|e| e.into_inner()) = added.clone();
     crate::tray::show_forget(added.last().map(String::as_str));
@@ -62,7 +62,7 @@ pub fn forget(app: &AppHandle, word: &str) -> Result<(), String> {
             .retain(|v| !v.eq_ignore_ascii_case(word));
         settings.general.settle_learned();
     })?;
-    commands::rebuild_in_background(app);
+    crate::state::rebuild_in_background(app);
     tracing::info!("forgot a learned word");
     let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
     last.retain(|w| !w.eq_ignore_ascii_case(word));

@@ -63,7 +63,7 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
                 return;
             }
             if shortcut.id() == undo_id {
-                if let Some(state) = app.try_state::<crate::commands::AppState>() {
+                if let Some(state) = app.try_state::<crate::state::AppState>() {
                     state.session.undo_ai_edit();
                 }
                 return;
@@ -77,7 +77,7 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
                 return;
             }
             let target = lock().targets.get(&shortcut.id()).cloned();
-            let Some(state) = app.try_state::<crate::commands::AppState>() else {
+            let Some(state) = app.try_state::<crate::state::AppState>() else {
                 return;
             };
             match target {

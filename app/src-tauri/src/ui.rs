@@ -63,19 +63,19 @@ impl Ui {
     /// than saving its old copy over them.
     pub fn reload_settings(&self) {
         use tauri::Manager;
-        let Some(state) = self.app.try_state::<crate::commands::AppState>() else {
+        let Some(state) = self.app.try_state::<crate::state::AppState>() else {
             return;
         };
         let settings = crate::engine::load_settings();
-        crate::commands::reflect_settings(&self.app, &state, &settings);
+        crate::state::reflect_settings(&self.app, &state, &settings);
         *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
         let app = self.app.clone();
         tauri::async_runtime::spawn(async move {
-            let state = app.state::<crate::commands::AppState>();
+            let state = app.state::<crate::state::AppState>();
             if let Some(e) = state.apply().await {
                 tracing::warn!("settings reloaded, but: {e}");
             }
-            crate::commands::settings_changed_elsewhere(&app);
+            crate::state::settings_changed_elsewhere(&app);
         });
     }
 
@@ -84,7 +84,7 @@ impl Ui {
     pub fn settings(&self) -> Option<splashdown_config::Settings> {
         use tauri::Manager;
         self.app
-            .try_state::<crate::commands::AppState>()
+            .try_state::<crate::state::AppState>()
             .map(|state| state.settings())
     }
 

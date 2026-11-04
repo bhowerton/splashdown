@@ -10,8 +10,9 @@ use serde::Serialize;
 use splashdown_config::Settings;
 use tauri::{AppHandle, State};
 
-use crate::commands::{AppState, Saved};
 use crate::history::{self, ExportFormat};
+use crate::snapshot::Saved;
+use crate::state::AppState;
 
 /// A new file in Downloads named `<name> YYYY-MM-DD.<extension>`, with a
 /// number added if one already exists.

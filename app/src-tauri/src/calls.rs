@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-use crate::commands::AppState;
+use crate::state::AppState;
 
 pub const WINDOW: &str = "call-offer";
 /// App event with what the panel should show (`Offer`).

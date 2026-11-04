@@ -474,7 +474,7 @@ impl Controller {
         if self.slow_local < IN_A_ROW {
             return false;
         }
-        let keep = tauri::Manager::try_state::<crate::commands::AppState>(self.ui.app())
+        let keep = tauri::Manager::try_state::<crate::state::AppState>(self.ui.app())
             .is_some_and(|s| s.settings().ai.slow_local_ok);
         self.suggested_cloud = true;
         tracing::info!(

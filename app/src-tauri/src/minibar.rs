@@ -17,7 +17,7 @@ use splashdown_control::Request;
 use splashdown_platform::{MiniBar, MiniBarEvent, MiniBarPosition, MiniBarState};
 use tauri::{AppHandle, Manager};
 
-use crate::commands::AppState;
+use crate::state::AppState;
 use crate::tray::TrayIconState;
 
 static APP: OnceLock<AppHandle> = OnceLock::new();

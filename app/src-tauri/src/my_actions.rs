@@ -13,7 +13,7 @@ use splashdown_config::{ActionSettings, MyAction, MyActionKind, TEXT_SLOT};
 use splashdown_core::action::Mine;
 use tauri::{AppHandle, Manager};
 
-use crate::commands::AppState;
+use crate::state::AppState;
 use crate::voice_actions::Done;
 
 /// How long a script may run before the pill says it's still running.

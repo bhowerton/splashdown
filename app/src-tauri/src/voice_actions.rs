@@ -17,7 +17,7 @@ use splashdown_core::action::{Action, best_name};
 use splashdown_platform::{InstalledApp, MediaKey};
 use tauri::{AppHandle, Manager};
 
-use crate::commands::AppState;
+use crate::state::AppState;
 
 /// What was done, for the pill, and how to take it back.
 pub struct Done {

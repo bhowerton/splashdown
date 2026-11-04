@@ -9,7 +9,7 @@ use splashdown_config::Settings;
 use splashdown_core::gesture::PhysicalKey;
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
-use crate::commands::AppState;
+use crate::state::AppState;
 
 pub const WINDOW: &str = "help";
 /// App event with a fresh `Sheet`, when the window is shown again.
