@@ -57,6 +57,8 @@ pub struct Engine {
     pub compose_reads_window: bool,
     /// Names and terms on screen join each dictation's vocabulary.
     pub screen_words: bool,
+    /// Compose writes in the voice of the user's messages on screen.
+    pub compose_style: bool,
     /// Compose shows its draft in a panel instead of writing it in.
     pub compose_panel: bool,
     /// Type the AI's text as it streams in.
@@ -285,6 +287,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         },
         compose_reads_window: settings.general.compose_reads_window(),
         compose_panel: settings.general.compose_panel(),
+        compose_style: settings.general.compose_style(),
         screen_words: settings.general.screen_words(),
         share_recent: settings.general.share_recent()
             && ai_choice

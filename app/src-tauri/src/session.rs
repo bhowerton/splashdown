@@ -2054,6 +2054,7 @@ impl Controller {
             user_name: engine.context.user_name.clone(),
             today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
             tone: tone.and_then(splashdown_core::compose::tone),
+            match_style: engine.compose_style,
         };
         tracing::info!("composing, with {} matching note(s)", context.notes.len());
         let target = active.focus.as_ref().map(|f| f.app.pid);

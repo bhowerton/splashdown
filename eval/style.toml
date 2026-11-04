@@ -1,0 +1,139 @@
+# Writing style: Compose drafts in the user's own voice, learned from their
+# earlier messages in the conversation on screen. `splashdown-cli eval style`.
+#
+# Each case is drafted twice, with the user's voice and without, and a model
+# judges which sounds more like the user's own messages (`voice`), in both
+# orders. The drafts with the voice must also pass the rules: every Compose
+# check (has, has_any, not, lang, max_words; see compose.toml), plus
+# min_words, starts_lower (true: a small first letter; false: a capital) and
+# emoji (true: at least one; false: none).
+
+# ── A terse, lowercase Slack writer
+
+[[case]]
+id = "slack-terse"
+app = "Slack"
+user = "Ben"
+window = "#eng\nBen 9:02 AM\nyep on it\nPriya Shah 9:40 AM\nAnyone around to look at the flaky checkout test?\nBen 9:41 AM\nlgtm 👍 merged\nBen 9:55 AM\ncan do after lunch\nPriya Shah 10:15 AM\nCould you review my pricing PR today? It's a small one."
+asked = "reply saying yes, after lunch"
+voice = ["yep on it", "lgtm 👍 merged", "can do after lunch"]
+starts_lower = true
+max_words = 12
+not = ["hi priya", "hey priya", "thanks,", "best", "i hope"]
+
+# ── A formal emailer
+
+[[case]]
+id = "mail-formal"
+app = "Mail"
+user = "Margaret Hale"
+window = "Re: Quarterly figures\nFrom: Tom Reyes\nTo: Margaret Hale\nHi Margaret, could we meet this week to go over the numbers? Thursday or Friday would suit me. Tom\n\nOn Mon, Margaret Hale wrote:\nDear Tom,\n\nThank you for your note. I shall review the figures this afternoon and revert by Wednesday.\n\nKind regards,\nMargaret"
+asked = "reply that Thursday works"
+voice = ["Dear Tom,\n\nThank you for your note. I shall review the figures this afternoon and revert by Wednesday.\n\nKind regards,\nMargaret"]
+has = ["dear tom", "kind regards", "thursday"]
+not = ["hey", "cheers", "!"]
+starts_lower = false
+
+# ── A cheerful emailer
+
+[[case]]
+id = "mail-cheery"
+app = "Mail"
+user = "Sam"
+window = "Re: Potluck Saturday\nFrom: Jo Park\nTo: Sam\nWe're doing a potluck at mine on Saturday from 6. Can you come? What would you bring? Jo\n\nOn Tue, Sam wrote:\nHey Jo!! Love this idea 🙌 Count me in for the next one!\n\nS x"
+asked = "reply saying I'm in and I'll bring dessert"
+voice = ["Hey Jo!! Love this idea 🙌 Count me in for the next one!\n\nS x"]
+has_any = ["hey jo", "hi jo"]
+has = ["dessert", "s x"]
+not = ["dear", "kind regards", "best regards", "count me in for the next one", "love this idea"]
+
+# ── An emoji texter
+
+[[case]]
+id = "texts-emoji"
+app = "Messages"
+user = "Ana"
+window = "Lu\nare you still coming at 7?\nMe\nomg yes 😂 wouldn't miss it\nMe\non my way soon 🏃‍♀️\nLu\nok! the table is booked under my name"
+asked = "tell her I'm running ten minutes late"
+voice = ["omg yes 😂 wouldn't miss it", "on my way soon 🏃‍♀️"]
+emoji = true
+starts_lower = true
+max_words = 18
+
+# ── A German writer, asked in English
+
+[[case]]
+id = "texts-german"
+app = "WhatsApp"
+user = "Jonas"
+window = "Lea\nKommst du Freitag zum Grillen?\nJonas\nKlar, bin dabei 👍 LG Jonas\nLea\nSuper! Und Samstag zum Umzug helfen?"
+asked = "say I can't help on Saturday, sorry"
+voice = ["Klar, bin dabei 👍 LG Jonas"]
+# Short German is too short to detect reliably: German words instead.
+has_any = ["samstag", "leider", "sorry", "kann"]
+has = ["lg"]
+max_words = 25
+
+# ── One person, two voices in the same app
+
+[[case]]
+id = "mail-business-voice"
+app = "Mail"
+user = "Priya Raman"
+window = "Re: Contract renewal\nFrom: David Okafor\nTo: Priya Raman\nDear Ms Raman, please could you send the invoice for October? Regards, David Okafor\n\nOn Fri, Priya Raman wrote:\nDear Mr Okafor,\n\nThank you for the update. I will send the signed contract by Friday.\n\nBest regards,\nPriya Raman"
+asked = "reply that the invoice is attached"
+voice = ["Dear Mr Okafor,\n\nThank you for the update. I will send the signed contract by Friday.\n\nBest regards,\nPriya Raman"]
+has = ["dear", "invoice", "best regards"]
+has_any = ["okafor", "david"]
+not = ["hey", "haha", "!!"]
+starts_lower = false
+
+[[case]]
+id = "mail-friend-voice"
+app = "Mail"
+user = "Priya Raman"
+window = "Re: dinner??\nFrom: Meera\nTo: Priya Raman\nshall we do Saturday then? the new thai place?\n\nOn Thu, Priya Raman wrote:\nhaha yes!! dinner sounds amazing. pick a day\np"
+asked = "say Saturday works for me"
+voice = ["haha yes!! dinner sounds amazing. pick a day\np"]
+has = ["saturday"]
+not = ["dear", "best regards", "kind regards"]
+starts_lower = true
+max_words = 20
+
+# ── Only the voice is taken, never facts
+
+[[case]]
+id = "leak-facts"
+app = "Slack"
+user = "Ben"
+window = "#team\nBen 4:10 PM\nbooked marlow & sons for 7, budget is $480\nBen 4:12 PM\nlmk if anyone's veggie\nDana Ortiz 4:30 PM\nCan you send me the deck for tomorrow's review?"
+asked = "say I'll send it in an hour"
+voice = ["booked marlow & sons for 7, budget is $480", "lmk if anyone's veggie"]
+not = ["marlow", "480", "veggie", "budget"]
+starts_lower = true
+max_words = 15
+
+# ── No messages of theirs on screen: the usual defaults
+
+[[case]]
+id = "none-of-theirs"
+app = "Mail"
+user = "Ben"
+window = "Re: Office move\nFrom: Dana Ortiz\nTo: Ben\nHi Ben, movers come Thursday at 8. Can you have your desk packed by Wednesday evening? Thanks, Dana"
+asked = "reply saying yes, it'll be packed"
+has = ["dana"]
+has_any = ["wednesday", "packed"]
+
+# ── What they ask for comes first
+
+[[case]]
+id = "asked-overrides"
+app = "Slack"
+user = "Ben"
+window = "#clients\nBen 9:02 AM\nyep on it\nBen 9:41 AM\nlgtm 👍 merged\nOlivia Grant 11:00 AM\nThanks all for getting the release out on time."
+asked = "write a formal thank-you to Olivia for her patience during the release"
+has = ["olivia"]
+has_any = ["thank", "grateful", "gratitude", "appreciate"]
+not = ["lgtm", "yep"]
+starts_lower = false
+min_words = 6

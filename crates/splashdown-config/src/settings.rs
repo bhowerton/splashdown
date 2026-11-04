@@ -486,6 +486,9 @@ pub struct GeneralSettings {
     /// Names and terms in the window around the field (the email or chat
     /// on screen) join the vocabulary for each dictation. Unset means on.
     pub screen_words: Option<bool>,
+    /// Compose writes the way the user does in their own earlier messages
+    /// on screen. Unset means on.
+    pub compose_style: Option<bool>,
     /// Compose shows its draft in a panel to change and Insert, instead of
     /// writing it straight into the field. Unset means off.
     pub compose_panel: Option<bool>,
@@ -639,6 +642,10 @@ impl GeneralSettings {
 
     pub fn screen_words(&self) -> bool {
         self.screen_words.unwrap_or(true)
+    }
+
+    pub fn compose_style(&self) -> bool {
+        self.compose_style.unwrap_or(true)
     }
 
     pub fn compose_panel(&self) -> bool {
