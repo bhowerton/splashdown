@@ -384,10 +384,9 @@ fn set_language(app: &AppHandle, code: &str) {
         let Some(state) = app.try_state::<crate::commands::AppState>() else {
             return;
         };
-        if let Err(e) = state.set_language(language).await {
+        if let Err(e) = state.set_language(&app, language).await {
             tracing::warn!("couldn't change the language: {e}");
         }
-        crate::commands::settings_changed_elsewhere(&app);
     });
 }
 

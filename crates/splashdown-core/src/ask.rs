@@ -3,6 +3,7 @@
 //! answer may draw on the selection, the text around the cursor, the
 //! clipboard and excerpts of the user's own notes that match the question.
 
+use crate::prompt::escape;
 use crate::provider::TextRequest;
 
 /// What a question may be answered from, besides what the model knows.
@@ -127,11 +128,6 @@ pub fn request(question: &str, ctx: &AskContext) -> TextRequest {
         max_tokens: 800,
         json_schema: None,
     }
-}
-
-/// Keeps text from closing its block early.
-fn escape(text: &str, tag: &str) -> String {
-    text.replace(&format!("</{tag}"), &format!("<\\/{tag}"))
 }
 
 #[cfg(test)]

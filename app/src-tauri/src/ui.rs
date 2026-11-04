@@ -67,7 +67,7 @@ impl Ui {
             return;
         };
         let settings = crate::engine::load_settings();
-        crate::commands::show_settings(&self.app, &state, &settings);
+        crate::commands::reflect_settings(&self.app, &state, &settings);
         *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
         let app = self.app.clone();
         tauri::async_runtime::spawn(async move {

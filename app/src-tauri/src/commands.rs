@@ -32,13 +32,37 @@ pub struct AppState {
 }
 
 impl AppState {
+    /// Changes the settings from anywhere but the Settings window (which
+    /// saves through `save_settings`): the one way to do it. `change` runs
+    /// while the settings are locked, so nothing else changes them in
+    /// between; the result is saved, kept, reflected in the menu bar, mini
+    /// bar and shortcuts, and an open Settings window reads it again rather
+    /// than saving an older copy over it. When the change matters to
+    /// dictation, rebuild the engine afterwards (`apply`, or
+    /// `rebuild_in_background`).
+    pub fn update(
+        &self,
+        app: &AppHandle,
+        change: impl FnOnce(&mut Settings),
+    ) -> Result<Settings, String> {
+        let settings = {
+            let mut current = self.settings.lock().unwrap_or_else(|e| e.into_inner());
+            let mut settings = current.clone();
+            change(&mut settings);
+            settings.save(&engine::paths()?.config_file())?;
+            *current = settings.clone();
+            settings
+        };
+        reflect_settings(app, self, &settings);
+        settings_changed_elsewhere(app);
+        Ok(settings)
+    }
+
     /// Flips whisper mode (a voice action), saves, and rebuilds.
-    pub async fn toggle_whisper_mode(&self) -> Result<(), String> {
-        let mut settings = self.settings();
-        let on = !settings.general.whisper_mode();
-        settings.general.whisper_mode = Some(on);
-        settings.save(&engine::paths()?.config_file())?;
-        *self.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    pub async fn toggle_whisper_mode(&self, app: &AppHandle) -> Result<(), String> {
+        self.update(app, |s| {
+            s.general.whisper_mode = Some(!s.general.whisper_mode());
+        })?;
         if let Some(e) = self.apply().await {
             tracing::warn!("after changing whisper mode: {e}");
         }
@@ -47,23 +71,18 @@ impl AppState {
 
     /// Shows or hides the mini bar (from the bar's own menu) and saves
     /// the setting. Nothing to rebuild.
-    pub fn set_mini_bar(&self, on: bool) -> Result<(), String> {
-        let mut settings = self.settings();
-        settings.general.mini_bar = on.then_some(true);
-        settings.save(&engine::paths()?.config_file())?;
-        crate::minibar::set_visible(on);
-        *self.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
-        Ok(())
+    pub fn set_mini_bar(&self, app: &AppHandle, on: bool) -> Result<(), String> {
+        self.update(app, |s| s.general.mini_bar = on.then_some(true))
+            .map(|_| ())
     }
 
     /// Sets the spoken language (from the menu bar), saves, and rebuilds.
-    pub async fn set_language(&self, language: Option<String>) -> Result<(), String> {
-        let mut settings = self.settings();
-        settings.general.language = language;
-        settings.save(&engine::paths()?.config_file())?;
-        self.tray
-            .show_language(settings.general.language.as_deref());
-        *self.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    pub async fn set_language(
+        &self,
+        app: &AppHandle,
+        language: Option<String>,
+    ) -> Result<(), String> {
+        self.update(app, |s| s.general.language = language)?;
         if let Some(e) = self.apply().await {
             tracing::warn!("after changing the language: {e}");
         }
@@ -525,7 +544,7 @@ pub async fn save_settings(
     settings.notes.meeting_reminded |= current.notes.meeting_reminded;
     settings.general.settle_learned();
     settings.save(&engine::paths()?.config_file())?;
-    show_settings(&app, &state, &settings);
+    reflect_settings(&app, &state, &settings);
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
     let engine_error = state.apply().await;
     Ok(Saved {
@@ -536,7 +555,19 @@ pub async fn save_settings(
 
 /// Brings what settings show outside the engine up to date: the menu bar,
 /// the mini bar and global shortcuts.
-pub fn show_settings(app: &AppHandle, state: &AppState, settings: &Settings) {
+/// Rebuilds the engine without waiting for it (`AppState::apply`).
+pub fn rebuild_in_background(app: &AppHandle) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if let Some(e) = app.state::<AppState>().apply().await {
+            tracing::warn!("after a settings change: {e}");
+        }
+    });
+}
+
+/// Puts settings to use where they show outside the engine: the menu
+/// bar's language, the mini bar and the global shortcuts.
+pub fn reflect_settings(app: &AppHandle, state: &AppState, settings: &Settings) {
     state
         .tray
         .show_language(settings.general.language.as_deref());
@@ -1088,10 +1119,7 @@ pub async fn finish_onboarding(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    let mut settings = state.settings();
-    settings.general.onboarded = true;
-    settings.save(&engine::paths()?.config_file())?;
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    state.update(&app, |s| s.general.onboarded = true)?;
     if let Err(e) = set_launch_at_login(launch_at_login, app.clone()) {
         tracing::warn!("couldn't change launch at login: {e}");
     }

@@ -276,12 +276,9 @@ pub async fn call_offer_answer(answer: String, app: AppHandle) -> Result<(), Str
         "stop" => crate::meeting::stop(),
         "never" => {
             let state = app.state::<AppState>();
-            let mut settings = state.settings();
-            settings.notes.offer_on_calls = Some(false);
-            settings.save(&crate::engine::paths()?.config_file())?;
-            *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
-            crate::commands::settings_changed_elsewhere(&app);
-            Ok(())
+            state
+                .update(&app, |s| s.notes.offer_on_calls = Some(false))
+                .map(|_| ())
         }
         _ => Ok(()),
     }

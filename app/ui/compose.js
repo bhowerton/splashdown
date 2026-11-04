@@ -71,8 +71,8 @@ $("cp-change").addEventListener("submit", (e) => {
   change(text);
 });
 
-$("cp-prev").addEventListener("click", () => invoke("compose_version", { at: shown.at - 1 }));
-$("cp-next").addEventListener("click", () => invoke("compose_version", { at: shown.at + 1 }));
+$("cp-prev").addEventListener("click", () => call("compose_version", { at: shown.at - 1 }));
+$("cp-next").addEventListener("click", () => call("compose_version", { at: shown.at + 1 }));
 
 async function insert() {
   if ($("cp-insert").disabled) return;

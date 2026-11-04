@@ -5,6 +5,7 @@
 //! and each one is a new version of the same draft.
 
 use crate::ask::NoteExcerpt;
+use crate::prompt::escape;
 use crate::provider::TextRequest;
 
 /// What a draft is written from, besides what was said.
@@ -240,6 +241,12 @@ fn build(ctx: &ComposeContext, revision: Option<(&str, &str)>, asked: &str) -> T
     }
 }
 
+/// Compose reads the window from the nearest container around the field
+/// with at least this much text (an email, a few chat messages)…
+pub const WINDOW_MIN_CHARS: usize = 300;
+/// …and at most this much of it, the part nearest the field.
+pub const WINDOW_MAX_CHARS: usize = 6_000;
+
 /// At most this many of the user's own messages, each at most
 /// `THEIR_MESSAGE_CHARS` (the end cut), newest kept.
 const THEIR_MESSAGES: usize = 4;
@@ -351,11 +358,6 @@ fn author_name(line: &str) -> Option<&str> {
     let last = words[name_words - 1];
     let end = line.find(last)? + last.len();
     Some(&line[..end])
-}
-
-/// Keeps text from closing its block early.
-fn escape(text: &str, tag: &str) -> String {
-    text.replace(&format!("</{tag}"), &format!("<\\/{tag}"))
 }
 
 /// A draft as the model wrote it, with what models add around a message

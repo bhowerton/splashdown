@@ -164,7 +164,7 @@ fn on_event(event: MiniBarEvent) {
             let app = app.clone();
             tauri::async_runtime::spawn(async move {
                 if let Some(state) = app.try_state::<AppState>()
-                    && let Err(e) = state.set_mini_bar(false)
+                    && let Err(e) = state.set_mini_bar(&app, false)
                 {
                     tracing::warn!("couldn't hide the mini bar: {e}");
                 }

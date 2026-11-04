@@ -8,10 +8,22 @@ pub fn provider_label(name: Option<&str>) -> &'static str {
     match name.and_then(|n| n.split('/').next()) {
         Some("openai") => "OpenAI",
         Some("openrouter") => "OpenRouter",
+        Some("anthropic") => "Anthropic",
+        Some("apple") => "Apple's on-device model",
         Some("custom") => "Your local AI server",
-        Some("local") => "Local speech-to-text",
+        // The built-in speech model and the built-in text model alike.
+        Some("local") => "The model on this computer",
         _ => "The provider",
     }
+}
+
+/// What to say when an instruction, a spoken command or a voice action
+/// failed: names the model that runs instructions (or the AI pass's).
+pub fn instruction(e: &PipelineError, pipeline: &splashdown_core::Pipeline) -> String {
+    let llm = pipeline
+        .instruction_llm_name()
+        .or_else(|| pipeline.llm_name());
+    self::pipeline(e, None, llm.as_deref())
 }
 
 /// For a failed dictation.

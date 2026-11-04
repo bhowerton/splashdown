@@ -348,9 +348,21 @@ fn context_section(mode: Mode, ctx: &PromptContext) -> String {
 /// Wraps `text` in `<tag>` blocks, neutralizing any closing tag inside it so
 /// dictated text can't break out of its block.
 fn tagged(tag: &str, text: &str) -> String {
-    let close = format!("</{tag}");
-    let escaped = text.replace(&close, &format!("<\\/{tag}"));
-    format!("<{tag}>\n{escaped}\n</{tag}>")
+    format!("<{tag}>\n{}\n</{tag}>", escape(text, tag))
+}
+
+/// Today as prompts give it ("Monday, 3 November 2026"), so "tomorrow" and
+/// "next week" can be worked out.
+pub fn today(date: chrono::NaiveDate) -> String {
+    date.format("%A, %-d %B %Y").to_string()
+}
+
+/// `text` with any `</tag` in it neutralized, so text put in a `<tag>`
+/// block (a dictation, a selected email, the window's text) can't close the
+/// block early and pass itself off as instructions. Every prompt module
+/// uses this one.
+pub(crate) fn escape(text: &str, tag: &str) -> String {
+    text.replace(&format!("</{tag}"), &format!("<\\/{tag}"))
 }
 
 fn max_tokens_for(mode: Mode, input_chars: usize) -> u32 {

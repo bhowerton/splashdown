@@ -232,7 +232,7 @@ async function refresh() {
 document.querySelectorAll("[data-setting]").forEach((el) => {
   el.addEventListener("change", () => save());
 });
-$("run-setup").addEventListener("click", () => invoke("open_onboarding"));
+$("run-setup").addEventListener("click", () => call("open_onboarding"));
 // The log never contains dictated text, so it's safe to attach to a bug report.
 $("show-log").addEventListener("click", () => invoke("show_log_file").catch((e) => toast(String(e), true)));
 

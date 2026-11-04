@@ -99,7 +99,7 @@ $("ak-copy").addEventListener("click", copy);
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     e.preventDefault();
-    invoke("ask_close");
+    call("ask_close");
   } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && document.activeElement !== $("ak-follow-input")) {
     e.preventDefault();
     insert();

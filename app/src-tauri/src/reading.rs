@@ -310,17 +310,10 @@ fn offer_download(n: u64) -> bool {
          like a person and runs on this computer: a one-time download of 68 MB.",
         &["Download", "Use the system voice"],
     );
-    if answer.is_some() {
-        let mut settings = state.settings();
-        settings.general.natural_voice_offered = true;
-        let saved = crate::engine::paths().and_then(|p| settings.save(&p.config_file()));
-        match saved {
-            Ok(()) => {
-                *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
-                crate::commands::settings_changed_elsewhere(&app);
-            }
-            Err(e) => tracing::warn!("couldn't save that the natural voices were offered: {e}"),
-        }
+    if answer.is_some()
+        && let Err(e) = state.update(&app, |s| s.general.natural_voice_offered = true)
+    {
+        tracing::warn!("couldn't save that the natural voices were offered: {e}");
     }
     if answer != Some(0) || !current(n) {
         return false;

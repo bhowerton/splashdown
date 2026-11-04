@@ -4,6 +4,7 @@
 //! few actions; nothing here matches words, so it works the same in every
 //! language and however it's phrased.
 
+use crate::prompt::escape;
 use serde::Deserialize;
 use serde_json::json;
 
@@ -161,10 +162,6 @@ pub fn request(
             "additionalProperties": false,
         })),
     }
-}
-
-fn escape(text: &str, tag: &str) -> String {
-    text.replace(&format!("</{tag}"), &format!("<\\/{tag}"))
 }
 
 #[derive(Deserialize)]

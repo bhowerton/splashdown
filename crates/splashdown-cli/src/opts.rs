@@ -234,8 +234,8 @@ pub fn print_config(opts: &ProviderOpts) -> Result<()> {
     Ok(())
 }
 
-/// Placeholder speech-to-text for text-only commands.
-struct NoStt;
+/// Placeholder speech-to-text for text-only commands and the text evals.
+pub struct NoStt;
 
 #[async_trait::async_trait]
 impl SpeechToText for NoStt {

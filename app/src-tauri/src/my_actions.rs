@@ -231,16 +231,13 @@ fn run_program(name: &str, path: &str, args: &[String]) -> Result<String, String
 /// "Always allow": it runs without asking from now on.
 fn trust(app: &AppHandle, name: &str) -> Result<(), String> {
     let state = app.state::<AppState>();
-    let mut settings = state.settings();
-    for action in &mut settings.actions.mine {
-        if action.name == name {
-            action.trusted = true;
+    state.update(app, |s| {
+        for action in &mut s.actions.mine {
+            if action.name == name {
+                action.trusted = true;
+            }
         }
-    }
-    settings.save(&crate::engine::paths()?.config_file())?;
-    crate::commands::show_settings(app, &state, &settings);
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
-    crate::commands::settings_changed_elsewhere(app);
+    })?;
     Ok(())
 }
 

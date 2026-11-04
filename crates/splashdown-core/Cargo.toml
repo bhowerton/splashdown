@@ -10,6 +10,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+chrono.workspace = true
 serde.workspace = true
 async-trait.workspace = true
 futures-util.workspace = true

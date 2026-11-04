@@ -20,28 +20,30 @@ pub fn learn(app: &AppHandle, words: Vec<String>) -> Vec<String> {
     let Some(state) = app.try_state::<AppState>() else {
         return Vec::new();
     };
-    let mut settings = state.settings();
-    let general = &mut settings.general;
     let has = |list: &[String], w: &str| list.iter().any(|v| v.eq_ignore_ascii_case(w));
     let mut added: Vec<String> = Vec::new();
-    for word in words {
-        if worth_learning(&word)
-            && !has(&general.vocabulary, &word)
-            && !has(&general.forgotten_words, &word)
-            && !has(&added, &word)
-        {
-            added.push(word);
+    let saved = state.update(app, |settings| {
+        let general = &mut settings.general;
+        for word in words {
+            if worth_learning(&word)
+                && !has(&general.vocabulary, &word)
+                && !has(&general.forgotten_words, &word)
+                && !has(&added, &word)
+            {
+                added.push(word);
+            }
         }
+        general.vocabulary.extend(added.iter().cloned());
+        general.learned_words.extend(added.iter().cloned());
+    });
+    if let Err(e) = saved {
+        tracing::warn!("couldn't save learned words: {e}");
+        return Vec::new();
     }
     if added.is_empty() {
         return added;
     }
-    general.vocabulary.extend(added.iter().cloned());
-    general.learned_words.extend(added.iter().cloned());
-    if let Err(e) = save(app, &state, settings) {
-        tracing::warn!("couldn't save learned words: {e}");
-        return Vec::new();
-    }
+    commands::rebuild_in_background(app);
     tracing::info!("learned {} word(s) from corrections", added.len());
     *LAST.lock().unwrap_or_else(|e| e.into_inner()) = added.clone();
     crate::tray::show_forget(added.last().map(String::as_str));
@@ -53,13 +55,14 @@ pub fn forget(app: &AppHandle, word: &str) -> Result<(), String> {
     let state = app
         .try_state::<AppState>()
         .ok_or("Splashdown isn't ready")?;
-    let mut settings = state.settings();
-    settings
-        .general
-        .vocabulary
-        .retain(|v| !v.eq_ignore_ascii_case(word));
-    settings.general.settle_learned();
-    save(app, &state, settings)?;
+    state.update(app, |settings| {
+        settings
+            .general
+            .vocabulary
+            .retain(|v| !v.eq_ignore_ascii_case(word));
+        settings.general.settle_learned();
+    })?;
+    commands::rebuild_in_background(app);
     tracing::info!("forgot a learned word");
     let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
     last.retain(|w| !w.eq_ignore_ascii_case(word));
@@ -79,23 +82,6 @@ pub fn forget_last(app: &AppHandle) {
     {
         tracing::warn!("couldn't forget a learned word: {e}");
     }
-}
-
-fn save(
-    app: &AppHandle,
-    state: &AppState,
-    settings: splashdown_config::Settings,
-) -> Result<(), String> {
-    settings.save(&crate::engine::paths()?.config_file())?;
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
-    commands::settings_changed_elsewhere(app);
-    let app = app.clone();
-    tauri::async_runtime::spawn(async move {
-        if let Some(e) = app.state::<AppState>().apply().await {
-            tracing::warn!("after learning a word: {e}");
-        }
-    });
-    Ok(())
 }
 
 /// Names and terms only: not addresses, paths, emails or numbers.

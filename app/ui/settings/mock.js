@@ -2,6 +2,9 @@
 
 // Sample backend for previewing the Settings window as a plain file:// page.
 // Only called when window.__TAURI__ is absent (see invoke in common.js).
+// Keep it in step with the real commands: the state below mirrors
+// `Snapshot` in app/src-tauri/src/commands.rs, and a command the page calls
+// that isn't answered here logs a warning and returns null.
 
 /** Sample data so the page can be designed in a normal browser. */
 async function mockInvoke(cmd, args) {
@@ -53,6 +56,16 @@ async function mockInvoke(cmd, args) {
     speech_destination: "cloud",
     ai_destination: "cloud",
     engine_error: null,
+    resolved_instructions: null,
+    can_route_instructions: true,
+    downloads: [],
+    speech_loading: false,
+    apple: { speech: "ready", speech_detail: "", language_model: true, language_model_detail: "" },
+    transforms: [
+      { id: "summary", name: "Summary", instruction: "Summarize this in a few short bullet points.", place: "below", shortcut: null },
+      { id: "todos", name: "To-dos", instruction: "List the tasks in this as - [ ] items.", place: "below", shortcut: "Ctrl+Alt+Digit1" },
+      { id: "email", name: "Email", instruction: "Turn this into a short email.", place: "replace", shortcut: null },
+    ],
     presets: [
       { id: "default", name: "Default", instructions: "", ai: true, insert: "paste", rules: [] },
       { id: "email", name: "Email", instructions: "Use short paragraphs. Only add a greeting or sign-off if I say one or ask for it.", ai: true, insert: "paste", rules: [{ app: "com.apple.mail", url: null, title: null }, { app: null, url: "mail.google.com", title: null }] },
@@ -72,7 +85,7 @@ async function mockInvoke(cmd, args) {
       sound_volume: 0.12,
     },
     platform: "macos",
-    version: "0.1.1",
+    version: "0.6.0",
     config_path: "~/Library/Application Support/Splashdown/config.toml",
     update: { available: "0.2.0", notes: "Faster local speech-to-text.\nFixes pasting into Slack.", checking: false, installing: false, progress: null, last_checked: Date.now() - 3600000, error: null },
   };
@@ -145,7 +158,15 @@ async function mockInvoke(cmd, args) {
     }
     case "test_ai":
       return { output: "I think we should ship it on Thursday.", millis: 512, model: "openrouter/google/gemini-2.5-flash-lite", note: null };
-    default:
+    case "import_settings":
       return { state: mockInvoke.state, engine_error: null };
+    case "get_launch_at_login":
+    case "calendar_access":
+      return false;
+    case "notes_meaning_progress":
+      return [0, 0];
+    default:
+      console.warn(`mock: no sample answer for ${cmd}`);
+      return null;
   }
 }

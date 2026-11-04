@@ -11,6 +11,7 @@ use std::time::{Duration, UNIX_EPOCH};
 
 use chrono::{DateTime, Local, TimeZone};
 use serde::{Deserialize, Serialize};
+use splashdown_core::meeting::Turn;
 
 /// Inside the notes folder; hidden by Finder, Explorer and Obsidian.
 const META_DIR: &str = ".splashdown";
@@ -1287,7 +1288,7 @@ fn front_matter_value(front: &str, key: &str) -> Option<String> {
 /// level or a transcript turn.
 fn starts_part(line: &str) -> bool {
     let line = line.trim_end();
-    is_turn(line)
+    Turn::parse(line).is_some()
         || line.strip_prefix("## ").is_some_and(|h| {
             ["My notes", "Summary", "Transcript"]
                 .iter()
@@ -1295,32 +1296,11 @@ fn starts_part(line: &str) -> bool {
         })
 }
 
-/// A transcript turn: `**[0:04] You:** …` (a meeting) or `**[0:04]** …`
-/// (a file). Not any line that happens to start with `**[`, which the
-/// user may type in their own notes.
-pub fn is_turn(line: &str) -> bool {
-    let Some((stamp, rest)) = line.strip_prefix("**[").and_then(|l| l.split_once(']')) else {
-        return false;
-    };
-    let parts: Vec<&str> = stamp.split(':').collect();
-    let stamp_ok = (2..=3).contains(&parts.len())
-        && parts
-            .iter()
-            .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
-        && parts[1..].iter().all(|p| p.len() == 2);
-    stamp_ok
-        && (rest.starts_with("**")
-            || rest
-                .strip_prefix(' ')
-                .and_then(|r| r.split_once(":**"))
-                .is_some_and(|(who, _)| !who.is_empty() && !who.contains('*')))
-}
-
 /// Where the transcript's first turn starts in `text`, if it has one.
 pub fn transcript_start(text: &str) -> Option<usize> {
     let mut at = 0;
     for line in text.split_inclusive('\n') {
-        if is_turn(line) {
+        if Turn::parse(line).is_some() {
             return Some(at);
         }
         at += line.len();
@@ -1651,8 +1631,6 @@ mod tests {
         assert_eq!(with_section(&typed, "My notes", mine), typed);
         assert_eq!(section(&typed, "My notes").as_deref(), Some(mine));
         assert_eq!(transcript_start(&typed), typed.find("**[0:00]"));
-        assert!(is_turn("**[1:02:30] Them:** Hi") && is_turn("**[0:04]** Hi"));
-        assert!(!is_turn("**[x] call Sam") && !is_turn("**[0:4] You:** no"));
         assert_eq!(section(body, "My notes"), None);
         // Nobody spoke: above the note that says so.
         assert_eq!(

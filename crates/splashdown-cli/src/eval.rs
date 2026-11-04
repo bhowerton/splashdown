@@ -410,7 +410,7 @@ async fn cleanup_one(
         Some(cloud) => format!("{} + instructions: {}", llm.name(), cloud.name()),
         None => llm.name(),
     };
-    let pipeline = Pipeline::new(std::sync::Arc::new(NoopStt), Some(llm))
+    let pipeline = Pipeline::new(std::sync::Arc::new(crate::opts::NoStt), Some(llm))
         .with_instruction_model(instruction_llm);
     eprintln!("\nCleanup eval · {name} · {} cases\n", cases.len());
 
@@ -538,7 +538,7 @@ fn text_pipeline(providers: &ProviderOpts) -> Result<(String, Pipeline)> {
         Some(cloud) => cloud.name(),
         None => llm.name(),
     };
-    let pipeline = Pipeline::new(std::sync::Arc::new(NoopStt), Some(llm))
+    let pipeline = Pipeline::new(std::sync::Arc::new(crate::opts::NoStt), Some(llm))
         .with_instruction_model(instruction_llm);
     Ok((name, pipeline))
 }
@@ -1043,22 +1043,6 @@ async fn style(
 
 // ---------------------------------------------------------------- actions
 
-/// What the planner knows of now: fixed in the eval so dates can be
-/// checked exactly.
-pub fn plan_context(now: chrono::NaiveDateTime) -> PlanContext {
-    PlanContext {
-        now: now.format("%A %Y-%m-%d %H:%M").to_string(),
-        coming_days: (1..=7)
-            .map(|d| {
-                (now.date() + chrono::Days::new(d))
-                    .format("%A %Y-%m-%d")
-                    .to_string()
-            })
-            .collect(),
-        ..PlanContext::default()
-    }
-}
-
 #[derive(Deserialize)]
 struct ActionFile {
     case: Vec<ActionCase>,
@@ -1122,7 +1106,7 @@ async fn actions(cases: &[&ActionCase], verbose: bool, providers: &ProviderOpts)
             takes_text,
         })
         .to_vec(),
-        ..plan_context(now)
+        ..PlanContext::at(now)
     };
     eprintln!("\nActions eval · {name} · {} cases\n", cases.len());
     if let Some(first) = cases.first() {
@@ -1437,24 +1421,6 @@ fn wer(reference: &str, hypothesis: &str) -> f64 {
         prev = cur;
     }
     prev[h.len()] as f64 / r.len() as f64
-}
-
-struct NoopStt;
-
-#[async_trait::async_trait]
-impl splashdown_core::SpeechToText for NoopStt {
-    fn name(&self) -> String {
-        "none".into()
-    }
-    async fn transcribe(
-        &self,
-        _: &splashdown_core::AudioClip,
-        _: &splashdown_core::SttHints,
-    ) -> splashdown_core::ProviderResult<splashdown_core::Transcript> {
-        Err(splashdown_core::ProviderError::Unavailable(
-            "text-only".into(),
-        ))
-    }
 }
 
 #[cfg(test)]

@@ -5,6 +5,7 @@
 //! nothing in the catalog sends, deletes or pays. The request reaches this
 //! step after the command interpreter (`crate::command`) named it `do`.
 
+use crate::prompt::escape;
 use serde_json::{Map, Value, json};
 
 use crate::provider::TextRequest;
@@ -375,6 +376,8 @@ pub enum Plan {
 
 /// What the planner knows besides the request.
 #[derive(Debug, Clone, Default)]
+/// What the planner is told besides the request. `PlanContext::at` fills
+/// in the dates.
 pub struct PlanContext {
     /// Now, as "Monday 2026-11-02 10:00".
     pub now: String,
@@ -391,6 +394,24 @@ pub struct PlanContext {
     /// The actions the user set up (`my_action`); without any, the action
     /// isn't offered.
     pub mine: Vec<Mine>,
+}
+
+impl PlanContext {
+    /// The dates for `now` (the user's local time): now, and the next
+    /// seven days.
+    pub fn at(now: chrono::NaiveDateTime) -> Self {
+        Self {
+            now: now.format("%A %Y-%m-%d %H:%M").to_string(),
+            coming_days: (1..=7)
+                .map(|d| {
+                    (now.date() + chrono::Days::new(d))
+                        .format("%A %Y-%m-%d")
+                        .to_string()
+                })
+                .collect(),
+            ..Self::default()
+        }
+    }
 }
 
 /// One of the user's own actions, as the planner sees it.
@@ -586,10 +607,6 @@ fn schema(specs: &[&Spec], mine: &[Mine]) -> Value {
         "required": ["call"],
         "additionalProperties": false,
     })
-}
-
-fn escape(text: &str, tag: &str) -> String {
-    text.replace(&format!("</{tag}"), &format!("<\\/{tag}"))
 }
 
 /// Whether the reply holds a JSON object at all (before any checks).

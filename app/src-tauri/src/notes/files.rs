@@ -331,7 +331,12 @@ fn transcribe(
                         store
                             .add_paragraph(
                                 &note.path,
-                                &format!("**[{}]** {text}", timestamp(piece.start)),
+                                &splashdown_core::meeting::Turn {
+                                    stamp: &timestamp(piece.start),
+                                    who: "",
+                                    said: &text,
+                                }
+                                .line(),
                             )
                             .map_err(|e| e.to_string())?;
                         heard = true;

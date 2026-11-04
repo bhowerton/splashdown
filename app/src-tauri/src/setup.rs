@@ -358,23 +358,15 @@ async fn speed_test(app: &AppHandle) -> Option<u32> {
 /// anything: it changes nothing about how dictation runs.
 fn remember_speed(app: &AppHandle, ms: u32) {
     let state = app.state::<AppState>();
-    let mut settings = state.settings();
-    settings.ai.local_ms = Some(ms);
-    if let Ok(paths) = engine::paths()
-        && settings.save(&paths.config_file()).is_ok()
-    {
-        *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    if let Err(e) = state.update(app, |s| s.ai.local_ms = Some(ms)) {
+        tracing::warn!("couldn't keep the measured speed: {e}");
     }
 }
 
 /// Saves a change to the settings and puts it to use.
 async fn change(app: &AppHandle, f: impl FnOnce(&mut Settings)) -> Result<(), String> {
     let state = app.state::<AppState>();
-    let mut settings = state.settings();
-    f(&mut settings);
-    settings.save(&engine::paths()?.config_file())?;
-    crate::commands::show_settings(app, &state, &settings);
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    state.update(app, f)?;
     if let Some(e) = state.apply().await {
         tracing::warn!("after setting up: {e}");
     }

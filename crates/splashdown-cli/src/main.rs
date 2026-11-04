@@ -572,7 +572,7 @@ fn run() -> Result<()> {
             if let splashdown_core::command::Command::Do(request) = &out.command {
                 let ctx = splashdown_core::action::PlanContext {
                     selection,
-                    ..eval::plan_context(chrono::Local::now().naive_local())
+                    ..splashdown_core::action::PlanContext::at(chrono::Local::now().naive_local())
                 };
                 let plan = rt.block_on(setup.pipeline.plan_action(request, &ctx, None))?;
                 eprintln!(
@@ -596,7 +596,7 @@ fn run() -> Result<()> {
             let context = splashdown_core::ask::AskContext {
                 selection,
                 user_name: setup.settings.general.user_name.clone(),
-                today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+                today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
                 ..Default::default()
             };
             let request = splashdown_core::ask::request(&question, &context);
@@ -758,7 +758,10 @@ fn run() -> Result<()> {
                 focus.selection()
             );
             let started = std::time::Instant::now();
-            let text = focus.surrounding_text(300, 6000);
+            let text = focus.surrounding_text(
+                splashdown_core::compose::WINDOW_MIN_CHARS,
+                splashdown_core::compose::WINDOW_MAX_CHARS,
+            );
             eprintln!(
                 "{} · {} ms · {} characters",
                 focus.app.name,

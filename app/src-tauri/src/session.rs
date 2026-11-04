@@ -69,11 +69,6 @@ const WHISPER_BOOST: f32 = 5.0;
 /// At most this much text is read aloud, or summarized to be: about 45
 /// minutes of listening.
 const READ_CHARS: usize = 40_000;
-/// Compose reads the window from the nearest container around the field
-/// with at least this much text (an email, a few chat messages)…
-const WINDOW_MIN_CHARS: usize = 300;
-/// …and at most this much of it, the part nearest the field.
-const WINDOW_MAX_CHARS: usize = 6_000;
 /// Live preview: first pass after this much audio, then one pass this often.
 const PREVIEW_START: Duration = Duration::from_millis(500);
 const PREVIEW_EVERY: Duration = Duration::from_millis(600);
@@ -2022,7 +2017,12 @@ impl Controller {
             .focus
             .as_ref()
             .filter(|_| selection.is_none() && engine.compose_reads_window)
-            .and_then(|f| f.surrounding_text(WINDOW_MIN_CHARS, WINDOW_MAX_CHARS));
+            .and_then(|f| {
+                f.surrounding_text(
+                    splashdown_core::compose::WINDOW_MIN_CHARS,
+                    splashdown_core::compose::WINDOW_MAX_CHARS,
+                )
+            });
         match &window_text {
             Some(text) => tracing::info!(
                 "compose read {} characters from the window",
@@ -2051,7 +2051,7 @@ impl Controller {
                 .filter(|_| engine.share_app_name)
                 .map(|f| f.app.name.clone()),
             user_name: engine.context.user_name.clone(),
-            today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+            today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
             tone: tone.and_then(splashdown_core::compose::tone),
             match_style: engine.compose_style,
         };
@@ -2201,7 +2201,7 @@ impl Controller {
                 .filter(|_| engine.share_app_name)
                 .map(|f| f.app.name.clone()),
             user_name: engine.context.user_name.clone(),
-            today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+            today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
             earlier: Vec::new(),
             cite_numbers: false,
             spoken: speak,
@@ -2359,12 +2359,7 @@ impl Controller {
             selection: Some(text.to_string()),
             context: engine.context.clone(),
         }))
-        .map_err(|e| {
-            let llm = pipeline
-                .instruction_llm_name()
-                .or_else(|| pipeline.llm_name());
-            errors::pipeline(&e, None, llm.as_deref())
-        })?;
+        .map_err(|e| errors::instruction(&e, pipeline))?;
         crate::spend::record_outcome(&outcome);
         let mut outcome = outcome;
         outcome.text = splashdown_config::tidy_answer(&transform.id, &outcome.text);
@@ -2765,10 +2760,7 @@ impl Controller {
         let outcome = match result {
             Ok(outcome) => outcome,
             Err(e) => {
-                let llm = pipeline
-                    .instruction_llm_name()
-                    .or_else(|| pipeline.llm_name());
-                let message = errors::pipeline(&e, None, llm.as_deref());
+                let message = errors::instruction(&e, pipeline);
                 return self.notice(Tone::Warning, &short(&message));
             }
         };
@@ -2931,16 +2923,7 @@ impl Controller {
             return self.notice(Tone::Warning, "Not while a password is being typed");
         }
         let enabled = engine.actions.enabled_ids();
-        let now = chrono::Local::now().naive_local();
         let ctx = splashdown_core::action::PlanContext {
-            now: now.format("%A %Y-%m-%d %H:%M").to_string(),
-            coming_days: (1..=7)
-                .map(|d| {
-                    (now.date() + chrono::Days::new(d))
-                        .format("%A %Y-%m-%d")
-                        .to_string()
-                })
-                .collect(),
             selection,
             shortcuts: if enabled.contains(&"run_shortcut") {
                 crate::voice_actions::shortcuts()
@@ -2949,6 +2932,7 @@ impl Controller {
             },
             presets: engine.presets.iter().map(|p| p.name.clone()).collect(),
             mine: crate::my_actions::for_planner(&engine.actions),
+            ..splashdown_core::action::PlanContext::at(chrono::Local::now().naive_local())
         };
         let pipeline = engine.pipeline_for(&active.preset);
         self.ui.show(OverlayState::Message {
@@ -2960,10 +2944,7 @@ impl Controller {
         let planned = match planned {
             Ok(planned) => planned,
             Err(e) => {
-                let llm = pipeline
-                    .instruction_llm_name()
-                    .or_else(|| pipeline.llm_name());
-                let message = errors::pipeline(&e, None, llm.as_deref());
+                let message = errors::instruction(&e, pipeline);
                 return self.notice(Tone::Warning, &short(&message));
             }
         };
@@ -3228,7 +3209,12 @@ fn read_screen_words(pid: i32) -> mpsc::Receiver<Vec<String>> {
     std::thread::spawn(move || {
         let words = Focus::capture()
             .filter(|f| f.app.pid == pid)
-            .and_then(|f| f.surrounding_text(WINDOW_MIN_CHARS, WINDOW_MAX_CHARS))
+            .and_then(|f| {
+                f.surrounding_text(
+                    splashdown_core::compose::WINDOW_MIN_CHARS,
+                    splashdown_core::compose::WINDOW_MAX_CHARS,
+                )
+            })
             .map(|text| splashdown_core::vocab::terms_on_screen(&text, SCREEN_TERMS))
             .unwrap_or_default();
         let _ = tx.send(words);

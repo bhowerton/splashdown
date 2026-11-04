@@ -353,7 +353,7 @@ fn own(app: &AppHandle, what: &str) -> Result<Done, String> {
             let on = what == "whisper_mode_on";
             let state = app.state::<AppState>();
             if state.settings().general.whisper_mode() != on {
-                tauri::async_runtime::block_on(state.toggle_whisper_mode())?;
+                tauri::async_runtime::block_on(state.toggle_whisper_mode(app))?;
             }
             done(if on {
                 "Whisper mode on"
@@ -677,13 +677,11 @@ fn run_shortcut(
 #[cfg(target_os = "macos")]
 fn trust_shortcut(app: &AppHandle, name: &str) -> Result<(), String> {
     let state = app.state::<AppState>();
-    let mut settings = state.settings();
-    if !settings.actions.trusted_shortcuts.iter().any(|n| n == name) {
-        settings.actions.trusted_shortcuts.push(name.to_string());
-    }
-    settings.save(&crate::engine::paths()?.config_file())?;
-    crate::commands::show_settings(app, &state, &settings);
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    state.update(app, |s| {
+        if !s.actions.trusted_shortcuts.iter().any(|n| n == name) {
+            s.actions.trusted_shortcuts.push(name.to_string());
+        }
+    })?;
     Ok(())
 }
 

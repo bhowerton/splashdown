@@ -9,7 +9,13 @@
 // in a browser (for design work), calls go to the page's mockInvoke(cmd, args),
 // which must be loaded before anything calls invoke.
 const tauri = window.__TAURI__;
-const invoke = tauri ? tauri.core.invoke : (cmd, args) => mockInvoke(cmd, args);
+const invoke = tauri
+  ? tauri.core.invoke
+  : async (cmd, args) => {
+      // Pages without a sample backend still open; their calls just fail.
+      if (typeof mockInvoke !== "function") throw new Error(`no backend for ${cmd} in a plain browser page`);
+      return mockInvoke(cmd, args);
+    };
 const listen = tauri ? tauri.event.listen : mockListen;
 
 /** Events the page's mock sends (`mockEmit`), when opened as a plain file. */
@@ -125,6 +131,18 @@ function askText(message, { detail = "", placeholder = "", action = "OK", value 
 }
 
 let toastTimer;
+/** Calls a command for its effect, showing what went wrong if it fails
+ *  (a toast where the page has one, the console otherwise). Use `invoke`
+ *  directly when the caller handles the error itself. */
+async function call(cmd, args) {
+  try {
+    return await invoke(cmd, args);
+  } catch (e) {
+    if ($("toast")) toast(String(e), true);
+    else console.error(`${cmd}: ${e}`);
+  }
+}
+
 function toast(text, error = false) {
   const t = $("toast");
   t.textContent = text;

@@ -202,9 +202,95 @@ fn words(text: &str) -> Vec<String> {
         .collect()
 }
 
+/// One turn of a transcript as a note holds it: `**[1:02] Them:** what
+/// was said`, or `**[1:02]** what was said` when it doesn't say who (a
+/// transcribed file, or a recording of one side). The one place this
+/// format is written (`Turn::line`) and read (`Turn::parse`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Turn<'a> {
+    /// When it was said, as written: "1:02" or "1:02:30".
+    pub stamp: &'a str,
+    /// Who said it; "" when the line doesn't say.
+    pub who: &'a str,
+    /// What was said.
+    pub said: &'a str,
+}
+
+impl<'a> Turn<'a> {
+    /// The turn on `line`, if it is one. Not any line that happens to
+    /// start with `**[`, which the user may type in their own notes: the
+    /// time must be m:ss or h:mm:ss, and a name has no `*` in it.
+    pub fn parse(line: &'a str) -> Option<Self> {
+        let (stamp, rest) = line.strip_prefix("**[")?.split_once(']')?;
+        let parts: Vec<&str> = stamp.split(':').collect();
+        let stamp_ok = (2..=3).contains(&parts.len())
+            && parts
+                .iter()
+                .all(|p| !p.is_empty() && p.chars().all(|c| c.is_ascii_digit()))
+            && parts[1..].iter().all(|p| p.len() == 2);
+        if !stamp_ok {
+            return None;
+        }
+        if let Some(said) = rest.strip_prefix("**") {
+            return Some(Self {
+                stamp,
+                who: "",
+                said: said.trim_start(),
+            });
+        }
+        let (who, said) = rest.strip_prefix(' ')?.split_once(":**")?;
+        (!who.is_empty() && !who.contains('*')).then(|| Self {
+            stamp,
+            who,
+            said: said.trim_start(),
+        })
+    }
+
+    /// When it was said, from the start of the recording.
+    pub fn at(&self) -> Duration {
+        let secs = self
+            .stamp
+            .split(':')
+            .fold(0, |total, n| total * 60 + n.parse::<u64>().unwrap_or(0));
+        Duration::from_secs(secs)
+    }
+
+    /// The turn as a line of the note.
+    pub fn line(&self) -> String {
+        if self.who.is_empty() {
+            format!("**[{}]** {}", self.stamp, self.said)
+        } else {
+            format!("**[{}] {}:** {}", self.stamp, self.who, self.said)
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn turns_are_read_as_they_are_written() {
+        for line in [
+            "**[1:02:30] Them:** Hi there",
+            "**[0:04]** Hi",
+            "**[12:05] Dana Lee:** ok",
+        ] {
+            assert_eq!(Turn::parse(line).map(|t| t.line()).as_deref(), Some(line));
+        }
+        let turn = Turn::parse("**[1:02:30] Them:** Hi").unwrap();
+        assert_eq!((turn.who, turn.said), ("Them", "Hi"));
+        assert_eq!(turn.at(), Duration::from_secs(3750));
+        // The user's own lines aren't turns.
+        for line in [
+            "**[x] call Sam",
+            "**[0:4] You:** no",
+            "**[1:00] *bold*:** x",
+            "**[todo]** milk",
+        ] {
+            assert_eq!(Turn::parse(line), None, "{line}");
+        }
+    }
 
     fn seg(side: Side, start: u64, end: u64, text: &str) -> Segment {
         Segment {

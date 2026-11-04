@@ -1089,11 +1089,7 @@ pub fn notes_keep_on_top(
     if let Some(window) = app.get_webview_window(WINDOW) {
         window.set_always_on_top(on).map_err(|e| e.to_string())?;
     }
-    let mut settings = state.settings();
-    settings.notes.keep_on_top = on;
-    settings.save(&engine::paths()?.config_file())?;
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
-    crate::commands::settings_changed_elsewhere(&app);
+    state.update(&app, |s| s.notes.keep_on_top = on)?;
     Ok(())
 }
 
@@ -1367,6 +1363,7 @@ pub async fn notes_pick_folder(
 pub fn notes_set_folder(
     folder: String,
     move_notes_too: bool,
+    app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<View, String> {
     let folder = PathBuf::from(folder);
@@ -1380,10 +1377,8 @@ pub fn notes_set_folder(
             tracing::info!("moved {moved} notes to the new folder");
         }
     }
-    let mut settings = state.settings();
-    settings.notes.folder = (Some(&folder) != default_folder().as_ref()).then_some(folder);
-    settings.save(&engine::paths()?.config_file())?;
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
+    let kept = (Some(&folder) != default_folder().as_ref()).then_some(folder);
+    state.update(&app, |s| s.notes.folder = kept)?;
     *current_slot().lock().unwrap_or_else(|e| e.into_inner()) = None;
     view(&state)
 }
@@ -1537,7 +1532,7 @@ pub async fn notes_ask(
     let context = splashdown_core::ask::AskContext {
         notes,
         user_name: setup.user_name,
-        today: chrono::Local::now().format("%A, %-d %B %Y").to_string(),
+        today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
         earlier,
         cite_numbers: true,
         spoken: false,

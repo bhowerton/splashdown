@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use splashdown_audio::file::{TurnCutter, timestamp};
 use splashdown_audio::live::LiveAudio;
 use splashdown_config::{Destination, MeetingSummary, Secrets, Settings};
-use splashdown_core::meeting::{Meeting, Paragraph, Segment, Side};
+use splashdown_core::meeting::{Meeting, Paragraph, Segment, Side, Turn};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::commands::AppState;
@@ -378,11 +378,10 @@ fn record(
     // the room.
     if !matches!(source, Source::App { .. }) && !settings.notes.meeting_reminded {
         remind(app);
-        settings.notes.meeting_reminded = true;
-        if let Err(e) = settings.save(&crate::engine::paths()?.config_file()) {
-            tracing::warn!("couldn't save the meeting reminder: {e}");
+        match state.update(app, |s| s.notes.meeting_reminded = true) {
+            Ok(saved) => settings = saved,
+            Err(e) => tracing::warn!("couldn't save the meeting reminder: {e}"),
         }
-        *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
         if stop.load(Ordering::Relaxed) {
             return Ok(());
         }
@@ -879,16 +878,13 @@ impl<'a> Job<'a> {
             return;
         }
         for p in paragraphs {
-            let line = if self.one_sided {
-                format!("**[{}]** {}", timestamp(p.start), p.text)
-            } else {
-                format!(
-                    "**[{}] {}:** {}",
-                    timestamp(p.start),
-                    p.side.label(),
-                    p.text
-                )
-            };
+            let stamp = timestamp(p.start);
+            let line = Turn {
+                stamp: &stamp,
+                who: if self.one_sided { "" } else { p.side.label() },
+                said: &p.text,
+            }
+            .line();
             if let Some(collected) = &mut self.collected {
                 collected.push(line);
                 continue;
@@ -1014,12 +1010,12 @@ fn label_speakers(body: &str, spans: &[(u32, f64, f64)], side: Option<&str>) -> 
     let mut turns: Vec<(usize, f64)> = Vec::new();
     let mut starts: Vec<f64> = Vec::new();
     for (i, line) in lines.iter().enumerate() {
-        let Some((stamp, who, _)) = turn_head(line) else {
+        let Some(turn) = Turn::parse(line) else {
             continue;
         };
-        let at = seconds(stamp);
+        let at = turn.at().as_secs_f64();
         starts.push(at);
-        if who == side.unwrap_or("") {
+        if turn.who == side.unwrap_or("") {
             turns.push((i, at));
         }
     }
@@ -1056,35 +1052,14 @@ fn label_speakers(body: &str, spans: &[(u32, f64, f64)], side: Option<&str>) -> 
     }
     let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
     for (&(i, _), speaker) in turns.iter().zip(&found) {
-        let (Some(speaker), Some((stamp, _, said))) = (speaker, turn_head(lines[i])) else {
+        let (Some(speaker), Some(turn)) = (speaker, Turn::parse(lines[i])) else {
             continue;
         };
         let n = order.iter().position(|s| s == speaker).unwrap_or(0) + 1;
-        out[i] = format!("**[{stamp}] Speaker {n}:**{said}");
+        let who = format!("Speaker {n}");
+        out[i] = Turn { who: &who, ..turn }.line();
     }
     out.join("\n")
-}
-
-/// A transcript turn's time stamp, who said it ("" when it doesn't say)
-/// and what was said: `**[1:02] Them:** …` or `**[1:02]** …`.
-fn turn_head(line: &str) -> Option<(&str, &str, &str)> {
-    let rest = line.strip_prefix("**[")?;
-    let (stamp, rest) = rest.split_once(']')?;
-    if !stamp.chars().all(|c| c.is_ascii_digit() || c == ':') || stamp.is_empty() {
-        return None;
-    }
-    if let Some(said) = rest.strip_prefix("**") {
-        return Some((stamp, "", said));
-    }
-    let (who, said) = rest.strip_prefix(' ')?.split_once(":**")?;
-    Some((stamp, who, said))
-}
-
-/// "1:02:30" or "12:05" in seconds.
-fn seconds(stamp: &str) -> f64 {
-    stamp.split(':').fold(0.0, |total, n| {
-        total * 60.0 + n.parse::<f64>().unwrap_or(0.0)
-    })
 }
 
 /// The AI that runs transforms (it writes the summary): a name for the
@@ -1184,13 +1159,10 @@ fn ask_to_summarize(app: &AppHandle, ai: &str, one_sided: bool) -> bool {
     asking(app, None);
     if answer == Some(1) {
         let state = app.state::<AppState>();
-        let mut settings = state.settings();
-        settings.notes.meeting_summary = Some(MeetingSummary::Always);
-        if let Ok(paths) = crate::engine::paths()
-            && settings.save(&paths.config_file()).is_ok()
-        {
-            *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
-            crate::commands::settings_changed_elsewhere(app);
+        if let Err(e) = state.update(app, |s| {
+            s.notes.meeting_summary = Some(MeetingSummary::Always);
+        }) {
+            tracing::warn!("couldn't save always summarizing: {e}");
         }
         return true;
     }
@@ -1361,7 +1333,7 @@ fn with_transcript(body: &str, turns: &[String], said: &str) -> (String, bool) {
     // end of the note about how it ended.
     let start = lines
         .iter()
-        .position(|l| turn_head(l).is_some())
+        .position(|l| Turn::parse(l).is_some())
         .unwrap_or_else(|| {
             let mut at = lines.len();
             while at > 0 && (aside(lines[at - 1]) || lines[at - 1].trim().is_empty()) {
@@ -1371,18 +1343,18 @@ fn with_transcript(body: &str, turns: &[String], said: &str) -> (String, bool) {
         });
     let names: std::collections::HashMap<&str, &str> = lines[start..]
         .iter()
-        .filter_map(|l| turn_head(l))
-        .filter(|(_, who, _)| {
-            !who.is_empty() && *who != Side::You.label() && *who != Side::Them.label()
-        })
-        .map(|(stamp, who, _)| (stamp, who))
+        .filter_map(|l| Turn::parse(l))
+        .filter(|t| !t.who.is_empty() && t.who != Side::You.label() && t.who != Side::Them.label())
+        .map(|t| (t.stamp, t.who))
         .collect();
     let turns: Vec<String> = turns
         .iter()
-        .map(|t| match turn_head(t) {
-            Some((stamp, _, said)) if names.contains_key(stamp) => {
-                format!("**[{stamp}] {}:**{said}", names[stamp])
+        .map(|t| match Turn::parse(t) {
+            Some(turn) if names.contains_key(turn.stamp) => Turn {
+                who: names[turn.stamp],
+                ..turn
             }
+            .line(),
             _ => t.clone(),
         })
         .collect();
@@ -1530,15 +1502,9 @@ fn read_full(file: &mut impl std::io::Read, buf: &mut [u8]) -> std::io::Result<u
     Ok(filled)
 }
 
-/// The time of the last `**[m:ss] …:**` paragraph in a meeting note.
+/// The time of the last transcript turn in a meeting note.
 fn last_timestamp(body: &str) -> Option<Duration> {
-    let line = body.lines().rev().find(|l| l.starts_with("**["))?;
-    let time = line.strip_prefix("**[")?.split(']').next()?;
-    let mut secs = 0u64;
-    for part in time.split(':') {
-        secs = secs * 60 + part.parse::<u64>().ok()?;
-    }
-    Some(Duration::from_secs(secs))
+    body.lines().rev().find_map(Turn::parse).map(|t| t.at())
 }
 
 // ---------------------------------------------------------------- commands
