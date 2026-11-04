@@ -440,7 +440,6 @@ pub(super) fn end_tree(child: &mut std::process::Child) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::time::Instant;
 
     #[test]
     #[cfg(unix)]
@@ -451,7 +450,7 @@ mod tests {
             .arg("30")
             .stdout(std::process::Stdio::piped())
             .stderr(std::process::Stdio::piped());
-        let started = Instant::now();
+        let started = std::time::Instant::now();
         std::thread::spawn(|| {
             std::thread::sleep(Duration::from_millis(400));
             notes_transcribe_stop();
