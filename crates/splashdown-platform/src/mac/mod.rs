@@ -12,6 +12,7 @@ mod mic;
 mod minibar;
 mod output;
 mod overlay;
+mod sound;
 
 pub(crate) use apps::{activate_app, app_display, frontmost_app};
 pub(crate) use ax::{
@@ -30,7 +31,8 @@ pub(crate) use minibar::MiniBar;
 pub(crate) use output::{
     QuietOutput, can_quiet_output, output_volume, quiet_output, set_output_muted, set_output_volume,
 };
-pub(crate) use overlay::{Overlay, play_sound, reduce_motion};
+pub(crate) use overlay::Overlay;
+pub(crate) use sound::{play_sound, reduce_motion};
 
 pub(crate) const NAME: &str = "macos";
 

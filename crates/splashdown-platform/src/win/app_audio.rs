@@ -62,8 +62,8 @@ pub(crate) fn audio_apps() -> Vec<AudioApp> {
         // The browser itself, not the tab's audio process: its tree has
         // every tab.
         let root = root_of(pid, &processes);
-        let name = super::uia::exe_path(root)
-            .and_then(|path| super::uia::file_description(&path))
+        let name = super::apps::exe_path(root)
+            .and_then(|path| super::apps::file_description(&path))
             .unwrap_or_else(|| exe.trim_end_matches(".exe").to_string());
         match apps.iter_mut().find(|a| a.id.eq_ignore_ascii_case(exe)) {
             Some(app) => app.playing |= playing,

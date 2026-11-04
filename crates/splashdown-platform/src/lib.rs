@@ -1,7 +1,28 @@
 //! OS integration: global hotkeys, text insertion, focus and selection
 //! context, the status overlay, and permission checks.
 //!
-//! The API is the same on every platform; `mac/` and `win/` implement it.
+//! The API is the same on every platform; `mac/` and `win/` implement it,
+//! file for file, so a fix on one leads to its twin on the other:
+//!
+//! | What | Mac | Windows |
+//! |---|---|---|
+//! | The focused field, its text and selection, permissions | `ax.rs` | `uia.rs` |
+//! | Apps: the one in front, switching, names and icons | `apps.rs` | `apps.rs` |
+//! | The key hook | `keys.rs` | `keys.rs` |
+//! | The clipboard, pasting and typing, key presses | `clipboard.rs` | `clipboard.rs` |
+//! | The microphone: permission, apps using it | `mic.rs` | `mic.rs` |
+//! | Apps playing sound, and recording one | `mic.rs`, the Apple shim | `app_audio.rs` |
+//! | Media keys, pausing players | `media.rs` | `media.rs` |
+//! | Quieting the output while recording | `output.rs` | `output.rs` |
+//! | The status pill | `overlay.rs` | `overlay.rs` |
+//! | The mini bar | `minibar.rs` | `minibar.rs` |
+//! | Start and stop sounds | `sound.rs` | `sound.rs` |
+//! | Reading aloud with the system's voices | the Apple shim | `speech.rs` |
+//! | Desktop control (an experiment) | `computer.rs` | none |
+//!
+//! Windows also has `registry.rs` and `shell.rs`; macOS has `ffi.rs`
+//! (Accessibility and Core Graphics declarations). Other OSes get the
+//! stubs in `win/unsupported.rs`.
 //! Gesture rules (hold, double-tap, chords) live in `splashdown_core::gesture`, so
 //! this crate only reports raw key events.
 

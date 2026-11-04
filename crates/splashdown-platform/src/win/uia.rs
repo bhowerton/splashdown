@@ -1,26 +1,14 @@
-//! UI Automation: the focused app and field, selected text, password
-//! fields and page URLs; plus the permission answers for Windows.
+//! UI Automation: the focused field, its text and selection, password
+//! fields, page URLs and the text around the field; plus the permission
+//! answers for Windows. The Windows twin of `mac/ax.rs` (apps are in
+//! `apps.rs`, the microphone in `mic.rs`).
 
-use windows::Win32::Foundation::ERROR_NO_MORE_ITEMS;
-use windows::Win32::Foundation::{CloseHandle, ERROR_SUCCESS, HWND, LPARAM, POINT};
-use windows::Win32::Graphics::Gdi::{
-    BI_RGB, BITMAPINFO, BITMAPINFOHEADER, ClientToScreen, CreateCompatibleDC, DIB_RGB_COLORS,
-    DeleteDC, DeleteObject, GetDIBits,
-};
-use windows::Win32::Storage::FileSystem::{
-    GetFileVersionInfoSizeW, GetFileVersionInfoW, VerQueryValueW,
-};
+use windows::Win32::Foundation::{HWND, POINT};
+use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
 };
 use windows::Win32::System::Ole::{SafeArrayAccessData, SafeArrayDestroy, SafeArrayUnaccessData};
-use windows::Win32::System::Registry::{
-    HKEY, HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, RRF_RT_REG_QWORD, RRF_RT_REG_SZ,
-    RegCloseKey, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW,
-};
-use windows::Win32::System::Threading::{
-    OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
-};
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomation2, IUIAutomationElement, IUIAutomationTextPattern,
     IUIAutomationTextPattern2, IUIAutomationTextRange, IUIAutomationTreeWalker,
@@ -33,14 +21,14 @@ use windows::Win32::UI::Accessibility::{
     UIA_ValuePatternId, UIA_WindowControlTypeId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    DestroyIcon, EnumWindows, GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetIconInfo,
-    GetWindowTextW, GetWindowThreadProcessId, HICON, ICONINFO, IsIconic, IsWindowVisible,
-    PrivateExtractIconsW, SW_RESTORE, SetForegroundWindow, ShowWindow,
+    GUITHREADINFO, GetForegroundWindow, GetGUIThreadInfo, GetWindowTextW, GetWindowThreadProcessId,
 };
-use windows::core::{BOOL, Interface, PCWSTR, PWSTR};
+use windows::core::{BOOL, Interface};
 
-use super::{from_wide, wide};
-use crate::{Access, AppInfo, Permissions, PlatformError, Selection};
+use super::apps::*;
+use super::from_wide;
+use super::mic::*;
+use crate::{AppInfo, Permissions, Selection};
 
 /// Bound how long a hung app can block a UI Automation call (ms).
 const UIA_TRANSACTION_TIMEOUT: u32 = 500;
@@ -118,7 +106,7 @@ const _: fn() = || {
     assert_send::<FocusElement>();
 };
 
-fn window_pid(window: HWND) -> Option<u32> {
+pub(super) fn window_pid(window: HWND) -> Option<u32> {
     let mut pid = 0u32;
     // SAFETY: `window` is a window handle (a stale one just fails) and `pid`
     // a valid out-pointer.
@@ -133,92 +121,6 @@ fn window_title(window: HWND) -> Option<String> {
     let len = unsafe { GetWindowTextW(window, &mut buf) };
     let title = from_wide(&buf[..usize::try_from(len).unwrap_or(0)]);
     (!title.trim().is_empty()).then_some(title)
-}
-
-/// Full path of a process's executable.
-pub(crate) fn exe_path(pid: u32) -> Option<String> {
-    // SAFETY: plain values; the handle is closed below.
-    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
-    let mut buf = [0u16; 1024];
-    let mut len = buf.len() as u32;
-    // SAFETY: `process` is open with the access this needs; `buf` holds
-    // `len` UTF-16 units and `len` is a valid in/out pointer.
-    let ok = unsafe {
-        QueryFullProcessImageNameW(
-            process,
-            PROCESS_NAME_WIN32,
-            PWSTR(buf.as_mut_ptr()),
-            &mut len,
-        )
-    };
-    // SAFETY: `process` was opened above and is closed once.
-    let _ = unsafe { CloseHandle(process) };
-    ok.ok()?;
-    Some(from_wide(&buf[..(len as usize).min(buf.len())]))
-}
-
-fn file_name(path: &str) -> &str {
-    path.rsplit(['\\', '/']).next().unwrap_or(path)
-}
-
-/// The executable's "File description" (e.g. "Google Chrome"), the closest
-/// Windows has to an app's display name.
-pub(crate) fn file_description(path: &str) -> Option<String> {
-    let path_w = wide(path);
-    // SAFETY: `path_w` is a NUL-terminated path that outlives the call.
-    let size = unsafe { GetFileVersionInfoSizeW(PCWSTR(path_w.as_ptr()), None) };
-    if size == 0 {
-        return None;
-    }
-    let mut data = vec![0u8; size as usize];
-    // SAFETY: `data` is writable for the `size` bytes passed.
-    unsafe {
-        GetFileVersionInfoW(
-            PCWSTR(path_w.as_ptr()),
-            None,
-            size,
-            data.as_mut_ptr().cast(),
-        )
-    }
-    .ok()?;
-
-    let query = |sub: &str| -> Option<(*const u8, usize)> {
-        let sub = wide(sub);
-        let mut ptr = std::ptr::null_mut();
-        let mut len = 0u32;
-        // SAFETY: `data` is the version block filled in above and `sub` a
-        // NUL-terminated query; `ptr` and `len` are valid out-pointers. The
-        // result points into `data`.
-        let ok = unsafe {
-            VerQueryValueW(
-                data.as_ptr().cast(),
-                PCWSTR(sub.as_ptr()),
-                &mut ptr,
-                &mut len,
-            )
-        };
-        (ok.as_bool() && !ptr.is_null()).then_some((ptr.cast_const().cast::<u8>(), len as usize))
-    };
-
-    // The first language/code page pair, else US English / Unicode.
-    let translation = query("\\VarFileInfo\\Translation")
-        .filter(|&(_, len)| len >= 4)
-        .map(|(ptr, _)| {
-            // SAFETY: at least 4 bytes inside `data`; read unaligned since
-            // VerQueryValueW makes no alignment promise.
-            let pair = unsafe { std::ptr::read_unaligned(ptr.cast::<[u16; 2]>()) };
-            format!("{:04x}{:04x}", pair[0], pair[1])
-        })
-        .unwrap_or_else(|| "040904b0".into());
-    let (ptr, len) = query(&format!("\\StringFileInfo\\{translation}\\FileDescription"))?;
-    // `len` counts UTF-16 units, including the terminator.
-    let units: Vec<u16> = (0..len)
-        // SAFETY: the string's `len` units lie inside `data`; read
-        // unaligned for the same reason as above.
-        .map(|i| unsafe { std::ptr::read_unaligned(ptr.cast::<u16>().add(i)) })
-        .collect();
-    let name = from_wide(&units).trim().to_string();
-    (!name.is_empty()).then_some(name)
 }
 
 pub(crate) fn capture_focus() -> Option<(AppInfo, FocusElement)> {
@@ -321,127 +223,6 @@ fn page_url(el: &IUIAutomationElement, pid: u32) -> Option<String> {
 
 fn looks_like_url(s: &str) -> bool {
     s.len() < 8_192 && !s.contains(char::is_whitespace) && s.contains("://")
-}
-
-/// The foreground window's app, named like `capture_focus` names it.
-pub(crate) fn frontmost_app() -> Option<(i32, String, String)> {
-    // SAFETY: takes no arguments; may return a null window.
-    let window = unsafe { GetForegroundWindow() };
-    if window.is_invalid() {
-        return None;
-    }
-    let pid = window_pid(window)?;
-    let path = exe_path(pid);
-    let id = path
-        .as_deref()
-        .map(|p| file_name(p).to_string())
-        .unwrap_or_default();
-    let name = path
-        .map(|path| {
-            file_description(&path).unwrap_or_else(|| {
-                let file = file_name(&path);
-                file.strip_suffix(".exe").unwrap_or(file).to_string()
-            })
-        })
-        .unwrap_or_default();
-    Some((pid as i32, name, id))
-}
-
-/// Brings the app's frontmost visible window forward. Windows allows this
-/// because the foreground process (us) is the one asking.
-pub(crate) fn activate_app(pid: i32) -> crate::Result<()> {
-    let window = u32::try_from(pid)
-        .ok()
-        .and_then(top_window)
-        .ok_or_else(|| PlatformError::Failed("that app has no open window".into()))?;
-    // SAFETY: `window` came from EnumWindows just now; one closed since
-    // makes these calls fail, nothing worse.
-    let shown = unsafe {
-        if IsIconic(window).as_bool() {
-            let _ = ShowWindow(window, SW_RESTORE);
-        }
-        SetForegroundWindow(window).as_bool()
-    };
-    if shown {
-        Ok(())
-    } else {
-        Err(PlatformError::Failed("couldn't switch to that app".into()))
-    }
-}
-
-/// The first visible top-level window of `pid` in Z order (its frontmost).
-fn top_window(pid: u32) -> Option<HWND> {
-    struct Search {
-        pid: u32,
-        found: Option<HWND>,
-    }
-    unsafe extern "system" fn visit(window: HWND, lparam: LPARAM) -> BOOL {
-        // SAFETY: `lparam` points at the `Search` below, which outlives
-        // EnumWindows.
-        let search = unsafe { &mut *(lparam.0 as *mut Search) };
-        if is_app_window(window) && window_pid(window) == Some(search.pid) {
-            search.found = Some(window);
-            return BOOL(0);
-        }
-        BOOL(1)
-    }
-    let mut search = Search { pid, found: None };
-    // SAFETY: `visit` matches WNDENUMPROC and `search` lives until
-    // EnumWindows returns. Stopping early reports an error, which is ignored.
-    let _ = unsafe { EnumWindows(Some(visit), LPARAM(&raw mut search as isize)) };
-    search.found
-}
-
-/// A window people switch to: visible, not a tool window (palettes,
-/// floating bars) and not owned by another (dialogs, popups).
-fn is_app_window(window: HWND) -> bool {
-    use windows::Win32::UI::WindowsAndMessaging::{
-        GW_OWNER, GWL_EXSTYLE, GetWindow, GetWindowLongPtrW, WS_EX_TOOLWINDOW,
-    };
-    // SAFETY: `window` is a live handle; these only read its state.
-    unsafe {
-        IsWindowVisible(window).as_bool()
-            && GetWindow(window, GW_OWNER).is_err()
-            && (GetWindowLongPtrW(window, GWL_EXSTYLE) as u32 & WS_EX_TOOLWINDOW.0) == 0
-    }
-}
-
-/// Apps with a window open, by the names people know them by (the
-/// program's description, "Notepad", and its file name, "notepad"), with
-/// their process ids: for "switch to …", which mustn't start another copy.
-pub(crate) fn running_apps() -> Vec<(String, i32)> {
-    unsafe extern "system" fn visit(window: HWND, lparam: LPARAM) -> BOOL {
-        // SAFETY: `lparam` points at the Vec below, which outlives
-        // EnumWindows.
-        let pids = unsafe { &mut *(lparam.0 as *mut Vec<u32>) };
-        if is_app_window(window)
-            && let Some(pid) = window_pid(window)
-            && !pids.contains(&pid)
-        {
-            pids.push(pid);
-        }
-        BOOL(1)
-    }
-    let mut pids: Vec<u32> = Vec::new();
-    // SAFETY: `visit` matches WNDENUMPROC and `pids` lives until
-    // EnumWindows returns.
-    let _ = unsafe { EnumWindows(Some(visit), LPARAM(&raw mut pids as isize)) };
-    let mut apps = Vec::new();
-    for pid in pids {
-        let Some(path) = exe_path(pid) else {
-            continue;
-        };
-        let Ok(pid) = i32::try_from(pid) else {
-            continue;
-        };
-        if let Some(description) = file_description(&path) {
-            apps.push((description, pid));
-        }
-        if let Some(stem) = std::path::Path::new(&path).file_stem() {
-            apps.push((stem.to_string_lossy().into_owned(), pid));
-        }
-    }
-    apps
 }
 
 pub(crate) fn is_current(app: &AppInfo, focus: &FocusElement) -> bool {
@@ -778,169 +559,6 @@ pub(crate) fn permissions() -> Permissions {
     }
 }
 
-/// Reading the microphone privacy status properly needs WinRT
-/// (`AppCapability`), so this reads the settings the privacy page writes:
-/// the device-wide switch, "Microphone access" for apps, and "Let desktop
-/// apps access your microphone". Anything other than an explicit "Deny"
-/// counts as granted; desktop apps are never asked.
-fn microphone_access() -> Access {
-    const STORE: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone";
-    let denied = consent_denied(HKEY_LOCAL_MACHINE, STORE)
-        || consent_denied(HKEY_CURRENT_USER, STORE)
-        || consent_denied(HKEY_CURRENT_USER, &format!("{STORE}\\NonPackaged"));
-    if denied {
-        Access::Denied
-    } else {
-        Access::Granted
-    }
-}
-
-fn consent_denied(root: HKEY, subkey: &str) -> bool {
-    reg_string(root, subkey, Some("Value")).is_some_and(|v| v.eq_ignore_ascii_case("Deny"))
-}
-
-/// Apps using a microphone now. Windows' privacy records keep, per app,
-/// when it last started and stopped using one; a stop time of 0 means it
-/// still is. Packaged apps are listed by package family name
-/// (`MSTeams_8wekyb3d8bbwe`), others by their executable's file name
-/// (`Zoom.exe`).
-pub(crate) fn microphone_users() -> Vec<String> {
-    const STORE: &str = "Software\\Microsoft\\Windows\\CurrentVersion\\CapabilityAccessManager\\ConsentStore\\microphone";
-    let me = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.file_name().map(|f| f.to_string_lossy().into_owned()))
-        .unwrap_or_default();
-    let mut users = Vec::new();
-    for name in reg_subkeys(HKEY_CURRENT_USER, STORE) {
-        if name.eq_ignore_ascii_case("NonPackaged") {
-            let apps = format!("{STORE}\\NonPackaged");
-            for app in reg_subkeys(HKEY_CURRENT_USER, &apps) {
-                // The path, with # for each backslash.
-                let file = app.rsplit('#').next().unwrap_or(&app).to_string();
-                if !file.eq_ignore_ascii_case(&me) && in_use(&format!("{apps}\\{app}")) {
-                    users.push(file);
-                }
-            }
-        } else if in_use(&format!("{STORE}\\{name}")) {
-            users.push(name);
-        }
-    }
-    users
-}
-
-/// Whether the app with this consent record is using the microphone now.
-fn in_use(subkey: &str) -> bool {
-    reg_qword(HKEY_CURRENT_USER, subkey, "LastUsedTimeStop") == Some(0)
-        && reg_qword(HKEY_CURRENT_USER, subkey, "LastUsedTimeStart").is_some_and(|t| t > 0)
-}
-
-fn reg_qword(root: HKEY, subkey: &str, value: &str) -> Option<u64> {
-    let subkey = wide(subkey);
-    let value = wide(value);
-    let mut data = 0u64;
-    let mut size = std::mem::size_of::<u64>() as u32;
-    // SAFETY: NUL-terminated strings that outlive the call; `data` is
-    // writable for the `size` bytes passed.
-    let err = unsafe {
-        RegGetValueW(
-            root,
-            PCWSTR(subkey.as_ptr()),
-            PCWSTR(value.as_ptr()),
-            RRF_RT_REG_QWORD,
-            None,
-            Some((&raw mut data).cast()),
-            Some(&mut size),
-        )
-    };
-    (err == ERROR_SUCCESS).then_some(data)
-}
-
-/// The names of a registry key's subkeys (none if it can't be opened).
-fn reg_subkeys(root: HKEY, subkey: &str) -> Vec<String> {
-    let subkey = wide(subkey);
-    let mut key = HKEY::default();
-    // SAFETY: a NUL-terminated name that outlives the call and a writable
-    // key handle, closed below.
-    let opened =
-        unsafe { RegOpenKeyExW(root, PCWSTR(subkey.as_ptr()), Some(0), KEY_READ, &mut key) };
-    if opened != ERROR_SUCCESS {
-        return Vec::new();
-    }
-    let mut names = Vec::new();
-    let mut buf = [0u16; 512];
-    for index in 0.. {
-        let mut len = buf.len() as u32;
-        // SAFETY: `buf` is writable for `len` characters; the rest is unused.
-        let err = unsafe {
-            RegEnumKeyExW(
-                key,
-                index,
-                Some(PWSTR(buf.as_mut_ptr())),
-                &mut len,
-                None,
-                None,
-                None,
-                None,
-            )
-        };
-        if err == ERROR_NO_MORE_ITEMS {
-            break;
-        }
-        if err == ERROR_SUCCESS {
-            names.push(String::from_utf16_lossy(&buf[..len as usize]));
-        }
-    }
-    // SAFETY: opened above.
-    let _ = unsafe { RegCloseKey(key) };
-    names
-}
-
-/// A string value from the registry (`None` for the key's default value).
-/// Expandable strings come back expanded.
-fn reg_string(root: HKEY, subkey: &str, value: Option<&str>) -> Option<String> {
-    let subkey = wide(subkey);
-    let value = value.map(wide);
-    let mut buf = [0u16; 1024];
-    let mut size = std::mem::size_of_val(&buf) as u32;
-    // SAFETY: `subkey` and `value` are NUL-terminated strings that outlive
-    // the call (a null value name means the default value); `buf` is
-    // writable for the `size` bytes passed, and `size` is a valid in/out
-    // pointer.
-    let err = unsafe {
-        RegGetValueW(
-            root,
-            PCWSTR(subkey.as_ptr()),
-            value
-                .as_ref()
-                .map_or(PCWSTR::null(), |v| PCWSTR(v.as_ptr())),
-            RRF_RT_REG_SZ,
-            None,
-            Some(buf.as_mut_ptr().cast()),
-            Some(&mut size),
-        )
-    };
-    (err == ERROR_SUCCESS).then(|| from_wide(&buf))
-}
-
-/// "11 24H2 (build 26100)", for feedback reports. The registry's
-/// ProductName still says "Windows 10" on Windows 11, so the build number
-/// decides.
-pub(crate) fn os_version() -> Option<String> {
-    const KEY: &str = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
-    let build = reg_string(HKEY_LOCAL_MACHINE, KEY, Some("CurrentBuild"))?;
-    let major = if build.parse::<u32>().is_ok_and(|b| b >= 22_000) {
-        "11"
-    } else {
-        "10"
-    };
-    Some(
-        match reg_string(HKEY_LOCAL_MACHINE, KEY, Some("DisplayVersion")) {
-            Some(release) => format!("{major} {release} (build {build})"),
-            None => format!("{major} (build {build})"),
-        },
-    )
-}
-
 /// Browsers built on Chromium, by executable name. Their text fields
 /// sometimes drop a paste, so the session checks and retries.
 const CHROMIUM_EXES: &[&str] = &[
@@ -957,158 +575,6 @@ pub(crate) fn is_chromium(app_id: &str) -> bool {
     CHROMIUM_EXES
         .iter()
         .any(|exe| exe.eq_ignore_ascii_case(app_id))
-}
-
-/// The display name of an app known by its executable name: from its "App
-/// Paths" registration, else from a running copy. No icon yet; Settings
-/// shows a letter instead.
-pub(crate) fn app_display(app_id: &str) -> Option<crate::AppDisplay> {
-    let key = format!("Software\\Microsoft\\Windows\\CurrentVersion\\App Paths\\{app_id}");
-    let path = reg_string(HKEY_CURRENT_USER, &key, None)
-        .or_else(|| reg_string(HKEY_LOCAL_MACHINE, &key, None))
-        .map(|p| p.trim_matches('"').to_string())
-        .or_else(|| running_exe(app_id))?;
-    Some(crate::AppDisplay {
-        name: file_description(&path)?,
-        icon_png: icon_png(&path),
-    })
-}
-
-/// Pixels per side of an app icon in Settings: sharp on high-DPI screens.
-const ICON_PX: i32 = 64;
-
-/// The executable's own icon as a PNG.
-fn icon_png(exe: &str) -> Option<Vec<u8>> {
-    let mut name = [0u16; 260];
-    let wide: Vec<u16> = exe.encode_utf16().collect();
-    name.get_mut(..wide.len())?.copy_from_slice(&wide);
-    if wide.len() == name.len() {
-        return None;
-    }
-    let mut icon = [HICON::default()];
-    // SAFETY: `name` is a NUL-terminated path; one handle is written into
-    // `icon`, destroyed below.
-    let found =
-        unsafe { PrivateExtractIconsW(&name, 0, ICON_PX, ICON_PX, Some(&mut icon), None, 0) };
-    if found == 0 || found == u32::MAX || icon[0].is_invalid() {
-        return None;
-    }
-    let pixels = icon_pixels(icon[0]);
-    // SAFETY: extracted above, not used after this.
-    let _ = unsafe { DestroyIcon(icon[0]) };
-    encode_png(&pixels?, ICON_PX as u32)
-}
-
-/// An icon's pixels, RGBA, top row first.
-fn icon_pixels(icon: HICON) -> Option<Vec<u8>> {
-    let mut info = ICONINFO::default();
-    // SAFETY: `info` is writable; the bitmaps it gets are deleted below.
-    unsafe { GetIconInfo(icon, &mut info) }.ok()?;
-    let mut pixels = vec![0u8; (ICON_PX * ICON_PX * 4) as usize];
-    // The mask: white where an icon without alpha is see-through.
-    let mut mask = vec![0u8; pixels.len()];
-    let mut bmi = BITMAPINFO {
-        bmiHeader: BITMAPINFOHEADER {
-            biSize: std::mem::size_of::<BITMAPINFOHEADER>() as u32,
-            biWidth: ICON_PX,
-            // Negative: top row first.
-            biHeight: -ICON_PX,
-            biPlanes: 1,
-            biBitCount: 32,
-            biCompression: BI_RGB.0,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    // SAFETY: a memory DC for the copy, deleted right after; `pixels`
-    // holds the 32-bit rows `bmi` describes.
-    let (lines, mask_lines) = unsafe {
-        let dc = CreateCompatibleDC(None);
-        let lines = GetDIBits(
-            dc,
-            info.hbmColor,
-            0,
-            ICON_PX as u32,
-            Some(pixels.as_mut_ptr().cast()),
-            &mut bmi,
-            DIB_RGB_COLORS,
-        );
-        let mut mask_bmi = bmi;
-        let mask_lines = GetDIBits(
-            dc,
-            info.hbmMask,
-            0,
-            ICON_PX as u32,
-            Some(mask.as_mut_ptr().cast()),
-            &mut mask_bmi,
-            DIB_RGB_COLORS,
-        );
-        let _ = DeleteDC(dc);
-        let _ = DeleteObject(info.hbmColor.into());
-        let _ = DeleteObject(info.hbmMask.into());
-        (lines, mask_lines)
-    };
-    if lines != ICON_PX {
-        return None;
-    }
-    // BGRA to RGBA. An icon with no alpha at all (an older one) is opaque
-    // except where its mask is white.
-    let has_alpha = pixels.as_chunks::<4>().0.iter().any(|p| p[3] != 0);
-    let masked = mask_lines == ICON_PX;
-    for (p, m) in pixels
-        .as_chunks_mut::<4>()
-        .0
-        .iter_mut()
-        .zip(mask.as_chunks::<4>().0)
-    {
-        p.swap(0, 2);
-        if !has_alpha {
-            p[3] = if masked && m[0] != 0 { 0 } else { 255 };
-        }
-    }
-    Some(pixels)
-}
-
-fn encode_png(rgba: &[u8], side: u32) -> Option<Vec<u8>> {
-    let mut out = Vec::new();
-    let mut encoder = png::Encoder::new(&mut out, side, side);
-    encoder.set_color(png::ColorType::Rgba);
-    encoder.set_depth(png::BitDepth::Eight);
-    encoder.write_header().ok()?.write_image_data(rgba).ok()?;
-    Some(out)
-}
-
-/// The full path of a running app with this executable name, found through
-/// the top-level windows.
-fn running_exe(app_id: &str) -> Option<String> {
-    struct Search<'a> {
-        app_id: &'a str,
-        found: Option<String>,
-    }
-    unsafe extern "system" fn visit(window: HWND, lparam: LPARAM) -> BOOL {
-        // SAFETY: `lparam` points at the `Search` below, which outlives
-        // EnumWindows.
-        let search = unsafe { &mut *(lparam.0 as *mut Search) };
-        // SAFETY: `window` is a live handle from the enumeration.
-        let visible = unsafe { IsWindowVisible(window) }.as_bool();
-        if let Some(path) = visible
-            .then(|| window_pid(window).and_then(exe_path))
-            .flatten()
-            && file_name(&path).eq_ignore_ascii_case(search.app_id)
-        {
-            search.found = Some(path);
-            return BOOL(0);
-        }
-        BOOL(1)
-    }
-    let mut search = Search {
-        app_id,
-        found: None,
-    };
-    // SAFETY: `visit` matches WNDENUMPROC and `search` lives until
-    // EnumWindows returns. Stopping early reports an error, which is ignored.
-    let _ = unsafe { EnumWindows(Some(visit), LPARAM(&raw mut search as isize)) };
-    search.found
 }
 
 /// Nothing to request on Windows.

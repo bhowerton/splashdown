@@ -20,9 +20,8 @@ use windows::Win32::UI::Input::KeyboardAndMouse::{
     GetAsyncKeyState, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBD_EVENT_FLAGS, KEYBDINPUT,
     KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, KEYEVENTF_UNICODE, MAPVK_VK_TO_VSC, MapVirtualKeyW,
     SendInput, VIRTUAL_KEY, VK_B, VK_BACK, VK_C, VK_CONTROL, VK_DELETE, VK_DOWN, VK_END, VK_HOME,
-    VK_I, VK_INSERT, VK_LEFT, VK_LWIN, VK_MEDIA_NEXT_TRACK, VK_MEDIA_PLAY_PAUSE,
-    VK_MEDIA_PREV_TRACK, VK_MENU, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_RWIN, VK_SHIFT, VK_UP,
-    VK_V, VK_Z, VkKeyScanW,
+    VK_I, VK_INSERT, VK_LEFT, VK_LWIN, VK_MENU, VK_NEXT, VK_PRIOR, VK_RETURN, VK_RIGHT, VK_RWIN,
+    VK_SHIFT, VK_UP, VK_V, VK_Z, VkKeyScanW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     GetClassNameW, GetForegroundWindow, GetWindowThreadProcessId,
@@ -327,38 +326,14 @@ fn unicode_input(unit: u16, up: bool) -> INPUT {
     })
 }
 
-/// A media key (play/pause, next, previous), for voice actions: whichever
-/// app is playing answers it.
-pub(crate) fn press_media_key(key: crate::MediaKey) -> Result<()> {
-    let vk = match key {
-        crate::MediaKey::PlayPause => VK_MEDIA_PLAY_PAUSE,
-        crate::MediaKey::Next => VK_MEDIA_NEXT_TRACK,
-        crate::MediaKey::Previous => VK_MEDIA_PREV_TRACK,
-    };
-    let input = |up: bool| {
-        keyboard(KEYBDINPUT {
-            wVk: vk,
-            wScan: 0,
-            dwFlags: if up {
-                KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP
-            } else {
-                KEYEVENTF_EXTENDEDKEY
-            },
-            time: 0,
-            dwExtraInfo: INJECTED_TAG,
-        })
-    };
-    send(&[input(false), input(true)])
-}
-
-fn keyboard(ki: KEYBDINPUT) -> INPUT {
+pub(super) fn keyboard(ki: KEYBDINPUT) -> INPUT {
     INPUT {
         r#type: INPUT_KEYBOARD,
         Anonymous: INPUT_0 { ki },
     }
 }
 
-fn send(inputs: &[INPUT]) -> Result<()> {
+pub(super) fn send(inputs: &[INPUT]) -> Result<()> {
     // SAFETY: `inputs` is a slice of fully initialized keyboard INPUTs and
     // the size argument is the size of one INPUT, as required.
     let sent = unsafe { SendInput(inputs, std::mem::size_of::<INPUT>() as i32) };

@@ -12,12 +12,12 @@ use objc2_app_kit::{
     NSAccessibilityAnnouncementKey, NSAccessibilityAnnouncementRequestedNotification,
     NSAccessibilityPostNotificationWithUserInfo, NSBackingStoreType, NSBox, NSBoxType, NSColor,
     NSControlSize, NSFont, NSFontWeightMedium, NSPanel, NSProgressIndicator,
-    NSProgressIndicatorStyle, NSScreen, NSSound, NSStatusWindowLevel, NSTextField, NSTitlePosition,
-    NSView, NSWindowCollectionBehavior, NSWindowStyleMask, NSWorkspace,
+    NSProgressIndicatorStyle, NSScreen, NSStatusWindowLevel, NSTextField, NSTitlePosition, NSView,
+    NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
 
-use crate::{OverlayState, PlatformError, Result, Sound, Tone};
+use crate::{OverlayState, PlatformError, Result, Tone};
 
 /// Space between the text cursor and the overlay.
 const CARET_GAP: f64 = 12.0;
@@ -442,22 +442,6 @@ fn with_preset(label: &str, preset: &Option<String>) -> String {
         Some(p) => format!("{label} · {p}"),
         None => label.to_string(),
     }
-}
-
-/// Quiet system sounds: "Tink" when recording starts, "Pop" when it stops.
-pub(crate) fn play_sound(sound: Sound, volume: f32) {
-    let name = match sound {
-        Sound::Start => "Tink",
-        Sound::Stop => "Pop",
-    };
-    if let Some(s) = NSSound::soundNamed(&NSString::from_str(name)) {
-        s.setVolume(volume.clamp(0.0, 1.0));
-        s.play();
-    }
-}
-
-pub(crate) fn reduce_motion() -> bool {
-    NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceMotion()
 }
 
 /// The first `max` characters of `text` on one line, with an ellipsis
