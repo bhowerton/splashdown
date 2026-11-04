@@ -48,13 +48,7 @@ impl Controller {
         };
         let words = settled
             .filter(|_| engine.learn_vocabulary)
-            .map(|text| {
-                splashdown_core::vocab::corrections(
-                    &check.inserted,
-                    &text,
-                    &engine.context.vocabulary,
-                )
-            })
+            .map(|text| splashdown_core::vocab::corrected(&check.inserted, &text))
             .unwrap_or_default();
         // Keep watching while the dictation is still in the field: until
         // `until`, then (unless that was the second look) once more.

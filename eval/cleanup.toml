@@ -9,6 +9,8 @@
 #   max_chars maximum length
 #   screen    text read from the window around the field: its names and
 #             terms join the vocabulary, as in the app
+#   misheard  [[word, heard], …]: vocabulary words speech recognition wrote
+#             as something else before, as learned from corrections
 #   reject_text case-insensitive text it must not contain, punctuation
 #               included ("- [ ]")
 # The eval context always uses user name "Alex" and vocabulary Tauri, OpenRouter, Kubernetes.
@@ -208,6 +210,20 @@ app = "Messages"
 screen = "Priya Shah: did you see the Kowalczyk quote? Jordan Lee: yes, OpenRouter pricing too"
 expect = ["mom"]
 reject = ["Priya", "Kowalczyk", "Jordan"]
+
+[[case]]
+id = "misheard-meant"
+transcript = "let's meet at trucks parking at noon then walk over"
+misheard = [["TRUX", "trucks"]]
+expect = ["TRUX"]
+reject = ["trucks"]
+
+[[case]]
+id = "misheard-not-meant"
+transcript = "the delivery trucks are blocking the driveway again"
+misheard = [["TRUX", "trucks"]]
+expect = ["trucks"]
+reject_text = ["TRUX"]
 
 [[case]]
 id = "numbers-time-money"

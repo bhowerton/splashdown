@@ -6,6 +6,7 @@
 
 use std::sync::Mutex;
 
+use splashdown_core::vocab::Correction;
 use tauri::{AppHandle, Manager};
 
 use crate::state::AppState;
@@ -13,24 +14,32 @@ use crate::state::AppState;
 /// The words learned last, for the menu bar's Forget item.
 static LAST: Mutex<Vec<String>> = Mutex::new(Vec::new());
 
-/// Adds `words` to the vocabulary, leaving out ones already there, ones
-/// forgotten before and ones that aren't names or terms. Saves, rebuilds
-/// the engine, and returns what was added.
-pub fn learn(app: &AppHandle, words: Vec<String>) -> Vec<String> {
+/// Adds corrected words to the vocabulary, leaving out ones already there,
+/// ones forgotten before and ones that aren't names or terms, and keeps how
+/// each was misheard ("trucks" for "TRUX") as a hint for the AI pass.
+/// Saves, rebuilds the engine, and returns the words added.
+pub fn learn(app: &AppHandle, corrections: Vec<Correction>) -> Vec<String> {
     let Some(state) = app.try_state::<AppState>() else {
         return Vec::new();
     };
     let has = |list: &[String], w: &str| list.iter().any(|v| v.eq_ignore_ascii_case(w));
     let mut added: Vec<String> = Vec::new();
+    let mut hinted = false;
     let saved = state.update(app, |settings| {
         let general = &mut settings.general;
-        for word in words {
-            if worth_learning(&word)
-                && !has(&general.vocabulary, &word)
-                && !has(&general.forgotten_words, &word)
-                && !has(&added, &word)
-            {
-                added.push(word);
+        for c in &corrections {
+            if !worth_learning(&c.word) || has(&general.forgotten_words, &c.word) {
+                continue;
+            }
+            if !has(&general.vocabulary, &c.word) && !has(&added, &c.word) {
+                added.push(c.word.clone());
+            }
+            if c.misheard() {
+                let heard = general.misheard.entry(c.word.clone()).or_default();
+                if !has(heard, &c.heard) && heard.len() < MISHEARD_KEPT {
+                    heard.push(c.heard.to_lowercase());
+                    hinted = true;
+                }
             }
         }
         general.vocabulary.extend(added.iter().cloned());
@@ -40,15 +49,20 @@ pub fn learn(app: &AppHandle, words: Vec<String>) -> Vec<String> {
         tracing::warn!("couldn't save learned words: {e}");
         return Vec::new();
     }
-    if added.is_empty() {
+    if added.is_empty() && !hinted {
         return added;
     }
     crate::state::rebuild_in_background(app);
-    tracing::info!("learned {} word(s) from corrections", added.len());
-    *LAST.lock().unwrap_or_else(|e| e.into_inner()) = added.clone();
-    crate::tray::show_forget(added.last().map(String::as_str));
+    if !added.is_empty() {
+        tracing::info!("learned {} word(s) from corrections", added.len());
+        *LAST.lock().unwrap_or_else(|e| e.into_inner()) = added.clone();
+        crate::tray::show_forget(added.last().map(String::as_str));
+    }
     added
 }
+
+/// Mishearings kept per word.
+const MISHEARD_KEPT: usize = 5;
 
 /// Removes a learned word from the vocabulary for good.
 pub fn forget(app: &AppHandle, word: &str) -> Result<(), String> {

@@ -15,6 +15,9 @@ pub struct GeneralSettings {
     pub learned_words: Vec<String>,
     /// Learned words the user removed: never learned again.
     pub forgotten_words: Vec<String>,
+    /// How speech recognition wrote vocabulary words before the user
+    /// corrected them ("TRUX" = ["trucks"]), a hint for the AI pass.
+    pub misheard: std::collections::BTreeMap<String, Vec<String>>,
     /// Show words in the overlay while speaking (needs a speech model on
     /// this computer). Unset means on.
     pub live_preview: Option<bool>,
@@ -180,6 +183,8 @@ impl GeneralSettings {
     /// become forgotten, so they aren't learned again.
     pub fn settle_learned(&mut self) {
         let vocabulary = &self.vocabulary;
+        self.misheard
+            .retain(|word, _| vocabulary.iter().any(|v| v.eq_ignore_ascii_case(word)));
         let (kept, removed): (Vec<String>, Vec<String>) = std::mem::take(&mut self.learned_words)
             .into_iter()
             .partition(|w| vocabulary.iter().any(|v| v.eq_ignore_ascii_case(w)));

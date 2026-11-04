@@ -19,14 +19,40 @@ pub fn still_there(inserted: &str, field_now: &str) -> bool {
     long.is_empty() || kept * 2 >= long.len()
 }
 
+/// A word the user corrected, and how it was inserted.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Correction {
+    pub word: String,
+    /// What speech recognition wrote ("trucks" for "TRUX").
+    pub heard: String,
+}
+
+impl Correction {
+    /// Whether it was misheard as another word, not only written with
+    /// other capitals ("tauri" for "Tauri"): worth remembering as a hint.
+    pub fn misheard(&self) -> bool {
+        !self.word.eq_ignore_ascii_case(&self.heard)
+    }
+}
+
 /// The words in `field_now` that look like corrections of words in
 /// `inserted`. Words already in `known` (the vocabulary) are left out.
 pub fn corrections(inserted: &str, field_now: &str, known: &[String]) -> Vec<String> {
+    corrected(inserted, field_now)
+        .into_iter()
+        .map(|c| c.word)
+        .filter(|w| !known.iter().any(|k| k.eq_ignore_ascii_case(w)))
+        .collect()
+}
+
+/// The corrections in `field_now` of words in `inserted`, each with what
+/// it was inserted as, vocabulary words included (one misheard again is
+/// still worth knowing).
+pub fn corrected(inserted: &str, field_now: &str) -> Vec<Correction> {
     let inserted_words = words(inserted);
     let field_words = words(field_now);
-    let is_known = |w: &str| known.iter().any(|k| k.eq_ignore_ascii_case(w));
 
-    let mut out: Vec<String> = Vec::new();
+    let mut out: Vec<Correction> = Vec::new();
     for original in &inserted_words {
         // Still there as dictated: not corrected.
         if original.chars().count() < 3 || field_words.contains(original) {
@@ -35,13 +61,13 @@ pub fn corrections(inserted: &str, field_now: &str, known: &[String]) -> Vec<Str
         let lower = original.to_lowercase();
         let best = field_words
             .iter()
-            .filter(|w| !inserted_words.contains(w) && looks_like_term(w) && !is_known(w))
+            .filter(|w| !inserted_words.contains(w) && looks_like_term(w))
             // Partway through deleting it ("Pri"), not a correction.
             .filter(|w| {
                 let w = w.to_lowercase();
                 !(lower.len() > w.len() && lower.starts_with(&w))
             })
-            .filter(|w| !out.contains(w))
+            .filter(|w| !out.iter().any(|c| &c.word == *w))
             // Spelled close, or sounding the same ("trucks" → "TRUX"): how
             // speech recognition gets a name wrong. The closer, the better.
             .filter_map(|w| {
@@ -59,7 +85,10 @@ pub fn corrections(inserted: &str, field_now: &str, known: &[String]) -> Vec<Str
             })
             .min_by_key(|(d, _)| *d);
         if let Some((_, w)) = best {
-            out.push(w.clone());
+            out.push(Correction {
+                word: w.clone(),
+                heard: original.clone(),
+            });
         }
     }
     out
@@ -432,6 +461,14 @@ mod tests {
         ));
         assert!(!still_there(inserted, ""));
         assert!(!still_there(inserted, "Something else entirely now"));
+    }
+
+    #[test]
+    fn a_correction_says_what_was_heard() {
+        let c = &corrected("park at trucks", "park at TRUX")[0];
+        assert_eq!((c.word.as_str(), c.heard.as_str()), ("TRUX", "trucks"));
+        assert!(c.misheard());
+        assert!(!corrected("the tauri app", "the Tauri app")[0].misheard());
     }
 
     #[test]

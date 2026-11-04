@@ -25,6 +25,10 @@ pub(super) struct CleanupCase {
     /// Text read from the window around the field: its names and terms
     /// join the vocabulary, as in the app.
     pub(super) screen: Option<String>,
+    /// Vocabulary words speech recognition wrote as something else before
+    /// (`[word, heard]`), as learned from corrections.
+    #[serde(default)]
+    pub(super) misheard: Vec<[String; 2]>,
     /// A built-in transform's id: its instruction is used on `selection`.
     pub(super) transform: Option<String>,
     /// Case-insensitive substrings the output must contain.
@@ -75,6 +79,12 @@ impl CleanupCase {
                             .iter()
                             .flat_map(|s| splashdown_core::vocab::terms_on_screen(s, 30)),
                     )
+                    .chain(self.misheard.iter().map(|[word, _]| word.clone()))
+                    .collect(),
+                misheard: self
+                    .misheard
+                    .iter()
+                    .map(|[word, heard]| (word.clone(), heard.clone()))
                     .collect(),
                 ..PromptContext::default()
             },

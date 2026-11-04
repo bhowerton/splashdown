@@ -31,6 +31,10 @@ pub struct PromptContext {
     /// What the user dictated into the same app in the last few minutes,
     /// oldest first, for reference ("it", "that", a sentence carried on).
     pub earlier: Vec<String>,
+    /// How speech recognition has written some vocabulary words before
+    /// (the word, then what was heard), from the user's corrections: a
+    /// hint, used only when the sentence means that word.
+    pub misheard: Vec<(String, String)>,
 }
 
 /// How much the cleanup pass changes plain dictation. Instructions and
@@ -340,6 +344,17 @@ fn context_section(mode: Mode, ctx: &PromptContext) -> String {
         out.push_str(&format!(
             "\n\nVocabulary (preferred spellings): {}",
             ctx.vocabulary.join(", ")
+        ));
+    }
+    if !ctx.misheard.is_empty() {
+        let pairs: Vec<String> = ctx
+            .misheard
+            .iter()
+            .map(|(word, heard)| format!("\"{heard}\" for {word}"))
+            .collect();
+        out.push_str(&format!(
+            "\nSpeech recognition has written some of these as ordinary words before: {}. Use the vocabulary word only where the sentence means it (\"park at trucks\" may mean TRUX; \"the trucks are here\" means trucks).",
+            pairs.join(", ")
         ));
     }
     out

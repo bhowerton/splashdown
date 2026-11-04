@@ -312,6 +312,24 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         context: PromptContext {
             user_name: settings.general.user_name.clone(),
             vocabulary: vocabulary.clone(),
+            // Only to a cloud model: the built-in one (and, untested,
+            // Apple's) turns the ordinary word into the name too ("the TRUX
+            // are blocking"), which is worse than missing the name.
+            misheard: if ai_choice.as_ref().is_some_and(|c| {
+                !matches!(
+                    c.provider,
+                    AiProvider::Local | AiProvider::Apple | AiProvider::Custom
+                )
+            }) {
+                settings
+                    .general
+                    .misheard
+                    .iter()
+                    .flat_map(|(word, heard)| heard.iter().map(move |h| (word.clone(), h.clone())))
+                    .collect()
+            } else {
+                Vec::new()
+            },
             snippets: settings.snippets.clone(),
             mixed_languages: SttHints {
                 language: settings.general.language.clone(),

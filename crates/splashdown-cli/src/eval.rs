@@ -322,6 +322,7 @@ mod tests {
             context: None,
             earlier: Vec::new(),
             screen: None,
+            misheard: Vec::new(),
             transform: None,
             expect: vec!["friday".into()],
             reject: vec!["um".into(), "you know".into()],
