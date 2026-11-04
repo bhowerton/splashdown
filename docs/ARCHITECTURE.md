@@ -90,7 +90,7 @@ Rules of thumb:
 
 **Notes and meetings**
 - `notes/`: the Notes window and its commands (`mod.rs`), notes as Markdown files (`store.rs`), transcribing files and page links (`files.rs`, `link_helper.rs`), finding notes by meaning for Ask (`meaning.rs`), and serving recordings to the player (`media.rs`).
-- `meeting.rs`, `calls.rs`, `pill.rs`: recording a meeting into a note, offering to when a call starts, and the meeting pill.
+- `meeting.rs` and `meeting/`, `calls.rs`, `pill.rs`: recording a meeting into a note (the audio, the transcript, the summary, transcribing again, recovery after a crash), offering to when a call starts, and the meeting pill.
 
 **Where state lives.** `AppState` (in `state.rs`, handed to Tauri with `app.manage`) holds what commands share: the settings, the session's `Handle`, why the engine can't run (if it can't), history, the tray menu and update status. Commands get it as `State<'_, AppState>`; other code with `app.state::<AppState>()`. The session thread owns its own state and the `Engine`; everything else reaches it only by sending it a message through `session::Handle`. What one feature owns lives in a static in its own module: the Compose and Ask panels (`PANEL`), the reading in progress (`reading.rs`), the meeting in progress (`meeting.rs`), spending (`spend.rs`), the last learned word (`learning.rs`). `config.toml` is the truth for settings: the Settings window saves through `save_settings`; anything else changes them with `AppState::update` (which saves, refreshes the menu bar and shortcuts, and tells an open Settings window), then calls `AppState::apply` when dictation needs the change, which rebuilds the engine and sends it to the session.
 
@@ -108,7 +108,7 @@ The app is a handful of long-lived threads that talk over channels. Only the ses
 | `splashdown-preview` | `app/src-tauri/src/preview.rs` | Re-transcribes the recording so far with a local model for the live words in the overlay; with a streaming model the session's `LiveStream` gives them instead |
 | `splashdown-reading` | `app/src-tauri/src/reading.rs` | Reads text aloud, one piece at a time, so Esc or a new dictation can stop it |
 | `transcribe-file` | `app/src-tauri/src/notes/files.rs` | Transcribes audio and video files dropped on Notes into notes, one at a time |
-| `meeting`, `meeting-audio` | `app/src-tauri/src/meeting.rs`, `splashdown-audio/src/live.rs` | A meeting: takes both sides' audio twice a second (the microphone on its own recorder thread, the computer's sound from the Swift shim's Core Audio tap or WASAPI loopback), spools it, cuts each side into turns and writes them into the note |
+| `meeting`, `meeting-audio` | `app/src-tauri/src/meeting/record.rs`, `splashdown-audio/src/live.rs` | A meeting: takes both sides' audio twice a second (the microphone on its own recorder thread, the computer's sound from the Swift shim's Core Audio tap or WASAPI loopback), spools it, cuts each side into turns and writes them into the note |
 | `calls` | `app/src-tauri/src/calls.rs` | Watches which apps use the microphone, to offer recording a call |
 | `splashdown-llm` (separate process) | `crates/splashdown-llm` | Runs the built-in local text model when it's in use; started on demand by `splashdown-providers/src/local_llm.rs`, exits after 10 idle minutes |
 | `splashdown-updates` | `app/src-tauri/src/updates.rs` | Release builds only: checks for a new version (tauri-plugin-updater, GitHub releases) 30 s after launch and then daily, if allowed in Settings. Installing happens only from the user's click |
