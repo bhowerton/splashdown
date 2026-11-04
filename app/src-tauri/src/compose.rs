@@ -145,12 +145,16 @@ pub fn change(app: &AppHandle, change: &str) -> Result<(), String> {
 
 /// Writes the newest version from `request`, streaming it into the panel.
 fn write(app: &AppHandle, request: splashdown_core::TextRequest) {
-    let (writing, model) = {
+    let (writing, model, context) = {
         let mut panel = panel();
         panel.writing += 1;
         panel.shown.writing = true;
         panel.shown.error = None;
-        (panel.writing, panel.model.clone())
+        (
+            panel.writing,
+            panel.model.clone(),
+            panel.context.clone().unwrap_or_default(),
+        )
     };
     changed(app);
     let Some(model) = model else {
@@ -186,7 +190,7 @@ fn write(app: &AppHandle, request: splashdown_core::TextRequest) {
             match result {
                 Ok(completion) => {
                     if let Some(last) = panel.shown.versions.last_mut() {
-                        last.text = compose::clean(&completion.text);
+                        last.text = compose::finish(&completion.text, &context);
                     }
                     crate::did::note(crate::did::COMPOSED, "");
                 }

@@ -400,6 +400,82 @@ fn author_name(line: &str) -> Option<&str> {
     Some(&line[..end])
 }
 
+/// A finished draft for `ctx`: `clean`, then without any sentence copied
+/// word for word from the user's own messages on screen. Using their usual
+/// words is the point; repeating a whole sentence they already sent (five
+/// words or more) is not, and models do it however they're told.
+pub fn finish(draft: &str, ctx: &ComposeContext) -> String {
+    let draft = clean(draft);
+    if !ctx.match_style {
+        return draft;
+    }
+    let screen = [ctx.window_text.as_deref(), ctx.field_text.as_deref()]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut out = draft;
+    for message in their_messages(&screen, ctx.user_name.as_deref()) {
+        for sentence in sentences(&message) {
+            if sentence.split_whitespace().count() >= 5 {
+                out = without(&out, sentence);
+            }
+        }
+    }
+    out
+}
+
+/// The sentences of `text`, each with its closing punctuation.
+fn sentences(text: &str) -> Vec<&str> {
+    let mut out = Vec::new();
+    let mut start = 0;
+    for (i, c) in text.char_indices() {
+        if matches!(c, '.' | '!' | '?' | '\n') {
+            let end = i + c.len_utf8();
+            // "!!" and "?!" end one sentence.
+            if text[end..].starts_with(['.', '!', '?']) {
+                continue;
+            }
+            let s = text[start..end].trim();
+            if !s.is_empty() {
+                out.push(s);
+            }
+            start = end;
+        }
+    }
+    let rest = text[start..].trim();
+    if !rest.is_empty() {
+        out.push(rest);
+    }
+    out
+}
+
+/// `text` without `sentence` (any case), and the space it leaves tidied.
+fn without(text: &str, sentence: &str) -> String {
+    let lower = text.to_lowercase();
+    let needle = sentence.trim_end_matches(['.', '!', '?']).to_lowercase();
+    // Byte positions only line up when lowercasing kept the length.
+    if lower.len() != text.len() || needle.is_empty() {
+        return text.to_string();
+    }
+    let Some(at) = lower.find(&needle) else {
+        return text.to_string();
+    };
+    let mut end = at + needle.len();
+    while text[end..].starts_with(['.', '!', '?']) {
+        end += 1;
+    }
+    let joined = format!("{}{}", text[..at].trim_end_matches(' '), &text[end..]);
+    joined
+        .lines()
+        .map(str::trim)
+        .collect::<Vec<_>>()
+        .join("\n")
+        .replace("\n\n\n", "\n\n")
+        .trim()
+        .to_string()
+}
+
 /// A draft as the model wrote it, with what models add around a message
 /// taken off: a wrapping code fence or quotes, and a leading "Here's…:"
 /// line.
@@ -461,6 +537,32 @@ fn undash(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_sentence_they_already_sent_is_not_repeated() {
+        let ctx = ComposeContext {
+            window_text: Some(
+                "Jo\nPotluck Saturday?\nOn Tue, Sam wrote:\nHey Jo!! Love this idea 🙌 Count me in for the next one!\nS x".into(),
+            ),
+            user_name: Some("Sam".into()),
+            match_style: true,
+            ..ComposeContext::default()
+        };
+        assert_eq!(
+            finish(
+                "Hey Jo!! Love this idea 🙌 Count me in for the next one! I'll bring dessert.\n\nS x",
+                &ctx
+            ),
+            "Hey Jo!! I'll bring dessert.\n\nS x"
+        );
+        // Off, or short phrases: kept.
+        let off = ComposeContext {
+            match_style: false,
+            ..ctx.clone()
+        };
+        assert!(finish("Count me in for the next one!", &off).contains("Count me in"));
+        assert_eq!(finish("Love this idea 🙌", &ctx), "Love this idea 🙌");
+    }
 
     #[test]
     fn a_formal_request_leaves_out_the_everyday_style() {

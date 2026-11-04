@@ -159,7 +159,7 @@ impl Controller {
                         .record(&[(model.name(), completion.usage)], chrono::Local::now());
                 }
                 let result = result
-                    .map(|completion| splashdown_core::compose::clean(&completion.text))
+                    .map(|completion| splashdown_core::compose::finish(&completion.text, &context))
                     .map_err(|e| {
                         errors::pipeline(
                             &splashdown_core::PipelineError::Llm(e),

@@ -140,7 +140,7 @@ pub(super) async fn compose(
         let (draft, faults) = match result {
             Ok(done) => {
                 cost += done.usage;
-                let draft = compose::clean(&done.text);
+                let draft = compose::finish(&done.text, &context(case));
                 let faults = compose_faults(case, &draft);
                 (draft, faults)
             }

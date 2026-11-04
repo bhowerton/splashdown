@@ -161,7 +161,18 @@ pub(super) async fn style(
         latencies.push(started.elapsed());
         let plain = model.complete(&request(case, false, None)).await;
         let (styled, plain) = match (styled, plain) {
-            (Ok(s), Ok(p)) => (compose::clean(&s.text), compose::clean(&p.text)),
+            (Ok(s), Ok(p)) => {
+                let ctx = |match_style| ComposeContext {
+                    window_text: case.base.window.clone(),
+                    user_name: case.base.user.clone(),
+                    match_style,
+                    ..ComposeContext::default()
+                };
+                (
+                    compose::finish(&s.text, &ctx(true)),
+                    compose::finish(&p.text, &ctx(false)),
+                )
+            }
             (Err(e), _) | (_, Err(e)) => {
                 errors += 1;
                 println!("✗ {:<28} error: {e}", case.base.id);
