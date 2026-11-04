@@ -446,6 +446,11 @@ pub struct GeneralSettings {
     /// ISO-639-1 code; unset means auto-detect.
     pub language: Option<String>,
     pub vocabulary: Vec<String>,
+    /// Words in `vocabulary` learned from corrections (shown as learned,
+    /// to forget with one click).
+    pub learned_words: Vec<String>,
+    /// Learned words the user removed: never learned again.
+    pub forgotten_words: Vec<String>,
     /// Show words in the overlay while speaking (needs a local Whisper
     /// model). Unset means on.
     pub live_preview: Option<bool>,
@@ -463,8 +468,8 @@ pub struct GeneralSettings {
     pub keep_audio: Option<bool>,
     /// The first-run setup guide has been completed.
     pub onboarded: bool,
-    /// Suggest vocabulary from words corrected right after a dictation.
-    /// Unset means on.
+    /// Learn names and terms corrected right after a dictation into the
+    /// vocabulary. Unset means on.
     pub learn_vocabulary: Option<bool>,
     /// Never use a cloud provider: speech stays on this computer and the AI
     /// pass only runs on a local server (or is off).
@@ -478,6 +483,9 @@ pub struct GeneralSettings {
     /// conversation being answered) when nothing is selected. Unset means
     /// on.
     pub compose_reads_window: Option<bool>,
+    /// Names and terms in the window around the field (the email or chat
+    /// on screen) join the vocabulary for each dictation. Unset means on.
+    pub screen_words: Option<bool>,
     /// Compose shows its draft in a panel to change and Insert, instead of
     /// writing it straight into the field. Unset means off.
     pub compose_panel: Option<bool>,
@@ -598,6 +606,25 @@ impl GeneralSettings {
         self.keep_history() && self.keep_audio.unwrap_or(false)
     }
 
+    /// Learned words no longer in the vocabulary (removed in Settings)
+    /// become forgotten, so they aren't learned again.
+    pub fn settle_learned(&mut self) {
+        let vocabulary = &self.vocabulary;
+        let (kept, removed): (Vec<String>, Vec<String>) = std::mem::take(&mut self.learned_words)
+            .into_iter()
+            .partition(|w| vocabulary.iter().any(|v| v.eq_ignore_ascii_case(w)));
+        self.learned_words = kept;
+        for word in removed {
+            if !self
+                .forgotten_words
+                .iter()
+                .any(|f| f.eq_ignore_ascii_case(&word))
+            {
+                self.forgotten_words.push(word);
+            }
+        }
+    }
+
     pub fn learn_vocabulary(&self) -> bool {
         self.learn_vocabulary.unwrap_or(true)
     }
@@ -608,6 +635,10 @@ impl GeneralSettings {
 
     pub fn compose_reads_window(&self) -> bool {
         self.compose_reads_window.unwrap_or(true)
+    }
+
+    pub fn screen_words(&self) -> bool {
+        self.screen_words.unwrap_or(true)
     }
 
     pub fn compose_panel(&self) -> bool {
@@ -1605,6 +1636,20 @@ mod tests {
         assert_eq!(Settings::from_toml(&text).unwrap(), s);
         assert!(Settings::from_toml("[general]\nvocabulary = 3").is_err());
         assert!(Settings::from_toml("not toml at all ===").is_err());
+    }
+
+    #[test]
+    fn a_learned_word_removed_from_the_vocabulary_is_forgotten() {
+        let mut g = GeneralSettings {
+            vocabulary: vec!["Tauri".into()],
+            learned_words: vec!["Priya".into(), "tauri".into()],
+            ..GeneralSettings::default()
+        };
+        g.settle_learned();
+        assert_eq!(g.learned_words, vec!["tauri".to_string()]);
+        assert_eq!(g.forgotten_words, vec!["Priya".to_string()]);
+        g.settle_learned();
+        assert_eq!(g.forgotten_words.len(), 1, "not added twice");
     }
 
     #[test]

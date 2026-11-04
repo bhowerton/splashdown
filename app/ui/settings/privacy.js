@@ -40,6 +40,7 @@ function renderPrivacy() {
   $("pv-appname").checked = s.general.share_app_name !== false;
   $("pv-recent").checked = s.general.share_recent !== false;
   $("pv-window").checked = s.general.compose_reads_window !== false;
+  $("pv-screen-words").checked = s.general.screen_words !== false;
   $("pv-ask-notes").checked = s.notes?.ask_uses_notes !== false;
   $("pv-agents-read").checked = !!s.notes?.agents_read;
   $("pv-agents-write").checked = !!s.notes?.agents_write;

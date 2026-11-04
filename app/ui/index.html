@@ -241,9 +241,9 @@
         <div class="row column">
           <span class="lbl">Names and terms to spell correctly<small>One per line or comma-separated, e.g. product names, colleagues, jargon</small></span>
           <textarea id="gen-vocab" rows="3" aria-label="Names and terms to spell correctly" placeholder="Tauri, OpenRouter, Priya" data-setting></textarea>
-          <div id="vocab-suggest" class="suggest" hidden></div>
+          <div id="vocab-learned" class="suggest" hidden></div>
         </div>
-        <label class="row"><span class="lbl">Learn from my corrections<small>If you fix a name right after dictating it, Splashdown suggests adding it here. Only the word is kept.</small></span>
+        <label class="row"><span class="lbl">Learn from my corrections<small>If you fix a name or term right after dictating it ("Pria" to "Priya"), Splashdown adds it here and says so. Forget it with ✕ above, or from the menu bar. Only the word is kept.</small></span>
           <input id="gen-learn" type="checkbox" class="switch" data-setting></label>
         <div class="row"><span class="lbl">Bring your words from another dictation app<small>A dictionary or snippets export, or a word list (text or CSV, with “misspelling,correction” lines for corrections). Words, corrections and snippets are added; nothing already here changes.</small></span>
           <button class="btn" id="words-import">Import…</button>
@@ -511,6 +511,8 @@
           <input id="pv-recent" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">The conversation on screen, when you compose<small>With nothing selected, Compose reads the text around where you're typing (the email or chat you're answering) so the draft fits it. Read on this computer, sent only with that draft.</small></span>
           <input id="pv-window" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">Names and words on screen, when you dictate<small>Names and terms from the window you're typing in (the email or chat on screen) are added to your vocabulary for that dictation, so they're spelled right. Read on this computer; only those words are sent, with that dictation.</small></span>
+          <input id="pv-screen-words" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Your notes, when you ask a question<small>Parts of the notes that match the question (up to three), so answers can draw on them.</small></span>
           <input id="pv-ask-notes" type="checkbox" class="switch" data-setting></label>
         <div class="row"><span class="lbl">Selected text<small>Only when you select text and dictate an instruction for it, or run a transform on it.</small></span><button class="link" data-goto="words">Transforms</button></div>

@@ -188,6 +188,9 @@ struct CleanupCase {
     /// Earlier dictations into the same app, oldest first.
     #[serde(default)]
     earlier: Vec<String>,
+    /// Text read from the window around the field: its names and terms
+    /// join the vocabulary, as in the app.
+    screen: Option<String>,
     /// A built-in transform's id: its instruction is used on `selection`.
     transform: Option<String>,
     /// Case-insensitive substrings the output must contain.
@@ -230,7 +233,15 @@ impl CleanupCase {
                 field_text: self.context.clone(),
                 earlier: self.earlier.clone(),
                 user_name: Some("Alex".into()),
-                vocabulary: vec!["Tauri".into(), "OpenRouter".into(), "Kubernetes".into()],
+                vocabulary: ["Tauri", "OpenRouter", "Kubernetes"]
+                    .into_iter()
+                    .map(String::from)
+                    .chain(
+                        self.screen
+                            .iter()
+                            .flat_map(|s| splashdown_core::vocab::terms_on_screen(s, 30)),
+                    )
+                    .collect(),
                 ..PromptContext::default()
             },
         }
@@ -1245,6 +1256,7 @@ mod tests {
             preset: None,
             context: None,
             earlier: Vec::new(),
+            screen: None,
             transform: None,
             expect: vec!["friday".into()],
             reject: vec!["um".into(), "you know".into()],

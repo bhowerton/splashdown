@@ -65,6 +65,7 @@ function renderGeneral() {
   // One per line, so a term with a comma in it ("Smith, Jones & Co")
   // comes back whole.
   setValue($("gen-vocab"), s.general.vocabulary.join("\n"));
+  showLearned(s.general.learned_words ?? []);
   $("hist-keep").checked = s.general.keep_history === true; // on the History tab; off unless turned on
   $("hist-audio").checked = s.general.keep_audio === true;
   $("gen-near-cursor").checked = s.general.overlay_near_cursor !== false;
@@ -484,35 +485,27 @@ $("gen-volume").addEventListener("change", (e) => {
   invoke("preview_sound", { volume: Number(e.target.value) / 100 }).catch(() => {});
 });
 
-// ---------------------------------------------------------------- vocabulary suggestions
+// ---------------------------------------------------------------- learned words
 
-async function loadSuggestions() {
-  const words = await invoke("get_vocab_suggestions").catch(() => []);
-  const host = $("vocab-suggest");
+/** The words learned from corrections, each with ✕ to forget it (it's
+ *  removed and never learned again). */
+function showLearned(words) {
+  const host = $("vocab-learned");
   host.hidden = words.length === 0;
   host.replaceChildren(
-    document.createTextNode("Suggested from your corrections:"),
+    document.createTextNode("Learned from your corrections:"),
     ...words.map((w) => {
       const chip = document.createElement("span");
       chip.className = "chip";
       chip.append(w);
-      const add = document.createElement("button");
-      add.textContent = "+ Add";
-      add.onclick = async () => {
-        const s = collect();
-        if (!s.general.vocabulary.some((v) => v.toLowerCase() === w.toLowerCase())) s.general.vocabulary.push(w);
-        await invoke("dismiss_vocab_suggestion", { word: w });
-        await save(s);
-        loadSuggestions();
-      };
-      const no = document.createElement("button");
-      no.className = "no";
-      no.textContent = "Not now";
-      no.onclick = async () => {
-        await invoke("dismiss_vocab_suggestion", { word: w });
-        loadSuggestions();
-      };
-      chip.append(add, no);
+      const forget = document.createElement("button");
+      forget.className = "no";
+      forget.textContent = "✕";
+      forget.title = `Forget ${w}`;
+      forget.setAttribute("aria-label", `Forget ${w}`);
+      // Settings reloads once it's saved (settings-reloaded).
+      forget.onclick = () => invoke("forget_learned_word", { word: w }).catch((e) => toast(String(e), true));
+      chip.append(forget);
       return chip;
     })
   );

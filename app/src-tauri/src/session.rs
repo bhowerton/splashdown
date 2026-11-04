@@ -95,10 +95,18 @@ struct PendingCorrectionCheck {
     focus: Focus,
     inserted: String,
     due: Instant,
+    /// The second look: there's no third.
+    again: bool,
 }
 
-/// How long after an insertion to look for corrections.
+/// How long "Learned “Priya”" shows.
+const LEARNED_SHOWN: Duration = Duration::from_secs(3);
+
+/// How long after an insertion to look for corrections, and, while the
+/// field is still the one in use and nothing was corrected yet, how long
+/// after that to look once more.
 const CORRECTION_CHECK_AFTER: Duration = Duration::from_secs(20);
+const CORRECTION_CHECK_AGAIN: Duration = Duration::from_secs(120);
 
 pub struct Keys {
     pub dictation: PhysicalKey,
@@ -423,6 +431,9 @@ struct Active {
     /// The focused terminal's or editor's project, being listed in the
     /// background (presets with file tags on).
     project: Option<mpsc::Receiver<Option<Arc<Project>>>>,
+    /// Names and terms in the window around the field, being read in the
+    /// background, for speech-to-text and the AI to spell.
+    screen_words: Option<mpsc::Receiver<Vec<String>>>,
     /// A control request's `listen`: the text goes here, not into a field.
     reply_to: Option<control::Reply>,
 }
@@ -732,7 +743,7 @@ impl Controller {
         }
         self.maybe_preview(now);
         if self.correction_check.as_ref().is_some_and(|c| now >= c.due) {
-            self.check_corrections();
+            self.check_corrections(false);
         }
         if let Some(chunker) = self.active.as_mut().and_then(|a| a.chunker.as_mut()) {
             chunker.tick(&self.audio);
@@ -891,7 +902,7 @@ impl Controller {
         self.mic_lost = false;
         // The user has moved on: look at the previous insertion now.
         if self.correction_check.is_some() {
-            self.check_corrections();
+            self.check_corrections(true);
         }
         // The layout may have changed since the last dictation; this runs
         // on the main thread long before we paste.
@@ -987,6 +998,13 @@ impl Controller {
             .then(|| focus.as_ref().and_then(|f| f.app.document.clone()))
             .flatten()
             .map(list_project);
+        let screen_words = self
+            .engine
+            .as_ref()
+            .is_ok_and(|e| e.screen_words)
+            .then(|| focus.as_ref().map(|f| f.app.pid))
+            .flatten()
+            .map(read_screen_words);
         // Transforms replace a selection, so they never press Return.
         let auto_send = preset.auto_send && !matches!(selection, Selection::Text(_));
 
@@ -1043,6 +1061,7 @@ impl Controller {
             stream,
             reply_to: None,
             project,
+            screen_words,
         });
         if auto_send {
             self.lock().set_send(true);
@@ -1141,6 +1160,11 @@ impl Controller {
             );
         }
         let files = active.project.take().and_then(project_files);
+        let screen = active
+            .screen_words
+            .take()
+            .and_then(|rx| rx.recv_timeout(Duration::from_millis(300)).ok())
+            .unwrap_or_default();
         let mut typer = job
             .as_ref()
             .and_then(|_| self.stream_typer(&active, files.clone()));
@@ -1154,6 +1178,7 @@ impl Controller {
         let selected = job.as_ref().and_then(|j| j.selection.clone());
         let outcome = job
             .map(|job| with_file_names(job, files.as_deref()))
+            .map(|job| with_screen_words(job, &screen))
             .and_then(|job| self.run_pipeline(job, &active.preset, on_text))
             .map(|(mut outcome, took)| {
                 if let Some(project) = &files {
@@ -1642,6 +1667,7 @@ impl Controller {
                 focus,
                 inserted: outcome.text.clone(),
                 due: Instant::now() + CORRECTION_CHECK_AFTER,
+                again: false,
             });
         }
         let mut sent = false;
@@ -2462,9 +2488,10 @@ impl Controller {
         }
     }
 
-    /// Compares the field now with what we inserted and records likely
-    /// vocabulary corrections. Only the suggested words are kept.
-    fn check_corrections(&mut self) {
+    /// Compares the field now with what we inserted and learns the names
+    /// and terms the user corrected ("Pria" → "Priya"), saying so.
+    /// `moving_on`: a new dictation is starting, so this is the last look.
+    fn check_corrections(&mut self, moving_on: bool) {
         let Some(check) = self.correction_check.take() else {
             return;
         };
@@ -2476,9 +2503,28 @@ impl Controller {
         };
         let words =
             splashdown_core::vocab::suggest(&check.inserted, &now, &engine.context.vocabulary);
-        if !words.is_empty() {
-            tracing::info!("vocabulary suggestions: {}", words.len());
-            self.history.add_suggestions(words);
+        if words.is_empty() {
+            if !moving_on && !check.again && check.focus.is_current() {
+                self.correction_check = Some(PendingCorrectionCheck {
+                    due: Instant::now() + CORRECTION_CHECK_AGAIN,
+                    again: true,
+                    ..check
+                });
+            }
+            return;
+        }
+        let learned = crate::learning::learn(self.ui.app(), words);
+        // Not over a recording that's starting.
+        if !learned.is_empty() && self.active.is_none() {
+            let quoted: Vec<String> = learned
+                .iter()
+                .map(|w| format!("\u{201c}{w}\u{201d}"))
+                .collect();
+            self.ui.show(OverlayState::Message {
+                tone: Tone::Success,
+                text: format!("Learned {}", quoted.join(", ")),
+            });
+            self.hide_at = Some(Instant::now() + LEARNED_SHOWN);
         }
     }
 
@@ -3106,6 +3152,46 @@ fn project_files(rx: mpsc::Receiver<Option<Arc<Project>>>) -> Option<Arc<Project
 /// Project terms added to the vocabulary, at most. The user's own words
 /// come first: speech models only read so much of the hint.
 const PROJECT_TERMS: usize = 40;
+
+/// Names and terms on screen added to the vocabulary, at most.
+const SCREEN_TERMS: usize = 30;
+
+/// Reads the names and terms in the window around the focused field of
+/// app `pid` in the background (Accessibility can be slow in big pages).
+fn read_screen_words(pid: i32) -> mpsc::Receiver<Vec<String>> {
+    let (tx, rx) = mpsc::channel();
+    std::thread::spawn(move || {
+        let words = Focus::capture()
+            .filter(|f| f.app.pid == pid)
+            .and_then(|f| f.surrounding_text(WINDOW_MIN_CHARS, WINDOW_MAX_CHARS))
+            .map(|text| splashdown_core::vocab::terms_on_screen(&text, SCREEN_TERMS))
+            .unwrap_or_default();
+        let _ = tx.send(words);
+    });
+    rx
+}
+
+/// Adds names and terms from the screen to what speech-to-text and the AI
+/// are told to spell, after the user's own words.
+fn with_screen_words(mut job: AudioJob, words: &[String]) -> AudioJob {
+    let mut added = 0;
+    for word in words {
+        if !job
+            .context
+            .vocabulary
+            .iter()
+            .any(|v| v.eq_ignore_ascii_case(word))
+        {
+            job.hints.vocabulary.push(word.clone());
+            job.context.vocabulary.push(word.clone());
+            added += 1;
+        }
+    }
+    if added > 0 {
+        tracing::info!("{added} word(s) from the screen added to the vocabulary");
+    }
+    job
+}
 
 /// Adds the project's recently changed file names and its most-used code
 /// names to what speech-to-text and the AI are told to spell.

@@ -79,9 +79,6 @@ pub struct History {
     entries: Mutex<Vec<Entry>>,
     /// Kept in memory even when history is off.
     recent_apps: Mutex<Vec<RecentApp>>,
-    /// Vocabulary suggestions learned from corrections, not yet accepted or
-    /// dismissed. In memory only.
-    suggestions: Mutex<Vec<String>>,
     /// The most recent result, kept in memory even when history is off so
     /// "Paste last raw transcript" still works.
     latest: Mutex<Option<Entry>>,
@@ -107,7 +104,6 @@ impl History {
             entries: Mutex::new(entries),
             latest,
             recent_apps: Mutex::new(recent),
-            suggestions: Mutex::new(Vec::new()),
             keep_days: Mutex::new(None),
         }
     }
@@ -146,29 +142,6 @@ impl History {
             keep
         });
         before - entries.len()
-    }
-
-    pub fn add_suggestions(&self, words: Vec<String>) {
-        let mut s = self.suggestions.lock().unwrap_or_else(|e| e.into_inner());
-        for w in words {
-            if !s.iter().any(|x| x.eq_ignore_ascii_case(&w)) {
-                s.push(w);
-            }
-        }
-    }
-
-    pub fn suggestions(&self) -> Vec<String> {
-        self.suggestions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
-    }
-
-    pub fn remove_suggestion(&self, word: &str) {
-        self.suggestions
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .retain(|w| !w.eq_ignore_ascii_case(word));
     }
 
     /// Newest first.

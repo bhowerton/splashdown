@@ -13,7 +13,6 @@ function showTab(tab = (location.hash || "#general").slice(1)) {
   if (tab === "insights") loadInsights();
   if (tab === "presets") loadRecentApps();
   if (tab === "general") loadMicrophones();
-  if (tab === "words") loadSuggestions();
   document.querySelectorAll(".tab").forEach((s) => (s.hidden = s.id !== `tab-${tab}`));
   document.querySelectorAll(".side a[data-tab]").forEach((a) => {
     const on = a.dataset.tab === tab;
@@ -179,6 +178,7 @@ function collect() {
   s.general.share_app_name = $("pv-appname").checked ? null : false;
   s.general.share_recent = $("pv-recent").checked ? null : false;
   s.general.compose_reads_window = $("pv-window").checked ? null : false;
+  s.general.screen_words = $("pv-screen-words").checked ? null : false;
   s.general.compose_panel = $("hk-compose-panel").checked ? true : null;
   s.actions = collectActions(s.actions);
 
@@ -337,7 +337,6 @@ listen("show-tab", (event) => showTab(event.payload));
 (async () => {
   showTab();
   await refresh();
-  loadSuggestions();
   loadMicrophones();
   // Until setup is finished, start on the Permissions tab.
   if (!location.hash && !permissionsDone()) showTab("permissions");

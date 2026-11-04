@@ -40,6 +40,212 @@ fn looks_like_term(w: &str) -> bool {
             || w.chars().skip(1).any(char::is_uppercase))
 }
 
+/// Names and terms in text read from the screen (the email or chat around
+/// where the user is dictating), for speech-to-text and the AI to spell
+/// right: words that look like terms (see `looks_like_term`), leaving out
+/// common words that are only capitalized because they start a sentence or
+/// a line. Most frequent first, then nearest the end (the field); at most
+/// `max`.
+pub fn terms_on_screen(text: &str, max: usize) -> Vec<String> {
+    let all = words(text);
+    let lowercase: std::collections::HashSet<&str> = all
+        .iter()
+        .filter(|w| w.chars().next().is_some_and(char::is_lowercase))
+        .map(String::as_str)
+        .collect();
+    // (term, count, last position)
+    let mut found: Vec<(String, usize, usize)> = Vec::new();
+    for (i, w) in all.iter().enumerate() {
+        if !looks_like_term(w)
+            || w.chars().all(|c| c.is_ascii_digit() || c == '-')
+            || COMMON.contains(&w.to_lowercase().as_str())
+            || (w.chars().next().is_some_and(char::is_uppercase)
+                && lowercase.contains(w.to_lowercase().as_str()))
+            || (w.chars().count() > 1 && w.chars().all(char::is_uppercase) && w.chars().count() < 3)
+        {
+            continue;
+        }
+        match found.iter_mut().find(|(t, ..)| t == w) {
+            Some(entry) => {
+                entry.1 += 1;
+                entry.2 = i;
+            }
+            None => found.push((w.clone(), 1, i)),
+        }
+    }
+    found.sort_by(|a, b| b.1.cmp(&a.1).then(b.2.cmp(&a.2)));
+    found.into_iter().take(max).map(|(t, ..)| t).collect()
+}
+
+/// Words capitalized on screen only because of where they are (the start
+/// of a sentence, a line, a button or a header): never terms.
+const COMMON: &[&str] = &[
+    "the",
+    "this",
+    "that",
+    "these",
+    "those",
+    "there",
+    "then",
+    "than",
+    "and",
+    "but",
+    "for",
+    "not",
+    "you",
+    "your",
+    "yours",
+    "our",
+    "ours",
+    "their",
+    "they",
+    "them",
+    "she",
+    "her",
+    "his",
+    "him",
+    "its",
+    "can",
+    "could",
+    "would",
+    "should",
+    "will",
+    "shall",
+    "may",
+    "might",
+    "must",
+    "just",
+    "also",
+    "please",
+    "thanks",
+    "thank",
+    "hey",
+    "hello",
+    "dear",
+    "best",
+    "regards",
+    "cheers",
+    "sincerely",
+    "yes",
+    "yeah",
+    "okay",
+    "sure",
+    "great",
+    "good",
+    "nice",
+    "cool",
+    "sounds",
+    "let",
+    "lets",
+    "let's",
+    "what",
+    "when",
+    "where",
+    "which",
+    "who",
+    "why",
+    "how",
+    "here",
+    "have",
+    "has",
+    "had",
+    "are",
+    "was",
+    "were",
+    "been",
+    "being",
+    "did",
+    "does",
+    "doing",
+    "with",
+    "from",
+    "into",
+    "onto",
+    "about",
+    "after",
+    "before",
+    "today",
+    "tomorrow",
+    "yesterday",
+    "morning",
+    "afternoon",
+    "evening",
+    "tonight",
+    "subject",
+    "reply",
+    "forward",
+    "sent",
+    "inbox",
+    "drafts",
+    "draft",
+    "archive",
+    "trash",
+    "spam",
+    "starred",
+    "flagged",
+    "unread",
+    "search",
+    "compose",
+    "new",
+    "more",
+    "less",
+    "all",
+    "any",
+    "some",
+    "one",
+    "two",
+    "see",
+    "view",
+    "show",
+    "hide",
+    "open",
+    "close",
+    "edit",
+    "delete",
+    "send",
+    "save",
+    "cancel",
+    "done",
+    "share",
+    "copy",
+    "paste",
+    "undo",
+    "message",
+    "messages",
+    "threads",
+    "thread",
+    "people",
+    "channels",
+    "channel",
+    "home",
+    "activity",
+    "files",
+    "later",
+    "now",
+    "wrote",
+    "said",
+    "via",
+    "sir",
+    "madam",
+    "mr",
+    "mrs",
+    "ms",
+    "i'm",
+    "i've",
+    "i'll",
+    "i'd",
+    "it's",
+    "that's",
+    "don't",
+    "can't",
+    "won't",
+    "didn't",
+    "we're",
+    "we'll",
+    "you're",
+    "you'll",
+];
+
 fn max_distance(a: &str, b: &str) -> usize {
     (a.chars().count().max(b.chars().count()) / 3).clamp(1, 3)
 }
@@ -70,6 +276,40 @@ fn distance(a: &str, b: &str) -> usize {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn terms_on_screen_are_names_not_sentence_starts() {
+        let thread = "#launch\nPriya Shah 10:02 AM\nMorning! Standup moved to 10:30 today.\n\
+                      Jordan Lee 10:15 AM\nCan someone review the pricing page in the Launch doc? \
+                      Thanks Priya. Ping me on OpenRouter or the k8s channel.\nPeople\nThreads";
+        let terms = terms_on_screen(thread, 10);
+        assert_eq!(
+            terms[0], "Priya",
+            "the most mentioned comes first: {terms:?}"
+        );
+        for want in ["Shah", "Jordan", "Lee", "OpenRouter", "k8s", "Standup"] {
+            assert!(
+                terms.contains(&want.to_string()),
+                "{want} missing: {terms:?}"
+            );
+        }
+        // "Launch" is also written "#launch": an ordinary word.
+        for not in [
+            "Morning", "Can", "Thanks", "People", "Threads", "AM", "Launch",
+        ] {
+            assert!(!terms.contains(&not.to_string()), "{not} kept: {terms:?}");
+        }
+        assert_eq!(terms_on_screen(thread, 2).len(), 2);
+    }
+
+    #[test]
+    fn a_capitalized_word_also_used_lowercase_is_not_a_term() {
+        assert!(
+            terms_on_screen("Movers come Thursday. The movers are early.", 5)
+                .iter()
+                .all(|t| t != "Movers")
+        );
+    }
 
     #[test]
     fn suggests_corrected_names() {

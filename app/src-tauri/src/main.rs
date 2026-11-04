@@ -16,6 +16,7 @@ mod feedback;
 mod help;
 mod history;
 mod insights;
+mod learning;
 mod meeting;
 mod minibar;
 mod my_actions;
@@ -119,8 +120,7 @@ fn main() {
             commands::set_launch_at_login,
             commands::finish_onboarding,
             commands::open_onboarding,
-            commands::get_vocab_suggestions,
-            commands::dismiss_vocab_suggestion,
+            commands::forget_learned_word,
             commands::pause_hotkeys,
             commands::preview_sound,
             commands::list_microphones,

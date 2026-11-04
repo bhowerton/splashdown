@@ -10,7 +10,7 @@ async function mockInvoke(cmd, args) {
     settings: {
       speech: { provider: "auto", model: null },
       ai: { provider: "auto", model: null, base_url: null, fallback_models: null },
-      general: { user_name: "Alex", language: null, vocabulary: ["Tauri", "OpenRouter"], live_preview: null, keep_history: null, check_for_updates: null },
+      general: { user_name: "Alex", language: null, vocabulary: ["Tauri", "OpenRouter", "Priya"], learned_words: ["Priya"], live_preview: null, keep_history: null, check_for_updates: null },
       hotkeys: { dictation: null, instruction: null },
       presets: null,
       snippets: [{ trigger: "my address", text: "1 Infinite Loop, Cupertino" }],
@@ -97,8 +97,8 @@ async function mockInvoke(cmd, args) {
       ];
     case "reading_try":
       return null;
-    case "get_vocab_suggestions":
-      return ["Priya"];
+    case "forget_learned_word":
+      return null;
     case "get_recent_apps":
       return [{ id: "com.google.Chrome", name: "Google Chrome", site: "docs.google.com" }, { id: "com.linear", name: "Linear", site: null }];
     case "get_insights":

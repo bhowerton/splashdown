@@ -7,6 +7,8 @@
 #   reject    case-insensitive whole words/phrases it must not contain
 #   min_lines minimum number of non-empty lines
 #   max_chars maximum length
+#   screen    text read from the window around the field: its names and
+#             terms join the vocabulary, as in the app
 #   reject_text case-insensitive text it must not contain, punctuation
 #               included ("- [ ]")
 # The eval context always uses user name "Alex" and vocabulary Tauri, OpenRouter, Kubernetes.
@@ -183,6 +185,29 @@ expect = ["OpenRouter"]
 id = "vocab-kubernetes"
 transcript = "the cooper netties cluster is down"
 expect = ["Kubernetes"]
+
+[[case]]
+id = "screen-names-slack"
+transcript = "thanks pria I'll look at it before lunch and loop in jordan"
+app = "Slack"
+screen = "#launch\nPriya Shah 10:02 AM\nMorning! Standup moved to 10:30 today.\nJordan Lee 10:15 AM\nCan someone review the pricing page copy before lunch? It's in the Launch doc.\nPeople\nThreads"
+expect = ["Priya", "Jordan"]
+reject = ["Pria"]
+
+[[case]]
+id = "screen-names-mail"
+transcript = "hi niamh the movers are fine for thursday I'll have the desk packed"
+app = "Mail"
+screen = "Inbox (3)\nRe: Office move\nFrom: Niamh O'Connell\nTo: Alex\nHi Alex, movers come Thursday at 8 from Kowalczyk & Sons. Can you have your desk packed by Wednesday evening? Thanks, Niamh"
+expect = ["Niamh", "Thursday"]
+
+[[case]]
+id = "screen-terms-only-when-said"
+transcript = "send the notes to mom tonight"
+app = "Messages"
+screen = "Priya Shah: did you see the Kowalczyk quote? Jordan Lee: yes, OpenRouter pricing too"
+expect = ["mom"]
+reject = ["Priya", "Kowalczyk", "Jordan"]
 
 [[case]]
 id = "numbers-time-money"

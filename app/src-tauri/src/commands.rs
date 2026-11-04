@@ -523,6 +523,7 @@ pub async fn save_settings(
     settings.notes.folder = current.notes.folder;
     // Set by the first meeting, which Settings may not have seen.
     settings.notes.meeting_reminded |= current.notes.meeting_reminded;
+    settings.general.settle_learned();
     settings.save(&engine::paths()?.config_file())?;
     show_settings(&app, &state, &settings);
     *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
@@ -1114,15 +1115,10 @@ pub async fn open_onboarding(app: AppHandle) {
     crate::tray::open_onboarding(&app);
 }
 
+/// Settings' ✕ on a learned word: removes it, and it isn't learned again.
 #[tauri::command]
-pub fn get_vocab_suggestions(state: State<'_, AppState>) -> Vec<String> {
-    state.history.suggestions()
-}
-
-/// Removes a suggestion (after it was added to the vocabulary, or dismissed).
-#[tauri::command]
-pub fn dismiss_vocab_suggestion(word: String, state: State<'_, AppState>) {
-    state.history.remove_suggestion(&word);
+pub fn forget_learned_word(word: String, app: AppHandle) -> Result<(), String> {
+    crate::learning::forget(&app, &word)
 }
 
 /// While Settings listens for a new hotkey, pressing the current one

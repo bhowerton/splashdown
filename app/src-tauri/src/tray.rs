@@ -37,6 +37,19 @@ const RECORD_MEETING: &str = "Record a meeting";
 
 /// The meeting item, relabeled while a meeting records.
 static MEETING_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
+static FORGET_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
+const FORGET_NONE: &str = "Forget a learned word";
+
+/// The Forget item in the menu bar: the word learned last, or none.
+pub fn show_forget(word: Option<&str>) {
+    if let Some(item) = FORGET_ITEM.get() {
+        let _ = item.set_text(match word {
+            Some(w) => format!("Forget \u{201c}{w}\u{201d}"),
+            None => FORGET_NONE.to_string(),
+        });
+        let _ = item.set_enabled(word.is_some());
+    }
+}
 /// Last dictation → Retry, enabled while a failed recording is kept.
 static RETRY_ITEM: std::sync::OnceLock<MenuItem<Wry>> = std::sync::OnceLock::new();
 
@@ -146,6 +159,8 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         None::<&str>,
     )?;
     let _ = RETRY_ITEM.set(retry.clone());
+    let forget = MenuItem::with_id(app, "forget-learned", FORGET_NONE, false, None::<&str>)?;
+    let _ = FORGET_ITEM.set(forget.clone());
     let notes = MenuItem::with_id(app, "notes", "Notes", true, Some(crate::notes::ACCELERATOR))?;
     let meeting = MenuItem::with_id(
         app,
@@ -160,7 +175,9 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         "last",
         "Last dictation",
         true,
-        &[&undo_ai, &paste_raw, &copy_last, &read_last, &retry],
+        &[
+            &undo_ai, &paste_raw, &copy_last, &read_last, &retry, &forget,
+        ],
     )?;
     let what_to_say = MenuItem::with_id(app, "help", "What you can say…", true, None::<&str>)?;
     let feedback = MenuItem::with_id(app, "feedback", "Send feedback…", true, None::<&str>)?;
@@ -216,6 +233,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                         state.session.retry_last();
                     }
                 }
+                "forget-learned" => crate::learning::forget_last(app),
                 "undo-ai" => {
                     if let Some(state) = app.try_state::<crate::commands::AppState>() {
                         state.session.undo_ai_edit();

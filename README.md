@@ -89,7 +89,7 @@
 
 - **Presets** switch on their own by app, window title or website: Default, Email, Texting, Work chat, Code & Terminal, Notes, and your own. Each sets the tone, cleanup level, spoken language, translation, its own AI model, and whether to press Return when done.
 - **Context, only if you want it.** A preset can read the text around the cursor or your clipboard so names are spelled like the thread. Both are off unless you turn them on.
-- **Words that stick.** A vocabulary list that learns from your corrections, snippets with fill-ins (`{date}`, `{clipboard}`), and find-and-replace rules.
+- **Words that stick.** Names and terms in the window you're typing in (the email or chat on screen) are spelled right without adding them anywhere. A vocabulary list that learns from one correction (fix "Pria" to "Priya" once and it's learned, with a note saying so and one click to forget it), snippets with fill-ins (`{date}`, `{clipboard}`), and find-and-replace rules.
 - **Bring your words, share your presets.** Settings → Words & language → Import… brings the vocabulary, corrections and snippets from another dictation app's export, a word list or a CSV file. Share… on a preset saves it as a small file anyone can import.
 
 ### On your computer or in the cloud
