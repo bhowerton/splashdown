@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.7.0 — 2026-11-04
 
 - **Word for word.** A new built-in preset types exactly what you say, with no AI tidying: hold the dictation key and press 2 ("What can I say?" shows its number). It's never picked by app, only when you ask for it. Settings with your own preset list get it once; delete it and it stays gone. The other built-in presets move up one number (Email is now 3).
 - **Compose learns your style from your edits.** When Compose writes into a reply and you change the draft before sending (you always cut "I hope this finds you well", always sign "Cheers"), the draft and what you sent are kept on your computer, separately for email, work chat, texts and everything else. Every few edits, a short description of your style is written from them, and Compose follows it. Settings → Words & language shows each description, lets you rewrite it in your own words, and has Forget my style and a switch to stop learning. A formal message you ask for outright isn't bent to your everyday style.

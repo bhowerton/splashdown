@@ -85,7 +85,7 @@ async function mockInvoke(cmd, args) {
       sound_volume: 0.12,
     },
     platform: "macos",
-    version: "0.6.0",
+    version: "0.7.0",
     config_path: "~/Library/Application Support/Splashdown/config.toml",
     update: { available: "0.2.0", notes: "Faster local speech-to-text.\nFixes pasting into Slack.", checking: false, installing: false, progress: null, last_checked: Date.now() - 3600000, error: null },
   };
