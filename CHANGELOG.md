@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.7.1 — 2026-11-04
 
 - **Dictating with no text field selected.** When the cursor isn't in a text field (a web page outside any box, a list of files), the text is left on the clipboard and "No text box — copied to clipboard" shows, instead of "Inserted" with the words gone. The same happens when a paste into a browser field doesn't show up.
 - **Microphone permission.** After you allow the microphone in the setup guide, it now shows as allowed straight away. Before, it could keep showing Allow… until Splashdown restarted.
