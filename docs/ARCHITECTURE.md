@@ -7,7 +7,7 @@ How Splashdown fits together, for people changing it: where each part of the app
 A suggested reading order for your first look at the code:
 
 1. `app/src-tauri/src/main.rs`: what starts at launch, the shared `AppState`, and every command the windows can call.
-2. `app/src-tauri/src/session.rs`: the dictation controller. Read `Controller::run`, then `handle`, `start`, `finish` and `deliver`.
+2. `app/src-tauri/src/session.rs`: the dictation controller. Read `Controller::run` and `handle` there, then `start` (`session/recording.rs`), `finish` and `deliver` (`session/deliver.rs`). Its opening comment maps the files in `session/`.
 3. `crates/splashdown-core/src/pipeline.rs`: speech-to-text, the AI pass and the sanity guard.
 4. `crates/splashdown-core/src/prompt.rs` and `guard.rs`: what the AI is asked, and when its answer is thrown away.
 5. `crates/splashdown-core/src/gesture.rs`: how key presses become actions.
@@ -53,7 +53,7 @@ Rules of thumb:
 
 ## The app
 
-`app/src-tauri/src`, grouped by job. Some big files (`session.rs` first) will be split into folders; the jobs stay the same.
+`app/src-tauri/src`, grouped by job. Some big files will be split into folders; the jobs stay the same.
 
 **Shell: starting up, windows and menus**
 - `main.rs`: starts everything, creates `AppState`, registers every command.
@@ -71,7 +71,7 @@ Rules of thumb:
 - `export.rs`: exporting history and settings, and importing them.
 
 **The dictation session**
-- `session.rs` and `session/control.rs`: the controller, and requests from the control channel.
+- `session.rs` and `session/`: the controller, one file per job (starting a recording, building the job, delivering the text, Ask and Compose, spoken commands, edits and undo, learning corrections, and requests from the control channel).
 - `audio.rs`: the microphone thread.
 - `preview.rs`, `chunks.rs`, `stream_typing.rs`: live words in the overlay, transcribing a long dictation in pieces while the user speaks, and typing the AI's text as it's written.
 - `recent.rs`, `project.rs`, `replacements.rs`: context for the AI (recent dictations, a coding project's files) and snippet fill-ins and find-and-replace.
@@ -100,7 +100,7 @@ The app is a handful of long-lived threads that talk over channels. Only the ses
 | Main | Tauri, `app/src-tauri/src/ui.rs` | Windows, tray, overlay. AppKit objects are used only here; other threads post work with `run_on_main_thread` |
 | `splashdown-keys` | `splashdown-platform/src/mac/keys.rs`, `win/keys.rs` | A CGEventTap on its own run loop (macOS) or a `WH_KEYBOARD_LL` hook with its own message loop (Windows). Every key event (and the mouse's side buttons on macOS) goes to the gesture `Recognizer`, which decides synchronously whether to swallow it |
 | `splashdown-control` | `splashdown-control/src/server.rs` | Accepts control connections, each handled on a short-lived thread that waits for the session's answer |
-| `splashdown-session` | `app/src-tauri/src/session.rs` | The controller: receives `Msg`s (gesture actions, new settings, control requests, finished voice actions and drafts), drives audio, runs the pipeline, inserts text, records history |
+| `splashdown-session` | `app/src-tauri/src/session.rs` and `session/` | The controller: receives `Msg`s (gesture actions, new settings, control requests, finished voice actions and drafts), drives audio, runs the pipeline, inserts text, records history |
 | `splashdown-audio` | `app/src-tauri/src/audio.rs` | Owns the cpal stream (it can't move between threads) and serves start/take/stop |
 | `splashdown-preview` | `app/src-tauri/src/preview.rs` | Re-transcribes the recording so far with a local model for the live words in the overlay; with a streaming model the session's `LiveStream` gives them instead |
 | `splashdown-reading` | `app/src-tauri/src/reading.rs` | Reads text aloud, one piece at a time, so Esc or a new dictation can stop it |
@@ -127,11 +127,11 @@ The app is a handful of long-lived threads that talk over channels. Only the ses
 
 ## Features beyond dictation
 
-- **Compose** (`splashdown-core/src/compose.rs`, `app/src-tauri/src/compose.rs`): the user says what they want to write ("reply saying I'm in"), after the instruction key, or while holding the dictation key after pressing the Compose letter (off unless set). By default `show_draft` in `session.rs` writes the draft straight into the field; the panel is used when Settings asks for it (`compose_panel`), when text is selected, or when there's no field. With nothing selected, it reads the conversation around the field (`Focus::surrounding_text`, setting `compose_reads_window`), and `compose::their_messages` picks out the user's own earlier messages there, so the draft is written in their voice (`compose_style`).
+- **Compose** (`splashdown-core/src/compose.rs`, `app/src-tauri/src/compose.rs`): the user says what they want to write ("reply saying I'm in"), after the instruction key, or while holding the dictation key after pressing the Compose letter (off unless set). By default `show_draft` (`session/assist.rs`) writes the draft straight into the field; the panel is used when Settings asks for it (`compose_panel`), when text is selected, or when there's no field. With nothing selected, it reads the conversation around the field (`Focus::surrounding_text`, setting `compose_reads_window`), and `compose::their_messages` picks out the user's own earlier messages there, so the draft is written in their voice (`compose_style`).
 - **Ask** (`splashdown-core/src/ask.rs`, `app/src-tauri/src/ask.rs`): a spoken question (dictation key + A, or a command that is a question) answered in a panel, drawing on the selection, the text around the cursor, the clipboard and matching excerpts of the user's notes. Insert pastes the answer; follow-up questions carry on the conversation.
 - **Reading aloud** (`splashdown-core/src/aloud.rs`, `app/src-tauri/src/reading.rs`): "read this to me", a spoken summary, or the Ask panel's speaker button. English is read in the natural voice (Phonon, `splashdown-providers/src/natural_voice.rs`) when it's downloaded and chosen; otherwise the system's voices read it (the Apple shim on macOS, `splashdown-platform/src/win/speech.rs` on Windows). Nothing read this way leaves the computer.
 - **Voice actions** (`splashdown-core/src/action.rs`, `app/src-tauri/src/voice_actions.rs`, `my_actions.rs`): the command interpreter says `do`, the planner picks one action from `CATALOG` and its parameters are checked in code, then `voice_actions::carry_out` does it off the session thread. Nothing in the catalog sends, deletes or pays.
-- **Names on screen** (`read_screen_words` in `session.rs`, `splashdown_core::vocab::terms_on_screen`): at key down, the text around the field is read off the session thread, and the names and terms in it join that dictation's vocabulary (`with_screen_words`, setting `screen_words`).
+- **Names on screen** (`read_screen_words` in `session/job.rs`, `splashdown_core::vocab::terms_on_screen`): at key down, the text around the field is read off the session thread, and the names and terms in it join that dictation's vocabulary (`with_screen_words`, setting `screen_words`).
 - **Notes** (`app/src-tauri/src/notes/`): notes are Markdown files in a folder the user picks (`store.rs`), with no database: the folder is the truth, and other apps may change it at any time. Dropped audio and video files and page links become transcript notes (`files.rs`).
 - **Meetings** (`app/src-tauri/src/meeting.rs`, `splashdown-core/src/meeting.rs`): a call recorded as two sides, You (the microphone) and Them (what the computer plays), transcribed a turn at a time into a note in `Meetings/` and summarized when it ends with the built-in "Meeting summary" transform. `calls.rs` offers to record when a call app starts using the microphone.
 
