@@ -166,6 +166,7 @@
 | Have a message written | While holding, tap **Right Shift**, then say what to write ("reply saying I'm in"); select it and say "shorter" to change it |
 | Hear text read aloud | Select it, hold **Right Option** and say "read this to me" (or "read me a summary of this"); **Esc** stops it. Or menu bar → Last dictation → **Read it to me** |
 | Record a meeting | **⌃⌥M** (again to stop) |
+| Type exactly what you say, no tidying | While holding, press **2** (the Word for word preset) |
 | Use another preset | While holding, press **1–9** |
 | Change the spoken language | Menu bar → **Language** (detects it automatically by default) |
 | See everything you can say | Hold **Right Option**, tap **Right Shift**, and say "what can I say?", or menu bar → Help → **What you can say…** |

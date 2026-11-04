@@ -70,6 +70,9 @@ pub struct Settings {
     /// Unset means the built-in presets; once edited, the full list is
     /// saved.
     pub presets: Option<Vec<Preset>>,
+    /// Built-in presets added after a release that a saved preset list was
+    /// given (`LATER_PRESETS`), so deleting one isn't undone.
+    pub presets_given: Vec<String>,
     /// Saved text inserted when its trigger phrase is spoken.
     pub snippets: Vec<Snippet>,
     /// Find-and-replace rules applied to the final text.
@@ -159,6 +162,25 @@ impl Settings {
             && chosen != OtherAudio::Leave
         {
             general.other_sounds = Some(chosen);
+        }
+        // A saved preset list gets each later built-in once, in the place
+        // it has in the built-in list.
+        if let Some(presets) = &mut self.presets {
+            let builtin = crate::presets::builtin_presets();
+            for id in crate::presets::LATER_PRESETS {
+                if self.presets_given.iter().any(|g| g == id) {
+                    continue;
+                }
+                self.presets_given.push(id.to_string());
+                if presets.iter().any(|p| p.id == *id) {
+                    continue;
+                }
+                if let Some(at) = builtin.iter().position(|p| p.id == *id)
+                    && let Some(preset) = builtin.get(at)
+                {
+                    presets.insert(at.min(presets.len()), preset.clone());
+                }
+            }
         }
     }
 
@@ -578,6 +600,25 @@ mod tests {
     }
 
     #[test]
+    fn a_saved_preset_list_gets_word_for_word_once() {
+        use crate::presets::WORD_FOR_WORD_ID;
+        let saved = "[[presets]]\nid = \"default\"\nname = \"Default\"\n\n[[presets]]\nid = \"email\"\nname = \"Email\"\n";
+        let s = Settings::from_toml(saved).unwrap();
+        let presets = s.presets();
+        let ids: Vec<&str> = presets.iter().map(|p| p.id.as_str()).collect();
+        assert_eq!(ids, ["default", WORD_FOR_WORD_ID, "email"]);
+        assert!(!presets[1].ai);
+        // Deleted afterwards: it stays deleted.
+        let mut s = s;
+        s.presets
+            .as_mut()
+            .unwrap()
+            .retain(|p| p.id != WORD_FOR_WORD_ID);
+        let again = Settings::from_toml(&s.to_toml().unwrap()).unwrap();
+        assert!(again.presets().iter().all(|p| p.id != WORD_FOR_WORD_ID));
+    }
+
+    #[test]
     fn exported_text_reads_back_whole() {
         let mut s = Settings::default();
         s.general.vocabulary = vec!["Priya".into()];
@@ -588,6 +629,11 @@ mod tests {
             text: "1 Main St".into(),
         }];
         s.presets = Some(builtin_presets());
+        // As saved by this version: the later built-ins already given.
+        s.presets_given = crate::presets::LATER_PRESETS
+            .iter()
+            .map(|id| id.to_string())
+            .collect();
         let text = s.to_toml().unwrap();
         assert_eq!(Settings::from_toml(&text).unwrap(), s);
         assert!(Settings::from_toml("[general]\nvocabulary = 3").is_err());

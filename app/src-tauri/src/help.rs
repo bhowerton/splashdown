@@ -289,6 +289,17 @@ pub fn sheet(settings: &Settings) -> Sheet {
     if let Some(compose) = h.compose_key() {
         keys.push(press("Have a message written", key(compose)));
     }
+    // The word-for-word preset's number, where it is in the list.
+    if let Some(n) = presets
+        .iter()
+        .position(|p| p.id == splashdown_config::WORD_FOR_WORD_ID)
+        .filter(|at| *at < 9)
+    {
+        keys.push(press(
+            "Type exactly what you say, with no tidying",
+            (n + 1).to_string(),
+        ));
+    }
     if presets.len() > 1 {
         keys.push(press("Use another preset", "1–9"));
     }

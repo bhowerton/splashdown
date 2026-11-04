@@ -248,12 +248,27 @@ fn url(part: &str) -> AppRule {
     }
 }
 
+/// The built-in preset that types exactly what was said (no AI pass).
+pub const WORD_FOR_WORD_ID: &str = "word-for-word";
+
+/// Built-in presets added after a release, given once to settings that
+/// already have their own preset list (`Settings::upgrade`).
+pub const LATER_PRESETS: &[&str] = &[WORD_FOR_WORD_ID];
+
 /// The presets a fresh install starts with.
 pub fn builtin_presets() -> Vec<Preset> {
     vec![
         Preset {
             id: DEFAULT_PRESET_ID.into(),
             name: "Default".into(),
+            ..Preset::default()
+        },
+        // Second, so it's the 2 key while holding the dictation key: what
+        // was said, exactly, with no AI pass. Never picked by app.
+        Preset {
+            id: WORD_FOR_WORD_ID.into(),
+            name: "Word for word".into(),
+            ai: false,
             ..Preset::default()
         },
         Preset {
