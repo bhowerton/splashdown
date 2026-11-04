@@ -1,10 +1,14 @@
 name: Release cache
 
 # Release builds run on version tags, and a tag can only use build caches
-# saved on main. This keeps one warm for the Mac release build (both
-# architectures, release profile, as scripts/package-mac.sh builds them,
-# but unsigned), so a release compiles only Splashdown's own crates. The
-# Windows release uses the cache CI's windows-installer job saves.
+# saved on main. This keeps one warm for each release job: the same
+# release-profile builds, clippy and tests as release.yml (unsigned), so a
+# release compiles only Splashdown's own crates. On Windows it also caches
+# the Tauri CLI and the signing tool, which takes minutes to compile.
+#
+# It runs when dependencies change, not on a release's version bump: that
+# changes Cargo.lock too, but the release can't use what it would save, and
+# the cache from before the bump still holds every dependency.
 
 on:
   push:
@@ -28,6 +32,7 @@ env:
 
 jobs:
   mac:
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release ')
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
@@ -39,6 +44,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: mac-release
@@ -49,8 +55,53 @@ jobs:
         # The Mac builds are zip files, though tauri-cli's binstall settings
         # say tgz.
         run: cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
+      - name: Clippy and tests, as the release runs them
+        run: |
+          cargo clippy --release --workspace --all-targets --locked --target aarch64-apple-darwin -- -D warnings
+          cargo test --release --workspace --locked --target aarch64-apple-darwin --no-run
       - name: Build both architectures
         run: |
           cargo build --release --locked -p splashdown-llm --target aarch64-apple-darwin
           cargo build --release --locked -p splashdown-llm --target x86_64-apple-darwin
           cargo tauri build --target universal-apple-darwin --bundles app --no-sign
+
+  windows:
+    if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release ')
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows-release
+          # The fast local-model helper builds outside target\ (a short
+          # path; see scripts/package-win.ps1).
+          cache-directories: ${{ runner.temp }}\llm
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-binstall
+      # Installed after the cache step, so they're saved with it.
+      - name: Install the Tauri CLI and the signing tool
+        shell: pwsh
+        run: |
+          cargo binstall tauri-cli --version "^2" --no-confirm --locked
+          if (-not (Get-Command artifact-signing-cli -ErrorAction SilentlyContinue)) {
+            cargo binstall artifact-signing-cli --no-confirm --locked
+          }
+      - uses: jakoch/install-vulkan-sdk-action@v1
+        with:
+          # Pinned so the action's cache stays valid (as in release.yml).
+          vulkan_version: 1.4.363.1
+          install_runtime: false
+          cache: true
+      - name: Clippy and tests, as the release runs them
+        run: |
+          cargo clippy --release --workspace --all-targets --locked -- -D warnings
+          cargo test --release --workspace --locked --no-run
+      - name: Build the installer (unsigned)
+        shell: pwsh
+        env:
+          SPLASHDOWN_LLM_TARGET: ${{ runner.temp }}\llm
+        run: scripts/package-win.ps1

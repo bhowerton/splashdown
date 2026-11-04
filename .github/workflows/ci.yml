@@ -1,9 +1,21 @@
 name: CI
 
+# Every push gets the quick checks (formatting, licenses), which need no
+# build. The full build (clippy and the tests on macOS and Windows) runs on
+# pull requests, and on main by hand (Actions → CI → Run workflow). A
+# release runs the same clippy and tests inside its own release builds
+# (release.yml), so nothing ships unchecked and nothing is built twice.
+
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      installer:
+        description: Also build an unsigned Windows test installer
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -34,6 +46,7 @@ jobs:
 
   build:
     name: build (${{ matrix.os }})
+    if: github.event_name != 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -57,16 +70,15 @@ jobs:
       - name: Clippy
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: Test
+        # Also builds the app, so there's no separate build step.
         run: cargo test --workspace --locked
-      - name: Build app
-        run: cargo build -p splashdown --locked
 
   windows-installer:
-    # A test installer from every push to main, for trying the latest code
-    # on Windows without the build tools: open the run's summary page and
-    # download "windows-installer". Unsigned and without update files;
-    # releases come from release.yml.
-    if: github.event_name == 'push'
+    # A test installer, for trying the latest code on Windows without the
+    # build tools: tick the box when running CI by hand, then download
+    # "windows-installer" from the run's summary page. Unsigned and without
+    # update files; releases come from release.yml.
+    if: github.event_name == 'workflow_dispatch' && inputs.installer
     needs: build
     runs-on: windows-latest
     steps:
@@ -74,9 +86,10 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
-          # Shared with release.yml's Windows job, which restores it on a
-          # tag (tags can only use caches saved on main).
+          # The release cache (release-cache.yml), which builds the same
+          # way. Only read: that job keeps it up to date.
           shared-key: windows-release
+          save-if: false
           # The fast local-model helper builds outside target\ (a short
           # path; see scripts/package-win.ps1).
           cache-directories: ${{ runner.temp }}\llm

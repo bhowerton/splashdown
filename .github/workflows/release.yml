@@ -2,7 +2,9 @@ name: Release
 
 # Pushing a version tag (v0.2.0) builds the signed, notarized Mac DMG and the
 # Windows installer and makes a *draft* GitHub release with both, plus the
-# updater files. Publishing the draft is a person's job: installed copies
+# updater files. Each build runs clippy and the tests first, in the release
+# profile, so the release build reuses what they compiled: there's no need
+# to wait for CI on main before tagging. Publishing the draft is a person's job: installed copies
 # only see a published release, so nothing reaches them by accident.
 #
 # Run it by hand (Actions → Release → Run workflow) to get the same builds
@@ -57,13 +59,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
           # Saved on main by release-cache.yml: a tag can only use caches
           # from main, so this is what spares a release compiling every
           # dependency.
           shared-key: mac-release
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: false
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-binstall
@@ -73,6 +76,12 @@ jobs:
         # The Mac builds are zip files, though tauri-cli's binstall settings
         # say tgz.
         run: cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
+      - name: Clippy
+        # Release profile and the release's Apple Silicon target, so the
+        # build below reuses what this and the tests compile.
+        run: cargo clippy --release --workspace --all-targets --locked --target aarch64-apple-darwin -- -D warnings
+      - name: Test
+        run: cargo test --release --workspace --locked --target aarch64-apple-darwin
       - name: Import the Developer ID certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -120,15 +129,18 @@ jobs:
     steps:
       - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
       - uses: Swatinem/rust-cache@v2
         with:
-          # Saved on main by CI's windows-installer job, which builds the
-          # same way (a tag can only use caches from main).
+          # Saved on main by release-cache.yml, which builds the same way
+          # (a tag can only use caches from main). It also holds the Tauri
+          # CLI and the signing tool, installed there.
           shared-key: windows-release
           # The fast local-model helper builds outside target\ (a short
           # path; see scripts/package-win.ps1).
           cache-directories: ${{ runner.temp }}\llm
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          save-if: false
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-binstall
@@ -136,8 +148,20 @@ jobs:
         # A prebuilt binary (compiling it took 6–10 minutes); cargo-binstall
         # compiles it only if there's none for this platform.
         run: cargo binstall tauri-cli --version "^2" --no-confirm --locked
+      - name: Clippy
+        # Release profile, so the build below reuses what this and the
+        # tests compile.
+        run: cargo clippy --release --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: cargo test --release --workspace --locked
       - name: Install the Artifact Signing tool
-        run: cargo binstall artifact-signing-cli --no-confirm --locked
+        # It has no prebuilt binary, so it's compiled (4–5 minutes) unless
+        # the cache brought it.
+        shell: pwsh
+        run: |
+          if (-not (Get-Command artifact-signing-cli -ErrorAction SilentlyContinue)) {
+            cargo binstall artifact-signing-cli --no-confirm --locked
+          }
       - name: Fetch Microsoft's signing client
         # artifact-signing-cli downloads this itself with no retry or check,
         # and a bad download fails the build ("can't be unzipped"). It skips
