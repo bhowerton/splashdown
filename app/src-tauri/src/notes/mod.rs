@@ -15,13 +15,15 @@
 //! | `search.rs` | Finding notes for Ask, with excerpts |
 //! | `meaning.rs` | Finding notes by meaning |
 //! | `agents.rs` | Coding agents' access |
-//! | `files.rs`, `media.rs`, `link_helper.rs` | Transcribing a file, an app's audio or a link into a note |
+//! | `files.rs`, `media.rs` | Transcribing a file or an app's audio into a note |
+//! | `links.rs`, `link_helper.rs` | Transcribing a link, and the helper that downloads pages |
 
 mod agents;
 mod capture;
 pub mod files;
 mod folder;
 mod link_helper;
+pub mod links;
 pub mod markdown;
 pub mod meaning;
 pub mod media;

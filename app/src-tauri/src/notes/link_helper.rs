@@ -182,8 +182,8 @@ async fn download(
             .map_err(|_| "The download stopped coming.".to_string())?
             .map_err(|e| format!("The download stopped: {e}"))?
         {
-            if super::files::download_cancelled() {
-                return Err(super::files::STOPPED.to_string());
+            if super::links::download_cancelled() {
+                return Err(super::links::STOPPED.to_string());
             }
             hash.update(&chunk);
             file.write_all(&chunk).map_err(|e| e.to_string())?;
@@ -238,7 +238,7 @@ pub fn update(helper: &Helper) {
         .arg("-U")
         .stdout(std::process::Stdio::piped())
         .stderr(std::process::Stdio::piped());
-    match super::files::run_stoppable(command) {
+    match super::links::run_stoppable(command) {
         Ok(out) => tracing::info!(
             "yt-dlp update: {}",
             String::from_utf8_lossy(&out.stdout)
