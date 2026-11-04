@@ -5,6 +5,7 @@
 
 pub mod files;
 mod link_helper;
+pub mod markdown;
 pub mod meaning;
 pub mod media;
 pub mod store;
@@ -774,7 +775,7 @@ pub fn agent_read(settings: &NotesSettings, path: &str) -> Result<String, String
     let truncated = text.len() < note.body.len();
     serde_json::to_string(&serde_json::json!({
         "path": note.path,
-        "title": store::title_of(&note.body),
+        "title": markdown::title_of(&note.body),
         "text": text,
         "truncated": truncated,
     }))
@@ -1490,7 +1491,7 @@ pub async fn notes_ask(
     let (notes, sources): (Vec<_>, Vec<_>) = match &path {
         Some(path) => {
             let note = store.read(path).map_err(|e| e.to_string())?;
-            let title = store::title_of(&note.body);
+            let title = markdown::title_of(&note.body);
             let excerpt = splashdown_core::ask::NoteExcerpt {
                 title: title.clone(),
                 date: day_of(note.modified),

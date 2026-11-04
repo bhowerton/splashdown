@@ -38,7 +38,7 @@ pub(super) fn summarize(
     let Ok(body) = store.read(note).map(|n| n.body) else {
         return;
     };
-    if crate::notes::store::transcript_start(&body).is_none() {
+    if crate::notes::markdown::transcript_start(&body).is_none() {
         return;
     }
     let run = match settings.notes.meeting_summary {
@@ -54,12 +54,12 @@ pub(super) fn summarize(
     let Ok(body) = store.read(note).map(|n| n.body) else {
         return;
     };
-    let Some(at) = crate::notes::store::transcript_start(&body) else {
+    let Some(at) = crate::notes::markdown::transcript_start(&body) else {
         return;
     };
     let transcript = body[at..].trim();
     // What the user wrote down shows what mattered to them.
-    let input = match crate::notes::store::section(&body[..at], MY_NOTES) {
+    let input = match crate::notes::markdown::section(&body[..at], MY_NOTES) {
         Some(mine) if !mine.is_empty() => {
             format!("My notes, written during the meeting:\n{mine}\n\nTranscript:\n{transcript}")
         }

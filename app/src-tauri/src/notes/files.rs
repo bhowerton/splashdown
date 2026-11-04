@@ -412,7 +412,7 @@ fn transcribe_again(
     let (store, _) = store(&state)?;
     let title = store
         .read(&again.note)
-        .map(|n| super::store::title_of(&n.body))
+        .map(|n| super::markdown::title_of(&n.body))
         .unwrap_or_default();
     let total = hound::WavReader::open(recording)
         .ok()
