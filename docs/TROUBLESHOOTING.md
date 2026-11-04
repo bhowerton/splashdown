@@ -1,6 +1,6 @@
 # Troubleshooting
 
-The common problems and their fixes. If yours isn't here, use **Send feedback** (menu bar → Help, or Settings → About): it opens a GitHub issue with your versions filled in. Attaching the log helps (Settings → About → **Show log file**); it never contains what you said or typed.
+The common problems and their fixes. If yours isn't here, use **Send feedback** (menu bar icon → Help on a Mac, tray icon → Help on Windows, or Settings → About): it opens a GitHub issue with your versions filled in. Attaching the log helps (Settings → About → **Show log file**); it never contains what you said or typed.
 
 ## Nothing happens when I hold the key
 

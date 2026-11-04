@@ -116,8 +116,6 @@ li[aria-expanded="true"] > .nt-nav-row .nt-twisty .ic { transform: rotate(90deg)
 }
 .nt-find:hover { border-color: var(--muted); }
 .nt-find .nt-grow { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.nt-filters { display: flex; flex-wrap: wrap; gap: 3px; padding: 2px 9px 4px; }
-.nt-filters .nt-chip { padding: 0 7px; font-size: 11px; height: 22px; }
 .nt-list { list-style: none; margin: 0; padding: 0 6px 6px; overflow-y: auto; flex: 1; }
 .nt-group { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; padding: 12px 8px 3px; }
 .nt-item {
@@ -184,7 +182,6 @@ li[aria-expanded="true"] > .nt-nav-row .nt-twisty .ic { transform: rotate(90deg)
 .nt-rename input { flex: 1; min-width: 80px; width: auto !important; font-size: 13px; }
 .nt-tools { display: flex; gap: 5px; }
 .nt-tool[aria-pressed="true"], .nt-tool[aria-pressed="true"]:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
-.nt-tool.nt-recording, .nt-tool.nt-recording:hover:not(:disabled) { background: var(--warn-soft); }
 .nt-sep { width: 1px; height: 18px; background: var(--border); margin: 0 2px; }
 /* Narrow windows: the tools keep their icons. */
 @media (max-width: 760px) {

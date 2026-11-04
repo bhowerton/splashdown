@@ -220,7 +220,7 @@ Settings → Privacy shows where your words go for your current settings. The fu
 
 ## How well it works
 
-Every default was chosen by measurement. The cleanup prompt is tested on 54 cases covering fillers, self-corrections, formatting, instructions, transforms, context and prompt injection: the default OpenRouter model scores 96%, the built-in local model (Qwen3 4B) 85%, Apple's on-device model 72%. Results and how to run them are in [eval/README.md](eval/README.md).
+Every default was chosen by measurement. The cleanup prompt is tested on cases covering fillers, self-corrections, formatting, instructions, transforms, context, names on screen and prompt injection. Spoken commands, voice actions, Compose and speech-to-text have eval sets of their own. The scores for every model tried, and how to run the evals, are in [eval/README.md](eval/README.md).
 
 **Models you download keep their own licenses**, shown next to each one in Settings:
 - NVIDIA Nemotron Speech Streaming (English): NVIDIA Open Model License.
@@ -267,14 +267,15 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 |---|---|
 | `crates/splashdown-core` | Pipeline, prompts, sanity guard, hotkey gestures (no OS code) |
 | `crates/splashdown-audio` | Microphone capture, resampling, silence trimming |
-| `crates/splashdown-providers` | Speech-to-text and AI providers: OpenAI-compatible, OpenRouter, local speech-to-text (transcribe.cpp), Apple |
+| `crates/splashdown-providers` | Speech-to-text and AI providers: OpenAI-compatible, OpenRouter, Anthropic, local speech-to-text (transcribe.cpp), the built-in local model, Apple; the model catalog and the natural reading voice |
 | `crates/splashdown-platform` | Hotkeys, text insertion, focus and selection, the overlay (`mac/`, `win/`) |
-| `crates/splashdown-apple-shim` | Swift bridge to Apple's on-device speech and language models |
+| `crates/splashdown-apple-shim` | Swift bridge to Apple's on-device speech and language models, calendar, system voices and the computer's sound for meetings |
+| `crates/splashdown-llm` | The helper process that runs the built-in local text model (llama.cpp) |
 | `crates/splashdown-config` | Settings, provider resolution, presets, keychain, paths |
 | `crates/splashdown-cli` | The `splashdown-cli` developer tool and evals, and `splashdown-cli toggle`/`listen`/`note` for the running app |
 | `crates/splashdown-control` | The running app's control socket: protocol, client, server |
-| `crates/splashdown-mcp` | `splashdown-mcp`, voice input for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
-| `app/` | The menu bar app (Tauri) and its Settings, onboarding and Notes windows; `app/editor` builds the Notes editor |
+| `crates/splashdown-mcp` | `splashdown-mcp`, voice input and notes for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
+| `app/` | The menu bar and tray app (Tauri) and its windows: Settings, setup guide, Notes, Ask, Compose and a few small panels; `app/editor` builds the Notes editor |
 | `docs/` | [Architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md) |
 
 </details>

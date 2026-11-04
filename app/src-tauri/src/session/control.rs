@@ -1,4 +1,4 @@
-//! Requests from the control channel: the `splash` CLI, `splashdown://`
+//! Requests from the control channel: `splashdown-cli`, `splashdown://`
 //! links, and coding agents through `splashdown-mcp` (see
 //! `crates/splashdown-control`). Handled on the session thread like the
 //! dictation key's gestures, and through the same `Recognizer`, so a

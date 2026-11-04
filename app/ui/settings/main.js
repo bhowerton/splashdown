@@ -58,6 +58,7 @@ function render() {
   $("about-version").textContent = state.version;
   $("side-version").textContent = `Version ${state.version}`;
   $("about-platform").textContent = state.platform;
+  fitPlatform(state.platform);
   $("about-config").textContent = state.config_path;
   renderUpdate();
 }
@@ -179,8 +180,8 @@ function collect() {
   s.general.share_recent = $("pv-recent").checked ? null : false;
   s.general.compose_reads_window = $("pv-window").checked ? null : false;
   s.general.screen_words = $("pv-screen-words").checked ? null : false;
-  s.general.compose_panel = $("hk-compose-panel").checked ? true : null;
-  s.general.compose_style = $("hk-compose-style").checked ? null : false;
+  s.general.compose_panel = $("gen-compose-panel").checked ? true : null;
+  s.general.compose_style = $("gen-compose-style").checked ? null : false;
   s.actions = collectActions(s.actions);
 
   const sttProvider = $("stt-provider").value;

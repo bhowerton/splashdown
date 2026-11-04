@@ -1,3 +1,6 @@
+//! Audio as the pipeline sees it: mono PCM samples with their sample rate,
+//! already captured (capture itself is in `splashdown-audio`).
+
 use std::time::Duration;
 
 /// Mono PCM audio, normalized to `[-1.0, 1.0]`.

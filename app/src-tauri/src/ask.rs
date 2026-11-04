@@ -225,7 +225,8 @@ fn open(app: &AppHandle) {
     }
 }
 
-/// Hides the panel and gives focus back to the app the question came from.
+/// Hides the panel (`ask_close` also gives focus back to the app the
+/// question came from).
 fn hide(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(WINDOW) {
         let _ = window.hide();

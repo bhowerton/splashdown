@@ -602,12 +602,6 @@ pub fn reading_state() -> bool {
     is_reading()
 }
 
-/// Stops reading (the Ask panel's Esc).
-#[tauri::command]
-pub fn reading_stop() {
-    stop();
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

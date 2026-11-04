@@ -25,11 +25,12 @@ pub enum Command {
     PressEnter,
     /// Undo the last dictation entirely.
     UndoLast,
-    /// Insert new text at the cursor (the app writes it with Compose, from
-    /// what was said).
+    /// Something short to add at the cursor ("add a sign-off"). The app
+    /// writes it with Compose from what was said, like `Compose`; the two
+    /// are kept apart because the interpreter and its eval tell them apart.
     Write(String),
-    /// Draft a message: what to write, as said (`Pipeline::command` sees
-    /// to that).
+    /// A whole message to write ("draft a reply saying I'm in"): what to
+    /// write, as said (`Pipeline::command` sees to that).
     Compose(String),
     /// A question for the AI: answered in the Ask panel, not typed.
     Ask(String),
@@ -83,7 +84,7 @@ Choose exactly one action and reply with JSON only: {\"action\": \"...\", \"text
 - write: the command asks you to write or compose something new at the cursor (\"write a short no\", \"add a sign-off\"). \"text\" is what to insert.
 - ask: the command is a question for you to answer, or asks you to explain or look something up, rather than to change or write text (\"what's the German word for deadline\", \"how many days until Christmas\"). \"text\" is the question as said. The answer is shown to the user, not typed.
 - read: the command asks to hear text read aloud to them (\"read this to me\", \"read me a summary of this\", \"lies mir das vor\"). \"text\" is \"\" to read the text as it is; when they want to hear a summary, the gist, or something about the text instead, \"text\" is that request (\"summarize this\"). A sentence that only mentions reading (\"I read the report\") is not a command.
-- compose: the command asks for a longer message to check before it's inserted: a reply or an email (\"draft a reply saying I'm in\", \"write an email to Dana about the launch\"). \"text\" is the command as said.
+- compose: the command asks for a whole message: a reply or an email (\"draft a reply saying I'm in\", \"write an email to Dana about the launch\"). \"text\" is the command as said.
 - unclear: you can't tell what the user wants, or it isn't a command at all (just text, or a question meant for someone else, to be typed).
 
 \"That\", \"this\" or \"it\" (in any language) means the last dictation. Keep the last dictation's language unless the command asks for a translation. \"text\" is \"\" for actions that don't use it.

@@ -134,8 +134,8 @@ pub struct Keys {
     /// for the Ask panel.
     pub ask: PhysicalKey,
     /// Pressed while holding the dictation key: the dictation says what to
-    /// write, and the Compose panel drafts it.
-    /// `Other` when there's no compose letter.
+    /// write, and Compose writes it. `Other` when there's no compose letter
+    /// (the default: the instruction key asks for drafts too).
     pub compose: PhysicalKey,
 }
 
@@ -414,8 +414,7 @@ struct Active {
     capture: bool,
     /// The ask key was pressed: it's a question for the Ask panel.
     ask: bool,
-    /// The compose key was pressed: it says what to write, for the Compose
-    /// panel.
+    /// The compose key was pressed: it says what to write, for Compose.
     compose: bool,
     /// When to quiet other sounds (after the start sound has played).
     quiet_due: Option<Instant>,
@@ -1659,9 +1658,8 @@ impl Controller {
             && outcome.mode != Mode::Transform
             && !outcome.raw.trim().is_empty()
             && outcome.raw.trim() != outcome.text.trim();
-        let will_send = send;
         self.last_ai_edit = target_pid
-            .filter(|_| ai_changed && method == InsertMethod::Paste && !will_send)
+            .filter(|_| ai_changed && method == InsertMethod::Paste && !send)
             .map(|pid| AiEdit {
                 pid,
                 at: Instant::now(),
@@ -1675,7 +1673,7 @@ impl Controller {
         // Into an app of the user's, not one of Splashdown's own windows
         // (the setup guide's practice box).
         let elsewhere = target_pid.is_some_and(|pid| pid as u32 != std::process::id());
-        if engine_learns(&self.engine)
+        if self.engine.as_ref().is_ok_and(|e| e.learn_vocabulary)
             && let Some(focus) = active.focus
         {
             match focus.field_text() {
@@ -1927,7 +1925,7 @@ impl Controller {
     }
 
     /// The compose key while holding the dictation key: what's said is what
-    /// to write, drafted in the Compose panel.
+    /// to write, for Compose.
     fn start_compose(&mut self) {
         let Some(active) = &mut self.active else {
             return;
@@ -1948,7 +1946,7 @@ impl Controller {
     }
 
     /// `finish` for a question, a draft or a change to one: transcribes it
-    /// as said and hands it to the Ask or Compose panel, which work in the
+    /// as said and hands it to Ask or Compose, which work in the
     /// background.
     fn ask(&mut self, mut active: Active, kind: Asked) {
         let job = self.prepare(&mut active);
@@ -1993,8 +1991,9 @@ impl Controller {
         }
     }
 
-    /// Opens the Compose panel and drafts what was asked (`asked`), for
-    /// `active`'s app; `selection` is the message it answers.
+    /// Writes what was asked (`asked`) for `active`'s app: straight into the
+    /// field, or in the Compose panel when that's on, there's a selection
+    /// (`selection`, the message it answers) or there's no field.
     fn show_draft(&mut self, active: &Active, asked: String, selection: Option<String>) {
         let Ok(engine) = &self.engine else {
             return;
@@ -2550,7 +2549,11 @@ impl Controller {
         };
         let words = settled
             .map(|text| {
-                splashdown_core::vocab::suggest(&check.inserted, &text, &engine.context.vocabulary)
+                splashdown_core::vocab::corrections(
+                    &check.inserted,
+                    &text,
+                    &engine.context.vocabulary,
+                )
             })
             .unwrap_or_default();
         // Keep watching while the dictation is still in the field.
@@ -2608,9 +2611,6 @@ impl Controller {
         }
     }
 
-    /// Replaces the last AI-edited insertion with what was said: undo the
-    /// paste, then paste the transcript. Only right after it, in the same
-    /// app, like other edits of "that".
     /// "Retry last dictation": runs the kept recording again with the
     /// preset it was dictated with, and puts the text on the clipboard (the
     /// field it was meant for may be gone).
@@ -2681,6 +2681,10 @@ impl Controller {
         self.check_budget();
     }
 
+    /// Replaces the last AI-edited insertion with what was said: undo the
+    /// paste, then paste the transcript. Only right after it, in the same
+    /// app, like other edits of "that". A dictation into a note is taken
+    /// out of the note instead.
     fn undo_ai_edit(&mut self) {
         if let Some((captured, at)) = self.last_capture.take()
             && at.elapsed() < UNDO_WINDOW
@@ -3321,10 +3325,6 @@ fn inserted_status(
     text
 }
 
-fn engine_learns(engine: &Result<Engine, String>) -> bool {
-    engine.as_ref().is_ok_and(|e| e.learn_vocabulary)
-}
-
 /// "https://mail.google.com/mail/u/0" → "mail.google.com".
 fn host(url: &str) -> Option<String> {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
@@ -3357,7 +3357,7 @@ fn short(s: &str) -> String {
 enum Asked {
     /// A question for the Ask panel.
     Question,
-    /// What to write, for a new draft in the Compose panel.
+    /// What to write, for a new draft.
     Draft,
     /// A change to the draft open in the Compose panel.
     Change,

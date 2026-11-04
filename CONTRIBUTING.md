@@ -19,7 +19,7 @@ Thanks for helping. This file covers setting up, the checks a change has to pass
   winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
   ```
   On an ARM64 PC, also add the "MSVC ARM64 build tools" component in the Visual Studio Installer.
-- The Windows platform layer (`crates/splashdown-platform/src/win/`) is complete but has barely run on real Windows; see the M3 section of [docs/ROADMAP.md](docs/ROADMAP.md).
+- The Windows platform layer (`crates/splashdown-platform/src/win/`) is complete, and signed Windows releases ship from it. A few things are macOS only for now, such as `splashdown://` links and the computer-use spike.
 
 ## Building and running
 
@@ -44,17 +44,20 @@ The Notes window's editor (CodeMirror) is bundled into `app/ui/vendor/editor.js`
 cd app/editor && pnpm install && pnpm build
 ```
 
-That also rewrites `app/ui/vendor/editor.LICENSES.txt`, the licences of what's in the bundle.
+That also rewrites `app/ui/vendor/editor.LICENSES.txt`, the licenses of what's in the bundle.
 
 ## Checks every change must pass
 
-CI runs these on macOS and Windows; please run them before opening a pull request:
+CI runs these (clippy and the tests on both macOS and Windows); please run them before opening a pull request:
 
 ```sh
 cargo fmt --all --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
+cargo deny check licenses     # once: cargo install cargo-deny --locked
 ```
+
+The last one checks that every dependency's license allows MIT/Apache-2.0 distribution (the rules are in `deny.toml`). A new dependency under a license it doesn't list fails CI.
 
 From a Mac you can also check that the shared crates still build for Windows (transcribe.cpp can't be cross-compiled, hence the flags):
 
@@ -66,7 +69,7 @@ cargo clippy --target x86_64-pc-windows-msvc --no-default-features \
 
 **Tests that need hardware or keys** are marked `#[ignore]` with the reason, and don't run by default:
 - `splashdown-apple-shim`: Apple Intelligence turned on, and Apple's speech model downloaded. Run with `cargo test -p splashdown-apple-shim -- --ignored`.
-- The evals (`splashdown-cli eval cleanup`, `splashdown-cli eval stt`) call real providers and need keys or local models; see [eval/README.md](eval/README.md).
+- The evals (`splashdown-cli eval cleanup`, `commands`, `actions`, `compose`, `style` and `stt`; `eval make-audio` makes the audio for `stt`) are commands, not tests. They call real providers and need keys or local models; see [eval/README.md](eval/README.md).
 
 ## Packaging a release
 
@@ -116,14 +119,50 @@ Whoever can run this workflow with these secrets can ship an update to every ins
 
 ## Changing the AI prompts
 
-Prompts live in `crates/splashdown-core/src/prompt.rs` and the sanity guard in `guard.rs`. Small wording changes can move results a lot, so any prompt or guard change needs an eval run, before and after:
+Each prompt lives next to the code that uses it, in `crates/splashdown-core/src/` unless noted, and each but one has an eval:
+
+| Prompt | Where | Eval |
+|---|---|---|
+| The AI pass: cleanup, spoken instructions, transforms of selected text; and the sanity guard that checks its answer | `prompt.rs`, `guard.rs` | `eval cleanup` |
+| The built-in transforms' instructions, such as the meeting summary | `crates/splashdown-config/src/transforms.rs` | `eval cleanup` (the `transform-*` and `meeting-summary-*` cases) |
+| Spoken commands: which action a command names | `command.rs` | `eval commands` |
+| Voice actions: planning a "do" into one action | `action.rs` | `eval actions` |
+| Compose: drafts, changes to them, and writing in the user's voice | `compose.rs` | `eval compose`, `eval style` |
+| Ask: answers in the panel, and spoken summaries | `ask.rs` | none yet; try it by hand with `splashdown-cli ask "…"` |
+
+Small wording changes can move results a lot, so any prompt or guard change needs an eval run, before and after, on the cloud default and the built-in local model:
 
 ```sh
 cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
+cargo run --release -p splashdown-cli -- eval cleanup --ai local
 cargo run --release -p splashdown-cli -- eval cleanup --ai apple        # on a Mac with Apple Intelligence
 ```
 
-Include the scores in the pull request, and add a case to `eval/cleanup.toml` for the behavior you're fixing.
+The interpreter's prompt is shared by commands and voice actions, so a change to `command.rs` needs both `eval commands` and `eval actions`. `splashdown-cli command "…"` (add `--actions` for voice actions) shows what one command turns into. Include the scores in the pull request, and add a case for the behavior you're fixing (see below).
+
+## How to add…
+
+**A setting**
+1. A field in the right struct in `crates/splashdown-config/src/settings.rs`, as an `Option` documented with what unset means, and an accessor that applies the default (`compose_style()` is `compose_style.unwrap_or(true)`). Unset stays out of `config.toml`, so the default can change later.
+2. If the session needs it, a field in `Engine` (`app/src-tauri/src/engine.rs`), filled in `engine::build`. Saving rebuilds the engine, so the session sees the change.
+3. A control in `app/ui/index.html`, in its tab, marked `data-setting` so a change saves the whole form.
+4. A line in `collect()` in `app/ui/settings/main.js` that reads the control (save the default as `null`), and a line in the tab's render function (`renderGeneral` in `settings/general.js`, `renderPrivacy` in `settings/privacy.js`, …) that shows it.
+5. If it should show something other than the default when the page is opened as a plain file, the sample state in `app/ui/settings/mock.js`.
+
+**A Tauri command**
+1. A `#[tauri::command]` function in the module that owns the feature (it can take `State<'_, AppState>` and `AppHandle`), returning `Result<T, String>` with a message the user can read. Make it `async` and move slow work off the main thread.
+2. Its name in `invoke_handler` in `app/src-tauri/src/main.rs`.
+3. A call from the page: `invoke("my_command", { someArg })` (camelCase in JavaScript, snake_case in Rust).
+4. A `case` in the page's `mockInvoke`, if it has one (`settings/mock.js`, `onboarding.js`, `notes.js`).
+
+**A voice action**
+1. A `Spec` in `CATALOG` in `crates/splashdown-core/src/action.rs`, with its parameters and what each takes, a variant of `Action` (with its `id` and `fields`), and its arm where the planner's answer is turned into an `Action`. Parameters are checked here; nothing in the catalog may send, delete or pay.
+2. What it does: an arm in `carry_out` in `app/src-tauri/src/voice_actions.rs`. It runs off the session thread, so it may ask the user first (`prompt::ask`), as Shortcuts and calendar events do.
+3. Its checkbox in Settings → Actions: an `<input type="checkbox" class="switch" data-action="<id>" data-setting>` in `app/ui/index.html`, and its line in `help.rs` ("What can I say?").
+4. Cases in `eval/actions.toml`, including requests that must do nothing, then a run of `eval actions` and `eval commands` (an edit must never become an action).
+
+**An eval case**
+Add a `[[case]]` to the right file in `eval/` with a new `id`; the file's header says what the fields mean. Run just that case with `--filter <id>` on the cloud default and the built-in model, then the whole set, and put the scores in the pull request. When you compare models, add a row to the results in [eval/README.md](eval/README.md).
 
 ## Prices
 
@@ -131,7 +170,7 @@ Cost estimates for OpenAI and Anthropic come from the list in `crates/splashdown
 
 ## Code style
 
-- Match the code around you. Comments are short and explain *why*; every file starts with a `//!` summary of what it owns.
+- Match the code around you. Comments are short and explain *why*; every Rust file starts with a `//!` summary of what it owns.
 - Keep OS code in `splashdown-platform` (or `splashdown-apple-shim`), and settings decisions in `splashdown-config`. `splashdown-core` stays free of OS calls so it can be unit-tested.
 - Every `unsafe` block gets a `// SAFETY:` comment stating why it's sound; clippy enforces this.
 - User-facing text is plain and short, and names the fix ("OpenRouter rejected the key — check it in Settings → AI Models").

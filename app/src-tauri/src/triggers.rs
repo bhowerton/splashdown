@@ -1,5 +1,5 @@
 //! Ways to start dictation other than the dictation key: the control socket
-//! (the `splash` CLI, `splashdown-mcp` for coding agents) and
+//! (`splashdown-cli`, `splashdown-mcp` for coding agents) and
 //! `splashdown://` links (Raycast, Alfred, Shortcuts). Both end up as
 //! `session::Handle::control` calls.
 

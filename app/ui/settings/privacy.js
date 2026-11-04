@@ -72,7 +72,7 @@ async function renderNotesFolder() {
   }
   if (!folder) return;
   const el = $("pv-notes");
-  el.textContent = `What you write in Notes (⌃⌥N), one Markdown file per note, in ${folder.label}. Never sent anywhere unless you send or copy it${s.notes?.agents_read ? ", or a coding agent you've allowed reads it" : ""}.`;
+  el.textContent = `What you write in Notes (${comboLabel("N", state.platform)}), one Markdown file per note, in ${folder.label}. Never sent anywhere unless you send or copy it${s.notes?.agents_read ? ", or a coding agent you've allowed reads it" : ""}.`;
   el.title = folder.path;
   if (folder.synced) {
     el.textContent += ` That folder is in ${folder.synced}, so ${folder.synced} keeps a copy.`;

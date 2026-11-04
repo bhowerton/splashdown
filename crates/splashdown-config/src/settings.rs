@@ -340,7 +340,7 @@ pub struct HotkeySettings {
     /// key asks for drafts too ("reply saying I'm in").
     pub compose: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
-    /// Claude and others use a double-tap of Option.
+    /// other apps may use a double-tap of Option for their own shortcuts.
     pub double_tap: Option<bool>,
 }
 
@@ -451,8 +451,8 @@ pub struct GeneralSettings {
     pub learned_words: Vec<String>,
     /// Learned words the user removed: never learned again.
     pub forgotten_words: Vec<String>,
-    /// Show words in the overlay while speaking (needs a local Whisper
-    /// model). Unset means on.
+    /// Show words in the overlay while speaking (needs a speech model on
+    /// this computer). Unset means on.
     pub live_preview: Option<bool>,
     /// Type the AI's text into the app as it's written, rather than all at
     /// once when it's done. Unset means on.
@@ -757,7 +757,7 @@ impl std::str::FromStr for AiProvider {
     }
 }
 
-/// Default models, chosen from the M1 eval (see `eval/README.md`).
+/// Default models, chosen from the evals (see `eval/README.md`).
 pub mod defaults {
     pub const OPENAI_STT: &str = "gpt-4o-mini-transcribe";
     /// Gemini 2.5 Flash Lite was rate-limited on most requests; Voxtral
@@ -843,7 +843,7 @@ pub enum ResolveError {
     #[error("local-only mode is on, so {0} can't be used")]
     LocalOnly(&'static str),
     #[error(
-        "the spending limit is reached and there's no speech model on this computer — raise the limit in Settings, or download a Whisper model"
+        "the spending limit is reached and there's no speech model on this computer — raise the limit in Settings, or download a speech model"
     )]
     OverBudget,
 }
@@ -945,10 +945,9 @@ impl Settings {
     }
 
     /// Like `resolve_speech`, also considering Apple's on-device models.
-    /// A saved key wins (the user chose that provider); otherwise Apple is
-    /// preferred over local Whisper.
-    /// Over the spending limit, cloud speech-to-text gives way to Apple's
-    /// model or local Whisper.
+    /// A saved key wins (the user chose that provider); otherwise the
+    /// built-in speech model is preferred over Apple's. Over the spending
+    /// limit, cloud speech-to-text gives way to a model on this computer.
     pub fn resolve_speech_with(
         &self,
         secrets: &Secrets,
@@ -1155,7 +1154,7 @@ pub struct Situation {
     pub apple_language_model: bool,
     /// The built-in local text model is downloaded and can run.
     pub local_model: bool,
-    /// The default local Whisper model is downloaded.
+    /// The default built-in speech model is downloaded.
     pub local_speech: bool,
     /// The spending limit is reached: cloud providers aren't used.
     pub over_budget: bool,

@@ -1,6 +1,8 @@
 //! Learning vocabulary from corrections: after an insertion, if the user
 //! retypes an inserted word into something close that looks like a name or
-//! term ("Pria" → "Priya"), suggest adding it to the vocabulary.
+//! term ("Pria" → "Priya"), it's learned into the vocabulary (the app
+//! watches the field and saves it: `learning.rs`). Also the names and
+//! terms on screen, which join the vocabulary for one dictation.
 
 /// Whether most of `inserted` is still in `field_now`: false once the
 /// field was sent, cleared or replaced, when only an earlier reading can
@@ -17,9 +19,9 @@ pub fn still_there(inserted: &str, field_now: &str) -> bool {
     long.is_empty() || kept * 2 >= long.len()
 }
 
-/// Suggests words from `field_now` that look like corrections of words in
-/// `inserted`. `known` is the current vocabulary (never re-suggested).
-pub fn suggest(inserted: &str, field_now: &str, known: &[String]) -> Vec<String> {
+/// The words in `field_now` that look like corrections of words in
+/// `inserted`. Words already in `known` (the vocabulary) are left out.
+pub fn corrections(inserted: &str, field_now: &str, known: &[String]) -> Vec<String> {
     let inserted_words = words(inserted);
     let field_words = words(field_now);
     let is_known = |w: &str| known.iter().any(|k| k.eq_ignore_ascii_case(w));
@@ -60,7 +62,7 @@ pub fn suggest(inserted: &str, field_now: &str, known: &[String]) -> Vec<String>
 }
 
 /// Names, product terms and jargon: capitalized, or containing a digit or
-/// an inner capital. Ordinary lowercase typo fixes aren't suggested.
+/// an inner capital. Ordinary lowercase typo fixes aren't learned.
 fn looks_like_term(w: &str) -> bool {
     w.chars().count() >= 3
         && (w.chars().next().is_some_and(char::is_uppercase)
@@ -396,7 +398,7 @@ mod tests {
     #[test]
     fn a_correction_that_sounds_the_same_is_learned() {
         assert_eq!(
-            suggest(
+            corrections(
                 "I parked at trucks parking.",
                 "I parked at TRUX parking.",
                 &[]
@@ -404,28 +406,28 @@ mod tests {
             vec!["TRUX"]
         );
         assert_eq!(
-            suggest("Ask Caitlin about it.", "Ask Kaitlyn about it.", &[]),
+            corrections("Ask Caitlin about it.", "Ask Kaitlyn about it.", &[]),
             vec!["Kaitlyn"]
         );
         assert_eq!(
-            suggest("Send it to Jon.", "Send it to John.", &[]),
+            corrections("Send it to Jon.", "Send it to John.", &[]),
             vec!["John"]
         );
         assert_eq!(sound("trucks"), sound("TRUX"));
         // Sounding different stays different.
-        assert!(suggest("meet at the docks", "meet at the Dexter", &[]).is_empty());
-        assert!(suggest("call Mark later", "call Marcy later", &[]).is_empty());
+        assert!(corrections("meet at the docks", "meet at the Dexter", &[]).is_empty());
+        assert!(corrections("call Mark later", "call Marcy later", &[]).is_empty());
     }
 
     #[test]
     fn a_word_partway_through_deletion_is_not_a_correction() {
-        assert!(suggest("Thanks Pria, see you", "Thanks Pri", &[]).is_empty());
+        assert!(corrections("Thanks Pria, see you", "Thanks Pri", &[]).is_empty());
     }
 
     #[test]
-    fn suggests_corrected_names() {
+    fn finds_corrected_names() {
         assert_eq!(
-            suggest(
+            corrections(
                 "Please send it to Pria and Marcus.",
                 "Please send it to Priya and Marcus.",
                 &[]
@@ -433,7 +435,7 @@ mod tests {
             vec!["Priya"]
         );
         assert_eq!(
-            suggest("Deploy the tauri app.", "Deploy the Tauri app.", &[]),
+            corrections("Deploy the tauri app.", "Deploy the Tauri app.", &[]),
             vec!["Tauri"]
         );
     }
@@ -441,13 +443,13 @@ mod tests {
     #[test]
     fn ignores_ordinary_edits_and_known_words() {
         // Lowercase typo fixes aren't terms.
-        assert!(suggest("I think their right", "I think they're right", &[]).is_empty());
+        assert!(corrections("I think their right", "I think they're right", &[]).is_empty());
         // Unchanged text.
-        assert!(suggest("Hello Priya", "Hello Priya, more typing", &[]).is_empty());
+        assert!(corrections("Hello Priya", "Hello Priya, more typing", &[]).is_empty());
         // Already in the vocabulary.
-        assert!(suggest("to Pria", "to Priya", &["priya".into()]).is_empty());
+        assert!(corrections("to Pria", "to Priya", &["priya".into()]).is_empty());
         // Unrelated rewrite.
-        assert!(suggest("meet on Monday", "meet on Thursday", &[]).is_empty());
+        assert!(corrections("meet on Monday", "meet on Thursday", &[]).is_empty());
     }
 
     #[test]

@@ -35,7 +35,7 @@ const LEGACY_APP_DIR: &str = "just-say-it";
 pub struct Paths {
     /// `config.toml` and `history.jsonl`.
     pub config_dir: PathBuf,
-    /// Downloaded Whisper models.
+    /// Downloaded models: speech, the built-in text model, voices.
     pub models_dir: PathBuf,
     pub logs_dir: PathBuf,
 }

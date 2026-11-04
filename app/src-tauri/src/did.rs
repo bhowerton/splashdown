@@ -26,7 +26,7 @@ pub const ACTED: &str = "acted";
 pub const ASKED: &str = "asked";
 /// Had text read aloud (or a summary of it).
 pub const READ: &str = "read";
-/// A draft written in the Compose panel.
+/// A draft written by Compose (into the field or the panel).
 pub const COMPOSED: &str = "composed";
 
 #[derive(Debug, Clone, Serialize)]

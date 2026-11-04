@@ -1,3 +1,4 @@
+/* The setup guide (onboarding.html), on top of settings.css. */
 [hidden] { display: none !important; }
 .ob-body { overflow: hidden; }
 .ob { height: 100vh; display: flex; flex-direction: column; padding: 26px 34px 20px; }
@@ -113,7 +114,6 @@ kbd.keycap {
 .actions-ask { margin-top: 10px; padding: 12px 14px; border-radius: var(--radius); background: var(--accent-soft); }
 .actions-ask .ask-q { margin: 0 0 4px; font-weight: 650; font-size: 14px; }
 .actions-ask .ask-what { margin: 0 0 10px; font-size: 13px; }
-.actions-ask .ask-note { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
 .actions-ask .ask-buttons { display: flex; gap: 8px; }
 .actions-on { margin: 0 0 14px; color: var(--ok); font-size: 13px; font-weight: 600; }
 .try-foot { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }

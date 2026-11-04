@@ -1,6 +1,7 @@
 "use strict";
 
-// Helpers shared by the Settings window and the setup guide. Loaded first.
+// Helpers shared by every window in app/ui (Settings, the setup guide,
+// Notes, Ask, Compose and the small ones). Loaded first.
 // The pages use classic scripts (not modules, so they also open as file://),
 // so every top-level name is shared across a page's scripts: keep them unique.
 
@@ -136,6 +137,21 @@ function toast(text, error = false) {
 // ---------------------------------------------------------------- dictation key
 
 /** The dictation key used while none is chosen. */
+/** A ⌃⌥ shortcut as this computer writes it: "⌃⌥N" on a Mac, "Ctrl+Alt+N"
+ *  elsewhere. */
+function comboLabel(letter, platform) {
+  return (platform === "macos" ? "⌃⌥" : "Ctrl+Alt+") + letter;
+}
+
+/** Fills in what differs by platform in static text: `data-combo="N"`
+ *  elements get the shortcut (comboLabel), `.menubar` elements "the menu
+ *  bar" on a Mac and "the tray menu" (Splashdown's icon by the clock) on
+ *  Windows. */
+function fitPlatform(platform, root = document) {
+  root.querySelectorAll("[data-combo]").forEach((el) => (el.textContent = comboLabel(el.dataset.combo, platform)));
+  root.querySelectorAll(".menubar").forEach((el) => (el.textContent = platform === "macos" ? "the menu bar" : "the tray menu"));
+}
+
 function defaultDictationKey(platform) {
   return platform === "macos" ? "right-alt" : "right-control";
 }

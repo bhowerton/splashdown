@@ -385,7 +385,8 @@ expect = "compose"
 id = "en-compose-email"
 said = "write an email to Dana about the launch moving to Thursday"
 app = "Mail"
-expect = ["compose", "do"]
+# write also goes through Compose in the app, so it's as good.
+expect = ["compose", "write", "do"]
 
 [[case]]
 id = "en-compose-reply-to-selection"

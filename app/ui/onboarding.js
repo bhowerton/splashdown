@@ -84,7 +84,7 @@ $("next").onclick = async () => {
   go(step + 1);
 };
 
-// ---------------------------------------------------------------- step 2: getting ready
+// ---------------------------------------------------------------- step 2: how it should work
 
 const KEY_CHOICES = {
   openrouter: { label: "OpenRouter", site: "openrouter.ai/keys" },
@@ -372,7 +372,7 @@ function renderPermissions() {
   if (step === 3) updateFooter();
 }
 
-// ---------------------------------------------------------------- step 4: getting ready
+// ---------------------------------------------------------------- step 4: waiting for the downloads
 
 /** Speech to text still downloading (or stopped by an error): nothing can
  *  be tried yet, and the guide waits here. The AI comes in the background. */

@@ -1,5 +1,6 @@
 //! Global shortcuts: ⌃⌥V (paste the last raw transcript), ⌃⌥Z (undo the
-//! AI's edit of the last dictation), ⌃⌥N (show or hide Notes), each
+//! AI's edit of the last dictation), ⌃⌥N (show or hide Notes), ⌃⌥M (start
+//! or stop recording a meeting), each
 //! preset's own shortcut, which starts a hands-free dictation with that
 //! preset (or finishes the one in progress), and each transform's, which
 //! runs it on the selected text.

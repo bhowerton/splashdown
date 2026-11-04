@@ -1,7 +1,7 @@
 //! Messages between the app and `splashdown-llm`, the helper process that
 //! runs the built-in local text model. One JSON object per line on the
 //! helper's stdin and stdout. The model runs in its own process because
-//! llama.cpp and whisper.cpp each bundle a different copy of the ggml
+//! llama.cpp and transcribe.cpp each bundle a different copy of the ggml
 //! engine, which can't share one binary.
 
 use std::path::PathBuf;

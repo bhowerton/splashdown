@@ -47,7 +47,7 @@ pub struct Engine {
     pub presets: Vec<Preset>,
     /// Saved instructions for Notes and transform shortcuts.
     pub transforms: Vec<splashdown_config::Transform>,
-    /// Watch for corrections after inserting and suggest vocabulary.
+    /// Watch for corrections after inserting and learn the corrected names.
     pub learn_vocabulary: bool,
     /// Tell the AI which app the text is going into.
     pub share_app_name: bool,

@@ -14,7 +14,7 @@ use crate::history::History;
 const SETTINGS_WINDOW: &str = "settings";
 pub const ONBOARDING_WINDOW: &str = "onboarding";
 /// Shown next to the menu item; the global shortcut itself is registered in
-/// `main.rs`.
+/// `shortcuts.rs`.
 const PASTE_RAW_ACCELERATOR: &str = "Ctrl+Alt+V";
 /// Shown in the menu; registered in `shortcuts.rs`.
 const UNDO_AI_ACCELERATOR: &str = "Ctrl+Alt+Z";

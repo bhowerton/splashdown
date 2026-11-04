@@ -1,3 +1,6 @@
+//! What a recording is for: plain dictation, dictation with a spoken
+//! instruction, a rewrite of selected text, or raw speech-to-text.
+
 use serde::{Deserialize, Serialize};
 
 /// What a recording session does with the user's speech.

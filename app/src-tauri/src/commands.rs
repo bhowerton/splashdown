@@ -1063,13 +1063,6 @@ fn look_up_app(id: String) -> AppInfo {
     info
 }
 
-/// The most recent dictation (kept even when history is off). The setup
-/// guide uses it to notice the first successful dictation.
-#[tauri::command]
-pub fn last_result(state: State<'_, AppState>) -> Option<Entry> {
-    state.history.last()
-}
-
 #[tauri::command]
 pub fn get_launch_at_login(app: AppHandle) -> bool {
     use tauri_plugin_autostart::ManagerExt;

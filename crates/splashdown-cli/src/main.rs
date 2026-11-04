@@ -1,4 +1,4 @@
-//! `splashdown-cli` — developer harness for the Splashdown pipeline (milestone M1),
+//! `splashdown-cli`: a developer harness for the Splashdown pipeline (and its evals),
 //! and a remote control for the running app (`splashdown-cli toggle`, `splashdown-cli
 //! listen`, … over its control socket; see `splashdown-control`).
 //!

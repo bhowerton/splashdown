@@ -1,3 +1,7 @@
+//! The Splashdown app: starts the menu bar (tray) icon, the dictation
+//! session, the windows and the background jobs, and registers every Tauri
+//! command the UI (`app/ui`) calls. See docs/ARCHITECTURE.md for a map.
+
 // No console window on Windows release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
@@ -115,7 +119,6 @@ fn main() {
             commands::copy_text,
             commands::get_recent_apps,
             commands::redo_history,
-            commands::last_result,
             commands::get_launch_at_login,
             commands::set_launch_at_login,
             commands::finish_onboarding,
@@ -195,7 +198,6 @@ fn main() {
             reading::reading_try,
             reading::reading_toggle,
             reading::reading_state,
-            reading::reading_stop,
             help::help_sheet,
             help::help_close,
             help::help_open_actions,

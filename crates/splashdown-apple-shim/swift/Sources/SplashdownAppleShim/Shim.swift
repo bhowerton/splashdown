@@ -11,7 +11,7 @@ import Speech
 
 public typealias SplashdownCallback = @convention(c) (UnsafeMutableRawPointer?, Int32, UnsafePointer<CChar>?) -> Void
 
-// Status codes shared with ../src/lib.rs.
+// Status codes shared with src/ffi.rs in this crate (keep both in step).
 let OK: Int32 = 0
 let NOT_ENABLED: Int32 = 1        // Apple Intelligence is off
 let NOT_ELIGIBLE: Int32 = 2       // this Mac can't run it

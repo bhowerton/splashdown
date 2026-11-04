@@ -1,5 +1,5 @@
 //! The running app's control channel, for things other than the dictation
-//! key: the `splash` CLI, `splashdown://` links, and coding agents (through
+//! key: `splashdown-cli`, `splashdown://` links, and coding agents (through
 //! `splashdown-mcp`).
 //!
 //! One JSON line per connection each way. The request is

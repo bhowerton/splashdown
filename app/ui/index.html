@@ -69,9 +69,9 @@
         <div class="row"><span class="lbl"><label for="hk-compose">Compose</label><small>Off unless you choose a letter. You don't need one: tap the instruction key and say what to write ("reply saying I'm in"). With a letter, holding the dictation key and pressing it always writes a draft.</small></span>
           <input id="hk-compose" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" placeholder="Off" data-setting></div>
         <label class="row"><span class="lbl">Write drafts in my style<small>Compose writes the way you do in your own earlier messages in the conversation on screen: your greeting and sign-off, length, how formal you are, emoji. Nothing is stored.</small></span>
-          <input id="hk-compose-style" type="checkbox" class="switch" data-setting></label>
+          <input id="gen-compose-style" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Check drafts in a panel first<small>Compose shows the draft in a panel to change by voice, with every version kept, and you choose Insert.</small></span>
-          <input id="hk-compose-panel" type="checkbox" class="switch" data-setting></label>
+          <input id="gen-compose-panel" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Double-tap for hands-free too<small>Off by default: Claude and some other apps use a double-tap of Option. Mouse buttons always double-click into hands-free.</small></span>
           <input id="hk-double-tap" type="checkbox" class="switch" data-setting></label>
         <div class="row note-row" id="hk-tip-row" hidden><span class="lbl"><small id="hk-tip"></small></span></div>
@@ -105,11 +105,11 @@
           <input id="nt-keep-audio" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Find notes by meaning<small id="nt-meaning-note">Ask finds notes about what you mean, not only ones with the same words: “why was the launch delayed?” finds the note that says it was pushed back. Runs on this computer; the first time downloads the Qwen3 Embedding model (about 639 MB).</small></span>
           <input id="nt-meaning" type="checkbox" class="switch" data-setting></label>
-        <div class="row"><span class="lbl">Notes window<small>⌃⌥N, or Notes in the menu bar. Transforms are on the Words tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
+        <div class="row"><span class="lbl">Notes window<small><span data-combo="N">⌃⌥N</span>, or Notes in <span class="menubar">the menu bar</span>. Transforms are on the Words tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
       </div>
       <div class="group">
         <div class="gh">Meetings</div>
-        <div class="row"><span class="lbl">Record a meeting<small>⌃⌥M, or Record a meeting in the menu bar or Notes. Your microphone is You, and what your computer plays is Them. The transcript goes into Meetings in your notes folder as the call goes.</small></span></div>
+        <div class="row"><span class="lbl">Record a meeting<small><span data-combo="M">⌃⌥M</span>, or Record a meeting in <span class="menubar">the menu bar</span> or Notes. Your microphone is You, and what your computer plays is Them. The transcript goes into Meetings in your notes folder as the call goes.</small></span></div>
         <label class="row"><span class="lbl">Show a bar on screen while recording<small>The time, both sides' levels and Stop, at the top of the screen. Drag it anywhere.</small></span>
           <input id="mt-pill" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Offer to record when a call starts<small>When Zoom, Teams, Slack, FaceTime, a browser or another call app starts using the microphone, a small panel offers to record, and offers to stop when the call ends. Nothing is recorded until you click.</small></span>
@@ -243,9 +243,9 @@
         <div class="row column">
           <span class="lbl">Names and terms to spell correctly<small>One per line or comma-separated, e.g. product names, colleagues, jargon</small></span>
           <textarea id="gen-vocab" rows="3" aria-label="Names and terms to spell correctly" placeholder="Tauri, OpenRouter, Priya" data-setting></textarea>
-          <div id="vocab-learned" class="suggest" hidden></div>
+          <div id="vocab-learned" class="learned" hidden></div>
         </div>
-        <label class="row"><span class="lbl">Learn from my corrections<small>If you fix a name or term right after dictating it ("Pria" to "Priya"), Splashdown adds it here and says so. Forget it with ✕ above, or from the menu bar. Only the word is kept.</small></span>
+        <label class="row"><span class="lbl">Learn from my corrections<small>If you fix a name or term right after dictating it ("Pria" to "Priya"), Splashdown adds it here and says so. Forget it with ✕ above, or from <span class="menubar">the menu bar</span>. Only the word is kept.</small></span>
           <input id="gen-learn" type="checkbox" class="switch" data-setting></label>
         <div class="row"><span class="lbl">Bring your words from another dictation app<small>A dictionary or snippets export, or a word list (text or CSV, with “misspelling,correction” lines for corrections). Words, corrections and snippets are added; nothing already here changes.</small></span>
           <button class="btn" id="words-import">Import…</button>
@@ -466,7 +466,7 @@
         <div><h1>History</h1><p>Past dictations, kept only on this computer and only if you want them.</p></div>
       </header>
       <div class="group">
-        <label class="row"><span class="lbl">Keep a history of dictations<small>Off by default. When on, the last 300 are stored only on this computer, so you can find, copy or redo them. “Paste last raw transcript” (⌃⌥V) works either way.</small></span>
+        <label class="row"><span class="lbl">Keep a history of dictations<small>Off by default. When on, the last 300 are stored only on this computer, so you can find, copy or redo them. “Paste last raw transcript” (<span data-combo="V">⌃⌥V</span>) works either way.</small></span>
           <input id="hist-keep" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Delete after<small>Older dictations and their recordings are deleted automatically.</small></span>
           <select id="hist-days" data-setting>
@@ -533,7 +533,7 @@
         <div class="row"><span class="lbl">Dictation history<small id="pv-history"></small></span><button class="link" data-goto="history">Manage</button></div>
         <div class="row"><span class="lbl">Usage numbers<small>Words, speaking time and app names per day, for Insights. Never what you said.</small></span><button class="link" data-goto="insights">Manage</button></div>
         <div class="row"><span class="lbl">Vocabulary learning<small>After a dictation, re-reads the field once to spot corrected names. Only the word is kept.</small></span><button class="link" data-goto="words">Change</button></div>
-        <div class="row"><span class="lbl">Notes<small id="pv-notes">What you write in Notes (⌃⌥N), one Markdown file per note.</small></span><button class="link" id="pv-notes-open">Open</button></div>
+        <div class="row"><span class="lbl">Notes<small id="pv-notes">What you write in Notes (<span data-combo="N">⌃⌥N</span>), one Markdown file per note.</small></span><button class="link" id="pv-notes-open">Open</button></div>
         <div class="row"><span class="lbl">API keys<small id="pv-keys"></small></span></div>
         <div class="row"><span class="lbl">Logs<small>Timings and errors only, never what you say.</small></span></div>
       </div>

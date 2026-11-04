@@ -1,6 +1,9 @@
-//! The Compose panel: the user says what they want to write (after the
-//! instruction key: "draft a reply…") and a draft is written into a
-//! small window, streamed as it's written. While the panel is open, a
+//! The Compose panel. Compose (the user says what they want to write after
+//! the instruction key: "draft a reply…") writes the draft straight into
+//! the field by default (`show_draft` in session.rs); this panel is used when
+//! Settings → General → Check drafts in a panel first is on, text is
+//! selected, or there's no field. The draft is streamed into a small
+//! window as it's written. While the panel is open, a
 //! dictation changes the draft instead of being typed ("shorter", "add
 //! that I'm free Thursday"), and so do the quick changes and a typed
 //! change; every version is kept, to go back to. Insert pastes the draft

@@ -33,8 +33,8 @@ function renderGeneral() {
   setValue($("hk-note"), (s.hotkeys.note || noteDefault).toUpperCase());
   setValue($("hk-ask"), (s.hotkeys.ask || askDefault(s.hotkeys)).toUpperCase());
   setValue($("hk-compose"), (s.hotkeys.compose || "").toUpperCase());
-  $("hk-compose-panel").checked = s.general.compose_panel === true;
-  $("hk-compose-style").checked = s.general.compose_style !== false;
+  $("gen-compose-panel").checked = s.general.compose_panel === true;
+  $("gen-compose-style").checked = s.general.compose_style !== false;
   const notes = s.notes ?? {};
   setValue($("nt-capture-to"), notes.capture_to ?? "inbox");
   $("nt-daily-row").hidden = (notes.capture_to ?? "inbox") !== "daily";

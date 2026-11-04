@@ -7,7 +7,7 @@
 // app it's for; Esc closes.
 
 /** What the panel shows (`compose::Shown`). */
-let shown = { versions: [], at: 0, writing: false, error: null, app: null, replying: false, removed: false };
+let shown = { versions: [], at: 0, writing: false, error: null, app: null, replying: false, read_window: false, removed: false };
 /** Something is being read aloud (`reading.rs`). */
 let reading = false;
 /** The dictation key's name, for the hint. */

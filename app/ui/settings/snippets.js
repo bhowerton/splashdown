@@ -1,7 +1,8 @@
 "use strict";
 
-// Snippets (on the General tab): spoken trigger phrases that insert saved text.
-// Saved straight into settings.snippets on every change.
+// Snippets and find-and-replace rules (on the Words & language tab).
+// Snippets: spoken trigger phrases that insert saved text, saved straight
+// into settings.snippets on every change.
 
 function renderSnippets() {
   const host = $("snippets");
