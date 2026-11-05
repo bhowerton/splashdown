@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.8.0 — 2026-11-04
 
 - **Coding agents can go through your meetings.** With notes allowed for coding agents (Settings → Privacy), `splashdown-mcp` can now list your notes by date, kind, folder or tag ("recap my meetings this week", "what's tagged #launch since Monday?"), with each meeting's summary in the same answer. It can read just a meeting's summary, your own notes from it, or its transcript, from one time to another or for one speaker, and long transcripts come in pages instead of being cut off at 50,000 characters. A search match in a transcript says when it was said. Results link back to the note in Splashdown.
 - **Meetings and transcripts have their own switch for agents:** "…including meetings and transcripts", since they hold other people's words. It stays on if you'd already allowed notes, and starts off when you first allow them.
