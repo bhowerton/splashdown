@@ -43,6 +43,10 @@ cp app/src-tauri/icons/icon.icns "$APP/Contents/Resources/icon.icns"
 # shim's build.rs); without it the system doesn't know they exist.
 cp -R target/appintents/Metadata.appintents "$APP/Contents/Resources/"
 
+# A new build number each time: macOS reads an app's Shortcuts actions
+# once per build number, so a dev build that kept 0.8.0 would keep the
+# actions of its first build.
+BUILD="1.$(date +%s)"
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -55,7 +59,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleIconFile</key><string>icon</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
-  <key>CFBundleVersion</key><string>$VERSION</string>
+  <key>CFBundleVersion</key><string>$BUILD</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
 </dict>
 </plist>
@@ -75,6 +79,9 @@ codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP" 2>&1 | grep
 
 # A helper left from the previous build would keep the old model code.
 pkill -x splashdown-llm 2>/dev/null || true
+
+# Tell Launch Services about this build now, so Shortcuts sees its actions.
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" || true
 
 # Replace a running copy.
 pkill -x splashdown 2>/dev/null && sleep 0.5 || true

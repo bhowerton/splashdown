@@ -105,11 +105,11 @@ impl Controller {
                 Ok(None)
             }
             Request::Listen { .. } if recording => Err("Already recording".into()),
-            Request::Listen { prompt } => match self.start_external() {
+            Request::Listen { prompt, to } => match self.start_external() {
                 Ok(()) => {
                     // Answered when the recording ends (`answer`), or the
                     // reply is dropped if it's discarded.
-                    self.listen(prompt, reply);
+                    self.listen(prompt, to, reply);
                     return;
                 }
                 Err(e) => Err(e),
@@ -213,7 +213,7 @@ impl Controller {
 
     /// Turns the recording just started into an answer for `reply`: plain
     /// dictation (no field, no selection), with the question on screen.
-    fn listen(&mut self, prompt: Option<String>, reply: Reply) {
+    fn listen(&mut self, prompt: Option<String>, to: Option<String>, reply: Reply) {
         // The pinned preset, or the default one: not the focused app's.
         let preset = self.match_preset(None);
         let Some(active) = &mut self.active else {
@@ -224,6 +224,7 @@ impl Controller {
         active.selection = Selection::Empty;
         active.preset = preset;
         active.reply_to = Some(reply);
+        active.answer_to = to;
         active.shown = match prompt.filter(|p| !p.trim().is_empty()) {
             Some(text) => OverlayState::Question { text },
             None => OverlayState::HandsFree { preset: None },
@@ -248,7 +249,10 @@ impl Controller {
                     Err("Didn't catch that".to_string())
                 } else {
                     self.record(&outcome, None, &active.preset, took);
-                    self.done("Answer sent");
+                    self.done(&match active.answer_to.take() {
+                        Some(to) => format!("Sent to {to}"),
+                        None => "Answer sent".into(),
+                    });
                     Ok(Some(outcome.text))
                 };
                 self.check_budget();

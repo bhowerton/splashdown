@@ -437,6 +437,8 @@ struct Active {
     screen_words: Option<mpsc::Receiver<Vec<String>>>,
     /// A control request's `listen`: the text goes here, not into a field.
     reply_to: Option<control::Reply>,
+    /// …and where it ends up, for the overlay ("Sent to Shortcuts").
+    answer_to: Option<String>,
 }
 
 struct Controller {

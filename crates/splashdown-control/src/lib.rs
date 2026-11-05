@@ -70,6 +70,10 @@ pub enum Request {
     Listen {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         prompt: Option<String>,
+        /// Where the answer goes, for the overlay once it's sent: "Sent to
+        /// Shortcuts". Unset: "Answer sent".
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<String>,
     },
     /// With `text`, add it to the capture note. Without, start a
     /// hands-free recording that goes into a note, or finish the one in
@@ -368,12 +372,23 @@ mod tests {
         );
         assert_eq!(
             Request::parse(r#"{"cmd":"listen"}"#),
-            Ok(Request::Listen { prompt: None })
+            Ok(Request::Listen {
+                prompt: None,
+                to: None
+            })
         );
         assert_eq!(
             Request::parse(r#"{"cmd":"listen","prompt":"Which one?"}"#),
             Ok(Request::Listen {
-                prompt: Some("Which one?".into())
+                prompt: Some("Which one?".into()),
+                to: None
+            })
+        );
+        assert_eq!(
+            Request::parse(r#"{"cmd":"listen","to":"Shortcuts"}"#),
+            Ok(Request::Listen {
+                prompt: None,
+                to: Some("Shortcuts".into())
             })
         );
         assert!(Request::parse(r#"{"cmd":"format-disk"}"#).is_err());
@@ -447,6 +462,7 @@ mod tests {
     fn requests_and_replies_are_single_lines() {
         let line = to_line(&Request::Listen {
             prompt: Some("two\nlines".into()),
+            to: None,
         });
         assert_eq!(line, "{\"cmd\":\"listen\",\"prompt\":\"two\\nlines\"}\n");
         assert_eq!(to_line(&Request::Cancel), "{\"cmd\":\"cancel\"}\n");
@@ -492,7 +508,7 @@ mod tests {
         let (client, server) = UnixStream::pair().unwrap();
         let t = std::thread::spawn(move || {
             server::handle_connection(server, &|r: Request| match r {
-                Request::Listen { prompt } => Reply::from(Ok(prompt)),
+                Request::Listen { prompt, .. } => Reply::from(Ok(prompt)),
                 _ => Reply::error("Not recording"),
             });
         });
@@ -500,6 +516,7 @@ mod tests {
             &client,
             &Request::Listen {
                 prompt: Some("echo".into()),
+                to: None,
             },
         )
         .unwrap();

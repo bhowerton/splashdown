@@ -12,6 +12,14 @@ pub struct Captured {
     pub label: String,
 }
 
+impl Captured {
+    /// The note's file, absolute.
+    pub fn file(&self) -> Option<PathBuf> {
+        let (store, _) = store_for(self.folder.clone()).ok()?;
+        Some(store.root().join(&self.appended.path))
+    }
+}
+
 pub(super) fn capture_target(settings: &NotesSettings) -> Target {
     match settings.capture_to {
         CaptureTo::Inbox => Target::Inbox,

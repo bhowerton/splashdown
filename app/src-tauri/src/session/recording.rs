@@ -263,6 +263,7 @@ impl Controller {
             chunker,
             stream,
             reply_to: None,
+            answer_to: None,
             project,
             screen_words,
         });

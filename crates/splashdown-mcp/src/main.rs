@@ -89,6 +89,7 @@ fn main() {
 fn ask(question: String) -> Result<String, String> {
     match splashdown_control::send(&Request::Listen {
         prompt: Some(question),
+        to: None,
     }) {
         Ok(Some(text)) if !text.trim().is_empty() => Ok(text),
         Ok(_) => Err("The user didn't say anything. Ask in the chat instead.".into()),

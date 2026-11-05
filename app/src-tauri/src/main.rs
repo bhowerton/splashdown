@@ -21,6 +21,8 @@ mod feedback;
 mod help;
 mod history;
 mod insights;
+#[cfg(target_os = "macos")]
+mod intents;
 mod learning;
 mod meeting;
 mod minibar;
@@ -264,10 +266,6 @@ fn main() {
             reading::init(ui.clone());
             let session = session::spawn(ui, built, engine::keys(&settings), history.clone());
             let only_copy = triggers::serve(session.clone());
-            #[cfg(target_os = "macos")]
-            if only_copy {
-                triggers::serve_intents(session.clone());
-            }
             // The session asks for a rebuild when spending crosses a limit.
             let handle = app.handle().clone();
             app.listen_any(ui::REBUILD_ENGINE, move |_| {
@@ -291,6 +289,10 @@ fn main() {
             });
             updates::start(app.handle());
             shortcuts::sync(app.handle(), &presets, &transforms);
+            #[cfg(target_os = "macos")]
+            if only_copy {
+                intents::serve(app.handle().clone());
+            }
 
             if !only_copy {
                 app.handle().exit(0);

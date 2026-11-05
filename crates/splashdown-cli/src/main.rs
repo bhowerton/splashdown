@@ -244,6 +244,7 @@ fn run() -> Result<()> {
         Command::Cancel => Some(Request::Cancel),
         Command::Listen { prompt } => Some(Request::Listen {
             prompt: prompt.clone(),
+            to: None,
         }),
         Command::Note { text } => Some(Request::Note {
             text: Some(text.join(" ")).filter(|t| !t.trim().is_empty()),
