@@ -73,6 +73,17 @@ pub(super) struct Item {
     pub(super) link: Option<Link>,
     /// A meeting's recording, transcribed again into its note.
     pub(super) again: Option<Again>,
+    /// Told the note's path when it's done, and why it stopped early if it
+    /// did (a Shortcuts action waiting for it).
+    pub(super) reply: Option<std::sync::mpsc::Sender<Result<Done, String>>>,
+}
+
+/// A transcription that ran: its note, and why it stopped early if it did
+/// (what was done is kept).
+#[derive(Debug, Clone)]
+pub(crate) struct Done {
+    pub(crate) note: String,
+    pub(crate) stopped: Option<String>,
 }
 
 pub(super) struct Again {
@@ -174,6 +185,7 @@ fn add(app: &AppHandle, files: Vec<PathBuf>) {
                 path,
                 link: None,
                 again: None,
+                reply: None,
             })
             .collect(),
     );
@@ -203,7 +215,7 @@ pub(super) fn add_items(app: &AppHandle, items: Vec<Item>) {
 /// Transcribes waiting files until there are none.
 fn work(app: AppHandle) {
     loop {
-        let (item, stop) = {
+        let (mut item, stop) = {
             let mut queue = queue();
             let Some(item) = queue.waiting.pop_front() else {
                 queue.running = false;
@@ -223,34 +235,42 @@ fn work(app: AppHandle) {
         // A panic (a decoder on a damaged file) mustn't leave the queue
         // marked running with the note locked until a restart.
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &item.again {
-            Some(again) => transcribe_again(&app, path, again, &stop),
+            Some(again) => transcribe_again(&app, path, again, &stop).map(|stopped| Done {
+                note: again.note.clone(),
+                stopped,
+            }),
             None => transcribe(&app, path, item.link.as_ref(), &stop),
         }))
         .unwrap_or_else(|_| {
             tracing::error!("transcribing a file panicked");
             Err("something went wrong reading it".into())
         });
-        match result {
-            Ok(None) => {}
-            Ok(Some(stopped)) => tell(
+        match &result {
+            Ok(Done { stopped: None, .. }) => {}
+            Ok(Done {
+                stopped: Some(stopped),
+                ..
+            }) => tell(
                 &app,
                 format!("{name}: {stopped}"),
                 !stop.load(Ordering::Relaxed),
             ),
             Err(e) => tell(&app, format!("Couldn't transcribe {name}: {e}"), true),
         }
+        if let Some(reply) = item.reply.take() {
+            let _ = reply.send(result);
+        }
         // (A link's download goes when `item` does.)
     }
 }
 
-/// Transcribes one file into a new note. Returns why it stopped early, if
-/// it did (what's done is kept).
+/// Transcribes one file into a new note.
 fn transcribe(
     app: &AppHandle,
     path: &Path,
     link: Option<&Link>,
     stop: &AtomicBool,
-) -> Result<Option<String>, String> {
+) -> Result<Done, String> {
     let state = app.state::<AppState>();
     let mut file = AudioFile::open(path).map_err(|e| e.to_string())?;
     let speech = state.session.file_speech()?;
@@ -372,7 +392,10 @@ fn transcribe(
             .add_paragraph(&note.path, &last)
             .map_err(|e| e.to_string())?;
     }
-    Ok(stopped)
+    Ok(Done {
+        note: note.path,
+        stopped,
+    })
 }
 
 /// Transcribes a meeting's recording again into its note, with the model
@@ -514,6 +537,31 @@ fn sentence(e: &str) -> &str {
     e.trim().trim_end_matches('.')
 }
 
+/// A Shortcuts action's file: transcribed into a new note like a dropped
+/// one (in turn, with progress in the Notes window), waiting until it's
+/// done.
+#[cfg(target_os = "macos")]
+pub(crate) fn transcribe_and_wait(app: &AppHandle, path: PathBuf) -> Result<Done, String> {
+    if !is_media(&path) {
+        return Err(format!(
+            "{} isn't an audio or video file Splashdown can read.",
+            file_name(&path)
+        ));
+    }
+    let (reply, done) = std::sync::mpsc::channel();
+    add_items(
+        app,
+        vec![Item {
+            path,
+            link: None,
+            again: None,
+            reply: Some(reply),
+        }],
+    );
+    done.recv()
+        .unwrap_or_else(|_| Err("The transcription was stopped.".into()))
+}
+
 /// Transcribe → A file…: a file picker; the files chosen are transcribed.
 #[tauri::command]
 pub async fn notes_transcribe_pick(app: AppHandle) -> Result<(), String> {
@@ -602,6 +650,7 @@ pub fn notes_transcribe_again(
             path: recording,
             link: None,
             again: Some(Again { note: path, model }),
+            reply: None,
         }],
     );
     Ok(())

@@ -260,6 +260,7 @@ pub(super) async fn download_file(url: &str, dir: &Path) -> Result<Item, String>
             title,
         }),
         again: None,
+        reply: None,
     })
 }
 
@@ -325,6 +326,7 @@ pub(super) fn download_page(
             title: Some(title.to_string()).filter(|t| !t.is_empty()),
         }),
         again: None,
+        reply: None,
     })
 }
 

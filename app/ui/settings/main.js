@@ -158,6 +158,7 @@ function collect() {
   s.notes.ask_uses_notes = $("pv-ask-notes").checked ? null : false;
   s.notes.agents_write = $("pv-agents-read").checked && $("pv-agents-write").checked;
   s.notes.agents_meetings = $("pv-agents-read").checked && $("pv-agents-meetings").checked;
+  s.notes.shortcuts_read = $("pv-shortcuts-read").checked ? null : false;
   s.general.user_name = $("gen-name").value.trim() || null;
   s.general.language = $("gen-language").value || null;
   s.general.vocabulary = vocabularyFrom($("gen-vocab").value, state.settings.general.vocabulary);

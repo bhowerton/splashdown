@@ -25,6 +25,10 @@ pub struct NotesSettings {
     /// …including meetings and transcripts (other people's words). Unset
     /// means on, as before this choice existed; Settings saves it.
     pub agents_meetings: Option<bool>,
+    /// Let Shortcuts actions (Mac) find, read and ask about notes. Unset
+    /// means on: the user builds their own shortcuts. Notes hidden from
+    /// agents stay hidden from them too.
+    pub shortcuts_read: Option<bool>,
     /// Meeting notes' folder inside the notes folder. Unset means
     /// "Meetings".
     pub meeting_folder: Option<String>,
@@ -82,6 +86,11 @@ impl NotesSettings {
     /// they may read notes at all.
     pub fn agents_meetings(&self) -> bool {
         self.agents_meetings.unwrap_or(true)
+    }
+
+    /// Whether Shortcuts actions may find, read and ask about notes.
+    pub fn shortcuts_read(&self) -> bool {
+        self.shortcuts_read.unwrap_or(true)
     }
 
     pub fn stop_when_quiet(&self) -> bool {

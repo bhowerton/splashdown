@@ -67,6 +67,10 @@ struct Answer: Decodable {
     var text: String?
     /// A note's file.
     var file: String?
+    /// One note to pass on.
+    var note: NoteInfo?
+    /// Notes found, or the ones an answer drew on.
+    var notes: [NoteInfo]?
 
     /// `message` as Siri and Shortcuts say it.
     var dialog: IntentDialog {
@@ -74,7 +78,7 @@ struct Answer: Decodable {
     }
 
     /// The note, as a Markdown file the next action can read or share.
-    func note() throws -> IntentFile {
+    func noteFile() throws -> IntentFile {
         guard let file else {
             throw SplashdownError(message: "Splashdown didn't say which note.")
         }
@@ -134,7 +138,7 @@ struct AddToNoteIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> & ProvidesDialog {
         let answer = try await Splashdown.send(["cmd": "add_to_note", "text": text])
-        return .result(value: try answer.note(), dialog: answer.dialog)
+        return .result(value: try answer.noteFile(), dialog: answer.dialog)
     }
 }
 
@@ -229,7 +233,7 @@ struct StopMeetingIntent: AppIntent {
 
     func perform() async throws -> some IntentResult & ReturnsValue<IntentFile> & ProvidesDialog {
         let answer = try await Splashdown.send(["cmd": "stop_meeting", "wait": wait])
-        return .result(value: try answer.note(), dialog: answer.dialog)
+        return .result(value: try answer.noteFile(), dialog: answer.dialog)
     }
 }
 
@@ -268,6 +272,17 @@ struct SplashdownShortcuts: AppShortcutsProvider {
         AppShortcut(
             intent: StopMeetingIntent(),
             phrases: ["Stop the meeting in \(.applicationName)"]
+        )
+        AppShortcut(
+            intent: AskNotesIntent(),
+            phrases: [
+                "Ask \(.applicationName)",
+                "Ask \(.applicationName) about my notes",
+            ]
+        )
+        AppShortcut(
+            intent: FindNotesIntent(),
+            phrases: ["Find notes in \(.applicationName)"]
         )
     }
 }

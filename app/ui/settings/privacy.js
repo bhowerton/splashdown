@@ -49,6 +49,8 @@ function renderPrivacy() {
   // notes; someone turning notes on for the first time starts with it off.
   $("pv-agents-meetings").checked = s.notes?.agents_meetings ?? !!s.notes?.agents_read;
   $("pv-agents-meetings").disabled = !s.notes?.agents_read;
+  $("pv-shortcuts-group").hidden = state.platform !== "macos";
+  $("pv-shortcuts-read").checked = s.notes?.shortcuts_read !== false;
   const days = s.general.history_days;
   const kept = days ? `, deleted after ${days === 1 ? "1 day" : `${days} days`}` : "";
   $("pv-history").textContent = s.general.keep_history === true

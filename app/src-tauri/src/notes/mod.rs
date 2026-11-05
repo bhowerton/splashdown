@@ -535,6 +535,150 @@ struct AskUpdate {
     sources: Vec<Source>,
 }
 
+/// Who's asking: the Notes window, whose answers cite their notes by
+/// number, or a Shortcuts action, which gets plain text and never draws on
+/// notes marked hidden from agents.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Asker {
+    Notes,
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+    Shortcuts,
+}
+
+/// What answering a question about notes takes.
+struct Prepared {
+    model: Arc<dyn splashdown_core::TextModel>,
+    request: splashdown_core::TextRequest,
+    /// The notes the answer may draw on.
+    sources: Vec<Source>,
+}
+
+/// The model and request for `question`, about the note at `path` or
+/// (with none) the notes that match it.
+async fn prepare_ask(
+    state: &AppState,
+    question: &str,
+    path: Option<&str>,
+    recent: bool,
+    earlier: Vec<(String, String)>,
+    asker: Asker,
+) -> Result<Prepared, String> {
+    let session = state.session.clone();
+    let setup = tauri::async_runtime::spawn_blocking(move || session.answer_model())
+        .await
+        .map_err(|e| e.to_string())??
+        .ok_or("Asking needs an AI model: choose one in Settings → AI Models.")?;
+    let (store, _) = store(state)?;
+    let (notes, sources): (Vec<_>, Vec<_>) = match path {
+        Some(path) => {
+            let note = store.read(path).map_err(|e| e.to_string())?;
+            let title = markdown::title_of(&note.body);
+            let excerpt = splashdown_core::ask::NoteExcerpt {
+                title: title.clone(),
+                date: day_of(note.modified),
+                text: clip(&note.body, ONE_NOTE_CHARS, recent),
+            };
+            let source = Source {
+                title,
+                path: path.to_string(),
+            };
+            (vec![excerpt], vec![source])
+        }
+        None => {
+            // Finding notes by meaning can take a moment.
+            let by_meaning = state.settings().notes.ask_by_meaning;
+            let asked = question.to_string();
+            let found = tauri::async_runtime::spawn_blocking(move || {
+                let found = matching(
+                    &store,
+                    &asked,
+                    NOTES_ASK_NOTES,
+                    NOTES_ASK_EXCERPT,
+                    by_meaning,
+                );
+                if asker == Asker::Notes {
+                    return found;
+                }
+                let hidden: std::collections::HashSet<String> = store
+                    .list()
+                    .into_iter()
+                    .filter(|n| n.hidden_from_agents)
+                    .map(|n| n.path)
+                    .collect();
+                found
+                    .into_iter()
+                    .filter(|(path, _)| !hidden.contains(path))
+                    .collect()
+            })
+            .await
+            .map_err(|e| e.to_string())?;
+            found
+                .into_iter()
+                .map(|(path, excerpt)| {
+                    let source = Source {
+                        title: excerpt.title.clone(),
+                        path,
+                    };
+                    (excerpt, source)
+                })
+                .unzip()
+        }
+    };
+    tracing::info!("asking about notes, with {} note(s)", notes.len());
+    let context = splashdown_core::ask::AskContext {
+        notes,
+        user_name: setup.user_name,
+        today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
+        earlier,
+        cite_numbers: asker == Asker::Notes,
+        spoken: false,
+        ..Default::default()
+    };
+    Ok(Prepared {
+        model: setup.model,
+        request: splashdown_core::ask::request(question, &context),
+        sources,
+    })
+}
+
+/// A Shortcuts action's question about the notes: the whole answer at
+/// once, and the notes it drew on (title and path).
+#[cfg(target_os = "macos")]
+pub(crate) fn ask_for_shortcuts(
+    state: &AppState,
+    question: &str,
+) -> Result<(String, Vec<(String, String)>), String> {
+    let question = question.trim();
+    if question.is_empty() {
+        return Err("There's no question to ask.".into());
+    }
+    tauri::async_runtime::block_on(async {
+        let Prepared {
+            model,
+            request,
+            sources,
+        } = prepare_ask(state, question, None, false, Vec::new(), Asker::Shortcuts).await?;
+        let result = model.complete(&request).await;
+        let usage = match &result {
+            Ok(completion) => Some(completion.usage),
+            Err(splashdown_core::ProviderError::Interrupted { usage, .. }) => Some(*usage),
+            Err(_) => None,
+        };
+        if let Some(usage) = usage {
+            crate::spend::shared().record(&[(model.name(), usage)], chrono::Local::now());
+        }
+        let completion = result.map_err(|e| {
+            crate::errors::pipeline(
+                &splashdown_core::PipelineError::Llm(e),
+                None,
+                Some(&model.name()),
+            )
+        })?;
+        let sources = sources.into_iter().map(|s| (s.title, s.path)).collect();
+        Ok((completion.text.trim().to_string(), sources))
+    })
+}
+
 /// A question asked in the Notes window, about the note at `path` or (with
 /// none) the notes that match it. The answer streams to the page as
 /// `notes-ask` events. `recent` asks about the end of a long note (a
@@ -554,65 +698,19 @@ pub async fn notes_ask(
     if question.is_empty() {
         return Ok(());
     }
-    let session = state.session.clone();
-    let setup = tauri::async_runtime::spawn_blocking(move || session.answer_model())
-        .await
-        .map_err(|e| e.to_string())??
-        .ok_or("Asking needs an AI model: choose one in Settings → AI Models.")?;
-    let (store, _) = store(&state)?;
-    let (notes, sources): (Vec<_>, Vec<_>) = match &path {
-        Some(path) => {
-            let note = store.read(path).map_err(|e| e.to_string())?;
-            let title = markdown::title_of(&note.body);
-            let excerpt = splashdown_core::ask::NoteExcerpt {
-                title: title.clone(),
-                date: day_of(note.modified),
-                text: clip(&note.body, ONE_NOTE_CHARS, recent),
-            };
-            let source = Source {
-                title,
-                path: path.clone(),
-            };
-            (vec![excerpt], vec![source])
-        }
-        None => {
-            // Finding notes by meaning can take a moment.
-            let by_meaning = state.settings().notes.ask_by_meaning;
-            let asked = question.clone();
-            tauri::async_runtime::spawn_blocking(move || {
-                matching(
-                    &store,
-                    &asked,
-                    NOTES_ASK_NOTES,
-                    NOTES_ASK_EXCERPT,
-                    by_meaning,
-                )
-            })
-            .await
-            .map_err(|e| e.to_string())?
-            .into_iter()
-            .map(|(path, excerpt)| {
-                let source = Source {
-                    title: excerpt.title.clone(),
-                    path,
-                };
-                (excerpt, source)
-            })
-            .unzip()
-        }
-    };
-    tracing::info!("asking in Notes, with {} note(s)", notes.len());
-    let context = splashdown_core::ask::AskContext {
-        notes,
-        user_name: setup.user_name,
-        today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
+    let Prepared {
+        model,
+        request,
+        sources,
+    } = prepare_ask(
+        &state,
+        &question,
+        path.as_deref(),
+        recent,
         earlier,
-        cite_numbers: true,
-        spoken: false,
-        ..Default::default()
-    };
-    let request = splashdown_core::ask::request(&question, &context);
-    let model = setup.model;
+        Asker::Notes,
+    )
+    .await?;
     tauri::async_runtime::spawn(async move {
         let emit = |answer: &str, done: bool, error: Option<String>| {
             let _ = app.emit_to(

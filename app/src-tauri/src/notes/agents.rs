@@ -19,7 +19,7 @@ pub(super) const AGENTS_NO_WRITE: &str = "Coding agents may read Splashdown's no
 
 const MEETINGS_OFF: &str = "Meetings and transcripts are off for coding agents. To allow it, turn on “…including meetings and transcripts” in Splashdown → Settings → Privacy.";
 
-const HIDDEN: &str = "The user keeps this note from coding agents.";
+pub(crate) const HIDDEN: &str = "The user keeps this note from coding agents.";
 
 /// Most notes one search returns.
 pub(super) const SEARCH_LIMIT: usize = 50;
@@ -89,6 +89,32 @@ pub fn agent_list(
         out["hint"] = json!(nothing_found(&filter, settings));
     }
     reply(&out)
+}
+
+/// The notes at `paths` that `settings` lets an agent reach, as
+/// `list_notes` lists them, in the order asked (for Shortcuts, which keeps
+/// notes by path).
+#[cfg(target_os = "macos")]
+pub(crate) fn notes_at(settings: &NotesSettings, paths: &[String]) -> Result<Vec<Value>, String> {
+    if !settings.agents_read {
+        return Err(AGENTS_OFF.into());
+    }
+    let (store, _) = store_for(settings.folder.clone())?;
+    let notes = store.list();
+    Ok(paths
+        .iter()
+        .filter_map(|p| notes.iter().find(|n| &n.path == p))
+        .filter(|n| visible(settings, n))
+        .map(|n| listed(n, false))
+        .collect())
+}
+
+/// The title of the note at `path`, from its first heading.
+#[cfg(target_os = "macos")]
+pub(crate) fn title_at(settings: &NotesSettings, path: &str) -> Option<String> {
+    let (store, _) = store_for(settings.folder.clone()).ok()?;
+    let note = store.read(path).ok()?;
+    Some(markdown::title_of(&note.body)).filter(|t| !t.is_empty())
 }
 
 /// `search_notes`: notes whose title or text contains `query` (any case),
@@ -1081,6 +1107,20 @@ mod tests {
         );
         let missing = parse(agent_read(&s, "Plan.md", &summary).unwrap());
         assert!(missing["missing"].is_string());
+
+        // By path (Shortcuts): in the order asked, never the hidden one.
+        #[cfg(target_os = "macos")]
+        {
+            let paths =
+                ["Plan.md", "Secret.md", "Nowhere.md", "Meetings/Sync.md"].map(String::from);
+            let at: Vec<Value> = notes_at(&s, &paths).unwrap();
+            let at: Vec<&str> = at.iter().map(|n| n["path"].as_str().unwrap()).collect();
+            assert_eq!(at, ["Plan.md", "Meetings/Sync.md"]);
+            assert_eq!(
+                title_at(&s, "Meetings/Sync.md").as_deref(),
+                Some("Weekly sync")
+            );
+        }
 
         s.agents_meetings = Some(false);
         assert_eq!(

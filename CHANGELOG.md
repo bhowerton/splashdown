@@ -2,6 +2,17 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Shortcuts can work with your notes (Mac).** Five more actions:
+  - **Find Notes** by what they say, kind (meetings, transcripts…) and time.
+  - **Get Note Text**: a whole note, or a meeting's summary, your own notes from it, or its transcript.
+  - **Ask My Notes**: a question answered from your notes.
+  - **Transcribe File**: an audio or video file into a new note.
+  - **Open Note** in Splashdown.
+
+  Settings → Privacy → Shortcuts → "Let shortcuts find and read notes" turns it off. A note hidden from coding agents is hidden from shortcuts too.
+
 ## 0.9.0 — 2026-11-05
 
 - **A dictation no longer starts with the one before it.** When you dictate into an app you dictated into a few minutes earlier, the AI sees that earlier text for reference. Smaller models sometimes wrote it out again in front of the new text. Splashdown now takes it off, even while text is typed as it streams in.
