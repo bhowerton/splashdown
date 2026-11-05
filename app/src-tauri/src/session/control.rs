@@ -55,9 +55,24 @@ impl Controller {
                 None
             }),
             Request::Note { text: Some(text) } => self.capture_text(&text),
-            Request::SearchNotes { query, limit } => self
+            Request::SearchNotes {
+                query,
+                limit,
+                filter,
+            } => self
                 .notes_settings()
-                .and_then(|n| crate::notes::agent_search(&n, &query, limit))
+                .and_then(|n| crate::notes::agent_search(&n, &query, limit, &filter))
+                .map(Some),
+            Request::ListNotes {
+                filter,
+                with_summary,
+                limit,
+                cursor,
+            } => self
+                .notes_settings()
+                .and_then(|n| {
+                    crate::notes::agent_list(&n, &filter, with_summary, limit, cursor.as_deref())
+                })
                 .map(Some),
             Request::Status => serde_json::to_string(&self.status(recording))
                 .map(Some)
@@ -72,9 +87,9 @@ impl Controller {
                 self.ui.reload_settings();
                 Ok(None)
             }
-            Request::ReadNote { path } => self
+            Request::ReadNote { path, part } => self
                 .notes_settings()
-                .and_then(|n| crate::notes::agent_read(&n, &path))
+                .and_then(|n| crate::notes::agent_read(&n, &path, &part))
                 .map(Some),
             Request::AppendNote { text, to } => self
                 .notes_settings()

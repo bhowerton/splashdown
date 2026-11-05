@@ -176,6 +176,51 @@ pub(super) fn front_matter_value(front: &str, key: &str) -> Option<String> {
     })
 }
 
+/// `agents: false` (or `no`, `off`) in front matter: the note is kept
+/// from coding agents.
+pub(super) fn hidden_from_agents(front: &str) -> bool {
+    front_matter_value(front, "agents").is_some_and(|v| {
+        ["false", "no", "off"]
+            .iter()
+            .any(|f| v.eq_ignore_ascii_case(f))
+    })
+}
+
+/// `front` (front matter with its `---` lines, or "") with `key: value`
+/// set, replacing the key's line if there is one, or with the key taken
+/// out when `value` is `None`. Front matter left empty is dropped.
+pub(super) fn with_front_value(front: &str, key: &str, value: Option<&str>) -> String {
+    let is_key = |l: &str| l.strip_prefix(key).is_some_and(|r| r.starts_with(':'));
+    let line = value.map(|v| format!("{key}: {}", yaml_scalar(v)));
+    if front.is_empty() {
+        return line.map_or_else(String::new, |l| format!("---\n{l}\n---\n"));
+    }
+    let inner: Vec<&str> = front
+        .lines()
+        .skip(1)
+        .take_while(|l| l.trim_end() != "---")
+        .collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut placed = false;
+    for l in inner {
+        if is_key(l) {
+            if let Some(line) = line.as_ref().filter(|_| !placed) {
+                out.push(line.clone());
+                placed = true;
+            }
+            continue;
+        }
+        out.push(l.to_string());
+    }
+    if let Some(line) = line.filter(|_| !placed) {
+        out.push(line);
+    }
+    if out.iter().all(|l| l.trim().is_empty()) {
+        return String::new();
+    }
+    format!("---\n{}\n---\n", out.join("\n"))
+}
+
 /// Whether `line` starts a part of a meeting note: a heading of its own
 /// level or a transcript turn.
 pub(super) fn starts_part(line: &str) -> bool {

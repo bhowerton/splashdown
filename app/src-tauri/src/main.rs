@@ -162,6 +162,7 @@ fn main() {
             notes::notes_delete_folder,
             notes::notes_move,
             notes::notes_set_tags,
+            notes::notes_set_hidden_from_agents,
             notes::notes_daily,
             notes::notes_edit_transforms,
             notes::notes_add,

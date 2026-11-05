@@ -22,6 +22,9 @@ pub struct NotesSettings {
     pub agents_read: bool,
     /// …and add to them.
     pub agents_write: bool,
+    /// …including meetings and transcripts (other people's words). Unset
+    /// means on, as before this choice existed; Settings saves it.
+    pub agents_meetings: Option<bool>,
     /// Meeting notes' folder inside the notes folder. Unset means
     /// "Meetings".
     pub meeting_folder: Option<String>,
@@ -73,6 +76,12 @@ impl NotesSettings {
             .map(str::trim)
             .filter(|f| !f.is_empty())
             .unwrap_or("Meetings")
+    }
+
+    /// Whether coding agents may reach meetings and transcripts, when
+    /// they may read notes at all.
+    pub fn agents_meetings(&self) -> bool {
+        self.agents_meetings.unwrap_or(true)
     }
 
     pub fn stop_when_quiet(&self) -> bool {

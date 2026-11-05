@@ -5,7 +5,7 @@
 //! One JSON line per connection each way. The request is
 //! `{"cmd":"toggle"|"start"|"stop"|"cancel"}`, `{"cmd":"listen","prompt":"…"}`,
 //! `{"cmd":"note","text":"…"}`, or one of the notes requests for coding
-//! agents (`search_notes`, `read_note`, `append_note`); the reply is
+//! agents (`list_notes`, `search_notes`, `read_note`, `append_note`); the reply is
 //! `{"ok":true}`, `{"ok":true,"text":"…"}` (`listen`: the cleaned-up answer;
 //! notes requests: JSON) or `{"ok":false,"error":"…"}`.
 //!
@@ -85,10 +85,30 @@ pub enum Request {
         query: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         limit: Option<usize>,
+        #[serde(default, skip_serializing_if = "NoteFilter::is_empty")]
+        filter: NoteFilter,
     },
-    /// A note's text, as JSON.
+    /// The notes `filter` lets through, newest first, as JSON: a page of
+    /// `limit` from `cursor`.
+    #[serde(rename = "list_notes")]
+    ListNotes {
+        #[serde(default, skip_serializing_if = "NoteFilter::is_empty")]
+        filter: NoteFilter,
+        /// Each meeting's summary too.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        with_summary: bool,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cursor: Option<String>,
+    },
+    /// A note's text, or one part of it, as JSON.
     #[serde(rename = "read_note")]
-    ReadNote { path: String },
+    ReadNote {
+        path: String,
+        #[serde(default, skip_serializing_if = "ReadPart::is_whole")]
+        part: ReadPart,
+    },
     /// Add `text` to the capture note, or to the note at `to`.
     #[serde(rename = "append_note")]
     AppendNote {
@@ -133,6 +153,64 @@ impl Request {
     /// Parses a request line.
     pub fn parse(line: &str) -> Result<Self, String> {
         serde_json::from_str(line.trim()).map_err(|e| format!("bad request: {e}"))
+    }
+}
+
+/// Which notes a list or search covers. Every field is optional; dates
+/// are the agent's words (`7d`, `2026-11-02`), checked by the app.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct NoteFilter {
+    /// A named range: `today`, `yesterday`, `this_week`, `last_week`…
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub when: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub until: Option<String>,
+    /// `meeting`, `transcript`, `capture` or `note`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// A folder, with its subfolders.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub folder: Option<String>,
+    /// A tag, with the tags nested under it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tag: Option<String>,
+}
+
+impl NoteFilter {
+    pub fn is_empty(&self) -> bool {
+        self == &Self::default()
+    }
+}
+
+/// What of a note `read_note` returns. The default is the whole note.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ReadPart {
+    /// `all`, `summary`, `my_notes` or `transcript`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub section: Option<String>,
+    /// The transcript from this time (`m:ss`, `h:mm:ss` or seconds)…
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub start: Option<String>,
+    /// …to this one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub end: Option<String>,
+    /// Only what this speaker said (`You`, `Them` or a name).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub speaker: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_chars: Option<usize>,
+    /// Where to carry on, from the last reply's `next_cursor`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cursor: Option<String>,
+}
+
+impl ReadPart {
+    pub fn is_whole(&self) -> bool {
+        self == &Self::default()
     }
 }
 
@@ -319,8 +397,42 @@ mod tests {
             Request::parse(r#"{"cmd":"search_notes","query":"launch"}"#),
             Ok(Request::SearchNotes {
                 query: "launch".into(),
-                limit: None
+                limit: None,
+                filter: NoteFilter::default(),
             })
+        );
+        assert_eq!(
+            Request::parse(
+                r#"{"cmd":"list_notes","filter":{"when":"this_week","kind":"meeting"},"with_summary":true}"#
+            ),
+            Ok(Request::ListNotes {
+                filter: NoteFilter {
+                    when: Some("this_week".into()),
+                    kind: Some("meeting".into()),
+                    ..NoteFilter::default()
+                },
+                with_summary: true,
+                limit: None,
+                cursor: None,
+            })
+        );
+        // An older splashdown-mcp's read_note is still the whole note.
+        assert_eq!(
+            Request::parse(r#"{"cmd":"read_note","path":"a.md"}"#),
+            Ok(Request::ReadNote {
+                path: "a.md".into(),
+                part: ReadPart::default(),
+            })
+        );
+        assert_eq!(
+            to_line(&Request::ReadNote {
+                path: "a.md".into(),
+                part: ReadPart {
+                    section: Some("summary".into()),
+                    ..ReadPart::default()
+                },
+            }),
+            "{\"cmd\":\"read_note\",\"path\":\"a.md\",\"part\":{\"section\":\"summary\"}}\n"
         );
         assert_eq!(
             to_line(&Request::AppendNote {

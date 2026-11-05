@@ -109,7 +109,7 @@ pub fn open(app: &AppHandle) {
 }
 
 /// `open`, then a new note or today's note (`then`: "new" or "daily"),
-/// for voice actions.
+/// for voice actions, or a note (`note:<path>`, from a link).
 pub fn open_to(app: &AppHandle, then: Option<&str>) {
     remember_front_app();
     read_for_meaning(app);
@@ -123,7 +123,7 @@ pub fn open_to(app: &AppHandle, then: Option<&str>) {
         return;
     }
     let page = match then {
-        Some(then) => format!("notes.html?then={then}"),
+        Some(then) => format!("notes.html?then={}", crate::triggers::encode(then)),
         None => "notes.html".into(),
     };
     let result = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App(page.into()))

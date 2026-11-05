@@ -41,6 +41,20 @@ async function setPinned(path, pinned) {
   }
 }
 
+async function toggleHiddenFromAgents() {
+  if (!current.path) return;
+  const open = notes.find((n) => n.path === current.path);
+  const hidden = !open?.hidden_from_agents;
+  await saveNow();
+  try {
+    await invoke("notes_set_hidden_from_agents", { path: current.path, hidden });
+    await refresh();
+    toast(hidden ? "Hidden from coding agents" : "Coding agents can reach this note again");
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
 function startRename() {
   if (!current.path || locked()) return;
   const name = current.path.split("/").pop().replace(/\.md$/i, "");

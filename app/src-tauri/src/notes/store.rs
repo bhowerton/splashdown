@@ -43,6 +43,12 @@ pub struct Summary {
     /// Its tags, from its front matter and `#tags` in its text, without
     /// the `#` (`work/acme`).
     pub tags: Vec<String>,
+    /// When it was made, from its front matter's `created:` (RFC 3339),
+    /// if it says.
+    pub created: Option<String>,
+    /// `agents: false` in its front matter: coding agents can't list,
+    /// find, read or add to it.
+    pub hidden_from_agents: bool,
 }
 
 /// A note opened in the editor.
@@ -203,6 +209,8 @@ impl Store {
         let (front, body) = split_front_matter(text);
         Some(Summary {
             source: front_matter_value(front, "source").unwrap_or_default(),
+            created: front_matter_value(front, "created"),
+            hidden_from_agents: hidden_from_agents(front),
             tags: tags_of(front, body),
             title: title_of(body),
             text: body.to_string(),
@@ -719,6 +727,17 @@ impl Store {
         let text = std::fs::read_to_string(&path)?;
         let (front, body) = split_front_matter(&text);
         let front = with_front_tags(front, tags);
+        self.write(&path, &format!("{front}{body}"))?;
+        self.read(rel)
+    }
+
+    /// Sets `key: value` in a note's front matter, or takes the key out
+    /// when `value` is `None`.
+    pub fn set_front_value(&self, rel: &str, key: &str, value: Option<&str>) -> io::Result<Note> {
+        let path = self.resolve(rel)?;
+        let text = std::fs::read_to_string(&path)?;
+        let (front, body) = split_front_matter(&text);
+        let front = with_front_value(front, key, value);
         self.write(&path, &format!("{front}{body}"))?;
         self.read(rel)
     }

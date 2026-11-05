@@ -55,8 +55,74 @@ pub fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
         return;
     };
     for url in urls {
+        if let Some(path) = note_link(&url) {
+            crate::notes::open_to(app, Some(&format!("note:{path}")));
+            continue;
+        }
         open_link(&state.session, &url);
     }
+}
+
+/// `splashdown://open?note=<path>` (what coding agents are given to point
+/// at a note) → the note's path.
+fn note_link(url: &str) -> Option<String> {
+    let (scheme, rest) = url.split_once(':')?;
+    if !scheme.eq_ignore_ascii_case("splashdown") {
+        return None;
+    }
+    let rest = rest.trim_start_matches('/');
+    let (name, query) = rest.split_once('?')?;
+    if !name.trim_end_matches('/').eq_ignore_ascii_case("open") {
+        return None;
+    }
+    query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("note="))
+        .map(decode)
+        .filter(|p| !p.is_empty())
+}
+
+/// Percent-encodes `text` for a link: everything but letters, digits and
+/// `-._~`.
+pub fn encode(text: &str) -> String {
+    let mut out = String::new();
+    for byte in text.bytes() {
+        match byte {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
+                out.push(char::from(byte));
+            }
+            _ => out.push_str(&format!("%{byte:02X}")),
+        }
+    }
+    out
+}
+
+/// Undoes [`encode`] (and `+` for a space, as forms write it). A broken
+/// escape is kept as it is.
+fn decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let hex = |b: u8| char::from(b).to_digit(16).map(|d| d as u8);
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'%' => match (
+                bytes.get(i + 1).and_then(|&b| hex(b)),
+                bytes.get(i + 2).and_then(|&b| hex(b)),
+            ) {
+                (Some(hi), Some(lo)) => {
+                    out.push(hi * 16 + lo);
+                    i += 3;
+                    continue;
+                }
+                _ => out.push(b'%'),
+            },
+            b'+' => out.push(b' '),
+            b => out.push(b),
+        }
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }
 
 #[cfg(target_os = "macos")]
@@ -114,5 +180,25 @@ mod tests {
         assert_eq!(link_request("splashdown://listen"), None);
         assert_eq!(link_request("splashdown://"), None);
         assert_eq!(link_request("https://toggle"), None);
+    }
+
+    #[test]
+    fn note_links_carry_a_path() {
+        let path = "Meetings/Weekly sync · Nov 3.md";
+        let link = format!("splashdown://open?note={}", encode(path));
+        assert_eq!(note_link(&link).as_deref(), Some(path));
+        assert_eq!(
+            note_link("splashdown://open/?x=1&note=a+b.md").as_deref(),
+            Some("a b.md")
+        );
+        assert_eq!(
+            note_link("splashdown://open?note=100%"),
+            Some("100%".into())
+        );
+        assert_eq!(note_link("splashdown://open"), None);
+        assert_eq!(note_link("splashdown://toggle?note=a.md"), None);
+        assert_eq!(note_link("https://open?note=a.md"), None);
+        // An open-note link isn't a request.
+        assert_eq!(link_request("splashdown://open?note=a.md"), None);
     }
 }

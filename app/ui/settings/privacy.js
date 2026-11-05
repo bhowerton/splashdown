@@ -45,6 +45,10 @@ function renderPrivacy() {
   $("pv-agents-read").checked = !!s.notes?.agents_read;
   $("pv-agents-write").checked = !!s.notes?.agents_write;
   $("pv-agents-write").disabled = !s.notes?.agents_read;
+  // Unset (from before this switch) means on for whoever had allowed
+  // notes; someone turning notes on for the first time starts with it off.
+  $("pv-agents-meetings").checked = s.notes?.agents_meetings ?? !!s.notes?.agents_read;
+  $("pv-agents-meetings").disabled = !s.notes?.agents_read;
   const days = s.general.history_days;
   const kept = days ? `, deleted after ${days === 1 ? "1 day" : `${days} days`}` : "";
   $("pv-history").textContent = s.general.keep_history === true

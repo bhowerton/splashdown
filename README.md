@@ -148,7 +148,7 @@
 
 ### For developers
 
-- **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice and, if you allow it, search and add to your notes ([docs/AGENTS.md](docs/AGENTS.md)).
+- **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice and, if you allow it, search, read and add to your notes, and go through your meetings by date ("recap my meetings this week") ([docs/AGENTS.md](docs/AGENTS.md)).
 - **Scripting:** `splashdown://toggle` links for Raycast, Alfred or Shortcuts; `splashdown-cli toggle` and `splashdown-cli listen` from a terminal; mouse side buttons as the dictation key.
 
 <details>

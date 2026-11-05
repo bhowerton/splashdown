@@ -2,6 +2,12 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Coding agents can go through your meetings.** With notes allowed for coding agents (Settings → Privacy), `splashdown-mcp` can now list your notes by date, kind, folder or tag ("recap my meetings this week", "what's tagged #launch since Monday?"), with each meeting's summary in the same answer. It can read just a meeting's summary, your own notes from it, or its transcript, from one time to another or for one speaker, and long transcripts come in pages instead of being cut off at 50,000 characters. A search match in a transcript says when it was said. Results link back to the note in Splashdown.
+- **Meetings and transcripts have their own switch for agents:** "…including meetings and transcripts", since they hold other people's words. It stays on if you'd already allowed notes, and starts off when you first allow them.
+- **Hide from coding agents** in a note's ⋯ menu keeps that note out of every agent's reach.
+
 ## 0.7.1 — 2026-11-04
 
 - **Dictating with no text field selected.** When the cursor isn't in a text field (a web page outside any box, a list of files), the text is left on the clipboard and "No text box — copied to clipboard" shows, instead of "Inserted" with the words gone. The same happens when a paste into a browser field doesn't show up.

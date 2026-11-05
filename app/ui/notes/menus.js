@@ -33,6 +33,7 @@ const ACTS = {
   delete: deleteNote,
   "edit-rewrites": editRewrites,
   "on-top": () => setOnTop(!onTop),
+  "hide-from-agents": toggleHiddenFromAgents,
   transcribe: pickFile,
   "transcribe-link": askForLink,
   "transcribe-app": pickApp,

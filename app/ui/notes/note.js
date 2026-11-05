@@ -179,6 +179,8 @@ function updateHeader() {
     document.querySelector(`#nt-menu [data-act="${act}"]`).disabled = !current.path || isLocked;
   }
   document.querySelector('#nt-menu [data-act="reveal"]').disabled = !current.path;
+  $("nt-hide-agents").disabled = !current.path || isLocked;
+  $("nt-hide-agents").setAttribute("aria-checked", String(!!open?.hidden_from_agents));
   // A new folder would split the transcript from the job's.
   document.querySelector('#nt-menu [data-act="folder"]').disabled = !!job || !!meeting;
   $("nt-status").textContent = isLocked && !liveHere()

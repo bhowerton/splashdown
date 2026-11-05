@@ -7,13 +7,14 @@
 //! `notifications/cancelled` (the protocol's spelling).
 
 use serde_json::{Value, json};
-use splashdown_control::Request;
+use splashdown_control::{NoteFilter, ReadPart, Request};
 
 /// Newest first. A client asking for one of these gets it; any other
 /// version gets the newest, as the spec's version negotiation says.
 pub const PROTOCOL_VERSIONS: &[&str] = &["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 
 pub const TOOL: &str = "ask_user_by_voice";
+pub const LIST_NOTES: &str = "list_notes";
 pub const SEARCH_NOTES: &str = "search_notes";
 pub const READ_NOTE: &str = "read_note";
 pub const APPEND_NOTE: &str = "append_note";
@@ -100,37 +101,84 @@ fn initialize(params: &Value) -> Value {
             "title": "Splashdown",
             "version": env!("CARGO_PKG_VERSION"),
         },
-        "instructions": "Use ask_user_by_voice when you need the user's input and a spoken answer is quicker than typing: a decision, a preference, a clarification. Use search_notes and read_note to look up what the user has written in their Splashdown notes, and append_note to add to them, when the user asks you to; these need the user to allow it in Splashdown's settings. The user must have the Splashdown app running.",
+        "instructions": "Use ask_user_by_voice when you need the user's input and a spoken answer is quicker than typing: a decision, a preference, a clarification. The notes tools reach the user's Splashdown notes (Markdown files) when the user asks you to, and only if they allowed it in Splashdown's settings. Notes are of four kinds: meeting (a recorded call), transcript (an app's audio, the microphone, a file or a link), capture (dictated into the Inbox or a daily note) and note. A meeting note has My notes (what the user wrote), a Summary, and a transcript of turns, \"[m:ss] Speaker: words\"; \"You\" is the user. Find notes with list_notes (by date, kind, folder or tag) or search_notes (by words), then read one part with read_note. Take paths only from those results, and cite notes by title and date. The user must have the Splashdown app running.",
     })
+}
+
+/// What list_notes and search_notes take to narrow the notes down.
+fn filter_properties() -> Value {
+    json!({
+        "when": { "type": "string", "description": "A named range: today, yesterday, this_week, last_week, this_month, last_month, last_7_days or last_30_days." },
+        "since": { "type": "string", "description": "From this date or time: 2026-11-02, an RFC 3339 time, today, yesterday, or a while ago (7d, 36h)." },
+        "until": { "type": "string", "description": "Before this date or time, in the same forms as since." },
+        "kind": { "type": "string", "enum": ["meeting", "transcript", "capture", "note"], "description": "Only this kind of note." },
+        "folder": { "type": "string", "description": "Only notes in this folder or its subfolders." },
+        "tag": { "type": "string", "description": "Only notes with this tag, or one nested under it (work matches work/acme)." }
+    })
+}
+
+fn with_filters(mut properties: Value) -> Value {
+    if let (Some(props), Some(filters)) =
+        (properties.as_object_mut(), filter_properties().as_object())
+    {
+        props.extend(filters.clone());
+    }
+    properties
+}
+
+fn read_only() -> Value {
+    json!({ "readOnlyHint": true, "openWorldHint": false })
 }
 
 fn tools() -> Value {
     json!([
         ask_tool(),
         {
-            "name": SEARCH_NOTES,
-            "title": "Search the user's notes",
-            "description": "Search the user's Splashdown notes (Markdown files they dictated or typed) for a word or phrase, in titles and text. Returns up to `limit` notes, title matches first then newest, each with its path, title, last change and a short excerpt. Read one in full with read_note. Works only if the user allowed coding agents to read notes in Splashdown's settings.",
+            "name": LIST_NOTES,
+            "title": "List the user's notes",
+            "description": "List the user's Splashdown notes, newest first, narrowed by date, kind, folder or tag: \"my meetings this week\", \"notes tagged launch since Monday\". Returns each note's path, title, kind, dates, folder, tags and link; for meetings and transcripts also speakers, duration and which sections exist. with_summary adds each meeting's summary, for a recap in one call. Pages with cursor.",
             "inputSchema": {
                 "type": "object",
-                "properties": {
-                    "query": { "type": "string", "description": "Text to look for (any case). Empty lists the newest notes." },
+                "properties": with_filters(json!({
+                    "with_summary": { "type": "boolean", "description": "Add each meeting's summary (up to 2,000 characters). At most 25 notes then." },
+                    "limit": { "type": "integer", "minimum": 1, "maximum": 100, "description": "Most notes to return (default 20)." },
+                    "cursor": { "type": "string", "description": "next_cursor from the previous page." }
+                }))
+            },
+            "annotations": read_only()
+        },
+        {
+            "name": SEARCH_NOTES,
+            "title": "Search the user's notes",
+            "description": "Search the user's Splashdown notes for a word or phrase (any case) in titles and text, transcripts included, optionally narrowed like list_notes. Returns up to `limit` notes, title matches first then newest, each with its path, title, kind, dates, a short excerpt, and for transcripts `said`: when and by whom the first matching turns were said, to read from with read_note's start.",
+            "inputSchema": {
+                "type": "object",
+                "properties": with_filters(json!({
+                    "query": { "type": "string", "description": "Text to look for. Empty lists the newest notes." },
                     "limit": { "type": "integer", "minimum": 1, "maximum": 50, "description": "Most notes to return (default 10)." }
-                },
+                })),
                 "required": ["query"]
-            }
+            },
+            "annotations": read_only()
         },
         {
             "name": READ_NOTE,
             "title": "Read a note",
-            "description": "Read one of the user's Splashdown notes in full, by the path search_notes gave.",
+            "description": "Read one of the user's notes by the path list_notes or search_notes gave: all of it, or one section of a meeting or transcript (summary, my_notes or transcript). A transcript can be narrowed to a stretch of time (start, end) or one speaker. Long text comes in pages: pass next_cursor back as cursor for the rest.",
             "inputSchema": {
                 "type": "object",
                 "properties": {
-                    "path": { "type": "string", "description": "The note's path, as search_notes returned it." }
+                    "path": { "type": "string", "description": "The note's path, as list_notes or search_notes returned it." },
+                    "section": { "type": "string", "enum": ["all", "summary", "my_notes", "transcript"], "description": "Which part (default all)." },
+                    "start": { "type": "string", "description": "Transcript only: from this time in the recording (1:05, 1:02:30 or seconds)." },
+                    "end": { "type": "string", "description": "Transcript only: up to this time." },
+                    "speaker": { "type": "string", "description": "Transcript only: what this speaker said (You is the user)." },
+                    "max_chars": { "type": "integer", "minimum": 500, "maximum": 40000, "description": "Most characters to return (default 20,000)." },
+                    "cursor": { "type": "string", "description": "next_cursor from the previous read of the same note and section." }
                 },
                 "required": ["path"]
-            }
+            },
+            "annotations": read_only()
         },
         {
             "name": APPEND_NOTE,
@@ -140,10 +188,11 @@ fn tools() -> Value {
                 "type": "object",
                 "properties": {
                     "text": { "type": "string", "description": "What to add, as Markdown." },
-                    "to": { "type": "string", "description": "A note's path from search_notes. Leave out for the capture note." }
+                    "to": { "type": "string", "description": "A note's path from list_notes or search_notes. Leave out for the capture note." }
                 },
                 "required": ["text"]
-            }
+            },
+            "annotations": { "readOnlyHint": false, "destructiveHint": false, "idempotentHint": false, "openWorldHint": false }
         }
     ])
 }
@@ -195,19 +244,36 @@ fn call(id: Value, params: &Value) -> Step {
             }
             return Step::Ask { id, question };
         }
+        LIST_NOTES => Request::ListNotes {
+            filter: filter(&args),
+            with_summary: args
+                .get("with_summary")
+                .and_then(Value::as_bool)
+                .unwrap_or(false),
+            limit: number(&args, "limit"),
+            cursor: optional(&args, "cursor"),
+        },
         SEARCH_NOTES => Request::SearchNotes {
             query: text("query"),
-            limit: args
-                .get("limit")
-                .and_then(Value::as_u64)
-                .and_then(|n| usize::try_from(n).ok()),
+            limit: number(&args, "limit"),
+            filter: filter(&args),
         },
         READ_NOTE => {
             let path = text("path");
             if path.is_empty() {
                 return missing("path");
             }
-            Request::ReadNote { path }
+            Request::ReadNote {
+                path,
+                part: ReadPart {
+                    section: optional(&args, "section"),
+                    start: optional(&args, "start"),
+                    end: optional(&args, "end"),
+                    speaker: optional(&args, "speaker"),
+                    max_chars: number(&args, "max_chars"),
+                    cursor: optional(&args, "cursor"),
+                },
+            }
         }
         APPEND_NOTE => {
             let note = text("text");
@@ -223,6 +289,35 @@ fn call(id: Value, params: &Value) -> Step {
         _ => return Step::Send(error(id, INVALID_PARAMS, &format!("unknown tool: {name}"))),
     };
     Step::Control { id, request }
+}
+
+/// A string argument, trimmed; `None` when it's missing or empty. Numbers
+/// are taken as their text (a model may send a cursor or time as one).
+fn optional(args: &Value, key: &str) -> Option<String> {
+    match args.get(key)? {
+        Value::String(s) => Some(s.trim().to_string()).filter(|s| !s.is_empty()),
+        Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
+fn number(args: &Value, key: &str) -> Option<usize> {
+    let value = args.get(key)?;
+    value
+        .as_u64()
+        .or_else(|| value.as_str().and_then(|s| s.trim().parse().ok()))
+        .and_then(|n| usize::try_from(n).ok())
+}
+
+fn filter(args: &Value) -> NoteFilter {
+    NoteFilter {
+        when: optional(args, "when"),
+        since: optional(args, "since"),
+        until: optional(args, "until"),
+        kind: optional(args, "kind"),
+        folder: optional(args, "folder"),
+        tag: optional(args, "tag"),
+    }
 }
 
 /// The `tools/call` result for an answer, or for why there isn't one.
@@ -278,8 +373,19 @@ mod tests {
         let r = send(r#"{"jsonrpc":"2.0","id":2,"method":"tools/list"}"#);
         let tools = r["result"]["tools"].as_array().unwrap();
         let names: Vec<_> = tools.iter().map(|t| t["name"].as_str().unwrap()).collect();
-        assert_eq!(names, [TOOL, SEARCH_NOTES, READ_NOTE, APPEND_NOTE]);
+        assert_eq!(
+            names,
+            [TOOL, LIST_NOTES, SEARCH_NOTES, READ_NOTE, APPEND_NOTE]
+        );
         assert_eq!(tools[0]["inputSchema"]["required"], json!(["question"]));
+        // list and search take the same filters.
+        for tool in &tools[1..3] {
+            for key in ["when", "since", "until", "kind", "folder", "tag"] {
+                assert!(tool["inputSchema"]["properties"][key].is_object(), "{key}");
+            }
+            assert_eq!(tool["annotations"]["readOnlyHint"], true);
+        }
+        assert_eq!(tools[4]["annotations"]["readOnlyHint"], false);
     }
 
     #[test]
@@ -292,7 +398,43 @@ mod tests {
                 id: json!(4),
                 request: Request::SearchNotes {
                     query: "launch".into(),
-                    limit: Some(3)
+                    limit: Some(3),
+                    filter: NoteFilter::default(),
+                }
+            }
+        );
+        assert_eq!(
+            handle(
+                r#"{"jsonrpc":"2.0","id":7,"method":"tools/call","params":{"name":"list_notes","arguments":{"when":"this_week","kind":"meeting","with_summary":true,"limit":"5","cursor":20,"tag":" "}}}"#
+            ),
+            Step::Control {
+                id: json!(7),
+                request: Request::ListNotes {
+                    filter: NoteFilter {
+                        when: Some("this_week".into()),
+                        kind: Some("meeting".into()),
+                        ..NoteFilter::default()
+                    },
+                    with_summary: true,
+                    limit: Some(5),
+                    cursor: Some("20".into()),
+                }
+            }
+        );
+        assert_eq!(
+            handle(
+                r#"{"jsonrpc":"2.0","id":8,"method":"tools/call","params":{"name":"read_note","arguments":{"path":"Meetings/Sync.md","section":"transcript","start":"1:05","speaker":"Dana"}}}"#
+            ),
+            Step::Control {
+                id: json!(8),
+                request: Request::ReadNote {
+                    path: "Meetings/Sync.md".into(),
+                    part: ReadPart {
+                        section: Some("transcript".into()),
+                        start: Some("1:05".into()),
+                        speaker: Some("Dana".into()),
+                        ..ReadPart::default()
+                    },
                 }
             }
         );

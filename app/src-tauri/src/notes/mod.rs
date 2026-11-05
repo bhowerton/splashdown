@@ -325,6 +325,20 @@ pub fn notes_set_tags(
         .map_err(|e| e.to_string())
 }
 
+/// Keeps a note from coding agents (`agents: false` in its front matter),
+/// or lets them reach it again.
+#[tauri::command]
+pub fn notes_set_hidden_from_agents(
+    path: String,
+    hidden: bool,
+    state: State<'_, AppState>,
+) -> Result<Note, String> {
+    store(&state)?
+        .0
+        .set_front_value(&path, "agents", hidden.then_some("false"))
+        .map_err(|e| e.to_string())
+}
+
 /// A meeting writes into its note as it goes: it can't be moved meanwhile.
 fn not_recording(path: &str) -> Result<(), String> {
     match crate::meeting::status() {
@@ -712,6 +726,8 @@ mod tests {
             folder: String::new(),
             source: String::new(),
             tags: Vec::new(),
+            created: None,
+            hidden_from_agents: false,
         }
     }
 

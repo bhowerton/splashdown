@@ -105,10 +105,14 @@ listen("notes-send-target", (event) => {
   updateHeader();
 });
 
-/** What a voice action asked for once the window is up: "new" or "daily". */
+/**
+ * What was asked for once the window is up: "new" or "daily" (voice
+ * actions), or "note:<path>" (a splashdown://open?note= link).
+ */
 function then(what) {
   if (what === "new") newNote();
   else if (what === "daily") openDaily();
+  else if (what?.startsWith("note:")) openNote(what.slice(5));
 }
 
 listen("notes-then", (event) => then(event.payload));

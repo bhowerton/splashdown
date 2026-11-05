@@ -30,7 +30,7 @@ If you turn on Name meetings from my calendar (Settings → Notes → Meetings, 
 
 To offer to record a call, Splashdown checks every two seconds which apps are using the microphone (Settings → Notes → Meetings). Only the apps' names are read, nothing leaves your computer, and nothing is recorded until you click Record.
 
-If you allow coding agents to read your notes (Settings → Privacy, off by default), what an agent reads goes to that agent's own AI provider.
+If you allow coding agents to read your notes (Settings → Privacy, off by default), what an agent reads goes to that agent's own AI provider. Meetings and transcripts, which hold other people's words, have a switch of their own, and a note marked Hide from coding agents (its ⋯ menu) is never reached.
 
 Each provider handles what it receives under its own privacy policy. Local-only mode (Settings → Privacy) refuses every cloud provider, even when a key is saved.
 
