@@ -3,9 +3,12 @@
 //! records the user's spoken answer hands-free, and the cleaned-up text
 //! goes back to the agent. `search_notes`, `read_note` and `append_note`
 //! reach the user's notes, if Settings allows it. It talks to the running
-//! app over its control socket (`splashdown-control`). Setup: docs/AGENTS.md.
+//! app over its control socket (`splashdown-control`). With arguments it
+//! sets agents up with itself instead (`splashdown-mcp install
+//! claude-code`; `setup.rs`). Setup: docs/AGENTS.md.
 
 mod mcp;
+mod setup;
 
 use std::io::{BufRead, Write};
 use std::sync::{Arc, Mutex};
@@ -16,6 +19,10 @@ use splashdown_control::{ClientError, Request};
 use crate::mcp::Step;
 
 fn main() {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if let Some(code) = setup::main(&args) {
+        std::process::exit(code);
+    }
     let out = Arc::new(Mutex::new(std::io::stdout()));
     // The `tools/call` waiting for the user, if any. The app records one
     // answer at a time.

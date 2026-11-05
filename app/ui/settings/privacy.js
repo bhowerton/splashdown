@@ -84,3 +84,84 @@ async function renderNotesFolder() {
   // Synced notes stand out while local-only mode is on.
   el.classList.toggle("warn-text", !!folder.synced && !!state.settings.general.local_only);
 }
+
+/** Settings → Privacy → Coding agents → Set up an agent: each agent this
+ *  computer has, whether Splashdown is set up in it, and a button. */
+async function renderCodingAgents() {
+  const list = $("pv-agents-list");
+  let found;
+  try {
+    found = await invoke("coding_agents");
+  } catch (e) {
+    list.replaceChildren(agentRow("Couldn't check for agents", String(e)));
+    return;
+  }
+  $("pv-agents-server").textContent = ` For any other agent, its command is ${found.server}.`;
+  const rows = found.agents.map((a) => {
+    const only = a.only_in ?? [];
+    const state = a.set_up
+      ? a.points_here === false
+        ? "Set up, with another copy of Splashdown. Set it up again to use this one."
+        : "Set up."
+      : only.length
+        ? `Set up for ${only.join(", ")} only.`
+        : a.found
+          ? "Not set up."
+          : "Not found on this computer.";
+    const row = agentRow(a.name, state);
+    const acts = document.createElement("span");
+    acts.className = "row-acts";
+    if (a.how === "config") {
+      // Claude Desktop: lines to add to its config by hand.
+      acts.append(agentButton("Copy setup", () => copyForAgent(a.snippet, `Copied. In Claude Desktop: Settings → Developer → Edit Config, add it, then restart Claude Desktop.`)));
+    } else {
+      const again = a.set_up && a.points_here !== false;
+      acts.append(agentButton(again ? "Set up again" : "Set up", () => setUpAgent(a), !a.found && a.how === "command" && a.id !== "vscode"));
+      if (a.command) acts.append(agentButton("Copy command", () => copyForAgent(a.command, "Copied. Run it in a terminal."), false, "link"));
+    }
+    row.append(acts);
+    return row;
+  });
+  list.replaceChildren(...rows);
+}
+
+function agentRow(name, detail) {
+  const row = document.createElement("div");
+  row.className = "row";
+  const lbl = document.createElement("span");
+  lbl.className = "lbl";
+  lbl.textContent = name;
+  const small = document.createElement("small");
+  small.textContent = detail;
+  lbl.append(small);
+  row.append(lbl);
+  return row;
+}
+
+function agentButton(text, onClick, disabled = false, cls = "btn") {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = cls;
+  b.textContent = text;
+  b.disabled = disabled;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+async function copyForAgent(text, message) {
+  try {
+    await invoke("copy_text", { text });
+    toast(message);
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+async function setUpAgent(agent) {
+  try {
+    toast(await invoke("coding_agent_install", { id: agent.id }));
+  } catch (e) {
+    toast(String(e), true);
+  }
+  renderCodingAgents();
+}

@@ -8,6 +8,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 - **Meetings and transcripts have their own switch for agents:** "…including meetings and transcripts", since they hold other people's words. It stays on if you'd already allowed notes, and starts off when you first allow them.
 - **Hide from coding agents** in a note's ⋯ menu keeps that note out of every agent's reach.
 - **Two ready-made requests for agents:** "Recap my meetings" and "My open action items" come with `splashdown-mcp` as prompts, which Claude Code offers as commands.
+- **Set up a coding agent from Settings.** Settings → Privacy → Coding agents → Set up an agent lists Claude Code, Codex, Cursor, VS Code and Claude Desktop with whether Splashdown is set up in each, and a Set up button: Splashdown runs Claude Code's or Codex's own command for you, or opens Cursor's or VS Code's install link, or copies the lines Claude Desktop needs. `splashdown-mcp` now comes with the app (before, you had to build it), and does the same from a terminal: `splashdown-mcp install claude-code`, `agents`, `uninstall`.
 - **`splashdown-cli notes list`, `search` and `read`** do the same from a terminal or a script: `splashdown-cli notes list --when this_week --kind meeting --summary`.
 
 ## 0.7.1 — 2026-11-04

@@ -19,22 +19,34 @@ Every result has a `splashdown://open?note=` link that opens the note in Splashd
 
 Splashdown must be running. The server talks to it over the app's control socket, so nothing leaves your computer beyond what your speech and AI providers already see.
 
-## Build it
+## Set it up
+
+`splashdown-mcp` comes with the app: on a Mac it's `/Applications/Splashdown.app/Contents/MacOS/splashdown-mcp`, on Windows `splashdown-mcp.exe` next to `Splashdown.exe`. The easiest way in is **Settings → Privacy → Coding agents → Set up an agent**, which lists the agents on your computer with a **Set up** button each:
+
+- **Claude Code and Codex:** Splashdown runs their own `claude mcp add` / `codex mcp add` for you (user-wide, so it works in every project). **Copy command** gives you the line to run yourself instead.
+- **Cursor and VS Code:** their install link opens, and they ask you to confirm.
+- **Claude Desktop:** **Copy setup** copies the lines to add under Settings → Developer → Edit Config; then restart it.
+
+Start a new session in the agent afterwards. The same is there from a terminal, which is handy over SSH or in scripts:
 
 ```sh
-cargo build --release -p splashdown-mcp
-# → target/release/splashdown-mcp
+splashdown-mcp agents                    # which agents are set up
+splashdown-mcp install claude-code       # or codex, cursor, vscode, claude-desktop
+splashdown-mcp uninstall claude-code
+splashdown-mcp config cursor             # what to add by hand
 ```
 
-Use the absolute path to that file below. (Or copy it somewhere permanent, such as `~/.local/bin`.)
+(Run the copy inside the app, by its full path above, so agents are pointed at it.) Splashdown never edits an agent's config files itself: the agent's own command or install link does it, and Claude Desktop's is left to you.
+
+Building from source, it's `cargo build --release -p splashdown-mcp` (→ `target/release/splashdown-mcp`), and `scripts/run-mac-app.sh` puts it in the development app.
 
 ## Claude Code
 
 ```sh
-claude mcp add splashdown -- /path/to/splashdown-mcp
+claude mcp add --scope user splashdown -- /Applications/Splashdown.app/Contents/MacOS/splashdown-mcp
 ```
 
-Add `--scope user` to use it in every project. Then ask Claude to check with you by voice, or add a line to your `CLAUDE.md`, for example: "When you need a decision from me, ask with `ask_user_by_voice`."
+Without `--scope user` it's only for the folder you run it in. Then ask Claude to check with you by voice, or add a line to your `CLAUDE.md`, for example: "When you need a decision from me, ask with `ask_user_by_voice`."
 
 ## Cursor
 
@@ -44,7 +56,7 @@ In `~/.cursor/mcp.json` (every project) or `.cursor/mcp.json` (one project):
 {
   "mcpServers": {
     "splashdown": {
-      "command": "/path/to/splashdown-mcp"
+      "command": "/Applications/Splashdown.app/Contents/MacOS/splashdown-mcp"
     }
   }
 }

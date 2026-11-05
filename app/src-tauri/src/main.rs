@@ -10,6 +10,7 @@ mod ask;
 mod audio;
 mod calls;
 mod chunks;
+mod coding_agents;
 mod commands;
 mod compose;
 mod did;
@@ -121,6 +122,8 @@ fn main() {
             commands::clear_insights,
             commands::app_info,
             history::copy_text,
+            coding_agents::coding_agents,
+            coding_agents::coding_agent_install,
             history::get_recent_apps,
             history::redo_history,
             commands::get_launch_at_login,

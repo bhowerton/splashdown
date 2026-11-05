@@ -30,7 +30,7 @@ scripts/run-mac-app.sh        # macOS: build, bundle, sign and launch the menu b
 scripts\run-win-app.ps1       # Windows: build and launch the tray app (checks the build tools first)
 ```
 
-The built-in local text model runs in a separate helper, `splashdown-llm` (see the architecture doc); `cargo build --workspace` builds it next to the app, which is where the app looks for it. Download its model with `cargo run --release -p splashdown-cli -- models download qwen3-4b` (2.5 GB).
+The built-in local text model runs in a separate helper, `splashdown-llm` (see the architecture doc); `cargo build --workspace` builds it next to the app, which is where the app looks for it. The same goes for `splashdown-mcp`, which Settings → Privacy → Coding agents runs to set agents up; both ship inside the app (Tauri's external binaries, added in `tauri.release.conf.json` and the packaging scripts). Download its model with `cargo run --release -p splashdown-cli -- models download qwen3-4b` (2.5 GB).
 
 `scripts/run-mac-app.sh` builds a real `.app` bundle so macOS grants Accessibility and Microphone to Splashdown rather than to your terminal. It signs with the first "Apple Development" certificate in your keychain, so permissions survive rebuilds. Without one it signs ad hoc, and macOS asks again after every build. Set `SPLASHDOWN_SIGN_IDENTITY` to choose a certificate. Logs go to `target/macos/splashdown.log`. On Windows, `scripts\run-win-app.ps1` needs no signing (Windows asks for no permissions), passes `.env.local` the same way, and logs to `%LOCALAPPDATA%\Splashdown\logs\splashdown.log`. If PowerShell refuses to run scripts, use `powershell -ExecutionPolicy Bypass -File scripts\run-win-app.ps1`.
 

@@ -72,21 +72,25 @@ if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
 fi
 export APPLE_SIGNING_IDENTITY
 
-# The helper that runs the built-in local text model ships next to the app
-# (Tauri's "external binary"). It's added through a
-# release-only config so plain `cargo build` doesn't need it.
-cargo build --release -p splashdown-llm --target aarch64-apple-darwin
-cargo build --release -p splashdown-llm --target x86_64-apple-darwin
+# Two programs ship next to the app (Tauri's "external binaries"): the
+# helper that runs the built-in local text model, and splashdown-mcp, the
+# MCP server coding agents are set up with (Settings → Privacy → Coding
+# agents). They're added through a release-only config so plain
+# `cargo build` doesn't need them.
 mkdir -p app/src-tauri/binaries
-# Tauri builds each architecture separately (wanting that one's helper),
-# then bundles the universal file.
-for arch in aarch64 x86_64; do
-    cp "target/$arch-apple-darwin/release/splashdown-llm" \
-        "app/src-tauri/binaries/splashdown-llm-$arch-apple-darwin"
+for bin in splashdown-llm splashdown-mcp; do
+    cargo build --release -p "$bin" --target aarch64-apple-darwin
+    cargo build --release -p "$bin" --target x86_64-apple-darwin
+    # Tauri builds each architecture separately (wanting that one's
+    # program), then bundles the universal file.
+    for arch in aarch64 x86_64; do
+        cp "target/$arch-apple-darwin/release/$bin" \
+            "app/src-tauri/binaries/$bin-$arch-apple-darwin"
+    done
+    lipo -create -output "app/src-tauri/binaries/$bin-universal-apple-darwin" \
+        "target/aarch64-apple-darwin/release/$bin" \
+        "target/x86_64-apple-darwin/release/$bin"
 done
-lipo -create -output app/src-tauri/binaries/splashdown-llm-universal-apple-darwin \
-    target/aarch64-apple-darwin/release/splashdown-llm \
-    target/x86_64-apple-darwin/release/splashdown-llm
 
 # The updater signing key. Its password is empty unless one was set when
 # it was generated. The key itself never goes into the repository.

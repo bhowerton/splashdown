@@ -37,8 +37,9 @@ if ($missing) {
 $profileName = if ($env:PROFILE) { $env:PROFILE } else { "release" }
 $targetDir = if ($profileName -eq "dev") { "debug" } else { $profileName }
 
-# The app, plus the helper that runs the built-in local text model.
-cargo build -p splashdown -p splashdown-llm --profile $profileName
+# The app, plus the helper that runs the built-in local text model and the
+# MCP server for coding agents, which the app finds next to itself.
+cargo build -p splashdown -p splashdown-llm -p splashdown-mcp --profile $profileName
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 # A helper left from the previous build would keep the old model code, and

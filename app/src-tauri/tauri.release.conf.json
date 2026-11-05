@@ -1,6 +1,6 @@
 {
   "bundle": {
-    "externalBin": ["binaries/splashdown-llm"],
+    "externalBin": ["binaries/splashdown-llm", "binaries/splashdown-mcp"],
     "createUpdaterArtifacts": true
   }
 }

@@ -28,12 +28,13 @@ APP=$OUT/Splashdown.app
 LOG=$OUT/splashdown.log
 
 # The app, plus the helper that runs the built-in local text model.
-cargo build -p splashdown -p splashdown-llm --profile "$PROFILE"
+cargo build -p splashdown -p splashdown-llm -p splashdown-mcp --profile "$PROFILE"
 
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
 cp "target/$TARGET_DIR/splashdown" "$APP/Contents/MacOS/splashdown"
 cp "target/$TARGET_DIR/splashdown-llm" "$APP/Contents/MacOS/splashdown-llm"
+cp "target/$TARGET_DIR/splashdown-mcp" "$APP/Contents/MacOS/splashdown-mcp"
 cp app/src-tauri/icons/icon.icns "$APP/Contents/Resources/icon.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
@@ -62,6 +63,7 @@ IDENTITY=${IDENTITY:--}
 echo "Signing with: $([ "$IDENTITY" = - ] && echo ad-hoc || security find-identity -v -p codesigning | grep "$IDENTITY" | cut -d'"' -f2)"
 # The helper first: the app's signature covers it as-is.
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID.llm" "$APP/Contents/MacOS/splashdown-llm" 2>&1 | grep -v "replacing existing signature" || true
+codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID.mcp" "$APP/Contents/MacOS/splashdown-mcp" 2>&1 | grep -v "replacing existing signature" || true
 codesign --force --sign "$IDENTITY" --identifier "$BUNDLE_ID" "$APP" 2>&1 | grep -v "replacing existing signature" || true
 
 # A helper left from the previous build would keep the old model code.
