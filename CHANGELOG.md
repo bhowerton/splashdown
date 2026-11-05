@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.9.0 — 2026-11-05
 
 - **A dictation no longer starts with the one before it.** When you dictate into an app you dictated into a few minutes earlier, the AI sees that earlier text for reference. Smaller models sometimes wrote it out again in front of the new text. Splashdown now takes it off, even while text is typed as it streams in.
 - **Splashdown in Shortcuts (Mac).** Six actions to use in your own shortcuts:
