@@ -688,7 +688,13 @@ fn said_in(body: &str, needle: &str) -> Vec<Value> {
         .filter_map(|l| Turn::parse(l.trim_end()))
         .filter(|t| t.said.to_lowercase().contains(needle))
         .take(HITS_PER_NOTE)
-        .map(|t| json!({ "at": t.stamp, "speaker": t.who }))
+        .map(|t| {
+            if t.who.is_empty() {
+                json!({ "at": t.stamp })
+            } else {
+                json!({ "at": t.stamp, "speaker": t.who })
+            }
+        })
         .collect()
 }
 
@@ -1097,5 +1103,10 @@ mod tests {
         assert_eq!(said, [json!({ "at": "0:05", "speaker": "Dana Lee" })]);
         assert!(said_in(MEETING, "").is_empty());
         assert!(said_in("# Plan\n\nThe price.", "price").is_empty());
+        // A file's transcript names nobody: no empty speaker.
+        assert_eq!(
+            said_in("**[0:20]** And the price page.", "price"),
+            [json!({ "at": "0:20" })]
+        );
     }
 }
