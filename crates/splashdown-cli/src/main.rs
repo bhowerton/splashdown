@@ -11,6 +11,7 @@ mod eval;
 mod import;
 mod manage;
 mod meeting;
+mod notes;
 mod opts;
 mod record;
 mod report;
@@ -245,6 +246,13 @@ enum Command {
         /// The text to add, e.g. `splashdown-cli note buy oat milk`.
         text: Vec<String>,
     },
+    /// List, search and read your notes and meetings in the running app,
+    /// as coding agents do (Settings → Privacy → Coding agents must allow
+    /// it).
+    Notes {
+        #[command(subcommand)]
+        command: notes::NotesCommand,
+    },
 }
 
 #[derive(Subcommand)]
@@ -407,6 +415,7 @@ fn run() -> Result<()> {
     // Status, settings and history need no keys or runtime either.
     match &cli.command {
         Command::Status { json } => return manage::status(*json),
+        Command::Notes { command } => return notes::run(command),
         Command::History { query, limit, json } => {
             return manage::history(&query.join(" "), *limit, *json);
         }
@@ -787,6 +796,7 @@ fn run() -> Result<()> {
         | Command::Cancel
         | Command::Listen { .. }
         | Command::Note { .. }
+        | Command::Notes { .. }
         | Command::Status { .. }
         | Command::History { .. }
         | Command::Settings { .. }

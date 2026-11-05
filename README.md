@@ -180,6 +180,7 @@
 | Start or finish from Raycast, Alfred or Shortcuts | Open `splashdown://toggle` (also `start`, `stop`, `cancel`) |
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
 | Add to your notes from a terminal or launcher | `splashdown-cli note buy oat milk`, or `splashdown-cli note` (and `splashdown://note`) to dictate one hands-free |
+| Go through your notes and meetings from a terminal | `splashdown-cli notes list --when this_week --kind meeting --summary`, `notes search <words>`, `notes read <path> --section transcript --speaker Dana` (with notes allowed for coding agents in Settings → Privacy) |
 | Script Splashdown | `splashdown-cli status --json`; `settings get`, `set`, `unset` and `list` by key (`general.language`); `models list`, `download` and `use`; `history <words>`; `say "…"` reads text in the natural voice. Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running, 4 no such setting or model |
 
 On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.

@@ -3,7 +3,9 @@
 //!
 //! MCP over stdio is JSON-RPC 2.0, one message per line. We implement
 //! `initialize`, `ping`, `tools/list` and `tools/call` (asking the user by
-//! voice, and the user's notes), and honor
+//! voice, and the user's notes), `prompts/list` and `prompts/get` (a
+//! meetings recap and action items, which clients offer as commands), and
+//! honor
 //! `notifications/cancelled` (the protocol's spelling).
 
 use serde_json::{Value, json};
@@ -80,6 +82,8 @@ pub fn handle(line: &str) -> Step {
         "ping" => Step::Send(response(id, json!({}))),
         "tools/list" => Step::Send(response(id, json!({ "tools": tools() }))),
         "tools/call" => call(id, &params),
+        "prompts/list" => Step::Send(response(id, json!({ "prompts": prompts() }))),
+        "prompts/get" => prompt(id, &params),
         _ => Step::Send(error(
             id,
             METHOD_NOT_FOUND,
@@ -95,7 +99,10 @@ fn initialize(params: &Value) -> Value {
         .unwrap_or(PROTOCOL_VERSIONS[0]);
     json!({
         "protocolVersion": version,
-        "capabilities": { "tools": { "listChanged": false } },
+        "capabilities": {
+            "tools": { "listChanged": false },
+            "prompts": { "listChanged": false }
+        },
         "serverInfo": {
             "name": "splashdown",
             "title": "Splashdown",
@@ -291,6 +298,85 @@ fn call(id: Value, params: &Value) -> Step {
     Step::Control { id, request }
 }
 
+pub const RECAP_MEETINGS: &str = "recap_meetings";
+pub const ACTION_ITEMS: &str = "action_items";
+
+/// Prompts: ready-made requests that use the notes tools, which clients
+/// offer as commands (`/splashdown:recap_meetings` in some).
+fn prompts() -> Value {
+    json!([
+        {
+            "name": RECAP_MEETINGS,
+            "title": "Recap my meetings",
+            "description": "A recap of the user's recorded meetings over a stretch of time: what was decided and who does what, from their Splashdown notes.",
+            "arguments": [
+                { "name": "when", "description": "today, yesterday, this_week (the default), last_week, this_month, last_month, last_7_days or last_30_days.", "required": false }
+            ]
+        },
+        {
+            "name": ACTION_ITEMS,
+            "title": "My open action items",
+            "description": "The open action items and to-dos in the user's Splashdown meetings and notes, grouped by who owns them.",
+            "arguments": [
+                { "name": "when", "description": "How far back: last_7_days (the default), this_week, last_week, last_30_days…", "required": false },
+                { "name": "person", "description": "Only this person's items (\"me\" for the user).", "required": false }
+            ]
+        }
+    ])
+}
+
+fn prompt(id: Value, params: &Value) -> Step {
+    let name = params.get("name").and_then(Value::as_str).unwrap_or("");
+    let args = params.get("arguments").cloned().unwrap_or(Value::Null);
+    let arg = |key: &str| optional(&args, key);
+    let (description, text) = match name {
+        RECAP_MEETINGS => {
+            let when = arg("when").unwrap_or_else(|| "this_week".into());
+            (
+                "Recap my meetings",
+                format!(
+                    "Recap my meetings ({when}) from my Splashdown notes.\n\n\
+                     1. Call list_notes with kind \"meeting\", when \"{when}\" and with_summary true (page with cursor if there's more).\n\
+                     2. For a meeting whose summary was cut short, read it with read_note, section \"summary\". If one has no summary, read its transcript.\n\
+                     3. For each meeting, oldest first: its title, date and who was there, then the decisions and action items.\n\
+                     4. End with every action item grouped by person (\"You\" in a transcript is me).\n\n\
+                     Cite each meeting by title and date, with its link. Use only what's in the notes; say so if something is unclear rather than guessing."
+                ),
+            )
+        }
+        ACTION_ITEMS => {
+            let when = arg("when").unwrap_or_else(|| "last_7_days".into());
+            let only = arg("person").map_or_else(String::new, |p| {
+                format!(" Only list the items that belong to {p} (\"You\" in a transcript, and \"me\", is the user).")
+            });
+            (
+                "My open action items",
+                format!(
+                    "Find the open action items in my Splashdown meetings and notes ({when}).\n\n\
+                     1. Call list_notes with kind \"meeting\", when \"{when}\" and with_summary true, and take the action items from each summary (read the summary with read_note if it was cut short).\n\
+                     2. Call search_notes with query \"- [ ]\" and when \"{when}\" for unticked to-dos in my other notes, and read those notes.\n\
+                     3. Leave out anything already ticked off (\"- [x]\").{only}\n\n\
+                     List the items grouped by owner, each with the note it came from (title, date, link) and a due date if one was said. Mark an owner or date you can't tell as unclear rather than guessing."
+                ),
+            )
+        }
+        _ => {
+            return Step::Send(error(
+                id,
+                INVALID_PARAMS,
+                &format!("unknown prompt: {name}"),
+            ));
+        }
+    };
+    Step::Send(response(
+        id,
+        json!({
+            "description": description,
+            "messages": [{ "role": "user", "content": { "type": "text", "text": text } }]
+        }),
+    ))
+}
+
 /// A string argument, trimmed; `None` when it's missing or empty. Numbers
 /// are taken as their text (a model may send a cursor or time as one).
 fn optional(args: &Value, key: &str) -> Option<String> {
@@ -455,6 +541,63 @@ mod tests {
             r#"{"jsonrpc":"2.0","id":6,"method":"tools/call","params":{"name":"read_note","arguments":{}}}"#,
         );
         assert_eq!(r["result"]["isError"], true);
+    }
+
+    #[test]
+    fn prompts_are_listed_and_filled_in() {
+        let r = send(r#"{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}"#);
+        assert!(r["result"]["capabilities"]["prompts"].is_object());
+        let r = send(r#"{"jsonrpc":"2.0","id":2,"method":"prompts/list"}"#);
+        let names: Vec<_> = r["result"]["prompts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["name"].as_str().unwrap())
+            .collect();
+        assert_eq!(names, [RECAP_MEETINGS, ACTION_ITEMS]);
+
+        let r = send(
+            r#"{"jsonrpc":"2.0","id":3,"method":"prompts/get","params":{"name":"recap_meetings","arguments":{"when":"last_week"}}}"#,
+        );
+        let text = r["result"]["messages"][0]["content"]["text"]
+            .as_str()
+            .unwrap();
+        assert_eq!(r["result"]["messages"][0]["role"], "user");
+        assert!(text.contains("when \"last_week\"") && text.contains("list_notes"));
+        // The default range.
+        let r = send(
+            r#"{"jsonrpc":"2.0","id":4,"method":"prompts/get","params":{"name":"recap_meetings"}}"#,
+        );
+        assert!(
+            r["result"]["messages"][0]["content"]["text"]
+                .as_str()
+                .unwrap()
+                .contains("this_week")
+        );
+
+        let r = send(
+            r#"{"jsonrpc":"2.0","id":5,"method":"prompts/get","params":{"name":"action_items","arguments":{"person":"Dana"}}}"#,
+        );
+        let text = r["result"]["messages"][0]["content"]["text"]
+            .as_str()
+            .unwrap();
+        assert!(
+            text.contains("last_7_days")
+                && text.contains("belong to Dana")
+                && text.contains("- [ ]")
+        );
+        let r = send(
+            r#"{"jsonrpc":"2.0","id":6,"method":"prompts/get","params":{"name":"action_items"}}"#,
+        );
+        assert!(
+            !r["result"]["messages"][0]["content"]["text"]
+                .as_str()
+                .unwrap()
+                .contains("belong to")
+        );
+
+        let r = send(r#"{"jsonrpc":"2.0","id":7,"method":"prompts/get","params":{"name":"nope"}}"#);
+        assert_eq!(r["error"]["code"], INVALID_PARAMS);
     }
 
     #[test]

@@ -8,6 +8,11 @@
 - **`read_note`:** a whole note, or one part of a meeting or transcript (`summary`, `my_notes` or `transcript`). A transcript can be read from a time to a time, or for one speaker. Long notes come in pages, so a two-hour transcript can be read to the end.
 - **`append_note`:** adds a paragraph to a note (your Inbox or today's note unless the agent names another).
 
+Two **prompts** come with it, which Claude Code offers as commands (`/mcp__splashdown__recap_meetings`, `/mcp__splashdown__action_items`) and other clients list with their prompts:
+
+- **`recap_meetings`** (`when`, default `this_week`): each meeting's decisions and action items, then every action item by person, citing the meetings.
+- **`action_items`** (`when`, default `last_7_days`; `person`, optional): the open action items in your meetings and the unticked `- [ ]` to-dos in your other notes, grouped by owner.
+
 Every result has a `splashdown://open?note=` link that opens the note in Splashdown's Notes window (on a Mac), for the agent to point you at.
 
 **The notes tools are off until you allow them** in Settings → Privacy → Coding agents: "Let coding agents read notes", then "…including meetings and transcripts" (what other people said, kept apart because it's theirs) and "…and add to them". To keep one note from agents, choose **Hide from coding agents** in its ⋯ menu (it writes `agents: false` in the note's front matter). Whatever an agent reads goes to that agent's own AI provider. Until then, the tools answer with how to turn them on.
@@ -55,5 +60,6 @@ Any MCP client that runs stdio servers works the same way: the command is the pa
 - One question at a time. If you're already dictating, the agent is told to ask in the chat instead.
 - The answer uses your pinned preset, or the default one, not the preset for the app in front.
 - To try it without an agent, run `splashdown-cli listen --prompt "Tabs or spaces?"`, which prints your answer.
+- The notes tools have a command-line twin for scripts, and for agents that run commands rather than MCP: `splashdown-cli notes list` (`--when`, `--since`, `--until`, `--kind`, `--folder`, `--tag`, `--summary`), `notes search <words>` and `notes read <path>` (`--section`, `--start`, `--end`, `--speaker`). `--json` prints what the tools return. They ask the running app, so the same Privacy switches apply.
 - Ask in plain words: "recap my meetings this week", "what did Dana say about pricing?", "what's tagged #launch since Monday?", "note that down in my inbox". Agents only use the notes tools when asked to; nothing is read in the background.
 - Notes are only reached inside your notes folder: an agent can't read other files through these tools.
