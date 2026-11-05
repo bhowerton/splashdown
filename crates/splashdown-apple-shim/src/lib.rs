@@ -8,6 +8,7 @@
 
 mod calendar;
 mod ffi;
+pub mod intents;
 mod providers;
 mod screenshot;
 mod speak;

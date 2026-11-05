@@ -118,7 +118,17 @@ if [ -z "${TAURI_SIGNING_PRIVATE_KEY:-}" ]; then
         UPDATER=0
     fi
 fi
+# The Shortcuts, Spotlight and Siri actions' metadata, which the Swift
+# shim's build script writes to target/appintents. Built first: Tauri
+# checks its resources exist before it compiles anything.
+cargo build --release -p splashdown-apple-shim
+if [ ! -f target/appintents/Metadata.appintents/extract.actionsdata ]; then
+    echo "error: the App Intents metadata wasn't built (target/appintents)" >&2
+    exit 1
+fi
+
 CONFIGS=(--config app/src-tauri/tauri.release.conf.json)
+CONFIGS+=(--config '{"bundle":{"resources":{"../../target/appintents/Metadata.appintents/":"Metadata.appintents/"}}}')
 [ "$UPDATER" = 1 ] || CONFIGS+=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
 
 cargo tauri build --target universal-apple-darwin --bundles app,dmg "${CONFIGS[@]}"

@@ -39,6 +39,9 @@ cp "target/$TARGET_DIR/splashdown-llm" "$APP/Contents/MacOS/splashdown-llm"
 cp "target/$TARGET_DIR/splashdown-mcp" "$APP/Contents/MacOS/splashdown-mcp"
 cp "target/slim/$TARGET_DIR/splashdown-cli" "$APP/Contents/MacOS/splashdown-cli"
 cp app/src-tauri/icons/icon.icns "$APP/Contents/Resources/icon.icns"
+# The Shortcuts, Spotlight and Siri actions' metadata (written by the Swift
+# shim's build.rs); without it the system doesn't know they exist.
+cp -R target/appintents/Metadata.appintents "$APP/Contents/Resources/"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

@@ -1,6 +1,7 @@
 //! Ways to start dictation other than the dictation key: the control socket
 //! (`splashdown-cli`, `splashdown-mcp` for coding agents) and
-//! `splashdown://` links (Raycast, Alfred, Shortcuts). Both end up as
+//! `splashdown://` links (Raycast, Alfred, Shortcuts), and on macOS the
+//! app's own Shortcuts, Spotlight and Siri actions. All end up as
 //! `session::Handle::control` calls.
 
 use std::sync::Arc;
@@ -41,6 +42,25 @@ pub fn serve(session: Handle) -> bool {
         Err(e) => tracing::warn!("control socket unavailable: {e}"),
     }
     true
+}
+
+/// Lets Splashdown's actions in Shortcuts, Spotlight and Siri run (macOS:
+/// App Intents, in the Swift shim). Each sends a control request as JSON,
+/// answered like the socket's.
+#[cfg(target_os = "macos")]
+pub fn serve_intents(session: Handle) {
+    splashdown_apple_shim::intents::start(move |json| {
+        session
+            .control(intent_request(&json)?)
+            .map(Option::unwrap_or_default)
+    });
+}
+
+/// An action's request (what `Intents.swift` sends).
+#[cfg(target_os = "macos")]
+fn intent_request(json: &str) -> Result<Request, String> {
+    serde_json::from_str(json)
+        .map_err(|e| format!("Splashdown didn't understand that action ({e})."))
 }
 
 /// Handles `splashdown://` links the system hands the app (macOS
@@ -167,6 +187,19 @@ fn link_request(url: &str) -> Option<Request> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn intents_send_control_requests() {
+        // As AddToNoteIntent sends it.
+        assert_eq!(
+            intent_request(r#"{"cmd":"note","text":"Buy milk"}"#),
+            Ok(Request::Note {
+                text: Some("Buy milk".into())
+            })
+        );
+        assert!(intent_request(r#"{"cmd":"fly"}"#).is_err());
+    }
 
     #[test]
     fn links_map_to_requests() {

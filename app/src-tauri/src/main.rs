@@ -264,6 +264,10 @@ fn main() {
             reading::init(ui.clone());
             let session = session::spawn(ui, built, engine::keys(&settings), history.clone());
             let only_copy = triggers::serve(session.clone());
+            #[cfg(target_os = "macos")]
+            if only_copy {
+                triggers::serve_intents(session.clone());
+            }
             // The session asks for a rebuild when spending crosses a limit.
             let handle = app.handle().clone();
             app.listen_any(ui::REBUILD_ENGINE, move |_| {
