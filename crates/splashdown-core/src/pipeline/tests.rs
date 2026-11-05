@@ -440,3 +440,20 @@ fn guarded_transform_keeps_selection() {
     assert_eq!(out.text, "original text");
     assert_eq!(out.fallback, Some(Fallback::Guard(GuardReason::Empty)));
 }
+
+#[test]
+fn an_earlier_dictation_the_model_repeats_is_left_out() {
+    let said = "can we point dev to production so we can do some testing";
+    let reply = "Tell me why we need that backfill.\n\nCan we point dev to production so we can do some testing?";
+    let mut job = text_job(Mode::Dictate, said);
+    job.context.earlier = vec!["Tell me why we need that backfill.".into()];
+    let (out, seen) = streamed(reply, job);
+    // Never typed as it streamed…
+    assert!(seen.iter().all(|s| !s.contains("backfill")), "{seen:?}");
+    // …and not in what goes in at the end.
+    assert_eq!(
+        out.text,
+        "Can we point dev to production so we can do some testing?"
+    );
+    assert!(out.fallback.is_none());
+}

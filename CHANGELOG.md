@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **A dictation no longer starts with the one before it.** When you dictate into an app you dictated into a few minutes earlier, the AI sees that earlier text for reference. Smaller models sometimes wrote it out again in front of the new text. Splashdown now takes it off, even while text is typed as it streams in.
+
 ## 0.8.0 — 2026-11-04
 
 - **Coding agents can go through your meetings.** With notes allowed for coding agents (Settings → Privacy), `splashdown-mcp` can now list your notes by date, kind, folder or tag ("recap my meetings this week", "what's tagged #launch since Monday?"), with each meeting's summary in the same answer. It can read just a meeting's summary, your own notes from it, or its transcript, from one time to another or for one speaker, and long transcripts come in pages instead of being cut off at 50,000 characters. A search match in a transcript says when it was said. Results link back to the note in Splashdown.

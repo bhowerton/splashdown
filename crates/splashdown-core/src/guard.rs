@@ -95,10 +95,23 @@ pub enum Partial {
 }
 
 /// Judges a reply that's still arriving, for showing it as it comes.
-pub fn partial(mode: Mode, source: &str, so_far: &str) -> Partial {
+/// `earlier` is what the prompt's `<earlier>` block held.
+pub fn partial(mode: Mode, source: &str, earlier: &[String], so_far: &str) -> Partial {
     let text = so_far.trim_start();
     if text.starts_with(['<', '`', '"', '“']) {
         return Partial::Stop;
+    }
+    if matches!(mode, Mode::Dictate | Mode::DictateInstruct) {
+        // A reply that starts like an earlier dictation may be repeating
+        // it: wait until it's clear. Once it has, `drop_repeated_earlier`
+        // takes it off the whole reply, which can't happen to text already
+        // typed.
+        if drop_repeated_earlier(text, source, earlier).is_some() {
+            return Partial::Stop;
+        }
+        if may_repeat_earlier(text, source, earlier) {
+            return Partial::Wait;
+        }
     }
     if mode != Mode::Dictate {
         return Partial::Show;
@@ -109,6 +122,100 @@ pub fn partial(mode: Mode, source: &str, so_far: &str) -> Partial {
         Partial::Wait
     } else {
         Partial::Show
+    }
+}
+
+/// `output` with the earlier dictations it starts with taken off, when the
+/// user didn't say them again; `None` when it doesn't start with one.
+/// The prompt gives the model what the user dictated into the same app a
+/// few minutes ago, for reference, and small models sometimes write it out
+/// again before the new text.
+pub fn drop_repeated_earlier(output: &str, source: &str, earlier: &[String]) -> Option<String> {
+    let said = words(source);
+    let mut rest = output.trim_start();
+    let mut dropped = false;
+    // Several earlier dictations can come back one after another.
+    'again: loop {
+        for one in earlier {
+            let repeat = words(one);
+            if repeat.is_empty() || said.starts_with(&repeat) {
+                continue;
+            }
+            if let Some(end) = end_of_words(rest, &repeat) {
+                let after = rest[end..]
+                    .trim_start_matches(|c: char| c.is_whitespace() || SENTENCE_ENDS.contains(&c));
+                if after.is_empty() {
+                    // Nothing new after it: leave it to the other checks.
+                    break 'again;
+                }
+                rest = after;
+                dropped = true;
+                continue 'again;
+            }
+        }
+        break;
+    }
+    dropped.then(|| rest.to_string())
+}
+
+/// Whether `so_far` (a reply still arriving, maybe cut mid-word) reads like
+/// the start of an earlier dictation the user didn't say again.
+fn may_repeat_earlier(so_far: &str, source: &str, earlier: &[String]) -> bool {
+    let so_far = words(so_far);
+    let Some((last, whole)) = so_far.split_last() else {
+        return false;
+    };
+    let said = words(source);
+    earlier.iter().any(|one| {
+        let repeat = words(one);
+        !said.starts_with(&repeat)
+            && repeat.len() >= so_far.len()
+            && repeat.starts_with(whole)
+            && repeat[whole.len()].starts_with(last.as_str())
+    })
+}
+
+/// Punctuation that ends a sentence or clause, dropped with a repeat.
+const SENTENCE_ENDS: &[char] = &[
+    '.', ',', ';', ':', '!', '?', '…', '。', '，', '、', '！', '？', '；', '：', '¿', '¡', '؟',
+];
+
+/// The words of `text`, lowercased: letters and digits, so punctuation and
+/// capitals don't hide a repeat.
+fn words(text: &str) -> Vec<String> {
+    text.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Where in `text` the words `wanted` end, if `text` starts with them.
+fn end_of_words(text: &str, wanted: &[String]) -> Option<usize> {
+    let mut found = 0;
+    let mut start = None;
+    for (i, c) in text.char_indices() {
+        let in_word = c.is_alphanumeric();
+        match (in_word, start) {
+            (true, None) => start = Some(i),
+            (false, Some(s)) => {
+                if text[s..i].to_lowercase() != wanted[found] {
+                    return None;
+                }
+                found += 1;
+                start = None;
+                if found == wanted.len() {
+                    return Some(i);
+                }
+            }
+            _ => {}
+        }
+    }
+    // The last word runs to the end of the text.
+    match start {
+        Some(s) if found + 1 == wanted.len() && text[s..].to_lowercase() == wanted[found] => {
+            Some(text.len())
+        }
+        _ => None,
     }
 }
 
@@ -172,8 +279,83 @@ mod tests {
     use super::*;
 
     #[test]
+    fn a_repeated_earlier_dictation_is_taken_off() {
+        let earlier = vec!["Tell me why we need that backfill.".to_string()];
+        let said = "can we point dev to production so we can do some testing";
+        let reply = "Tell me why we need that backfill.\n\nCan we point dev to production so we can do some testing?";
+        assert_eq!(
+            drop_repeated_earlier(reply, said, &earlier).as_deref(),
+            Some("Can we point dev to production so we can do some testing?")
+        );
+        // Capitals and punctuation don't hide it.
+        assert_eq!(
+            drop_repeated_earlier(
+                "tell me, why we need that backfill — Can we",
+                said,
+                &earlier
+            )
+            .as_deref(),
+            Some("— Can we")
+        );
+        // Two earlier ones, one after the other.
+        let two = vec!["First thing.".to_string(), "Second thing.".to_string()];
+        assert_eq!(
+            drop_repeated_earlier("First thing. Second thing. New one.", "new one", &two)
+                .as_deref(),
+            Some("New one.")
+        );
+    }
+
+    #[test]
+    fn words_the_user_said_again_stay() {
+        let earlier = vec!["Thanks.".to_string()];
+        // Said again this time.
+        assert_eq!(
+            drop_repeated_earlier("Thanks. See you then.", "thanks see you then", &earlier),
+            None
+        );
+        // Only a word in common, not the whole earlier dictation.
+        let earlier = vec!["Tell me why we need that backfill.".to_string()];
+        assert_eq!(
+            drop_repeated_earlier("Tell me more.", "tell me more", &earlier),
+            None
+        );
+        // Nothing but the repeat: left for the other checks.
+        assert_eq!(
+            drop_repeated_earlier("Tell me why we need that backfill.", "hmm", &earlier),
+            None
+        );
+        // No earlier dictations.
+        assert_eq!(drop_repeated_earlier("Hello.", "hello", &[]), None);
+    }
+
+    #[test]
+    fn a_streaming_reply_waits_while_it_could_be_a_repeat() {
+        let earlier = vec!["Tell me why we need that backfill.".to_string()];
+        let said = "can we point dev to production";
+        let p = |so_far| partial(Mode::Dictate, said, &earlier, so_far);
+        assert_eq!(p("Te"), Partial::Wait);
+        assert_eq!(p("Tell me why"), Partial::Wait);
+        // It was one: the whole reply goes in at the end, without it.
+        assert_eq!(p("Tell me why we need that backfill. Can"), Partial::Stop);
+        // It wasn't.
+        assert_eq!(p("Can we point"), Partial::Show);
+        assert_eq!(p("Tell us"), Partial::Show);
+        // Said again by the user: shown as usual.
+        let again = |so_far| {
+            partial(
+                Mode::Dictate,
+                "tell me why we need that backfill again",
+                &earlier,
+                so_far,
+            )
+        };
+        assert_eq!(again("Tell me why"), Partial::Show);
+    }
+
+    #[test]
     fn partial_replies_that_cant_pass_are_caught_early() {
-        let p = |mode, source, so_far| partial(mode, source, so_far);
+        let p = |mode, source, so_far| partial(mode, source, &[], so_far);
         assert_eq!(p(Mode::Dictate, "um hello there", "Hello"), Partial::Show);
         assert_eq!(p(Mode::Dictate, "um hello there", ""), Partial::Show);
         assert_eq!(

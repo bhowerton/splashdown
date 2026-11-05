@@ -122,6 +122,7 @@ impl Pipeline {
                 on_text.filter(|_| streams),
                 task.mode(),
                 &source,
+                &job.context.earlier,
             )
             .await
         };
@@ -145,6 +146,15 @@ impl Pipeline {
             Err(err) => return Err(PipelineError::Llm(err)),
         };
 
+        // Small models sometimes write out the earlier dictations they were
+        // given for reference before the new text.
+        let output = match task.mode() {
+            Mode::Dictate | Mode::DictateInstruct => {
+                guard::drop_repeated_earlier(&output, &source, &job.context.earlier)
+                    .unwrap_or(output)
+            }
+            _ => output,
+        };
         match guard::check(task.mode(), &source, &output) {
             Verdict::Accept(text) => match snippets.fill(&text) {
                 Some(filled) => outcome.text = filled,
@@ -182,6 +192,7 @@ async fn complete(
     on_text: Option<&mut OnText<'_>>,
     mode: Mode,
     source: &str,
+    earlier: &[String],
 ) -> ProviderResult<Completion> {
     let Some(on_text) = on_text else {
         return llm.complete(request).await;
@@ -191,7 +202,7 @@ async fn complete(
         if !passing {
             return;
         }
-        match guard::partial(mode, source, so_far) {
+        match guard::partial(mode, source, earlier, so_far) {
             guard::Partial::Show => on_text(so_far),
             guard::Partial::Wait => {}
             guard::Partial::Stop => passing = false,
