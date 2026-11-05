@@ -1,6 +1,6 @@
 /* The meeting pill (300 × 40, no title bar): a red dot, the time, both
    sides' levels and Stop. Drag it by anything but the buttons. Colors and
-   buttons come from settings.css. */
+   buttons come from base.css. */
 .pl-body { overflow: hidden; background: var(--surface); }
 .pl {
   height: 100vh; box-sizing: border-box; display: flex; align-items: center; gap: 8px;

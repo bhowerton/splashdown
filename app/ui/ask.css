@@ -1,6 +1,6 @@
 /* The Ask panel (about 460 × 300): the question, the answer as it streams
    in, and Copy / Insert. Colors, buttons and the toast come from
-   settings.css. */
+   base.css. */
 .ak-body { overflow: hidden; }
 .ak { height: 100vh; display: flex; flex-direction: column; background: var(--surface); }
 .ak-scroll { flex: 1; overflow-y: auto; padding: 4px 16px 10px; }

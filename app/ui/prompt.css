@@ -1,6 +1,6 @@
 /* A question the app asks on its own (380 × 150, no title bar): a title,
    a line or two, and its answers, the usual one on the right. Colors and
-   buttons come from settings.css. */
+   buttons come from base.css. */
 .pr-body { overflow: hidden; background: var(--surface); }
 .pr { height: 100vh; box-sizing: border-box; padding: 12px 14px 10px; display: flex; flex-direction: column; border: 1px solid var(--border); -webkit-user-select: none; user-select: none; }
 .pr-title { margin: 0; font-size: 13px; font-weight: 600; }

@@ -1,0 +1,142 @@
+/* The base styles for every window: colors, type, groups and rows,
+   buttons, switches, badges, toasts and dialogs. */
+:root {
+  color-scheme: light dark;
+  --bg: #f5f5f7;
+  --surface: #ffffff;
+  --surface-2: #f2f2f5;
+  --sidebar: #ececf0;
+  --border: #e2e2e7;
+  --text: #1d1d1f;
+  --muted: #6e6e76;
+  --accent: #0a6cf0;
+  --accent-soft: #e3eefe;
+  --ok: #248a3d;
+  --ok-soft: #e1f5e5;
+  --warn: #a85d00;
+  --warn-soft: #fff3da;
+  --err: #d70015;
+  --radius: 12px;
+  --shadow: 0 1px 2px rgba(0,0,0,.04), 0 1px 1px rgba(0,0,0,.03);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #1c1d20; --surface: #26272b; --surface-2: #303136; --sidebar: #222326;
+    --border: #36373c; --text: #ececef; --muted: #9b9ca4; --accent: #2f80ff;
+    --accent-soft: #1d3159; --ok: #4cd964; --ok-soft: #1c3624; --warn: #ffb340;
+    --warn-soft: #3a2f16; --err: #ff6961; --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+/* Keyboard focus is always visible; mouse clicks don't draw rings. */
+button:focus-visible, a:focus-visible, select:focus-visible, .switch:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+html, body { height: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 13.5px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  -webkit-user-select: none; user-select: none;
+}
+input, textarea, select, button { font: inherit; color: inherit; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+h1 { font-size: 20px; margin: 0 0 16px; font-weight: 650; }
+.sub { color: var(--muted); margin: 14px 2px 0; }
+/* Groups: a heading above a rounded card. The heading is inside the card's
+   markup and pulled up above its border. */
+.group {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  margin: 40px 0 0; box-shadow: var(--shadow);
+}
+.group:not(:has(> .gh)) { margin-top: 16px; }
+.group > .gh {
+  margin-top: -30px; height: 30px; padding: 0 4px; font-size: 13.5px; font-weight: 650; color: var(--text);
+}
+.row { display: flex; align-items: center; gap: 12px; padding: 11px 16px; border-top: 1px solid var(--border); min-height: 48px; }
+.group > .row:first-child, .gh + .row, .gh + div > .row:first-child, .gh + [hidden] + .row { border-top: 0; }
+.lbl { flex: 1; min-width: 0; }
+.lbl small { display: block; color: var(--muted); font-size: 12px; }
+select, input[type=text], input[type=password], input[type=number], textarea {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; outline: none;
+}
+select { min-width: 200px; }
+input[type=text], input[type=password] { width: 280px; }
+textarea { width: 100%; resize: vertical; }
+select:focus, input:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.switch {
+  appearance: none; -webkit-appearance: none; width: 36px; height: 21px; border-radius: 999px;
+  background: var(--border); position: relative; flex: none; margin: 0; transition: background .15s;
+}
+.switch::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 17px; height: 17px; border-radius: 50%;
+  background: #fff; box-shadow: 0 1px 2px rgba(0,0,0,.3); transition: left .15s;
+}
+.switch:checked { background: var(--accent); }
+.switch:checked::after { left: 17px; }
+.switch:focus-visible { box-shadow: 0 0 0 3px var(--accent-soft); outline: none; }
+.btn {
+  padding: 5px 12px; border-radius: 7px; border: 1px solid var(--border); background: var(--surface);
+  font-weight: 500; white-space: nowrap; cursor: default;
+}
+.btn:hover:not(:disabled) { background: var(--surface-2); }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.07); background: var(--accent); }
+.btn.danger { color: var(--err); }
+.btn:disabled { opacity: .5; }
+.badge { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.badge.ok { background: var(--ok-soft); color: var(--ok); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.muted { background: var(--surface-2); color: var(--muted); }
+.badge.acc { background: var(--accent-soft); color: var(--accent); }
+.step {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; flex: none;
+  font-size: 12.5px; font-weight: 650; border: 2px solid var(--accent); color: var(--accent);
+}
+.step.done { background: var(--ok); border-color: var(--ok); color: #fff; font-size: 0; }
+.step.done::after { content: "✓"; font-size: 13px; }
+.row.perm { align-items: flex-start; padding-top: 14px; padding-bottom: 14px; }
+.row.perm .state { display: flex; gap: 8px; align-items: center; }
+.howto { color: var(--accent) !important; margin-top: 4px; }
+.progress { display: inline-block; vertical-align: middle; margin-right: 8px; width: 120px; height: 6px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
+.progress > i { display: block; height: 100%; background: var(--accent); width: 0; transition: width .15s; }
+.row small.muted, .row .lbl small.muted { color: var(--muted); font-size: 12px; }
+.lbl small code { font-size: 11.5px; background: var(--surface-2); border-radius: 4px; padding: 0 4px; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
+.seg button { border: 0; background: var(--surface); padding: 4px 12px; font-size: 12.5px; cursor: default; }
+.seg button + button { border-left: 1px solid var(--border); }
+.seg button.on { background: var(--accent); color: #fff; }
+.kbd {
+  display: inline-flex; align-items: center; white-space: nowrap; font-size: 12.5px; font-weight: 600;
+  padding: 1px 8px; border-radius: 6px; background: var(--surface); border: 1px solid var(--border);
+  border-bottom-width: 2px; color: var(--text);
+}
+.link { border: 0; background: none; color: var(--accent); padding: 0; font: inherit; cursor: default; }
+.link:hover { text-decoration: underline; }
+/* Floats at the top of the page, over the content, so it never moves or
+   covers the controls being changed. */
+.toast {
+  position: fixed; top: 14px; left: calc(234px + (100vw - 234px) / 2); transform: translateX(-50%);
+  background: #1c1c1e; color: #f4f4f5; padding: 8px 14px; border-radius: 999px; font-size: 12.5px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25); max-width: min(520px, 70vw); width: max-content;
+  pointer-events: none; z-index: 10; animation: toast-in .18s ease-out;
+}
+@keyframes toast-in { from { opacity: 0; transform: translate(-50%, -6px); } }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+@media (max-width: 720px) { .toast { left: 50%; } }
+/* askConfirm's dialog. */
+dialog.confirm {
+  border: 1px solid var(--border); border-radius: 14px; padding: 18px 20px 16px; width: min(380px, 86vw);
+  background: var(--surface); color: var(--text); box-shadow: 0 18px 50px rgba(0,0,0,.3);
+}
+dialog.confirm::backdrop { background: rgba(0,0,0,.3); }
+.confirm-title { margin: 0 0 6px; font-weight: 650; font-size: 14px; }
+.confirm-detail { margin: 0; color: var(--muted); font-size: 12.5px; }
+.confirm-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
+.btn.danger-solid { background: var(--err); border-color: var(--err); color: #fff; }
+.btn.danger-solid:hover:not(:disabled) { background: var(--err); filter: brightness(1.08); }
+.toast.error { background: var(--err); color: #fff; }
+@media (max-width: 720px) {
+  .row { flex-wrap: wrap; }
+  input[type=text], input[type=password], select { width: 100%; min-width: 0; }
+}

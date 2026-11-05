@@ -1,6 +1,6 @@
 /* What you can say (about 520 × 640): every kind of command, grouped, with
    things to say in quotes and keys as key caps. Colors, buttons and .kbd
-   come from settings.css. */
+   come from base.css. */
 .hp-body { overflow: hidden; }
 .hp { height: 100vh; display: flex; flex-direction: column; background: var(--surface); }
 .hp-scroll { flex: 1; overflow-y: auto; padding: 6px 18px 14px; }

@@ -1,6 +1,6 @@
 /* The Compose panel (about 480 × 400): what was asked, the draft as it's
    written, quick changes, and Read aloud / Copy / Insert. Colors, buttons
-   and the toast come from settings.css. */
+   and the toast come from base.css. */
 .cp-body { overflow: hidden; }
 .cp { height: 100vh; display: flex; flex-direction: column; background: var(--surface); }
 .cp-scroll { flex: 1; overflow-y: auto; padding: 6px 16px 10px; }

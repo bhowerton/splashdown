@@ -1,6 +1,6 @@
 /* The call offer (340 × 112, no title bar): "Zoom is using the microphone
    — Record?" or, during a meeting, "the call ended — Stop?". Colors and
-   buttons come from settings.css. */
+   buttons come from base.css. */
 .of-body { overflow: hidden; background: var(--surface); }
 .of { height: 100vh; box-sizing: border-box; padding: 12px 14px 10px; display: flex; flex-direction: column; -webkit-user-select: none; user-select: none; }
 .of-title { margin: 0; font-size: 13px; font-weight: 600; }

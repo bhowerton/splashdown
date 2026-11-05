@@ -1,6 +1,6 @@
 /* The Notes window: a list on the left, the note on the right, and the
    Ask panel beside it when it's open. Colors, buttons and the toast come
-   from settings.css. */
+   from base.css. */
 .nt-body { overflow: hidden; background: var(--surface); }
 .nt { height: 100vh; display: flex; }
 .nt-grow { flex: 1; min-width: 0; }

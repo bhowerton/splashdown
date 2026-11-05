@@ -1,4 +1,4 @@
-/* The setup guide (onboarding.html), on top of settings.css. */
+/* The setup guide (onboarding.html), on top of base.css. */
 [hidden] { display: none !important; }
 .ob-body { overflow: hidden; }
 .ob { height: 100vh; display: flex; flex-direction: column; padding: 26px 34px 20px; }
