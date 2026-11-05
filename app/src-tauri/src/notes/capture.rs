@@ -13,7 +13,8 @@ pub struct Captured {
 }
 
 impl Captured {
-    /// The note's file, absolute.
+    /// The note's file, absolute (for the Mac's Shortcuts actions).
+    #[cfg(target_os = "macos")]
     pub fn file(&self) -> Option<PathBuf> {
         let (store, _) = store_for(self.folder.clone()).ok()?;
         Some(store.root().join(&self.appended.path))
