@@ -86,14 +86,17 @@ async function renderNotesFolder() {
 }
 
 /** Settings → Privacy → Coding agents → Set up an agent: each agent this
- *  computer has, whether Splashdown is set up in it, and a button. */
+ *  computer has, whether Splashdown is set up in it, and a button. What
+ *  the last Set up did shows in that agent's row. */
+const agentNotes = {};
+
 async function renderCodingAgents() {
   const list = $("pv-agents-list");
   let found;
   try {
     found = await invoke("coding_agents");
   } catch (e) {
-    list.replaceChildren(agentRow("Couldn't check for agents", String(e)));
+    list.replaceChildren(agentRow("Couldn't check for coding agents", firstLine(e)));
     return;
   }
   $("pv-agents-server").textContent = ` For any other agent, its command is ${found.server}.`;
@@ -104,20 +107,25 @@ async function renderCodingAgents() {
         ? "Set up, with another copy of Splashdown. Set it up again to use this one."
         : "Set up."
       : only.length
-        ? `Set up for ${only.join(", ")} only.`
+        ? `Set up for ${only.join(", ")} only. Set it up to use it everywhere.`
         : a.found
           ? "Not set up."
           : "Not found on this computer.";
-    const row = agentRow(a.name, state);
+    const row = agentRow(a.name, state, agentNotes[a.id]);
     const acts = document.createElement("span");
     acts.className = "row-acts";
     if (a.how === "config") {
       // Claude Desktop: lines to add to its config by hand.
-      acts.append(agentButton("Copy setup", () => copyForAgent(a.snippet, `Copied. In Claude Desktop: Settings → Developer → Edit Config, add it, then restart Claude Desktop.`)));
-    } else {
+      if (a.found) {
+        acts.append(agentButton("Copy setup", () => copyForAgent(a, a.snippet, "Copied. In Claude Desktop, choose Settings → Developer → Edit Config, add it, then restart Claude Desktop.")));
+      }
+    } else if (a.found) {
       const again = a.set_up && a.points_here !== false;
-      acts.append(agentButton(again ? "Set up again" : "Set up", () => setUpAgent(a), !a.found && a.how === "command" && a.id !== "vscode"));
-      if (a.command) acts.append(agentButton("Copy command", () => copyForAgent(a.command, "Copied. Run it in a terminal."), false, "link"));
+      acts.append(agentButton(again ? "Set up again" : "Set up", (b) => setUpAgent(a, b)));
+    }
+    // For an agent installed somewhere Splashdown doesn't look.
+    if (a.command && a.how === "command") {
+      acts.append(agentButton("Copy command", () => copyForAgent(a, a.command, "Copied. Run it in a terminal."), "link"));
     }
     row.append(acts);
     return row;
@@ -125,7 +133,12 @@ async function renderCodingAgents() {
   list.replaceChildren(...rows);
 }
 
-function agentRow(name, detail) {
+/** The first line of an error: the rest is for the command line. */
+function firstLine(e) {
+  return String(e).split("\n")[0].trim();
+}
+
+function agentRow(name, detail, note) {
   const row = document.createElement("div");
   row.className = "row";
   const lbl = document.createElement("span");
@@ -134,34 +147,42 @@ function agentRow(name, detail) {
   const small = document.createElement("small");
   small.textContent = detail;
   lbl.append(small);
+  if (note) {
+    const n = document.createElement("small");
+    n.className = `agent-note ${note.ok ? "ok" : "err"}`;
+    n.textContent = note.text;
+    lbl.append(n);
+  }
   row.append(lbl);
   return row;
 }
 
-function agentButton(text, onClick, disabled = false, cls = "btn") {
+function agentButton(text, onClick, cls = "btn") {
   const b = document.createElement("button");
   b.type = "button";
   b.className = cls;
   b.textContent = text;
-  b.disabled = disabled;
-  b.addEventListener("click", onClick);
+  b.addEventListener("click", () => onClick(b));
   return b;
 }
 
-async function copyForAgent(text, message) {
+async function copyForAgent(agent, text, message) {
   try {
     await invoke("copy_text", { text });
-    toast(message);
+    agentNotes[agent.id] = { ok: true, text: message };
   } catch (e) {
-    toast(String(e), true);
+    agentNotes[agent.id] = { ok: false, text: firstLine(e) };
   }
+  renderCodingAgents();
 }
 
-async function setUpAgent(agent) {
+async function setUpAgent(agent, button) {
+  button.disabled = true;
+  button.textContent = "Setting up…";
   try {
-    toast(await invoke("coding_agent_install", { id: agent.id }));
+    agentNotes[agent.id] = { ok: true, text: firstLine(await invoke("coding_agent_install", { id: agent.id })) };
   } catch (e) {
-    toast(String(e), true);
+    agentNotes[agent.id] = { ok: false, text: firstLine(e) };
   }
   renderCodingAgents();
 }

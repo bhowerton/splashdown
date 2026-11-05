@@ -460,11 +460,13 @@ pub fn install(agent: Agent, server: &Path) -> Result<String, String> {
             let name = agent.program().unwrap_or_default();
             let Some(program) = find_program(name) else {
                 return if agent == Agent::VsCode {
-                    open(&vscode_link(server))
-                        .map(|()| "VS Code was asked to add Splashdown; confirm there.".to_string())
+                    open(&vscode_link(server), agent).map(|()| {
+                        "VS Code was asked to add Splashdown; confirm it there.".to_string()
+                    })
                 } else {
                     Err(format!(
-                        "Couldn't find `{name}`. In a terminal where it works, run:\n{}",
+                        "{} isn't installed here (no `{name}` command found).\nIf it is, run this where `{name}` works:\n{}",
+                        agent.name(),
                         shell_line(name, &add_args(agent, server))
                     ))
                 };
@@ -481,16 +483,16 @@ pub fn install(agent: Agent, server: &Path) -> Result<String, String> {
                 ))
             } else {
                 Err(format!(
-                    "{} said: {}",
+                    "{} said no: {}",
                     agent.name(),
                     first_line(&output.stderr)
                         .or(first_line(&output.stdout))
-                        .unwrap_or("it didn't work")
+                        .unwrap_or("it didn't say why")
                 ))
             }
         }
-        Agent::Cursor => open(&cursor_link(server))
-            .map(|()| "Cursor was asked to add Splashdown; confirm there.".to_string()),
+        Agent::Cursor => open(&cursor_link(server), agent)
+            .map(|()| "Cursor was asked to add Splashdown; confirm it there.".to_string()),
         Agent::ClaudeDesktop => Err(format!(
             "Claude Desktop is set up by hand: add this to {} (Settings → Developer → Edit Config), then restart it:\n{}",
             config_file(agent).map_or_else(
@@ -515,11 +517,11 @@ pub fn uninstall(agent: Agent) -> Result<String, String> {
                 Ok(format!("Removed from {}.", agent.name()))
             } else {
                 Err(format!(
-                    "{} said: {}",
+                    "{} said no: {}",
                     agent.name(),
                     first_line(&output.stderr)
                         .or(first_line(&output.stdout))
-                        .unwrap_or("it didn't work")
+                        .unwrap_or("it didn't say why")
                 ))
             }
         }
@@ -547,8 +549,8 @@ fn first_line(bytes: &[u8]) -> Option<&str> {
         .copied()
 }
 
-/// Opens a link in the app that handles it.
-fn open(url: &str) -> Result<(), String> {
+/// Opens an agent's install link in the agent.
+fn open(url: &str, agent: Agent) -> Result<(), String> {
     let status = if cfg!(target_os = "macos") {
         Command::new("open").arg(url).status()
     } else if cfg!(windows) {
@@ -561,7 +563,8 @@ fn open(url: &str) -> Result<(), String> {
     };
     match status {
         Ok(s) if s.success() => Ok(()),
-        _ => Err(format!("Couldn't open {url}")),
+        // The link itself is long and says nothing to the user.
+        _ => Err(format!("Couldn't open {}. Is it installed?", agent.name())),
     }
 }
 

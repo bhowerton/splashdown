@@ -274,3 +274,6 @@ dialog.confirm.my-action { width: min(480px, 90vw); }
 
 /* Privacy → Coding agents → Set up an agent: a button or two per agent. */
 .row-acts { display: flex; gap: 10px; align-items: center; margin-left: auto; flex-shrink: 0; }
+.row .lbl small.agent-note { display: block; margin-top: 3px; }
+.row .lbl small.agent-note.ok { color: var(--ok); }
+.row .lbl small.agent-note.err { color: var(--err); }
