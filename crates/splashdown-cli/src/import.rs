@@ -16,7 +16,7 @@ pub(super) fn import_words(
     let own_config = config.is_none();
     let path = match config {
         Some(p) => p,
-        None => opts::paths()?.config_file(),
+        None => manage::paths()?.config_file(),
     };
     let mut settings = splashdown_config::Settings::load(&path)?;
     let merged = import::merge(&mut settings, &imported);

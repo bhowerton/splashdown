@@ -68,7 +68,10 @@ jobs:
           components: clippy
       - uses: Swatinem/rust-cache@v2
       - name: Clippy
-        run: cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          # The remote control alone, as the app ships it.
+          cargo clippy -p splashdown-cli --no-default-features --all-targets --locked -- -D warnings
       - name: Test
         # Also builds the app, so there's no separate build step.
         run: cargo test --workspace --locked

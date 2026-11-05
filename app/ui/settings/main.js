@@ -15,6 +15,12 @@ function showTab(tab = (location.hash || "#general").slice(1)) {
   if (tab === "general") loadMicrophones();
   // Asks each agent's own program, so only when the tab is shown.
   if (tab === "privacy") renderCodingAgents();
+  if (tab === "about") {
+    invoke("cli_path").then((path) => {
+      $("about-cli-row").hidden = !path;
+      $("about-cli").textContent = path ?? "";
+    }).catch(() => {});
+  }
   document.querySelectorAll(".tab").forEach((s) => (s.hidden = s.id !== `tab-${tab}`));
   document.querySelectorAll(".side a[data-tab]").forEach((a) => {
     const on = a.dataset.tab === tab;

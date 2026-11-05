@@ -17,30 +17,48 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 chrono.workspace = true
-async-trait.workspace = true
 clap.workspace = true
-dotenvy.workspace = true
-hound.workspace = true
-splashdown-audio.workspace = true
 splashdown-config.workspace = true
 splashdown-control.workspace = true
-splashdown-core.workspace = true
-splashdown-providers.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-base64.workspace = true
-reqwest.workspace = true
-splashdown-platform.workspace = true
 thiserror.workspace = true
-tokio = { workspace = true, features = ["rt-multi-thread", "time"] }
 toml.workspace = true
+# The developer harness (the `full` feature).
+async-trait = { workspace = true, optional = true }
+dotenvy = { workspace = true, optional = true }
+hound = { workspace = true, optional = true }
+splashdown-audio = { workspace = true, optional = true }
+splashdown-core = { workspace = true, optional = true }
+splashdown-providers = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
+reqwest = { workspace = true, optional = true }
+splashdown-platform = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "time"], optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
-splashdown-apple-shim.workspace = true
+splashdown-apple-shim = { workspace = true, optional = true }
 # Computer use (exploration): Cua Driver's MIT-licensed driver, pinned.
-cua-driver-sdk = { git = "https://github.com/trycua/cua", rev = "50242387d74cf82ccbed20846fc134e7a49ffa7c" }
+cua-driver-sdk = { git = "https://github.com/trycua/cua", rev = "50242387d74cf82ccbed20846fc134e7a49ffa7c", optional = true }
 
 [features]
-default = ["local-speech", "natural-voice"]
-local-speech = ["splashdown-providers/local-speech"]
-natural-voice = ["splashdown-providers/natural-voice"]
+default = ["full", "local-speech", "natural-voice"]
+# Everything: the pipeline, evals, models, recording and transcription.
+# Without it (`--no-default-features`) it's the remote control and settings
+# commands only, the build that ships inside the app.
+full = [
+    "dep:async-trait",
+    "dep:dotenvy",
+    "dep:hound",
+    "dep:splashdown-audio",
+    "dep:splashdown-core",
+    "dep:splashdown-providers",
+    "dep:base64",
+    "dep:reqwest",
+    "dep:splashdown-platform",
+    "dep:tokio",
+    "dep:splashdown-apple-shim",
+    "dep:cua-driver-sdk",
+]
+local-speech = ["full", "splashdown-providers/local-speech"]
+natural-voice = ["full", "splashdown-providers/natural-voice"]

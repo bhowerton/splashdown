@@ -1,7 +1,8 @@
 //! Settings → Privacy → Coding agents → Set up: which agents have
 //! Splashdown's MCP server, and setting one up. Both run `splashdown-mcp`
 //! (next to the app), which does the work: `agents --json` and `install
-//! <agent>` (`crates/splashdown-mcp/src/setup.rs`).
+//! <agent>` (`crates/splashdown-mcp/src/setup.rs`). Also where the
+//! command-line tool is, for Settings → About.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -58,4 +59,13 @@ pub async fn coding_agent_install(id: String) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || run(&["install", &id]))
         .await
         .map_err(|e| e.to_string())?
+}
+
+/// `splashdown-cli`, the command-line remote control that ships next to
+/// the app, for Settings → About; `None` in a development build without it.
+#[tauri::command]
+pub fn cli_path() -> Option<String> {
+    let exe = std::env::current_exe().ok()?;
+    let path = exe.with_file_name(format!("splashdown-cli{}", std::env::consts::EXE_SUFFIX));
+    path.is_file().then(|| path.display().to_string())
 }

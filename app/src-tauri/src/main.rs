@@ -124,6 +124,7 @@ fn main() {
             history::copy_text,
             coding_agents::coding_agents,
             coding_agents::coding_agent_install,
+            coding_agents::cli_path,
             history::get_recent_apps,
             history::redo_history,
             commands::get_launch_at_login,

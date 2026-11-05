@@ -72,24 +72,33 @@ if [ -z "${APPLE_SIGNING_IDENTITY:-}" ]; then
 fi
 export APPLE_SIGNING_IDENTITY
 
-# Two programs ship next to the app (Tauri's "external binaries"): the
-# helper that runs the built-in local text model, and splashdown-mcp, the
-# MCP server coding agents are set up with (Settings → Privacy → Coding
-# agents). They're added through a release-only config so plain
-# `cargo build` doesn't need them.
+# Three programs ship next to the app (Tauri's "external binaries"): the
+# helper that runs the built-in local text model; splashdown-mcp, the MCP
+# server coding agents are set up with (Settings → Privacy → Coding
+# agents); and splashdown-cli, the command-line remote control, built
+# without the developer harness (--no-default-features: 3 MB, not 38) in a
+# folder of its own so it doesn't trade features with the full build.
+# They're added through a release-only config so plain `cargo build`
+# doesn't need them.
 mkdir -p app/src-tauri/binaries
-for bin in splashdown-llm splashdown-mcp; do
-    cargo build --release -p "$bin" --target aarch64-apple-darwin
-    cargo build --release -p "$bin" --target x86_64-apple-darwin
+for bin in splashdown-llm splashdown-mcp splashdown-cli; do
+    args=(--release -p "$bin")
+    dir=target
+    if [ "$bin" = splashdown-cli ]; then
+        args+=(--no-default-features --target-dir target/slim)
+        dir=target/slim
+    fi
+    cargo build "${args[@]}" --target aarch64-apple-darwin
+    cargo build "${args[@]}" --target x86_64-apple-darwin
     # Tauri builds each architecture separately (wanting that one's
     # program), then bundles the universal file.
     for arch in aarch64 x86_64; do
-        cp "target/$arch-apple-darwin/release/$bin" \
+        cp "$dir/$arch-apple-darwin/release/$bin" \
             "app/src-tauri/binaries/$bin-$arch-apple-darwin"
     done
     lipo -create -output "app/src-tauri/binaries/$bin-universal-apple-darwin" \
-        "target/aarch64-apple-darwin/release/$bin" \
-        "target/x86_64-apple-darwin/release/$bin"
+        "$dir/aarch64-apple-darwin/release/$bin" \
+        "$dir/x86_64-apple-darwin/release/$bin"
 done
 
 # The updater signing key. Its password is empty unless one was set when

@@ -149,7 +149,7 @@
 ### For developers
 
 - **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice and, if you allow it, search, read and add to your notes, and go through your meetings by date ("recap my meetings this week") ([docs/AGENTS.md](docs/AGENTS.md)).
-- **Scripting:** `splashdown://toggle` links for Raycast, Alfred or Shortcuts; `splashdown-cli toggle` and `splashdown-cli listen` from a terminal; mouse side buttons as the dictation key.
+- **Scripting:** `splashdown://toggle` links for Raycast, Alfred or Shortcuts; `splashdown-cli toggle` and `splashdown-cli listen` from a terminal; mouse side buttons as the dictation key. `splashdown-cli` comes with the app: Settings → About shows where (on a Mac, `/Applications/Splashdown.app/Contents/MacOS/splashdown-cli`). To type just `splashdown-cli`, link it into a folder on your PATH, for example `ln -s /Applications/Splashdown.app/Contents/MacOS/splashdown-cli ~/.local/bin/`.
 
 <details>
 <summary><strong>All the keys</strong></summary>
@@ -181,7 +181,7 @@
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
 | Add to your notes from a terminal or launcher | `splashdown-cli note buy oat milk`, or `splashdown-cli note` (and `splashdown://note`) to dictate one hands-free |
 | Go through your notes and meetings from a terminal | `splashdown-cli notes list --when this_week --kind meeting --summary`, `notes search <words>`, `notes read <path> --section transcript --speaker Dana` (with notes allowed for coding agents in Settings → Privacy) |
-| Script Splashdown | `splashdown-cli status --json`; `settings get`, `set`, `unset` and `list` by key (`general.language`); `models list`, `download` and `use`; `history <words>`; `say "…"` reads text in the natural voice. Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running, 4 no such setting or model |
+| Script Splashdown | `splashdown-cli status --json`; `settings get`, `set`, `unset` and `list` by key (`general.language`); `history <words>`; `words import <file>`. Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running, 4 no such setting or model. (`models` and `say`, like the pipeline and eval commands, are in the full `splashdown-cli` you build from source.) |
 
 On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 
@@ -275,7 +275,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 | `crates/splashdown-apple-shim` | Swift bridge to Apple's on-device speech and language models, calendar, system voices and the computer's sound for meetings |
 | `crates/splashdown-llm` | The helper process that runs the built-in local text model (llama.cpp) |
 | `crates/splashdown-config` | Settings, provider resolution, presets, keychain, paths |
-| `crates/splashdown-cli` | The `splashdown-cli` developer tool and evals, and `splashdown-cli toggle`/`listen`/`note` for the running app |
+| `crates/splashdown-cli` | The `splashdown-cli` developer tool and evals, and `splashdown-cli toggle`/`listen`/`note`/`notes` for the running app; the app ships that remote control alone (`--no-default-features`) |
 | `crates/splashdown-control` | The running app's control socket: protocol, client, server |
 | `crates/splashdown-mcp` | `splashdown-mcp`, voice input and notes for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
 | `app/` | The menu bar and tray app (Tauri) and its windows: Settings, setup guide, Notes, Ask, Compose and a few small panels; `app/editor` builds the Notes editor |

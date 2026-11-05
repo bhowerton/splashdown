@@ -67,6 +67,8 @@ jobs:
         run: |
           cargo build --release --locked -p splashdown-llm -p splashdown-mcp --target aarch64-apple-darwin
           cargo build --release --locked -p splashdown-llm -p splashdown-mcp --target x86_64-apple-darwin
+          cargo build --release --locked -p splashdown-cli --no-default-features --target-dir target/slim --target aarch64-apple-darwin
+          cargo build --release --locked -p splashdown-cli --no-default-features --target-dir target/slim --target x86_64-apple-darwin
           cargo tauri build --target universal-apple-darwin --bundles app --no-sign
 
   windows:

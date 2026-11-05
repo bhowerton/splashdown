@@ -6,11 +6,12 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result, bail};
 use serde_json::Value as Json;
-use splashdown_config::{AiProvider, Settings, SpeechProvider};
+use splashdown_config::Settings;
+#[cfg(feature = "full")]
+use splashdown_config::{AiProvider, SpeechProvider};
 use splashdown_control::{ClientError, Request};
+#[cfg(feature = "full")]
 use splashdown_providers::{LocalModel, SpeechModel};
-
-use crate::opts;
 
 /// A failure with its own exit code (see `exit_code`).
 #[derive(Debug, thiserror::Error)]
@@ -23,6 +24,11 @@ pub enum CliError {
 /// Exit codes scripts can rely on: 0 worked, 1 failed, 2 wrong usage
 /// (clap), 3 the app isn't running (for commands that need it), 4 no such
 /// setting or model.
+/// Where the app keeps its settings, history and models.
+pub fn paths() -> Result<splashdown_config::Paths> {
+    splashdown_config::Paths::resolve().context("couldn't find the home directory")
+}
+
 pub fn exit_code(e: &anyhow::Error) -> u8 {
     if matches!(e.downcast_ref(), Some(ClientError::NotRunning)) {
         3
@@ -36,7 +42,7 @@ pub fn exit_code(e: &anyhow::Error) -> u8 {
 fn config_path(config: Option<PathBuf>) -> Result<PathBuf> {
     Ok(match config {
         Some(p) => p,
-        None => opts::paths()?.config_file(),
+        None => paths()?.config_file(),
     })
 }
 
@@ -208,11 +214,12 @@ pub fn settings_set(key: &str, value: Option<&str>, config: Option<PathBuf>) -> 
 
 /// Uses a downloaded model: a speech model for speech-to-text on this
 /// computer, or the built-in text model for the AI.
+#[cfg(feature = "full")]
 pub fn use_model(id: &str, config: Option<PathBuf>) -> Result<()> {
     let own = config.is_none();
     let path = config_path(config)?;
     let mut settings = Settings::load(&path)?;
-    let models_dir = opts::paths()?.models_dir;
+    let models_dir = paths()?.models_dir;
     if let Some(model) = SpeechModel::from_id(id) {
         if !model.is_downloaded(&models_dir) {
             bail!("{id} isn't downloaded: splashdown-cli models download {id}");
@@ -243,7 +250,7 @@ pub fn use_model(id: &str, config: Option<PathBuf>) -> Result<()> {
 /// History entries containing `query` (any case) in what was said or
 /// inserted, newest first. An empty query lists the latest.
 pub fn history(query: &str, limit: usize, json: bool) -> Result<()> {
-    let path = opts::paths()?.history_file();
+    let path = paths()?.history_file();
     let text = match std::fs::read_to_string(&path) {
         Ok(text) => text,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
@@ -350,6 +357,7 @@ mod tests {
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 
+    #[cfg(feature = "full")]
     #[test]
     fn unknown_models_are_not_found() {
         let path = temp_config("model");

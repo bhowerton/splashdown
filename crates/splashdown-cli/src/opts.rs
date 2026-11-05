@@ -3,7 +3,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::Args;
 use splashdown_config::{AiProvider, Paths, Secrets, Settings, SpeechProvider};
 use splashdown_core::{Pipeline, PromptContext, SpeechToText, SttHints, TextModel};
@@ -101,7 +101,7 @@ impl ContextOpts {
 }
 
 pub fn paths() -> Result<Paths> {
-    Paths::resolve().context("couldn't find the home directory")
+    crate::manage::paths()
 }
 
 /// Loads settings and applies command-line overrides.

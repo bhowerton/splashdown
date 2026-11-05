@@ -81,10 +81,15 @@ if ($built -ne 0) { exit $built }
 Copy-Item (Join-Path $llmTarget "release\splashdown-llm.exe") "app\src-tauri\binaries\splashdown-llm-$triple.exe"
 
 # The MCP server coding agents are set up with (Settings → Privacy →
-# Coding agents) ships next to the app too.
+# Coding agents) ships next to the app too, and so does splashdown-cli,
+# the command-line remote control, built without the developer harness
+# (--no-default-features) in a folder of its own.
 cargo build --release -p splashdown-mcp
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Copy-Item target\release\splashdown-mcp.exe "app\src-tauri\binaries\splashdown-mcp-$triple.exe"
+cargo build --release -p splashdown-cli --no-default-features --target-dir target\slim
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+Copy-Item target\slim\release\splashdown-cli.exe "app\src-tauri\binaries\splashdown-cli-$triple.exe"
 
 # The updater signing key. The key itself never goes into the repository.
 $updater = $true
@@ -99,7 +104,7 @@ if (-not $env:TAURI_SIGNING_PRIVATE_KEY) {
     }
 }
 $configs = @("--config", "app/src-tauri/tauri.release.conf.json",
-    "--config", '{"bundle":{"externalBin":["binaries/splashdown-llm","binaries/splashdown-llm-basic","binaries/splashdown-mcp"]}}')
+    "--config", '{"bundle":{"externalBin":["binaries/splashdown-llm","binaries/splashdown-llm-basic","binaries/splashdown-mcp","binaries/splashdown-cli"]}}')
 if (-not $updater) { $configs += @("--config", '{"bundle":{"createUpdaterArtifacts":false}}') }
 
 # Tauri runs signCommand on every binary it bundles and on the installer,
