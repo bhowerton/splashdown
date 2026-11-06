@@ -96,6 +96,21 @@ pub(crate) fn text_for(folder: Option<PathBuf>, rel: &str, vtt: bool) -> Result<
     })
 }
 
+/// Saves the note's subtitles next to the file it was transcribed from
+/// (`talk.mp4` → `talk.srt`), unless subtitles are already there.
+pub(super) fn save_beside(store: &Store, rel: &str, media: &Path) -> Result<(), String> {
+    let target = media.with_extension("srt");
+    if target.exists() {
+        tracing::info!("{} has subtitles already; left alone", media.display());
+        return Ok(());
+    }
+    let (cues, _) = cues(store, rel)?;
+    if cues.is_empty() {
+        return Ok(());
+    }
+    std::fs::write(&target, subtitles::srt(&cues)).map_err(|e| e.to_string())
+}
+
 /// What an export wrote.
 #[derive(Debug, Serialize)]
 pub struct Exported {

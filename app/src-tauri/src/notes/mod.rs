@@ -30,6 +30,7 @@ pub mod media;
 mod search;
 pub mod store;
 pub mod subtitles;
+pub mod watch;
 mod window;
 
 use std::path::{Path, PathBuf};

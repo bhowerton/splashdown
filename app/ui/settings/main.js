@@ -152,6 +152,7 @@ function collect() {
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;
   s.notes.daily_format = $("nt-daily-format").value.trim() || null;
   s.notes.keep_audio = $("nt-keep-audio").checked;
+  s.notes.watched = watchedFolders();
   s.notes.meeting_summary = $("mt-summary").value || null;
   s.notes.keep_meeting_audio = $("mt-keep-audio").checked;
   // On is the default, saved as unset.

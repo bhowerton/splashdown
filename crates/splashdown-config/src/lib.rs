@@ -19,7 +19,7 @@ pub use settings::{
     Destination, GeneralSettings, HotkeySettings, LOCAL_FAST_MS, LOCAL_SLOW_MS, LoadError,
     MeetingSummary, MyAction, MyActionKind, NotesSettings, OtherAudio, Replacement, ResolveError,
     SearchEngine, Settings, Situation, SpeechChoice, SpeechProvider, SpeechSettings, TEXT_SLOT,
-    defaults, is_local_url, replacement_problem,
+    WatchedFolder, defaults, is_local_url, replacement_problem,
 };
 pub use transforms::{
     NOTHING_TO_DO, Place, Transform, builtin_transforms, is_nothing_to_do, tidy_answer,

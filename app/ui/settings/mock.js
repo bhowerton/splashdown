@@ -141,6 +141,11 @@ async function mockInvoke(cmd, args) {
         { at: Date.now() - 60000, app: "Mail", mode: "dictate_instruct", raw: "hey sam um the deploy slipped to thursday", instruction: "make it a short email", text: "Hi Sam,\n\nQuick update: the deploy has slipped to Thursday.\n\nThanks,\nAlex", note: null, stt: "local/nemotron-speech-streaming-en-0.6b-Q4_K_M", llm: "openrouter/google/gemini-2.5-flash-lite", millis: 1400 },
         { at: Date.now() - 3600000, app: "Slack", mode: "dictate", raw: "sounds good I'll take a look after lunch", instruction: null, text: "Sounds good, I'll take a look after lunch.", note: null, stt: null, llm: null, millis: 900 },
       ].filter((e) => !args.query || e.text.toLowerCase().includes(args.query.toLowerCase()));
+    case "notes_watch_waiting":
+    case "notes_watch_take_waiting":
+      return 3;
+    case "notes_watch_pick":
+      return "/Users/alex/Movies/Zoom";
     case "export_history":
     case "export_settings":
       return "~/Downloads/Splashdown export.txt";

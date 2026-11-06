@@ -53,6 +53,7 @@ function renderGeneral() {
   setValue($("nt-daily-folder"), notes.daily_folder ?? "");
   setValue($("nt-daily-format"), notes.daily_format ?? "");
   $("nt-keep-audio").checked = !!notes.keep_audio;
+  renderWatched(notes.watched ?? []);
   setValue($("mt-summary"), notes.meeting_summary ?? "");
   $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
@@ -624,3 +625,107 @@ function showLearned(words) {
     })
   );
 }
+
+// ---------------------------------------------------------------- watched folders
+
+/** A row per watched folder: where its notes go, subtitles beside the
+ *  files, and the files that were there before it was added. */
+function renderWatched(folders) {
+  const rows = folders.map((f) => {
+    const row = document.createElement("div");
+    row.className = "watch-row";
+    row.dataset.path = f.path;
+    const name = document.createElement("div");
+    name.className = "watch-path";
+    name.textContent = f.path;
+    name.title = f.path;
+    const into = document.createElement("input");
+    into.type = "text";
+    into.className = "watch-into";
+    into.placeholder = "Top of your notes";
+    into.setAttribute("aria-label", "Notes folder for its transcripts");
+    into.spellcheck = false;
+    into.value = f.into ?? "";
+    into.addEventListener("change", () => save());
+    const intoLabel = document.createElement("label");
+    intoLabel.className = "watch-opt";
+    intoLabel.append("Notes go to ", into);
+    const subs = document.createElement("input");
+    subs.type = "checkbox";
+    subs.className = "watch-subs";
+    subs.checked = !!f.subtitles;
+    subs.addEventListener("change", () => save());
+    const subsLabel = document.createElement("label");
+    subsLabel.className = "watch-opt";
+    subsLabel.append(subs, " Save subtitles (.srt) next to each file");
+    const waiting = document.createElement("button");
+    waiting.type = "button";
+    waiting.className = "link watch-waiting";
+    waiting.hidden = true;
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "link danger";
+    remove.textContent = "Stop watching";
+    remove.addEventListener("click", () => {
+      row.remove();
+      save();
+    });
+    const acts = document.createElement("div");
+    acts.className = "watch-acts";
+    acts.append(waiting, remove);
+    row.append(name, intoLabel, subsLabel, acts);
+    showWaiting(f.path, waiting);
+    return row;
+  });
+  $("nt-watched").replaceChildren(...rows);
+}
+
+/** "Transcribe the 12 files already here", when there are some. */
+async function showWaiting(path, button) {
+  let count = 0;
+  try {
+    count = await invoke("notes_watch_waiting", { path });
+  } catch {
+    return;
+  }
+  if (!count) return;
+  button.textContent = count === 1 ? "Transcribe the file already here" : `Transcribe the ${count} files already here`;
+  button.hidden = false;
+  button.onclick = async () => {
+    try {
+      const n = await invoke("notes_watch_take_waiting", { path });
+      button.hidden = true;
+      toast(n === 1 ? "Transcribing 1 file: see Notes" : `Transcribing ${n} files: see Notes`);
+    } catch (e) {
+      toast(String(e), true);
+    }
+  };
+}
+
+/** The watched folders as the rows show them, for saving. */
+function watchedFolders() {
+  return [...document.querySelectorAll("#nt-watched .watch-row")].map((row) => ({
+    path: row.dataset.path,
+    into: row.querySelector(".watch-into").value.trim(),
+    subtitles: row.querySelector(".watch-subs").checked,
+  }));
+}
+
+$("nt-watch-add").addEventListener("click", async () => {
+  let path;
+  try {
+    path = await invoke("notes_watch_pick");
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
+  if (!path) return;
+  const folders = watchedFolders();
+  if (folders.some((f) => f.path === path)) {
+    toast("That folder is watched already.");
+    return;
+  }
+  const settings = collect();
+  settings.notes.watched = [...folders, { path, into: "", subtitles: false }];
+  save(settings);
+});

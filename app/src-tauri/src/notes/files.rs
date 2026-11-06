@@ -73,6 +73,9 @@ pub(super) struct Item {
     pub(super) link: Option<Link>,
     /// A meeting's recording, transcribed again into its note.
     pub(super) again: Option<Again>,
+    /// Found in this watched folder: the note goes where it says, with
+    /// subtitles beside the file if it asks.
+    pub(super) watched: Option<splashdown_config::WatchedFolder>,
     /// Told the note's path when it's done, and why it stopped early if it
     /// did (a Shortcuts action waiting for it).
     pub(super) reply: Option<std::sync::mpsc::Sender<Result<Done, String>>>,
@@ -127,7 +130,7 @@ pub(super) fn queue() -> MutexGuard<'static, Queue> {
         .unwrap_or_else(|e| e.into_inner())
 }
 
-fn is_media(path: &Path) -> bool {
+pub(super) fn is_media(path: &Path) -> bool {
     path.extension()
         .and_then(|e| e.to_str())
         .is_some_and(|e| EXTENSIONS.contains(&e.to_ascii_lowercase().as_str()))
@@ -185,6 +188,7 @@ fn add(app: &AppHandle, files: Vec<PathBuf>) {
                 path,
                 link: None,
                 again: None,
+                watched: None,
                 reply: None,
             })
             .collect(),
@@ -239,7 +243,7 @@ fn work(app: AppHandle) {
                 note: again.note.clone(),
                 stopped,
             }),
-            None => transcribe(&app, path, item.link.as_ref(), &stop),
+            None => transcribe(&app, path, item.link.as_ref(), item.watched.as_ref(), &stop),
         }))
         .unwrap_or_else(|_| {
             tracing::error!("transcribing a file panicked");
@@ -269,6 +273,7 @@ fn transcribe(
     app: &AppHandle,
     path: &Path,
     link: Option<&Link>,
+    watched: Option<&splashdown_config::WatchedFolder>,
     stop: &AtomicBool,
 ) -> Result<Done, String> {
     let state = app.state::<AppState>();
@@ -296,7 +301,8 @@ fn transcribe(
     // set to "the last note" don't go into it.
     let last = store.last().map(|(path, _)| path);
     let note = store
-        .create(
+        .create_in(
+            watched.map_or("", |w| w.into.trim()),
             &header,
             chrono::Local::now(),
             &Origin {
@@ -419,6 +425,17 @@ fn transcribe(
         store
             .add_paragraph(&note.path, &last)
             .map_err(|e| e.to_string())?;
+    }
+    if heard
+        && stopped.is_none()
+        && watched.is_some_and(|w| w.subtitles)
+        && let Err(e) = super::subtitles::save_beside(&store, &note.path, path)
+    {
+        tell(
+            app,
+            format!("Couldn't save subtitles for {}: {e}", file_name(path)),
+            true,
+        );
     }
     Ok(Done {
         note: note.path,
@@ -589,6 +606,7 @@ pub(crate) fn transcribe_and_wait(app: &AppHandle, path: PathBuf) -> Result<Done
             path,
             link: None,
             again: None,
+            watched: None,
             reply: Some(reply),
         }],
     );
@@ -684,6 +702,7 @@ pub fn notes_transcribe_again(
             path: recording,
             link: None,
             again: Some(Again { note: path, model }),
+            watched: None,
             reply: None,
         }],
     );

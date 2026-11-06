@@ -139,6 +139,7 @@
 - **Transcribe an app's audio:** a webinar in the browser, a podcast app, a call you're only listening to. Only that app's sound is recorded, with a level meter that says whether it's hearing words.
 - **Transcribe the microphone** for a lecture or a conversation in the room, hands-free.
 - **Transcribe files and links:** drop a voice memo, interview or video onto Notes, or paste a YouTube or podcast link.
+- **Watched folders:** choose folders in Settings → General → Transcribe new files in a folder, and new audio and video files that arrive there (a Zoom recordings folder, a recorder's imports) become transcript notes, with subtitles saved next to them if you like.
 - **Subtitles:** save any transcript or meeting as SRT or VTT subtitles from the note's menu or ⌘K. Transcribed on this computer, each caption is timed to the words; with cloud speech the times are estimated.
 
 ### Everything else

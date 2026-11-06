@@ -62,6 +62,22 @@ pub struct NotesSettings {
     /// Ask finds notes by what they mean too, not only by their words,
     /// with the downloaded embedding model.
     pub ask_by_meaning: bool,
+    /// Folders whose new audio and video files are transcribed into notes
+    /// while Splashdown runs.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub watched: Vec<WatchedFolder>,
+}
+
+/// A folder whose new audio and video files become transcript notes.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct WatchedFolder {
+    pub path: std::path::PathBuf,
+    /// The notes folder (inside the notes folder, "" for the top) the
+    /// transcripts go into.
+    pub into: String,
+    /// Also save subtitles (`name.srt`) next to each file.
+    pub subtitles: bool,
 }
 
 /// Whether to summarize a meeting when it ends.

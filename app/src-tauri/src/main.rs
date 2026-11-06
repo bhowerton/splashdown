@@ -145,6 +145,9 @@ fn main() {
             commands::send_feedback,
             notes::notes_load,
             notes::subtitles::notes_export_subtitles,
+            notes::watch::notes_watch_waiting,
+            notes::watch::notes_watch_take_waiting,
+            notes::watch::notes_watch_pick,
             notes::notes_list,
             notes::notes_open,
             notes::notes_save,
@@ -255,6 +258,7 @@ fn main() {
             meeting::recover(app.handle());
             calls::watch(app.handle());
             notes::watch_front_app(app.handle());
+            notes::watch::watch_folders(app.handle());
             history.set_keep_days(settings.general.history_days());
             let onboarded = settings.general.onboarded;
             let built = engine::build(&settings);

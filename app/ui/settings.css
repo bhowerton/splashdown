@@ -277,3 +277,12 @@ dialog.confirm.my-action { width: min(480px, 90vw); }
 .row .lbl small.agent-note { display: block; margin-top: 3px; }
 .row .lbl small.agent-note.ok { color: var(--ok); }
 .row .lbl small.agent-note.err { color: var(--err); }
+
+/* Watched folders: one row each, under the group's heading row. */
+.watched { display: flex; flex-direction: column; }
+.watch-row { display: grid; gap: 6px; padding: 10px 14px; border-top: 1px solid var(--border); }
+.watch-path { font-size: 12.5px; font-family: var(--mono, ui-monospace, monospace); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.watch-opt { display: flex; align-items: center; gap: 6px; font-size: 12.5px; color: var(--muted); }
+.watch-into { width: 180px; }
+.watch-acts { display: flex; gap: 14px; justify-content: flex-end; }
+.link.danger { color: var(--err); }
