@@ -312,7 +312,7 @@ pub fn sheet(settings: &Settings) -> Sheet {
         keys.push(press("Use another preset", "1–9"));
     }
     keys.push(press(
-        "Translate it, or the selected text, into the language in the menu bar",
+        "Translate it, or the selected text, into the language in the menu bar (again: the next one)",
         key(h.translate_key()),
     ));
     keys.push(press(

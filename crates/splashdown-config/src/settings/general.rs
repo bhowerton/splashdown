@@ -118,6 +118,9 @@ pub struct GeneralSettings {
     /// The one ⌃⌥T translates into now (picked in the menu bar). Unset,
     /// or no longer in the list, means the first.
     pub translate_to: Option<String>,
+    /// In email and chat apps, write a dictation in the language of the
+    /// conversation on screen when it's clearly another one than spoken.
+    pub reply_in_their_language: bool,
 }
 
 /// Other sounds while recording.

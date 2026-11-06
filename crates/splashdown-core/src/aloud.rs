@@ -158,7 +158,7 @@ pub fn language_guess(text: &str) -> Option<&'static str> {
     whatlang::detect(text).and_then(|info| code(info.lang()))
 }
 
-fn code(lang: whatlang::Lang) -> Option<&'static str> {
+pub(crate) fn code(lang: whatlang::Lang) -> Option<&'static str> {
     use whatlang::Lang::*;
     Some(match lang {
         Eng => "en",

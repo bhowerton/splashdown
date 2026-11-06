@@ -16,6 +16,7 @@ impl Controller {
             self.ui.hide();
         }
         self.maybe_preview(now);
+        self.check_screen();
         if self.correction_check.as_ref().is_some_and(|c| now >= c.due) {
             self.check_corrections(false);
         }
@@ -201,13 +202,14 @@ impl Controller {
             .then(|| focus.as_ref().and_then(|f| f.app.document.clone()))
             .flatten()
             .map(list_project);
+        let spoken = self.wants_their_language(focus.as_ref(), &selection, &preset);
         let screen_words = self
             .engine
             .as_ref()
             .is_ok_and(|e| e.screen_words)
             .then(|| focus.as_ref().map(|f| f.app.pid))
             .flatten()
-            .map(read_screen_words);
+            .map(|pid| read_screen_words(pid, spoken));
         // Transforms replace a selection, so they never press Return.
         let auto_send = preset.auto_send && !matches!(selection, Selection::Text(_));
 
@@ -266,10 +268,92 @@ impl Controller {
             answer_to: None,
             project,
             screen_words,
+            screen: None,
+            untranslated: None,
         });
         if auto_send {
             self.lock().set_send(true);
             self.ui.set_send(true);
+        }
+    }
+
+    /// The languages the user dictates in, when this dictation should come
+    /// out in the conversation's language if that's another one: the
+    /// setting is on, it's email or chat, and nothing else decides the
+    /// language (a selection, a preset that translates).
+    fn wants_their_language(
+        &self,
+        focus: Option<&Focus>,
+        selection: &Selection,
+        preset: &Preset,
+    ) -> Option<Vec<String>> {
+        use splashdown_core::style::Kind;
+        let engine = self.engine.as_ref().ok()?;
+        if !engine.reply_in_their_language
+            || matches!(selection, Selection::Text(_))
+            || preset.translate_to.is_some()
+        {
+            return None;
+        }
+        let focus = focus?;
+        let kind = splashdown_config::style_kind(&AppContext {
+            app_id: &focus.app.id,
+            app_name: &focus.app.name,
+            title: focus.app.window_title.as_deref(),
+            url: focus.app.url.as_deref(),
+        });
+        if !matches!(kind, Kind::Email | Kind::Chat | Kind::Texts) {
+            return None;
+        }
+        let hints = engine.hints_for(preset);
+        let mut spoken: Vec<String> = hints
+            .language
+            .into_iter()
+            .chain(hints.languages)
+            .filter(|l| !l.trim().is_empty())
+            .collect();
+        // Automatic: the language the computer is set to.
+        if spoken.is_empty() {
+            spoken.extend(splashdown_platform::system_language());
+        }
+        (!spoken.is_empty()).then_some(spoken)
+    }
+
+    /// Once the window has been read: when the conversation is in another
+    /// language, the dictation comes out in it, and the overlay says so.
+    pub(super) fn check_screen(&mut self) {
+        let Some(active) = &mut self.active else {
+            return;
+        };
+        if active.screen.is_some() {
+            return;
+        }
+        let Some(screen) = active
+            .screen_words
+            .as_ref()
+            .and_then(|rx| rx.try_recv().ok())
+        else {
+            return;
+        };
+        active.screen_words = None;
+        active.screen = Some(screen);
+        if let Some(preset) = their_preset(active) {
+            active.untranslated = Some(active.preset.clone());
+            self.use_preset(preset);
+        }
+    }
+
+    /// At the end of a dictation whose window read came in only now (a
+    /// short one): the same, without the overlay.
+    pub(super) fn check_screen_at_end(&self, active: &mut Active) {
+        if active.screen.is_none() {
+            active.screen = active
+                .screen_words
+                .take()
+                .and_then(|rx| rx.recv_timeout(Duration::from_millis(300)).ok());
+        }
+        if let Some(preset) = their_preset(active) {
+            active.untranslated = Some(std::mem::replace(&mut active.preset, preset));
         }
     }
 
@@ -499,4 +583,27 @@ pub(super) fn live_stream(engine: &Engine, preset: &Preset) -> Option<LiveStream
 /// The overlay names a preset unless it's the default one.
 pub(super) fn preset_label(preset: &Preset) -> Option<String> {
     (preset.id != DEFAULT_PRESET_ID && !preset.name.is_empty()).then(|| preset.name.clone())
+}
+
+/// The preset that writes `active`'s dictation in the conversation's
+/// language, when the window read found one and nothing chose otherwise
+/// since (T, a note, a question, a draft, a selection).
+fn their_preset(active: &Active) -> Option<Preset> {
+    let code = active.screen.as_ref()?.their_language?;
+    if active.capture
+        || active.ask
+        || active.compose
+        || active.preset.translate_to.is_some()
+        || matches!(active.selection, Selection::Text(_))
+    {
+        return None;
+    }
+    let language = splashdown_core::conversation::english_name(code)?;
+    let mut preset = super::edits::translating(active.preset.clone(), language);
+    preset.name = match preset_label(&active.preset) {
+        Some(name) => format!("{name} → {language} (their language)"),
+        None => format!("→ {language} (their language)"),
+    };
+    tracing::info!("the conversation is in {language}: dictating into it");
+    Some(preset)
 }

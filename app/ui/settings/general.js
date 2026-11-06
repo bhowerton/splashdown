@@ -92,6 +92,11 @@ function renderGeneral() {
   $("gen-whisper").checked = s.general.whisper_mode === true;
   renderMixedLanguages(s.general.languages ?? []);
   renderTranslateTargets(s.general.translate_targets ?? []);
+  $("gen-their").checked = !!s.general.reply_in_their_language;
+  // It reads the conversation with the screen words, so it can't without.
+  const screenOff = s.general.screen_words === false;
+  $("gen-their").disabled = screenOff && !s.general.reply_in_their_language;
+  $("gen-their-note").classList.toggle("warn-text", screenOff);
   $("gen-mini-bar").checked = s.general.mini_bar === true;
   $("gen-noise").checked = s.general.noise_reduction === true;
   setValue($("gen-other-audio"), s.general.other_sounds ?? "lower");

@@ -1,5 +1,6 @@
 //! What the computer has to spare: memory, to choose a local model that
-//! fits, and disk space, to say before a download that it won't.
+//! fits, and disk space, to say before a download that it won't. And the
+//! language it's set to.
 
 use std::path::Path;
 
@@ -13,6 +14,14 @@ pub fn free_disk_bytes(path: &Path) -> Option<u64> {
     imp::free_disk_bytes(path)
 }
 
+/// The language the user set the computer to, as a two-letter code ("de"),
+/// the first of their preferred languages.
+pub fn system_language() -> Option<String> {
+    let tag = imp::preferred_language()?;
+    let code = tag.split(['-', '_']).next()?.to_ascii_lowercase();
+    (code.len() == 2 || code.len() == 3).then_some(code)
+}
+
 #[cfg(target_os = "macos")]
 mod imp {
     use std::ffi::CString;
@@ -21,6 +30,11 @@ mod imp {
 
     pub fn memory_bytes() -> Option<u64> {
         Some(objc2_foundation::NSProcessInfo::processInfo().physicalMemory())
+    }
+
+    pub fn preferred_language() -> Option<String> {
+        let languages = objc2_foundation::NSLocale::preferredLanguages();
+        languages.firstObject().map(|l| l.to_string())
     }
 
     pub fn free_disk_bytes(path: &Path) -> Option<u64> {
@@ -46,6 +60,14 @@ mod imp {
     use windows::Win32::Storage::FileSystem::GetDiskFreeSpaceExW;
     use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
     use windows::core::PCWSTR;
+
+    pub fn preferred_language() -> Option<String> {
+        let mut name = [0u16; 85];
+        // SAFETY: the buffer is LOCALE_NAME_MAX_LENGTH (85) wide characters,
+        // and the call writes at most that, NUL included.
+        let len = unsafe { windows::Win32::Globalization::GetUserDefaultLocaleName(&mut name) };
+        (len > 1).then(|| String::from_utf16_lossy(&name[..len as usize - 1]))
+    }
 
     pub fn memory_bytes() -> Option<u64> {
         let mut status = MEMORYSTATUSEX {

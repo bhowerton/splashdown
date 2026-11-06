@@ -51,7 +51,7 @@ mod machine;
 mod players;
 
 pub use launch::{InstalledApp, installed_apps, open_app};
-pub use machine::{free_disk_bytes, memory_bytes};
+pub use machine::{free_disk_bytes, memory_bytes, system_language};
 
 /// Reading text aloud with Windows' own voices (on macOS it's the Apple
 /// shim's).

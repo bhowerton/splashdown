@@ -116,6 +116,7 @@
 - **"Read this to me."** Select text, hold Right Option and say it, and it's read aloud. With nothing selected, tap Right Shift first and the text you're writing is read, or your last dictation (also in the menu bar: Last dictation → Read it to me).
 - **"Read me a summary of this."** Your AI writes a short summary meant for listening, and it's read as it's written, so the voice starts after the first sentence. "Read me the action items" and other questions work the same way, and the answer stays in the Ask panel, which has a Read aloud button for any answer.
 - **Dictate in another language.** Hold the dictation key, press T and speak: it comes out in the language picked in the menu bar. The first time, pick one from a short list; choose up to five in Settings → Words & language to switch between them in the menu bar.
+- **Reply in their language.** Turn it on in Settings → Words & language, and in email and chat a conversation that's clearly in another language gets your dictation in that language, with no key to press.
 - **Translate what you select.** Select text in any app, hold the dictation key and press T. In your own text it's replaced by the translation; in text you can't edit (a web page, an email you received) the translation opens in the Ask panel, where Read aloud reads it in that language. Or say "read this to me in Spanish". ⌃⌥T does the same without holding a key.
 - **A natural voice, on your computer.** Phonon 31M (Gradium, Apache-2.0), a 68 MB download with 25 American and British voices, reads English with numbers, dates and amounts said properly, and starts speaking in a fraction of a second even on a slow PC. Other languages use the best system voice for that language. Music pauses while it reads, and Esc stops it. Settings → AI Models → Text to speech.
 
@@ -171,7 +172,7 @@
 | Have a message written | While holding, tap **Right Shift**, then say what to write ("reply saying I'm in"); select it and say "shorter" to change it |
 | Hear text read aloud | Select it, hold **Right Option** and say "read this to me" (or "read me a summary of this"); **Esc** stops it. Or menu bar → Last dictation → **Read it to me** |
 | Record a meeting | **⌃⌥M** (again to stop) |
-| Dictate in another language | While holding, press **T**, then speak; pick the language in the menu bar → **Translate into** |
+| Dictate in another language | While holding, press **T**, then speak; **T** again for the next language ticked in the menu bar → **Translate into** |
 | Translate selected text | Select it, then while holding press **T** (or press **⌃⌥T**) |
 | Type exactly what you say, no tidying | While holding, press **2** (the Word for word preset) |
 | Use another preset | While holding, press **1–9** |

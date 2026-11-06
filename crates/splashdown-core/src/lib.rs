@@ -10,6 +10,7 @@ mod audio;
 pub mod command;
 pub mod compose;
 pub mod computer;
+pub mod conversation;
 pub mod fallback;
 pub mod files;
 pub mod gesture;

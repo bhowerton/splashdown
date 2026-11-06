@@ -29,6 +29,7 @@ impl Controller {
         // Only an error from this dictation's own run counts below.
         self.pipeline_error = None;
         let spoke = active.started.elapsed();
+        self.check_screen_at_end(&mut active);
         let job = self.prepare(&mut active);
         if job.is_none()
             && let Some(command) = self.pending_command.take()
@@ -68,10 +69,16 @@ impl Controller {
         }
         let files = active.project.take().and_then(project_files);
         let screen = active
-            .screen_words
+            .screen
             .take()
-            .and_then(|rx| rx.recv_timeout(Duration::from_millis(300)).ok())
-            .unwrap_or_default();
+            .or_else(|| {
+                active
+                    .screen_words
+                    .take()
+                    .and_then(|rx| rx.recv_timeout(Duration::from_millis(300)).ok())
+            })
+            .unwrap_or_default()
+            .words;
         let mut typer = job
             .as_ref()
             .and_then(|_| self.stream_typer(&active, files.clone()));

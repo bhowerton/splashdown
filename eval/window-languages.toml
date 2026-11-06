@@ -1,0 +1,220 @@
+# Which language a conversation on screen is in, for "Reply in their
+# language". `splashdown-cli eval window-language`.
+#
+# `window` is text as read from the window around the field (the app's
+# labels, names and times mixed in, as `splashdown-cli window-text`
+# prints it). `spoken` is the user's language (default "en"). `expect` is
+# the language to reply in, or "none" to leave the dictation as spoken:
+# when the conversation is in the user's language, or isn't clear.
+#
+# A wrong switch puts the wrong language in someone's message, so
+# "none" cases weigh most: a miss only means translating by hand.
+
+# ── Clear cases
+
+[[case]]
+id = "slack-german"
+window = "#projekt-alpha\nLukas Becker 09:12\nGuten Morgen! Habt ihr die neuen Zahlen schon gesehen?\nLukas Becker 09:14\nIch glaube, wir sollten den Termin auf nächste Woche verschieben, sonst wird es zu knapp.\nPeople\nThreads\nDrafts & sent\nMessage #projekt-alpha"
+expect = "de"
+
+[[case]]
+id = "slack-english"
+window = "#launch\nPriya Shah 10:02 AM\nMorning! Standup moved to 10:30 today.\nJordan Lee 10:15 AM\nCan someone review the pricing page copy before lunch? It's in the Launch doc.\nPeople\nThreads\nDrafts & sent"
+expect = "none"
+
+[[case]]
+id = "mail-spanish"
+window = "Inbox (12)\nFlagged\nDrafts\nSent\nRe: Presupuesto para marzo\nFrom: Lucía Fernández\nTo: Ben\nHola Ben, te escribo para confirmar que el presupuesto quedó aprobado. ¿Podrías enviarme la factura antes del viernes? Muchas gracias, Lucía"
+expect = "es"
+
+[[case]]
+id = "messages-french-short"
+window = "Messages\nCamille\nTu arrives à quelle heure ce soir ?\nOn peut se retrouver devant le cinéma si tu veux\nDelivered\niMessage"
+expect = "fr"
+
+[[case]]
+id = "whatsapp-portuguese"
+window = "WhatsApp\nChats\nMariana\nonline\nOi! Tudo bem? 😊\nVocê vai na festa de sábado? A gente pode ir juntos se quiser\nType a message"
+expect = "pt"
+
+[[case]]
+id = "teams-polish"
+window = "Teams\nChat\nActivity\nCalendar\nKatarzyna Nowak 2:41 PM\nCześć, czy możesz przejrzeć dokument przed spotkaniem? Dodałam kilka komentarzy w sekcji o budżecie.\nType a new message"
+expect = "pl"
+
+[[case]]
+id = "slack-dutch"
+window = "#design\nSanne de Vries 11:03\nIk heb de nieuwe versie van het logo geüpload. Kunnen jullie er vandaag nog naar kijken?\nPeople\nThreads\nMessage #design"
+expect = "nl"
+
+[[case]]
+id = "line-japanese"
+window = "LINE\nトーク\n田中さん\n明日の打ち合わせは10時からで大丈夫ですか？資料は今夜までに送ります。\n既読\nメッセージを入力"
+expect = "ja"
+
+[[case]]
+id = "wechat-chinese"
+window = "WeChat\nChats\n王伟\n你好，明天的会议改到下午三点了，你那边方便吗？我会把文件发给你。\nEnter"
+expect = "zh"
+
+[[case]]
+id = "gmail-italian-user-replied-in-english"
+window = "Gmail\nInbox\nStarred\nSent\nRe: Visita in ufficio\nGiulia Romano\nto me\nCiao Ben, perfetto! Allora ci vediamo martedì alle 15. Ti mando l'indirizzo esatto domani mattina.\nBen\nto Giulia\nSounds great, see you Tuesday.\nGiulia Romano\nto me\nCiao Ben, ti va bene se spostiamo l'incontro a martedì pomeriggio?"
+expect = "it"
+
+# ── Their language is the user's
+
+[[case]]
+id = "spoken-german-german-chat"
+spoken = "de"
+window = "#team\nAnna Schmidt 14:20\nKannst du mir kurz Bescheid geben, wenn der Bericht fertig ist?\nMessage #team"
+expect = "none"
+
+[[case]]
+id = "spoken-spanish-english-mail"
+spoken = "es"
+window = "Inbox\nRe: Contract\nFrom: Mark Evans\nTo: Lucía\nHi Lucía, thanks for the quick turnaround. Could you send the signed copy by Friday? Best, Mark"
+expect = "en"
+
+# ── The app's labels are in another language than the messages
+
+[[case]]
+id = "spanish-ui-english-messages"
+window = "Bandeja de entrada (4)\nDestacados\nBorradores\nEnviados\nRe: Quarterly review\nDe: Sarah Kim\nPara: Ben\nHi Ben, can we push our review to Thursday? Something came up on Wednesday afternoon. Thanks, Sarah"
+expect = "none"
+
+[[case]]
+id = "german-ui-german-messages"
+window = "Posteingang (2)\nMarkiert\nEntwürfe\nGesendet\nAW: Rechnung Oktober\nVon: Thomas Müller\nAn: Ben\nHallo Ben, vielen Dank für die Rechnung. Wir überweisen den Betrag bis Ende der Woche. Viele Grüße, Thomas"
+expect = "de"
+
+[[case]]
+id = "english-ui-short-spanish"
+window = "Messages\nInbox\nArchive\nSettings\nHelp\nCarlos\nvale, nos vemos luego\nDelivered"
+expect = "es"
+
+# ── The conversation changed language
+
+[[case]]
+id = "switched-to-english"
+window = "Messages\nInés\n¿Vienes a cenar el domingo?\nSí, claro, ¿a qué hora?\nInés\nA las ocho. Oh by the way, my colleague from London is joining us, so let's speak English tonight!\nDelivered"
+expect = "none"
+
+[[case]]
+id = "switched-to-german"
+window = "#general\nMax Weber 9:01 AM\nHey all, quick reminder about the offsite next week.\nMax Weber 9:30 AM\nÜbrigens, ab jetzt schreibe ich hier auf Deutsch, damit die Kollegen in Berlin alles mitbekommen. Bitte meldet euch bis Freitag an.\nMessage #general"
+expect = "de"
+
+[[case]]
+id = "group-mostly-english-one-spanish"
+window = "#product\nPriya Shah 10:02 AM\nThe beta build is up, please test the onboarding flow today.\nJordan Lee 10:20 AM\nOn it, I'll file anything I find in Linear.\nDiego Ruiz 10:31 AM\nPerfecto, yo reviso la parte de pagos esta tarde.\nMessage #product"
+expect = "none"
+
+[[case]]
+id = "group-mixed-back-and-forth"
+window = "#latam-launch\nAna 3:02 PM\nLos textos en español ya están listos.\nTom 3:05 PM\nGreat, I'll put them in the build tonight.\nAna 3:07 PM\n¿Me avisas cuando esté?\nTom 3:09 PM\nWill do!\nMessage #latam-launch"
+expect = "none"
+
+# ── Not enough to go on
+
+[[case]]
+id = "only-emoji-and-ok"
+window = "Messages\nLéa\nok 👍\n😂😂\nDelivered"
+expect = "none"
+
+[[case]]
+id = "one-ambiguous-word"
+window = "WhatsApp\nChats\nMarco\nonline\nciao\nType a message"
+expect = "none"
+
+[[case]]
+id = "empty-thread"
+window = "Messages\nNew Message\nTo:\niMessage"
+expect = "none"
+
+# ── Foreign words in an English conversation
+
+[[case]]
+id = "english-with-spanish-places"
+window = "Messages\nJess\nLet's meet at Café de la Plaza on Calle Mayor, the one next to the Mercado de San Miguel. Around 7?\nDelivered"
+expect = "none"
+
+[[case]]
+id = "english-with-german-names"
+window = "#hiring\nRachel Green 4:10 PM\nWe have interviews with Jürgen Schäfer and Grüner Weg GmbH tomorrow, can someone from engineering join the 2pm?\nMessage #hiring"
+expect = "none"
+
+[[case]]
+id = "english-with-code"
+window = "#backend\nSam Patel 11:45 AM\nThe deploy failed again:\nError: Konfiguration ungültig (config.yaml:12)\nfn main() { let datos = cargar(); }\nCan you take a look before standup?\nMessage #backend"
+expect = "none"
+
+[[case]]
+id = "english-with-foreign-signature"
+window = "Inbox\nRe: Order 4471\nFrom: Support\nHi Ben, your replacement has shipped and should arrive Thursday. Let us know if anything else comes up.\nBest, the support team\n--\nDiese E-Mail kann vertrauliche Informationen enthalten. Wenn Sie nicht der richtige Adressat sind, informieren Sie bitte sofort den Absender."
+expect = "none"
+
+# ── Mail: newest on top, the quoted thread below
+
+[[case]]
+id = "mail-french-reply-over-english-quote"
+window = "Inbox\nRe: Partnership\nFrom: Antoine Dubois\nTo: Ben\nBonjour Ben, merci pour votre message. Je suis disponible jeudi matin pour en discuter, est-ce que 10h vous conviendrait ? Cordialement, Antoine\nOn Tue, Ben wrote:\n> Hi Antoine, would you have time this week to talk about the partnership? We'd love to show you the new product and hear what your team needs."
+expect = "fr"
+
+[[case]]
+id = "mail-english-reply-over-spanish-quote"
+window = "Inbox\nRe: Proveedor\nFrom: Laura Gómez\nTo: Ben\nHi Ben, switching to English so the rest of the team can follow. The supplier confirmed delivery for the 14th.\nEl lun., Ben escribió:\n> Hola Laura, ¿sabes algo del proveedor? Necesitamos la entrega antes del día 15 para poder montar todo a tiempo."
+expect = "none"
+
+# ── Held out: written after the detector was tuned, run once as written
+
+[[case]]
+id = "held-slack-swedish"
+window = "#marknad\nElin Johansson 13:05\nHej! Kan du kolla på kampanjtexterna innan fredag? Jag tror att rubriken behöver bli kortare.\nPeople\nThreads\nMessage #marknad"
+expect = "sv"
+
+[[case]]
+id = "held-messages-turkish"
+window = "Messages\nEmre\nAkşam yemeğe geliyor musun? Saat sekiz gibi başlarız diye düşünüyorum.\nDelivered"
+expect = "tr"
+
+[[case]]
+id = "held-gmail-spanish-english-signature"
+window = "Gmail\nInbox\nRe: Reunión del lunes\nJavier Morales\nto me\nHola Ben, ¿podemos mover la reunión del lunes al martes por la mañana? Tengo un viaje que no puedo cambiar.\nJavier Morales | Sales Director | Acme Corp\nThis email and any attachments are confidential."
+expect = "es"
+
+[[case]]
+id = "held-english-with-french-phrase"
+window = "Messages\nTom\nWell, the flight got cancelled again. C'est la vie! I'll be there Saturday morning instead.\nDelivered"
+expect = "none"
+
+[[case]]
+id = "held-hinglish"
+window = "WhatsApp\nChats\nRahul\nonline\nKal meeting hai kya? Main thoda late aaunga, traffic bahut hai yaar\nType a message"
+expect = "none"
+
+[[case]]
+id = "held-japanese-ui-english-messages"
+window = "メッセージ\n受信トレイ\nアーカイブ\nKevin\nAre we still on for lunch tomorrow? I can book a table near the office.\n配信済み"
+expect = "none"
+
+[[case]]
+id = "held-spoken-german-english-colleague"
+spoken = "de"
+window = "Teams\nChat\nJames Carter 10:14 AM\nCould you send me the slides from yesterday's workshop when you get a chance?\nType a new message"
+expect = "en"
+
+[[case]]
+id = "held-chinese-with-english-terms"
+window = "Slack\n#dev\n李娜 4:12 PM\n这个 API 的 timeout 太短了，能不能改成三十秒？我们在测试环境里一直报错。\nMessage #dev"
+expect = "zh"
+
+[[case]]
+id = "held-mail-portuguese-over-english-quote"
+window = "Inbox\nRe: Proposal\nFrom: João Silva\nTo: Ben\nOlá Ben, obrigado pela proposta. Vamos analisar com a equipe e retornamos até quarta-feira.\nOn Mon, Ben wrote:\n> Hi João, attached is the proposal we discussed. Let me know if you have any questions about the pricing."
+expect = "pt"
+
+[[case]]
+id = "held-doc-english-with-german-title"
+window = "Notion\nProjektplan Q1\nThis page tracks the launch plan for the first quarter. Owners are listed next to each milestone, and the dates are still tentative until the budget review.\nAdd a comment"
+expect = "none"

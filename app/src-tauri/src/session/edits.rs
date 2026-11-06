@@ -322,13 +322,34 @@ impl Controller {
             }
             return;
         }
+        let targets = self
+            .ui
+            .settings()
+            .map(|s| s.general.translate_targets)
+            .unwrap_or_default();
         let Some(active) = &mut self.active else {
             return;
+        };
+        // Pressed again: the next language ticked under Translate into,
+        // which the menu bar then ticks too.
+        let language = match (&active.untranslated, &active.preset.translate_to) {
+            (Some(_), Some(now)) => match next_language(&targets, now) {
+                Some(next) => {
+                    keep_translate_language(self.ui.app(), &next);
+                    next
+                }
+                None => return,
+            },
+            _ => language,
         };
         active.capture = false;
         active.ask = false;
         active.compose = false;
-        let preset = translating(active.preset.clone(), &language);
+        let before = active
+            .untranslated
+            .get_or_insert_with(|| active.preset.clone())
+            .clone();
+        let preset = translating(before, &language);
         tracing::info!("dictating into {language}");
         self.use_preset(preset);
     }
@@ -559,6 +580,22 @@ impl Controller {
     }
 }
 
+/// The language after `now` among `targets` (the ones ticked under
+/// Translate into), back to the first after the last; the first if `now`
+/// isn't one of them. `None` when there's nothing else to switch to.
+fn next_language(targets: &[String], now: &str) -> Option<String> {
+    let targets: Vec<&str> = targets
+        .iter()
+        .map(|t| t.trim())
+        .filter(|t| !t.is_empty())
+        .collect();
+    let next = match targets.iter().position(|t| *t == now) {
+        Some(i) => targets[(i + 1) % targets.len()],
+        None => targets.first()?,
+    };
+    (next != now).then(|| next.to_string())
+}
+
 /// Offered when translating with no language chosen yet. The rest are in
 /// Settings ("Other…"); names as Settings lists them.
 const PICK_LANGUAGES: [&str; 9] = [
@@ -601,7 +638,7 @@ const MOST_TRANSLATE_TARGETS: usize = 5;
 /// `preset` writing in `language`: its AI pass on (translating needs it),
 /// and named for the overlay "→ Spanish", or "Email → Spanish" for a
 /// preset of the user's own.
-fn translating(mut preset: Preset, language: &str) -> Preset {
+pub(super) fn translating(mut preset: Preset, language: &str) -> Preset {
     preset.name = match preset_label(&preset) {
         Some(name) => format!("{name} → {language}"),
         None => format!("→ {language}"),
@@ -614,6 +651,23 @@ fn translating(mut preset: Preset, language: &str) -> Preset {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_translate_key_again_moves_to_the_next_language() {
+        let targets = ["Spanish".to_string(), "French".into(), " German ".into()];
+        assert_eq!(
+            next_language(&targets, "Spanish").as_deref(),
+            Some("French")
+        );
+        assert_eq!(
+            next_language(&targets, "German").as_deref(),
+            Some("Spanish")
+        );
+        // From the conversation's language, not one of them: the first.
+        assert_eq!(next_language(&targets, "Dutch").as_deref(), Some("Spanish"));
+        assert_eq!(next_language(&targets[..1], "Spanish"), None);
+        assert_eq!(next_language(&[], "Spanish"), None);
+    }
 
     #[test]
     fn a_translated_dictation_keeps_the_preset_and_names_the_language() {

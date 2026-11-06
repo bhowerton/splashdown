@@ -181,6 +181,7 @@ function collect() {
   s.general.whisper_mode = $("gen-whisper").checked ? true : null;
   s.general.languages = mixedLanguages();
   s.general.translate_targets = translateTargets();
+  s.general.reply_in_their_language = $("gen-their").checked;
   s.general.mini_bar = $("gen-mini-bar").checked ? true : null;
   s.general.noise_reduction = $("gen-noise").checked ? true : null;
   s.general.history_days = Number($("hist-days").value) || null;

@@ -253,8 +253,10 @@
       </div>
       <div class="group">
         <div class="gh">Translate</div>
-        <div class="row column"><span class="lbl">Languages to translate into<small>Select text anywhere and press <span data-combo="T">⌃⌥T</span> to translate it into the language ticked in the menu bar, under Translate into. Text you can't edit, like a web page or a message you received, opens in the Ask panel, which can read it aloud. Uses the AI. Up to five.</small></span>
+        <div class="row column"><span class="lbl">Languages to translate into<small>Hold the dictation key and press the translate letter (T, under General) to dictate in the language ticked in the menu bar, under Translate into; with text selected, it's translated instead. <span data-combo="T">⌃⌥T</span> does both without holding a key. Text you can't edit, like a web page, opens in the Ask panel, which can read it aloud. Uses the AI. Up to five.</small></span>
           <div class="lang-chips" id="gen-translate" role="group" aria-label="Languages to translate into"></div></div>
+        <label class="row"><span class="lbl">Reply in the conversation's language<small id="gen-their-note">In email and chat apps, when the conversation on screen is clearly in another language than you speak, what you dictate comes out in theirs: the bar shows “→ German (their language)” while you speak, and Esc cancels. ⌃⌥Z puts back what you said. Reads the conversation with “Names and words on screen” (Privacy); nothing else is sent.</small></span>
+          <input id="gen-their" type="checkbox" class="switch" data-setting></label>
       </div>
       <div class="group">
         <div class="gh">Vocabulary</div>

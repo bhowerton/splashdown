@@ -442,9 +442,16 @@ struct Active {
     /// The focused terminal's or editor's project, being listed in the
     /// background (presets with file tags on).
     project: Option<mpsc::Receiver<Option<Arc<Project>>>>,
-    /// Names and terms in the window around the field, being read in the
+    /// Names and terms in the window around the field (and the
+    /// conversation's language, when it's wanted), being read in the
     /// background, for speech-to-text and the AI to spell.
-    screen_words: Option<mpsc::Receiver<Vec<String>>>,
+    screen_words: Option<mpsc::Receiver<Screen>>,
+    /// What that read found, once it's in.
+    screen: Option<Screen>,
+    /// The preset before this dictation was made to translate (the
+    /// translate key, or the conversation's language), so another
+    /// language can be put in its place.
+    untranslated: Option<Preset>,
     /// A control request's `listen`: the text goes here, not into a field.
     reply_to: Option<control::Reply>,
     /// …and where it ends up, for the overlay ("Sent to Shortcuts").

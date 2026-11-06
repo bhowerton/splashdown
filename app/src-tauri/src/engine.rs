@@ -57,6 +57,9 @@ pub struct Engine {
     pub compose_reads_window: bool,
     /// Names and terms on screen join each dictation's vocabulary.
     pub screen_words: bool,
+    /// Dictations in email and chat come out in the conversation's
+    /// language (needs `screen_words`, which reads the window).
+    pub reply_in_their_language: bool,
     /// Compose writes in the voice of the user's messages on screen, and
     /// follows the style learned from their edits.
     pub compose_style: bool,
@@ -295,6 +298,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         compose_style: settings.general.compose_style(),
         learn_style: settings.general.learn_style(),
         screen_words: settings.general.screen_words(),
+        reply_in_their_language: settings.general.reply_in_their_language,
         share_recent: settings.general.share_recent()
             && ai_choice
                 .as_ref()

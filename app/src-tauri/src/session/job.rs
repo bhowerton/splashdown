@@ -256,22 +256,48 @@ pub(super) const PROJECT_TERMS: usize = 40;
 /// Names and terms on screen added to the vocabulary, at most.
 pub(super) const SCREEN_TERMS: usize = 30;
 
+/// What was read from the window around the field.
+#[derive(Debug, Default)]
+pub(super) struct Screen {
+    /// Names and terms, for speech-to-text and the AI to spell.
+    pub words: Vec<String>,
+    /// The conversation's language (a two-letter code), when it was asked
+    /// for and is clearly not one the user speaks.
+    pub their_language: Option<&'static str>,
+}
+
 /// Reads the names and terms in the window around the focused field of
 /// app `pid` in the background (Accessibility can be slow in big pages).
-pub(super) fn read_screen_words(pid: i32) -> mpsc::Receiver<Vec<String>> {
+/// With `spoken` (the languages the user dictates in), it also tells the
+/// conversation's language if it's another one.
+pub(super) fn read_screen_words(pid: i32, spoken: Option<Vec<String>>) -> mpsc::Receiver<Screen> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let words = Focus::capture()
-            .filter(|f| f.app.pid == pid)
-            .and_then(|f| {
-                f.surrounding_text(
-                    splashdown_core::compose::WINDOW_MIN_CHARS,
-                    splashdown_core::compose::WINDOW_MAX_CHARS,
-                )
-            })
-            .map(|text| splashdown_core::vocab::terms_on_screen(&text, SCREEN_TERMS))
+        let text = Focus::capture().filter(|f| f.app.pid == pid).and_then(|f| {
+            f.surrounding_text(
+                splashdown_core::compose::WINDOW_MIN_CHARS,
+                splashdown_core::compose::WINDOW_MAX_CHARS,
+            )
+        });
+        let words = text
+            .as_deref()
+            .map(|text| splashdown_core::vocab::terms_on_screen(text, SCREEN_TERMS))
             .unwrap_or_default();
-        let _ = tx.send(words);
+        let their_language = spoken.zip(text.as_deref()).and_then(|(spoken, text)| {
+            let lang = splashdown_core::conversation::language(text)?;
+            let speaks = |code: &str| {
+                spoken.iter().any(|s| {
+                    s.split(['-', '_'])
+                        .next()
+                        .is_some_and(|s| s.eq_ignore_ascii_case(code))
+                })
+            };
+            (!speaks(lang)).then_some(lang)
+        });
+        let _ = tx.send(Screen {
+            words,
+            their_language,
+        });
     });
     rx
 }

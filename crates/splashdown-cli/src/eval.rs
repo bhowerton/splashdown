@@ -14,6 +14,7 @@ mod commands;
 mod compose;
 mod stt;
 mod style;
+mod window_language;
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -101,6 +102,18 @@ pub enum EvalCommand {
         #[command(flatten)]
         providers: ProviderOpts,
     },
+    /// Score how a conversation's language is told from window text
+    /// (eval/window-languages.toml), for "Reply in their language". No
+    /// model: language detection runs on this computer.
+    #[command(name = "window-language")]
+    WindowLanguage {
+        #[arg(long, default_value = "eval/window-languages.toml")]
+        cases: PathBuf,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(short, long)]
+        verbose: bool,
+    },
     /// Score voice actions on eval/actions.toml: each command is
     /// interpreted, then planned into an action.
     Actions {
@@ -150,6 +163,16 @@ pub async fn run(cmd: EvalCommand) -> Result<()> {
             models,
             providers,
         } => cleanup(&cases, filter.as_deref(), verbose, &models, &providers).await,
+        EvalCommand::WindowLanguage {
+            cases,
+            filter,
+            verbose,
+        } => {
+            let file: window_language::WindowFile = read_cases(&cases)?;
+            let cases = filtered(&file.case, filter.as_deref(), |c| &c.id);
+            window_language::run(&cases, verbose);
+            Ok(())
+        }
         EvalCommand::Commands {
             cases,
             filter,
