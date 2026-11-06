@@ -112,6 +112,12 @@ pub struct GeneralSettings {
     /// The natural voices were offered (and downloaded, or not) the first
     /// time something was read without them.
     pub natural_voice_offered: bool,
+    /// Languages to translate into with ⌃⌥T, by English name ("Spanish"),
+    /// as the menu bar lists them. Up to five.
+    pub translate_targets: Vec<String>,
+    /// The one ⌃⌥T translates into now (picked in the menu bar). Unset,
+    /// or no longer in the list, means the first.
+    pub translate_to: Option<String>,
 }
 
 /// Other sounds while recording.
@@ -130,6 +136,21 @@ pub enum OtherAudio {
 pub const DEFAULT_SOUND_VOLUME: f32 = 0.12;
 
 impl GeneralSettings {
+    /// The language ⌃⌥T translates into, if any is set up.
+    pub fn translate_target(&self) -> Option<&str> {
+        let targets: Vec<&str> = self
+            .translate_targets
+            .iter()
+            .map(|t| t.trim())
+            .filter(|t| !t.is_empty())
+            .collect();
+        self.translate_to
+            .as_deref()
+            .map(str::trim)
+            .filter(|t| targets.contains(t))
+            .or_else(|| targets.first().copied())
+    }
+
     pub fn live_preview(&self) -> bool {
         self.live_preview.unwrap_or(true)
     }
@@ -261,5 +282,23 @@ impl GeneralSettings {
         self.sound_volume
             .unwrap_or(DEFAULT_SOUND_VOLUME)
             .clamp(0.0, 1.0)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_translate_target_is_the_one_picked_or_the_first() {
+        let mut g = GeneralSettings::default();
+        assert_eq!(g.translate_target(), None);
+        g.translate_targets = vec!["Spanish".into(), " French ".into()];
+        assert_eq!(g.translate_target(), Some("Spanish"));
+        g.translate_to = Some("French".into());
+        assert_eq!(g.translate_target(), Some("French"));
+        // No longer in the list.
+        g.translate_to = Some("German".into());
+        assert_eq!(g.translate_target(), Some("Spanish"));
     }
 }

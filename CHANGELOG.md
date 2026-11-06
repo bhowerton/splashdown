@@ -4,6 +4,8 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
+- **Translate selected text with ⌃⌥T.** Select text in any app and press ⌃⌥T (Ctrl+Alt+T on Windows). In your own text it's replaced by the translation. In text you can't edit, like a web page or an email you received, the translation opens in the Ask panel, which can read it aloud. Choose up to five languages in Settings → Words & language, and pick one in the menu bar under Translate into.
+- **Better translations.** Translating, with ⌃⌥T or a preset's "Translate into", now keeps names, product terms, code and links as they are, keeps your tone and formatting, and translates questions instead of answering them.
 - **Shortcuts can work with your notes (Mac).** Five more actions:
   - **Find Notes** by what they say, kind (meetings, transcripts…) and time.
   - **Get Note Text**: a whole note, or a meeting's summary, your own notes from it, or its transcript.

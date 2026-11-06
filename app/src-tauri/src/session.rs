@@ -150,6 +150,8 @@ enum Msg {
     Transform(TransformRequest),
     /// A transform's shortcut, in another app: run it on the selection.
     TransformShortcut(String),
+    /// ⌃⌥T: translate the selection.
+    Translate,
     /// The speech-to-text for transcribing a file.
     FileSpeech(mpsc::Sender<Result<FileSpeech, String>>),
     /// The model that answers questions, for Ask in Notes.
@@ -268,6 +270,11 @@ impl Handle {
     /// A transform's shortcut was pressed outside Notes.
     pub fn transform_shortcut(&self, id: String) {
         let _ = self.tx.send(Msg::TransformShortcut(id));
+    }
+
+    /// ⌃⌥T was pressed: translate the selection.
+    pub fn translate(&self) {
+        let _ = self.tx.send(Msg::Translate);
     }
 
     /// Runs a transform on `text` and waits for it (behind any dictation in
@@ -579,6 +586,7 @@ impl Controller {
                     let _ = t.reply.send(result);
                 }
                 Ok(Msg::TransformShortcut(id)) => self.transform_shortcut(&id),
+                Ok(Msg::Translate) => self.translate_shortcut(),
                 Ok(Msg::FileSpeech(reply)) => {
                     let speech =
                         self.engine

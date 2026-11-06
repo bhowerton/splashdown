@@ -1,5 +1,6 @@
 //! Changing what was already done: redo with another preset, rewrite
-//! selected text with a transform, retry a failed recording, and undo.
+//! selected text with a transform or translate it, retry a failed
+//! recording, and undo.
 
 use super::*;
 
@@ -175,16 +176,111 @@ impl Controller {
         if let Some(why) = out.unchanged {
             return self.notice(Tone::Info, &format!("{name}: {why}"));
         }
+        self.replace_selection(&focus, out.text, &name);
+    }
+
+    /// Pastes `text` over the selection in `focus`, unless focus moved on
+    /// meanwhile (then it's left on the clipboard).
+    fn replace_selection(&mut self, focus: &Focus, text: String, name: &str) {
         if !focus.is_current() {
-            let _ = splashdown_platform::copy_to_clipboard(&out.text);
+            let _ = splashdown_platform::copy_to_clipboard(&text);
             return self.notice(Tone::Warning, "Focus changed — copied to clipboard");
         }
-        let result = splashdown_platform::insert_text(&out.text, InsertMethod::Paste);
+        let result = splashdown_platform::insert_text(&text, InsertMethod::Paste);
         if result.is_ok() {
             self.last_insert = Some((focus.app.pid, Instant::now()));
-            self.last_text = out.text;
+            self.last_text = text;
         }
-        self.finish_command(result, &name);
+        self.finish_command(result, name);
+    }
+
+    /// ⌃⌥T: the selection, translated into the language picked in the menu
+    /// bar. Where it can be changed, the translation replaces it; where it
+    /// can't (a web page, a message received, a PDF), the translation
+    /// opens in the Ask panel, which can read it aloud.
+    pub(super) fn translate_shortcut(&mut self) {
+        if self.active.is_some() {
+            return;
+        }
+        let language = self
+            .ui
+            .settings()
+            .and_then(|s| s.general.translate_target().map(str::to_string));
+        let Some(language) = language else {
+            crate::tray::open_settings(self.ui.app());
+            return self.notice(
+                Tone::Info,
+                "Choose languages to translate into: Settings → Words & language",
+            );
+        };
+        // ⌃⌥Z is about this now, not an earlier capture.
+        self.last_capture = None;
+        let Some(focus) = Focus::capture() else {
+            return self.notice(Tone::Info, "Select the text to translate");
+        };
+        if focus.is_secure_field() {
+            return self.notice(Tone::Warning, "Can't translate in password fields");
+        }
+        let selected = match focus.selection() {
+            Selection::Text(s) => Some(s),
+            Selection::Unknown => splashdown_platform::copy_selection(),
+            Selection::Empty => None,
+        }
+        .filter(|s| !s.trim().is_empty());
+        let Some(text) = selected else {
+            return self.notice(Tone::Info, "Select the text to translate");
+        };
+        // Only replaced where it's known to be editable: elsewhere a paste
+        // would vanish.
+        if focus.takes_text() != Some(true) {
+            return self.show_translation(&focus, &language, text);
+        }
+        let name = format!("Translated into {language}");
+        self.ui.show(OverlayState::Working {
+            label: format!("Translating into {language}…"),
+        });
+        let instruction = splashdown_config::translate_instruction(&language);
+        let out = match self.run_transform("", &text, Some(&instruction)) {
+            Ok((_, out)) => out,
+            Err(e) => return self.notice(Tone::Warning, &short(&e)),
+        };
+        if let Some(why) = out.unchanged {
+            return self.notice(Tone::Info, &format!("Translate: {why}"));
+        }
+        self.replace_selection(&focus, out.text, &name);
+    }
+
+    /// A translation of text that can't be replaced, in the Ask panel.
+    fn show_translation(&mut self, focus: &Focus, language: &str, text: String) {
+        let Ok(engine) = &self.engine else {
+            return self.notice(Tone::Warning, "Splashdown isn't ready: see Settings");
+        };
+        let preset = self.match_preset(Some(focus));
+        let Some(model) = engine.pipeline_for(&preset).answer_model() else {
+            return self.notice(
+                Tone::Warning,
+                "Translating needs an AI model: choose one in Settings → AI Models",
+            );
+        };
+        let context = splashdown_core::ask::AskContext {
+            selection: Some(text),
+            app_name: engine.share_app_name.then(|| focus.app.name.clone()),
+            user_name: engine.context.user_name.clone(),
+            today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
+            ..Default::default()
+        };
+        tracing::info!("translating a selection into {language} in the Ask panel");
+        crate::ask::ask(
+            self.ui.app(),
+            crate::ask::Question {
+                question: format!("Translate this into {language}. Write only the translation."),
+                context,
+                model,
+                target: Some((focus.app.pid, focus.app.name.clone())),
+                speak: false,
+            },
+        );
+        self.ui.hide();
     }
 
     /// "Retry last dictation": runs the kept recording again with the

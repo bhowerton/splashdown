@@ -169,6 +169,7 @@ function collect() {
   s.general.overlay_near_cursor = $("gen-near-cursor").checked ? null : false;
   s.general.whisper_mode = $("gen-whisper").checked ? true : null;
   s.general.languages = mixedLanguages();
+  s.general.translate_targets = translateTargets();
   s.general.mini_bar = $("gen-mini-bar").checked ? true : null;
   s.general.noise_reduction = $("gen-noise").checked ? true : null;
   s.general.history_days = Number($("hist-days").value) || null;

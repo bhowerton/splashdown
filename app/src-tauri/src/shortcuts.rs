@@ -42,7 +42,10 @@ fn lock() -> std::sync::MutexGuard<'static, Registered> {
     registered().lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// Installs the plugin, ⌃⌥V, ⌃⌥Z, ⌃⌥N and ⌃⌥M. Failing to register (another app owns the
+/// ⌃⌥T: translate the selection.
+pub const TRANSLATE_ACCELERATOR: &str = "Ctrl+Alt+T";
+
+/// Installs the plugin, ⌃⌥V, ⌃⌥Z, ⌃⌥N, ⌃⌥M and ⌃⌥T. Failing to register (another app owns the
 /// shortcut) only loses the shortcut, not the menu item.
 pub fn install(app: &tauri::App, history: Arc<History>) {
     let paste_raw = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyV);
@@ -53,6 +56,8 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
     let notes_id = notes.id();
     let meeting = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyM);
     let meeting_id = meeting.id();
+    let translate = Shortcut::new(Some(Modifiers::CONTROL | Modifiers::ALT), Code::KeyT);
+    let translate_id = translate.id();
     let plugin = tauri_plugin_global_shortcut::Builder::new()
         .with_handler(move |app, shortcut, event| {
             if event.state() != ShortcutState::Pressed {
@@ -74,6 +79,12 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
             }
             if shortcut.id() == meeting_id {
                 crate::meeting::toggle(app);
+                return;
+            }
+            if shortcut.id() == translate_id {
+                if let Some(state) = app.try_state::<crate::state::AppState>() {
+                    state.session.translate();
+                }
                 return;
             }
             let target = lock().targets.get(&shortcut.id()).cloned();
@@ -100,6 +111,7 @@ pub fn install(app: &tauri::App, history: Arc<History>) {
         (undo_ai, "Ctrl+Alt+Z", 'z'),
         (notes, crate::notes::ACCELERATOR, 'n'),
         (meeting, crate::meeting::ACCELERATOR, 'm'),
+        (translate, TRANSLATE_ACCELERATOR, 't'),
     ] {
         // On a keyboard where AltGr (Ctrl+Alt to Windows) plus this letter
         // types a character, the character wins; the menu item remains.

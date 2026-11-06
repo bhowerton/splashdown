@@ -72,6 +72,7 @@ function renderGeneral() {
   $("gen-near-cursor").checked = s.general.overlay_near_cursor !== false;
   $("gen-whisper").checked = s.general.whisper_mode === true;
   renderMixedLanguages(s.general.languages ?? []);
+  renderTranslateTargets(s.general.translate_targets ?? []);
   $("gen-mini-bar").checked = s.general.mini_bar === true;
   $("gen-noise").checked = s.general.noise_reduction === true;
   setValue($("gen-other-audio"), s.general.other_sounds ?? "lower");
@@ -134,6 +135,50 @@ function mixedLanguages() {
 }
 
 $("gen-language").addEventListener("change", () => ($("gen-languages-row").hidden = !!$("gen-language").value));
+
+/** Languages ⌃⌥T can translate into, by the English name the AI is told. */
+const TRANSLATE_TARGETS = [
+  "English", "Spanish", "French", "German", "Italian", "Portuguese", "Dutch", "Swedish", "Norwegian",
+  "Danish", "Finnish", "Polish", "Czech", "Ukrainian", "Russian", "Greek", "Turkish", "Arabic", "Hebrew",
+  "Hindi", "Bengali", "Indonesian", "Vietnamese", "Thai", "Japanese", "Korean",
+  "Chinese (Simplified)", "Chinese (Traditional)",
+];
+/** Most languages the menu bar lists. */
+const MOST_TRANSLATE_TARGETS = 5;
+
+function renderTranslateTargets(chosen) {
+  // Kept as chosen, even one this list no longer has.
+  const names = [...TRANSLATE_TARGETS, ...chosen.filter((c) => !TRANSLATE_TARGETS.includes(c))];
+  $("gen-translate").replaceChildren(
+    ...names.map((name) => {
+      const label = document.createElement("label");
+      label.className = "lang-chip";
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.value = name;
+      box.checked = chosen.includes(name);
+      box.onchange = () => {
+        limitTranslateTargets();
+        save();
+      };
+      label.append(box, document.createTextNode(name));
+      return label;
+    })
+  );
+  limitTranslateTargets();
+}
+
+/** Five ticked: the rest can't be ticked until one is cleared. */
+function limitTranslateTargets() {
+  const boxes = [...document.querySelectorAll("#gen-translate input")];
+  const full = boxes.filter((b) => b.checked).length >= MOST_TRANSLATE_TARGETS;
+  for (const box of boxes) box.disabled = full && !box.checked;
+}
+
+/** The ticked languages to translate into, for collect(). */
+function translateTargets() {
+  return [...document.querySelectorAll("#gen-translate input:checked")].map((b) => b.value);
+}
 
 // ---------------------------------------------------------------- hotkeys
 

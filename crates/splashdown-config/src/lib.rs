@@ -9,6 +9,7 @@ mod transforms;
 pub use presets::{
     AppContext, AppRule, CleanupLevel, DEFAULT_PRESET_ID, InsertMode, Preset, PresetModel, Tone,
     WORD_FOR_WORD_ID, builtin_presets, match_preset, preset_from_file, preset_to_file, style_kind,
+    translate_instruction,
 };
 pub use secrets::{
     KeyName, KeySource, Secrets, delete_key, key_source, migrate_legacy_keys, store_key,

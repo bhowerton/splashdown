@@ -180,6 +180,14 @@ pub fn sheet(settings: &Settings) -> Sheet {
                     "Hear a summary",
                     &["read me a summary of this", "read me the action items"],
                 ),
+                say(
+                    "Hear it in another language",
+                    &["read this to me in Spanish"],
+                ),
+                press(
+                    "Translate selected text (languages: menu bar → Translate into)",
+                    shortcut('T'),
+                ),
                 press("Stop reading", "Esc"),
             ],
             actions: false,
