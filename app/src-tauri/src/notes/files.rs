@@ -85,6 +85,8 @@ pub(super) struct Item {
 /// (what was done is kept).
 #[derive(Debug, Clone)]
 pub(crate) struct Done {
+    /// Only a Shortcuts action (macOS) asks which note it was.
+    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) note: String,
     pub(crate) stopped: Option<String>,
 }
