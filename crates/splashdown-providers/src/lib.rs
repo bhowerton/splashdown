@@ -17,6 +17,8 @@ pub mod pricing;
 #[cfg(feature = "local-speech")]
 mod silero;
 mod transcribe;
+#[cfg(feature = "voiceprints")]
+mod voiceprint;
 
 pub use anthropic::AnthropicModel;
 pub use chat::ChatModel;
@@ -32,3 +34,5 @@ pub use natural_voice::NaturalSpeech;
 #[cfg(feature = "local-speech")]
 pub use silero::Silero;
 pub use transcribe::{ChatAudioTranscriber, TranscriptionApi};
+#[cfg(feature = "voiceprints")]
+pub use voiceprint::Voiceprinter;

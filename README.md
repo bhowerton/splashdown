@@ -135,7 +135,7 @@
   <img src="docs/assets/sources.svg" width="800" alt="Animation: a video call, a podcast app, a video in the browser, the room and a file take turns; each one's sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags.">
 </p>
 
-- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named, and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down. A kept recording plays back from any turn, and can be transcribed again with another speech model. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record.
+- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named (and, if you turn it on, recognized by voice in later meetings), and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down. A kept recording plays back from any turn, and can be transcribed again with another speech model. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record.
 - **Transcribe an app's audio:** a webinar in the browser, a podcast app, a call you're only listening to. Only that app's sound is recorded, with a level meter that says whether it's hearing words.
 - **Transcribe the microphone** for a lecture or a conversation in the room, hands-free.
 - **Transcribe files and links:** drop a voice memo, interview or video onto Notes, or paste a YouTube or podcast link.
@@ -236,11 +236,12 @@ Every default was chosen by measurement. The cleanup prompt is tested on cases c
 - Nemotron 3.5 ASR Streaming: OpenMDW-1.1.
 - NVIDIA Parakeet TDT: CC-BY-4.0.
 - NVIDIA Streaming Sortformer (tells speakers apart in meetings): NVIDIA Open Model License.
+- NVIDIA TitaNet-small (recognizes people you've named in meetings), as exported by sherpa-onnx: NeMo Toolkit license, Apache-2.0.
 - OpenAI Whisper: MIT.
 - Qwen3 and Qwen3 Embedding (finds notes by meaning): Apache-2.0.
 - Gradium Phonon 31M and its voices (reads text aloud): Apache-2.0.
 
-Built in: Silero VAD (finds the speech in a recording), MIT. The Notes editor is built on CodeMirror and Lezer, MIT ([app/ui/vendor/editor.LICENSES.txt](app/ui/vendor/editor.LICENSES.txt)).
+Built in: Silero VAD (finds the speech in a recording), MIT. sherpa-onnx (Apache-2.0) and ONNX Runtime (MIT), which run the voice model. The Notes editor is built on CodeMirror and Lezer, MIT ([app/ui/vendor/editor.LICENSES.txt](app/ui/vendor/editor.LICENSES.txt)).
 
 Downloaded when you first transcribe a page link (YouTube and the like): yt-dlp, public domain (the Unlicense), and QuickJS-NG, MIT.
 

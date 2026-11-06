@@ -309,6 +309,33 @@ impl Diarizer {
     }
 }
 
+/// Voiceprints of meeting speakers, to know someone again in a later
+/// meeting: NVIDIA TitaNet-small (NeMo Toolkit license, Apache-2.0), as
+/// sherpa-onnx exports it, about 38 MB.
+pub struct VoiceModel;
+
+impl VoiceModel {
+    pub const ID: &'static str = "titanet-small";
+    pub const FILE: &'static str = "nemo_en_titanet_small.onnx";
+    /// Approximate download size in MB, for UI.
+    pub const APPROX_MB: u32 = 38;
+
+    pub fn url() -> String {
+        format!(
+            "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/{}",
+            Self::FILE
+        )
+    }
+
+    pub fn path_in(models_dir: &Path) -> PathBuf {
+        models_dir.join(Self::FILE)
+    }
+
+    pub fn is_downloaded(models_dir: &Path) -> bool {
+        Self::path_in(models_dir).is_file()
+    }
+}
+
 /// Finds notes by what they mean rather than the words they use, for Ask.
 /// Qwen3 Embedding 0.6B, 8-bit, run by `splashdown-llm`; over 100
 /// languages. Apache-2.0, about 639 MB.
@@ -479,6 +506,13 @@ pub async fn download_by_id(
         download_file(&Diarizer::url(), &Diarizer::path_in(models_dir), progress).await
     } else if id == Embedder::ID {
         download_file(&Embedder::url(), &Embedder::path_in(models_dir), progress).await
+    } else if id == VoiceModel::ID {
+        download_file(
+            &VoiceModel::url(),
+            &VoiceModel::path_in(models_dir),
+            progress,
+        )
+        .await
     } else if let Some(m) = SpeechModel::from_id(id) {
         m.download(models_dir, progress).await
     } else if let Some(m) = LocalModel::from_id(id) {

@@ -181,7 +181,13 @@ pub(super) fn finish(
 ) {
     // Speakers first, so the summary can say who said what.
     if settings.notes.meeting_speakers {
-        name_speakers(store, note, raw, one_sided);
+        name_speakers(
+            store,
+            note,
+            raw,
+            one_sided,
+            settings.notes.remember_speakers,
+        );
     }
     summarize(app, store, note, settings, one_sided);
     if settings.notes.keep_meeting_audio {
@@ -199,7 +205,13 @@ pub(super) fn finish(
 /// one-sided recording) with the downloaded diarization model, and labels
 /// their turns Speaker 1, Speaker 2… Nothing changes with only one voice,
 /// or without the model.
-pub(super) fn name_speakers(store: &Store, note: &str, raw: &Path, one_sided: bool) {
+pub(super) fn name_speakers(
+    store: &Store,
+    note: &str,
+    raw: &Path,
+    one_sided: bool,
+    remember: bool,
+) {
     let Ok(models) = crate::engine::paths().map(|p| p.models_dir) else {
         return;
     };
@@ -236,8 +248,18 @@ pub(super) fn name_speakers(store: &Store, note: &str, raw: &Path, one_sided: bo
         .map(|t| (t.speaker, t.start.as_secs_f64(), t.end.as_secs_f64()))
         .collect();
     let side = if one_sided { None } else { Some("Them") };
-    if let Err(e) = store.rewrite(note, |body| label_speakers(body, &spans, side)) {
+    let mut order = Vec::new();
+    let rewritten = store.rewrite(note, |body| {
+        let (body, numbered) = labelled(body, &spans, side);
+        order = numbered;
+        body
+    });
+    if let Err(e) = rewritten {
         tracing::warn!("couldn't label the speakers: {e}");
+        return;
+    }
+    if remember && !order.is_empty() {
+        super::voices::recognize(store, note, &pcm, &turns, &order);
     }
 }
 
@@ -246,7 +268,14 @@ pub(super) fn name_speakers(store: &Store, note: &str, raw: &Path, one_sided: bo
 /// the speaker of `spans` (speaker, start s, end s) it overlaps most,
 /// numbered in the order they first speak. Unchanged unless there are two
 /// or more.
+#[cfg(test)]
 pub(super) fn label_speakers(body: &str, spans: &[(u32, f64, f64)], side: Option<&str>) -> String {
+    labelled(body, spans, side).0
+}
+
+/// `label_speakers`, and the speakers of `spans` in the order they were
+/// numbered (Speaker 1 first); empty when nothing was labelled.
+fn labelled(body: &str, spans: &[(u32, f64, f64)], side: Option<&str>) -> (String, Vec<u32>) {
     // Each turn of that side: its line, and when it starts and ends (the
     // next turn's start).
     let lines: Vec<&str> = body.split('\n').collect();
@@ -291,7 +320,7 @@ pub(super) fn label_speakers(body: &str, spans: &[(u32, f64, f64)], side: Option
         }
     }
     if order.len() < 2 {
-        return body.to_string();
+        return (body.to_string(), Vec::new());
     }
     let mut out: Vec<String> = lines.iter().map(|l| l.to_string()).collect();
     for (&(i, _), speaker) in turns.iter().zip(&found) {
@@ -302,7 +331,7 @@ pub(super) fn label_speakers(body: &str, spans: &[(u32, f64, f64)], side: Option
         let who = format!("Speaker {n}");
         out[i] = Turn { who: &who, ..turn }.line();
     }
-    out.join("\n")
+    (out.join("\n"), order)
 }
 
 /// The spool as a WAV in `Attachments/`. Returns its path for the link.

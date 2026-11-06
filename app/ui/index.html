@@ -127,6 +127,10 @@
           <input id="mt-calendar" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Tell the other people apart<small id="mt-speakers-note">When a meeting ends, the other side's turns are split into Speaker 1, Speaker 2 and so on (up to four), which you can then name. Runs on this computer; the first time downloads NVIDIA's Sortformer model (about 139 MB).</small></span>
           <input id="mt-speakers" type="checkbox" class="switch" data-setting></label>
+        <label class="row" id="mt-remember-row"><span class="lbl">Recognize people you've named<small id="mt-remember-note">Name a speaker once (Speaker 2 → Priya) and they're named in later meetings when their voice clearly matches; anyone else stays Speaker 1, 2… A voiceprint is kept for each person you name: it stays on this computer and is never sent, but it's someone's biometric data, which some places regulate (Illinois, the EU): ask first if you're unsure. The first time downloads NVIDIA's TitaNet model (about 38 MB).</small></span>
+          <input id="mt-remember" type="checkbox" class="switch" data-setting></label>
+        <div class="row" id="mt-voices-row" hidden><span class="lbl">People known by voice<small id="mt-voices"></small></span>
+          <button type="button" class="link danger" id="mt-voices-forget">Forget all</button></div>
         <label class="row"><span class="lbl">Summarize when it ends<small id="mt-summary-note">Decisions, action items and open questions, at the top of the note.</small></span>
           <select id="mt-summary" data-setting>
             <option value="">Ask first (with an AI on this computer, just summarize)</option>

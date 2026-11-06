@@ -160,6 +160,7 @@ function collect() {
   s.notes.offer_on_calls = $("mt-offer").checked ? null : false;
   s.notes.meeting_calendar = $("mt-calendar").checked;
   s.notes.meeting_speakers = $("mt-speakers").checked;
+  s.notes.remember_speakers = $("mt-remember").checked && $("mt-speakers").checked;
   s.notes.ask_by_meaning = $("nt-meaning").checked;
   // The default (on for Windows, off for macOS) is saved as unset.
   const pillDefault = state.platform === "windows";

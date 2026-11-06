@@ -29,7 +29,7 @@ splashdown-config.workspace = true
 splashdown-control.workspace = true
 splashdown-core.workspace = true
 splashdown-platform.workspace = true
-splashdown-providers = { workspace = true, features = ["local-speech", "natural-voice"] }
+splashdown-providers = { workspace = true, features = ["local-speech", "natural-voice", "voiceprints"] }
 serde.workspace = true
 serde_json.workspace = true
 tauri = { version = "2", features = ["tray-icon", "image-png"] }

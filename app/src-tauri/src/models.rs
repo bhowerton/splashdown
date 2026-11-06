@@ -67,7 +67,7 @@ pub async fn fetch_model(
     id: &str,
     mut on_progress: impl FnMut(u64, Option<u64>) + Send,
 ) -> Result<(), String> {
-    use splashdown_providers::models::{Diarizer, Embedder};
+    use splashdown_providers::models::{Diarizer, Embedder, VoiceModel};
     let dir = engine::paths()?.models_dir;
     let here = |dir: &std::path::Path| {
         if id == splashdown_providers::NaturalVoice::ID {
@@ -76,6 +76,8 @@ pub async fn fetch_model(
             Some(Diarizer::is_downloaded(dir))
         } else if id == Embedder::ID {
             Some(Embedder::is_downloaded(dir))
+        } else if id == VoiceModel::ID {
+            Some(VoiceModel::is_downloaded(dir))
         } else if let Some(m) = SpeechModel::from_id(id) {
             Some(m.is_downloaded(dir))
         } else {

@@ -28,6 +28,13 @@ futures-executor.workspace = true
 splashdown-apple-shim.workspace = true
 transcribe-cpp = { workspace = true, optional = true, features = ["metal"] }
 
+# Voiceprints (remembering people across meetings): ONNX Runtime through
+# sherpa-onnx, linked in. Not on Windows yet: its static libraries there use
+# the static C runtime and the app the dynamic one, so it needs its DLLs
+# installed beside the app, which the installer doesn't do yet.
+[target.'cfg(not(windows))'.dependencies]
+sherpa-onnx = { version = "2.0.1", optional = true }
+
 [features]
 default = ["local-speech"]
 # Local speech-to-text with transcribe.cpp: Nemotron, Parakeet and Whisper
@@ -35,6 +42,8 @@ default = ["local-speech"]
 local-speech = ["dep:transcribe-cpp"]
 # The natural reading voice: Gradium's Phonon, run in-process by ptts.
 natural-voice = ["dep:ptts"]
+# Voiceprints of meeting speakers (NVIDIA TitaNet-small, run by sherpa-onnx).
+voiceprints = ["dep:sherpa-onnx"]
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

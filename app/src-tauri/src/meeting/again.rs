@@ -103,7 +103,13 @@ pub(crate) fn transcribe_again(
             .map_err(|e| e.to_string())?;
         drop(spool.flush());
         if settings.notes.meeting_speakers && !named {
-            name_speakers(store, note, &raw, one_sided);
+            name_speakers(
+                store,
+                note,
+                &raw,
+                one_sided,
+                settings.notes.remember_speakers,
+            );
         }
         Ok(None)
     })();

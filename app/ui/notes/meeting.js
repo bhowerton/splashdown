@@ -199,6 +199,9 @@ function renameSpeaker(who, name) {
   render({ reload: true });
   scheduleSave();
   toast(`${who} is now ${name}`);
+  // Their voice from this meeting is kept under the name, when Settings
+  // remembers people (nothing happens otherwise).
+  invoke("notes_speaker_named", { path: current.path, who, name }).catch(() => {});
 }
 
 /** Find in the transcript: shows the turns that have it, marked. */

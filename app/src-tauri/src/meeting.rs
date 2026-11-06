@@ -21,6 +21,7 @@ mod record;
 mod recover;
 mod summary;
 mod transcript;
+pub mod voices;
 
 use std::io::Write as _;
 use std::path::{Path, PathBuf};

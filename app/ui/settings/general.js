@@ -60,6 +60,12 @@ function renderGeneral() {
   $("mt-offer").checked = notes.offer_on_calls ?? true;
   $("mt-calendar").checked = !!notes.meeting_calendar;
   $("mt-speakers").checked = !!notes.meeting_speakers;
+  // Not on Windows yet: the voice model's runtime isn't installed there.
+  $("mt-remember-row").hidden = state.platform === "windows";
+  $("mt-remember").checked = !!notes.remember_speakers;
+  // It names the speakers that telling people apart finds.
+  $("mt-remember").disabled = !notes.meeting_speakers && !notes.remember_speakers;
+  renderVoices();
   $("nt-meaning").checked = !!notes.ask_by_meaning;
   if (notes.ask_by_meaning) showMeaningProgress();
   // EventKit is the Mac's; there's no calendar to read on Windows yet.
@@ -728,4 +734,65 @@ $("nt-watch-add").addEventListener("click", async () => {
   const settings = collect();
   settings.notes.watched = [...folders, { path, into: "", subtitles: false }];
   save(settings);
+});
+
+// ---------------------------------------------------------------- people known by voice
+
+/** The people saved by voice, each with Forget. */
+async function renderVoices() {
+  let voices = [];
+  try {
+    voices = await invoke("voices_list");
+  } catch {
+    voices = [];
+  }
+  $("mt-voices-row").hidden = voices.length === 0;
+  const list = $("mt-voices");
+  list.replaceChildren(
+    ...voices.flatMap((v, i) => {
+      const forget = document.createElement("button");
+      forget.type = "button";
+      forget.className = "link";
+      forget.textContent = "forget";
+      forget.title = `Forget ${v.name}'s voice`;
+      forget.addEventListener("click", async () => {
+        await invoke("voices_forget", { name: v.name }).catch((e) => toast(String(e), true));
+        renderVoices();
+      });
+      const meetings = v.meetings === 1 ? "1 meeting" : `${v.meetings} meetings`;
+      return [...(i ? ["; "] : []), `${v.name} (${meetings}, `, forget, ")"];
+    }),
+  );
+}
+
+$("mt-voices-forget").addEventListener("click", async () => {
+  try {
+    await invoke("voices_forget", { name: null });
+    toast("Every saved voice is forgotten");
+  } catch (e) {
+    toast(String(e), true);
+  }
+  renderVoices();
+});
+
+// Turning it on downloads the voice model (once); if that fails, it goes
+// back off.
+$("mt-remember").addEventListener("change", async (e) => {
+  if (!e.target.checked) return;
+  const note = $("mt-remember-note");
+  const before = note.textContent;
+  const stop = await listen("model-download", (ev) => {
+    if (ev.payload.id !== "titanet-small" || !ev.payload.total) return;
+    note.textContent = `Downloading the voice model… ${Math.floor((ev.payload.done / ev.payload.total) * 100)}%`;
+  });
+  try {
+    await invoke("download_model", { id: "titanet-small" });
+  } catch (err) {
+    e.target.checked = false;
+    e.target.dispatchEvent(new Event("change", { bubbles: true }));
+    toast(`Couldn't download the voice model: ${err}`, true);
+  } finally {
+    stop();
+    note.textContent = before;
+  }
 });

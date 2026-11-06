@@ -24,6 +24,7 @@ pub mod spoken;
 pub mod style;
 pub mod subtitles;
 pub mod vocab;
+pub mod voices;
 
 pub use audio::AudioClip;
 pub use mode::Mode;
