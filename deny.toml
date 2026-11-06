@@ -24,3 +24,11 @@ allow = [
     # Cua Driver, for computer use).
     "BSL-1.0",
 ]
+# Only in sherpa-onnx's build script, which downloads and unpacks its
+# prebuilt libraries (voiceprints); neither ships in the app. Both are
+# permissive: Mozilla's list of trusted certificates, and bzip2's BSD-style
+# license.
+exceptions = [
+    { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
+    { allow = ["bzip2-1.0.6"], crate = "libbz2-rs-sys" },
+]

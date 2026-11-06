@@ -17,3 +17,10 @@ accepted = [
     "BSL-1.0",
 ]
 workarounds = ["ring"]
+
+# Only in sherpa-onnx's build script (see deny.toml); listed with the rest.
+[webpki-roots]
+accepted = ["CDLA-Permissive-2.0"]
+
+[libbz2-rs-sys]
+accepted = ["bzip2-1.0.6"]
