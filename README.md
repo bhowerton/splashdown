@@ -42,8 +42,9 @@
 - **Works everywhere you type.** Email, Slack, Messages, docs, the browser, your terminal or code editor: any text field in any app.
 - **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
 - **Says what to do, not just what to write.** "Open Spotify", "remind me at 5 to stretch", "add dentist to my calendar on Thursday at 4", "pause the music", or your own: "deploy staging", "next slide". Nothing is sent, deleted or bought for you.
+- **Speaks their language.** Hold the key and tap T to write in Spanish, French or any language you pick, or let it reply in the language of the email or chat on screen.
 - **Reads to you, too.** Select text and say "read this to me", or "read me a summary of this", and it's read aloud in a natural voice that runs on your computer.
-- **Turns anything you hear into notes.** Pick any app (a webinar in your browser, a podcast, a video, a call you're only listening to) and what it says is written into a note as it plays. Record meetings without a bot joining, transcribe voice memos and YouTube links, and ask your notes questions. Notes are plain Markdown files.
+- **Turns anything you hear into notes.** Pick any app (a webinar in your browser, a podcast, a video, a call you're only listening to) and what it says is written into a note as it plays. Record meetings without a bot joining (and have the people you've named recognized next time), transcribe voice memos, YouTube links and whole folders, save subtitles, and ask your notes questions. Notes are plain Markdown files.
 - **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
 <p align="center">
@@ -111,13 +112,21 @@
 - **Change it by voice:** select the draft and say "shorter" or "warmer", or "scratch that" to take it back. To check drafts first, turn on Check drafts in a panel first: you can change the draft there by voice ("add that I'm free Thursday", "in German") and every version is kept until you Insert it.
 - **No made-up facts.** Names, dates, numbers and your own details come only from what you said, the message and your notes; anything missing is left as a [placeholder]. Instructions for an AI hidden in the message you're answering are left out before anything is written.
 
+### Translate
+
+<p align="center">
+  <img src="docs/assets/translate.svg" width="800" alt="Animation: in a new email, holding Option and tapping T shows '→ Spanish', and tapping T again '→ French'; saying 'see you Thursday at 3?' types 'On se voit jeudi à 15 h ?'. Then, in a work chat where Lukas writes in German, holding Option shows '→ German (their language)' with no key to press, and the reply is typed in German.">
+</p>
+
+- **Dictate in another language.** Hold the dictation key, tap **T** and speak: it comes out in the language ticked in the menu bar under Translate into. Tap **T** again for the next of your languages. The first time, pick one from a short list; choose up to five in Settings → Words & language.
+- **Reply in their language.** Turn it on in Settings → Words & language, and in email and chat a conversation that's clearly in another language gets your dictation in that language, with no key to press: the bar says "→ German (their language)" while you speak. It reads only the messages (not the app's labels or a quoted thread), and does nothing when the conversation is mixed or too short to tell.
+- **Translate what you select.** Select text in any app, hold the dictation key and tap T. In your own text it's replaced by the translation; in text you can't edit (a web page, an email you received) the translation opens in the Ask panel, where Read aloud reads it in that language. ⌃⌥T does the same without holding a key.
+- **A preset can always translate** (Settings → Presets → Translate into), and "translate that to Spanish" works as a spoken command.
+
 ### Hear it read back
 
 - **"Read this to me."** Select text, hold Right Option and say it, and it's read aloud. With nothing selected, tap Right Shift first and the text you're writing is read, or your last dictation (also in the menu bar: Last dictation → Read it to me).
-- **"Read me a summary of this."** Your AI writes a short summary meant for listening, and it's read as it's written, so the voice starts after the first sentence. "Read me the action items" and other questions work the same way, and the answer stays in the Ask panel, which has a Read aloud button for any answer.
-- **Dictate in another language.** Hold the dictation key, press T and speak: it comes out in the language picked in the menu bar. The first time, pick one from a short list; choose up to five in Settings → Words & language to switch between them in the menu bar.
-- **Reply in their language.** Turn it on in Settings → Words & language, and in email and chat a conversation that's clearly in another language gets your dictation in that language, with no key to press.
-- **Translate what you select.** Select text in any app, hold the dictation key and press T. In your own text it's replaced by the translation; in text you can't edit (a web page, an email you received) the translation opens in the Ask panel, where Read aloud reads it in that language. Or say "read this to me in Spanish". ⌃⌥T does the same without holding a key.
+- **"Read me a summary of this."** Your AI writes a short summary meant for listening, and it's read as it's written, so the voice starts after the first sentence. "Read this to me in Spanish" translates as it reads. "Read me the action items" and other questions work the same way, and the answer stays in the Ask panel, which has a Read aloud button for any answer.
 - **A natural voice, on your computer.** Phonon 31M (Gradium, Apache-2.0), a 68 MB download with 25 American and British voices, reads English with numbers, dates and amounts said properly, and starts speaking in a fraction of a second even on a slow PC. Other languages use the best system voice for that language. Music pauses while it reads, and Esc stops it. Settings → AI Models → Text to speech.
 
 ### Notes
@@ -136,12 +145,22 @@
   <img src="docs/assets/sources.svg" width="800" alt="Animation: a video call, a podcast app, a video in the browser, the room and a file take turns; each one's sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags.">
 </p>
 
-- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named (and, if you turn it on, recognized by voice in later meetings), and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down. A kept recording plays back from any turn, and can be transcribed again with another speech model. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record.
+- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named, and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down. A kept recording plays back from any turn, and can be transcribed again with another speech model. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record.
+- **Remembers who's who (Mac).** Name a speaker once (Speaker 2 → Priya, from the people invited or typed), and turn on Settings → General → Meetings → Recognize people you've named: in later meetings she's named by her voice when it's a clear match, and anyone new stays Speaker 1, 2. Voiceprints stay on your computer, never in your notes, and Settings lists them with Forget.
+
+<p align="center">
+  <img src="docs/assets/speakers.svg" width="800" alt="Animation: in Monday's meeting note, clicking Speaker 2 offers the people invited, and choosing Priya Shah renames every turn; her voice is kept on this computer. In Thursday's meeting, Priya Shah's turns carry her name and 'recognized by voice', while a new voice stays Speaker 2.">
+</p>
+
 - **Transcribe an app's audio:** a webinar in the browser, a podcast app, a call you're only listening to. Only that app's sound is recorded, with a level meter that says whether it's hearing words.
 - **Transcribe the microphone** for a lecture or a conversation in the room, hands-free.
 - **Transcribe files and links:** drop a voice memo, interview or video onto Notes, or paste a YouTube or podcast link.
-- **Watched folders:** choose folders in Settings → General → Transcribe new files in a folder, and new audio and video files that arrive there (a Zoom recordings folder, a recorder's imports) become transcript notes, with subtitles saved next to them if you like.
+- **Watched folders:** choose folders in Settings → General → Transcribe new files in a folder, and new audio and video files that arrive there (a Zoom recordings folder, a recorder's imports) become transcript notes once they've finished copying, with subtitles saved next to them if you like. Files already there are left alone unless you ask, and nothing is done twice.
 - **Subtitles:** save any transcript or meeting as SRT or VTT subtitles from the note's menu or ⌘K. Transcribed on this computer, each caption is timed to the words; with cloud speech the times are estimated.
+
+<p align="center">
+  <img src="docs/assets/folder.svg" width="800" alt="Animation: standup.mp4 is copied into a folder Splashdown watches; once it's copied it becomes a transcript note, line by line, on this computer. Then standup.srt appears beside the video, and the video plays with those subtitles.">
+</p>
 
 ### Everything else
 
@@ -154,6 +173,7 @@
 ### For developers
 
 - **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice and, if you allow it, search, read and add to your notes, and go through your meetings by date ("recap my meetings this week") ([docs/AGENTS.md](docs/AGENTS.md)).
+- **Shortcuts (Mac):** Dictate Text, Add to Note, Record a Voice Note, Start or Stop Dictation, Start Meeting and Stop Meeting (which can wait for the finished note), Find Notes, Get Note Text (a section, or subtitles), Ask My Notes, Transcribe File and Open Note, as actions in your own shortcuts. Settings → Privacy → Shortcuts turns off reading notes.
 - **Scripting:** `splashdown://toggle` links for Raycast, Alfred or Shortcuts; `splashdown-cli toggle` and `splashdown-cli listen` from a terminal; mouse side buttons as the dictation key. `splashdown-cli` comes with the app: Settings → About shows where (on a Mac, `/Applications/Splashdown.app/Contents/MacOS/splashdown-cli`). To type just `splashdown-cli`, link it into a folder on your PATH, for example `ln -s /Applications/Splashdown.app/Contents/MacOS/splashdown-cli ~/.local/bin/`.
 
 <details>

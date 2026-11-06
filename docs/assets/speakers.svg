@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="480" viewBox="0 0 960 480" role="img" aria-labelledby="t d">
+<title id="t">Remembering people by voice</title>
+<desc id="d">Monday's meeting note shows Speaker 1, You and Speaker 2. Clicking Speaker 2 offers the people invited; choosing Priya Shah renames every turn, and her voice is kept on this computer. In Thursday's meeting, Priya Shah's turns are labelled with her name and "recognized by voice", while a new voice stays Speaker 2.</desc>
+<style>@keyframes menu{0%,15.40%{opacity:0} 16.00%,23.40%{opacity:1} 24.00%,100%{opacity:0}}
+.menu{animation:menu 18s linear infinite}
+@keyframes old{0.00%,24.40%{opacity:1} 25.00%,100%{opacity:0}}
+.old{animation:old 18s linear infinite}
+@keyframes new{0%,24.40%{opacity:0} 25.00%,99.40%{opacity:1}}
+.new{animation:new 18s linear infinite}
+@keyframes toast{0%,25.40%{opacity:0;transform:translateY(6px)} 26.00%,42.00%{opacity:1;transform:none} 42.60%,100%{opacity:0;transform:translateY(6px)}}
+.toast{animation:toast 18s linear infinite}
+@keyframes say-a{0%,0.40%{opacity:0} 1.00%,43.00%{opacity:1} 43.60%,100%{opacity:0}}
+.say-a{animation:say-a 18s linear infinite}
+@keyframes pointer{0%,8%{transform:translate(340px,340px);opacity:0}9%{opacity:1}14%,17%{transform:translate(140px,255px);opacity:1}21%,24%{transform:translate(160px,288px);opacity:1}27%,100%{transform:translate(160px,288px);opacity:0}}
+.pointer{animation:pointer 18s ease-in-out infinite}
+@keyframes click{0%,15.4%,17.4%,22.4%,24.4%,100%{transform:scale(1)}16%,23%{transform:scale(.85)}}
+.click{transform-box:fill-box;transform-origin:top left;animation:click 18s linear infinite}
+@keyframes thursday{0%,44.40%{opacity:0} 45.00%,99.40%{opacity:1}}
+.thursday{animation:thursday 18s linear infinite}
+@keyframes say-b{0%,45.40%{opacity:0} 46.00%,99.00%{opacity:1} 99.60%,100%{opacity:0}}
+.say-b{animation:say-b 18s linear infinite}
+@keyframes b0{0%,50.40%{opacity:0;transform:translateY(6px)} 51.00%,99.40%{opacity:1;transform:none}}
+.b0{animation:b0 18s linear infinite}
+@keyframes b1{0%,57.40%{opacity:0;transform:translateY(6px)} 58.00%,99.40%{opacity:1;transform:none}}
+.b1{animation:b1 18s linear infinite}
+@keyframes b2{0%,64.40%{opacity:0;transform:translateY(6px)} 65.00%,99.40%{opacity:1;transform:none}}
+.b2{animation:b2 18s linear infinite}
+@keyframes b3{0%,71.40%{opacity:0;transform:translateY(6px)} 72.00%,99.40%{opacity:1;transform:none}}
+.b3{animation:b3 18s linear infinite}
+
+@keyframes twinkle{0%,100%{opacity:.9}50%{opacity:.35}}
+.star{animation:twinkle 3s ease-in-out infinite}
+.star:nth-of-type(2n){animation-delay:-1.4s}.star:nth-of-type(3n){animation-delay:-2.1s}
+
+/* Without motion: Monday named, Thursday recognized. */
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important}
+  .old,.menu,.toast,.pointer,.say-a{opacity:0}
+  .new,.thursday,.b0,.b1,.b2,.b3,.say-b{opacity:1;transform:none}
+}
+</style>
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0A1440"/><stop offset=".65" stop-color="#16337A"/><stop offset="1" stop-color="#2F64B8"/>
+  </linearGradient>
+  <linearGradient id="sea" x1="0" y1="440" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0F6FA8"/><stop offset="1" stop-color="#06305C"/>
+  </linearGradient>
+  <filter id="shadow" x="-20%" y="-30%" width="140%" height="180%">
+    <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".35"/>
+  </filter>
+  <filter id="soft" x="-20%" y="-30%" width="140%" height="180%">
+    <feDropShadow dx="0" dy="4" stdDeviation="6" flood-color="#000" flood-opacity=".18"/>
+  </filter>
+  <clipPath id="card"><rect width="960" height="480" rx="28"/></clipPath>
+</defs>
+<g clip-path="url(#card)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="960" height="480" fill="url(#sky)"/>
+  <circle class="star" cx="480" cy="30" r="2" fill="#fff"/><circle class="star" cx="476" cy="210" r="1.8" fill="#fff"/><circle class="star" cx="930" cy="380" r="2.2" fill="#fff"/><circle class="star" cx="20" cy="400" r="1.8" fill="#fff"/><circle class="star" cx="470" cy="390" r="1.6" fill="#fff"/>
+  <path d="M0 458 C160 446 320 470 480 458 S800 446 960 458 V480 H0 Z" fill="url(#sea)"/>
+
+  <!-- Monday: naming Speaker 2. -->
+  <g><g filter="url(#shadow)"><rect x="40" y="40" width="420" height="320" rx="14" fill="#fff"/></g><rect x="40" y="40" width="420" height="36" rx="14" fill="#EEF1F6"/><rect x="40" y="62" width="420" height="14" fill="#EEF1F6"/><circle cx="60" cy="58" r="5.5" fill="#FF5F57"/><circle cx="78" cy="58" r="5.5" fill="#FEBC2E"/><circle cx="96" cy="58" r="5.5" fill="#28C840"/><text x="250.0" y="63" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text><text x="60" y="106" font-size="18" font-weight="700" fill="#111827">Design review</text><text x="60" y="126" font-size="12.5" fill="#6B7280">Monday · 32 min · With Priya Shah, Dana Ortiz</text><g class=""><text x="60" y="160" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:04</text><text class="" x="106" y="160" font-size="14" font-weight="700" fill="#B45309">Speaker 1</text><text x="106" y="180" font-size="14.5" fill="#111827">Morning! Can we look at onboarding?</text></g><g class=""><text x="60" y="210" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:12</text><text class="" x="106" y="210" font-size="14" font-weight="700" fill="#2563EB">You</text><text x="106" y="230" font-size="14.5" fill="#111827">Sure, I&#x27;ll share my screen.</text></g><g class=""><text x="60" y="260" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:31</text><text x="106" y="280" font-size="14.5" fill="#111827">The second step still feels long.</text></g><g class=""><text x="60" y="310" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:48</text><text x="106" y="330" font-size="14.5" fill="#111827">I&#x27;d cut the survey entirely.</text></g><text class="old" x="106" y="260" font-size="14" font-weight="700" fill="#B45309">Speaker 2</text><text class="new" x="106" y="260" font-size="14" font-weight="700" fill="#B45309">Priya Shah</text><text class="old" x="106" y="310" font-size="14" font-weight="700" fill="#B45309">Speaker 2</text><text class="new" x="106" y="310" font-size="14" font-weight="700" fill="#B45309">Priya Shah</text><g class="menu"><g filter="url(#soft)"><rect x="100" y="268" width="176" height="68" rx="10" fill="#fff" stroke="#E5E7EB"/></g><rect x="106" y="274" width="164" height="26" rx="6" fill="#DBEAFE"/><text x="116" y="292" font-size="13.5" fill="#111827">Priya Shah</text><text x="116" y="322" font-size="13.5" fill="#6B7280">Type a name…</text></g></g>
+  <g class="toast"><g filter="url(#shadow)"><rect x="80" y="372" width="340" height="38" rx="19" fill="#17171C" fill-opacity=".94"/></g><g transform="translate(98 381)" fill="none" stroke="#52CF66" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="8" width="14" height="11" rx="2"/><path d="M4 8V5a4 4 0 0 1 8 0v3"/></g><text x="122" y="396" font-size="14" font-weight="600" fill="#F4F4F5">Priya’s voice kept, on this computer</text></g>
+
+  <!-- Thursday: known by voice. -->
+  <g class="thursday"><g filter="url(#shadow)"><rect x="500" y="40" width="420" height="320" rx="14" fill="#fff"/></g><rect x="500" y="40" width="420" height="36" rx="14" fill="#EEF1F6"/><rect x="500" y="62" width="420" height="14" fill="#EEF1F6"/><circle cx="520" cy="58" r="5.5" fill="#FF5F57"/><circle cx="538" cy="58" r="5.5" fill="#FEBC2E"/><circle cx="556" cy="58" r="5.5" fill="#28C840"/><text x="710.0" y="63" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text><text x="520" y="106" font-size="18" font-weight="700" fill="#111827">Design review</text><text x="520" y="126" font-size="12.5" fill="#6B7280">Thursday · 18 min · With Priya Shah, Sam Lee</text><g class="b0"><g class=""><text x="520" y="160" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:03</text><text class="" x="566" y="160" font-size="14" font-weight="700" fill="#B45309">Priya Shah</text><text x="566" y="180" font-size="14.5" fill="#111827">I tried the shorter flow last night.</text></g><rect x="654" y="147" width="128" height="18" rx="9" fill="#DCFCE7"/><text x="718" y="160" text-anchor="middle" font-size="11.5" font-weight="600" fill="#166534">recognized by voice</text></g><g class="b1"><g class=""><text x="520" y="210" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:15</text><text class="" x="566" y="210" font-size="14" font-weight="700" fill="#2563EB">You</text><text x="566" y="230" font-size="14.5" fill="#111827">How did it feel?</text></g></g><g class="b2"><g class=""><text x="520" y="260" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:22</text><text class="" x="566" y="260" font-size="14" font-weight="700" fill="#B45309">Speaker 2</text><text x="566" y="280" font-size="14.5" fill="#111827">Much faster, honestly.</text></g></g><g class="b3"><g class=""><text x="520" y="310" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">0:40</text><text class="" x="566" y="310" font-size="14" font-weight="700" fill="#B45309">Priya Shah</text><text x="566" y="330" font-size="14.5" fill="#111827">Let&#x27;s ship it on Friday.</text></g><rect x="654" y="297" width="128" height="18" rx="9" fill="#DCFCE7"/><text x="718" y="310" text-anchor="middle" font-size="11.5" font-weight="600" fill="#166534">recognized by voice</text></g></g>
+
+  <g class="pointer"><path class="click" d="M0 0 L0 18 L5 13.5 L8.5 21 L11.5 19.6 L8 12.4 L14.5 12.4 Z" fill="#111827" stroke="#fff" stroke-width="1.5" stroke-linejoin="round"/></g>
+
+  <text class="say-a" x="480.0" y="440" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">Name a speaker once…</text>
+  <text class="say-b" x="480.0" y="440" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">…and they’re known by their voice in the next meeting</text>
+</g>
+</svg>

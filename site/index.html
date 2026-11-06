@@ -24,6 +24,7 @@
   <nav>
     <a href="#features">Features</a>
     <a href="#actions">Voice actions</a>
+    <a href="#translate">Translate</a>
     <a href="#read">Read aloud</a>
     <a href="#notes">Notes &amp; meetings</a>
     <a href="#privacy">Privacy</a>
@@ -135,6 +136,25 @@
     </div>
   </section>
 
+  <section class="features" id="translate">
+    <h2>Speak your language. Write in theirs.</h2>
+    <img class="demo" src="assets/translate.svg" width="960" height="480" loading="lazy" alt="Animation: in a new email, holding Option and tapping T shows '→ Spanish', and tapping T again '→ French'; saying 'see you Thursday at 3?' types 'On se voit jeudi à 15 h ?'. Then, in a work chat where Lukas writes in German, holding Option shows '→ German (their language)' with no key to press, and the reply is typed in German.">
+    <div class="grid">
+      <article>
+        <h3>Hold, tap T, speak</h3>
+        <p>Hold the dictation key, tap T and talk: it comes out in Spanish, French or any of five languages you pick. Tap T again for the next one. The first time, choose from a short list; nothing to set up first.</p>
+      </article>
+      <article>
+        <h3>Reply in their language</h3>
+        <p>Turn it on, and in an email or chat that's clearly in German, what you say is written in German, with no key to press. It reads only the messages, and does nothing when the conversation is mixed or too short to tell.</p>
+      </article>
+      <article>
+        <h3>Translate what you read</h3>
+        <p>Select text and tap T while holding the key. In your own text it's replaced; on a web page or a message you received, the translation opens beside it, and Read aloud says it in that language.</p>
+      </article>
+    </div>
+  </section>
+
   <section class="features" id="read">
     <h2>Hear it, too.</h2>
     <div class="grid">
@@ -171,7 +191,7 @@
       </article>
       <article>
         <h3>Meeting notes without a bot</h3>
-        <p>Record your microphone and what the call plays, turn by turn, with your own notes beside the live transcript. Each voice on the call gets its own name, and on a Mac the title comes from your calendar. A summary of decisions and action items follows, and Splashdown offers to record when a call starts.</p>
+        <p>Record your microphone and what the call plays, turn by turn, with your own notes beside the live transcript. Each voice on the call is told apart, and on a Mac the title comes from your calendar. A summary of decisions and action items follows, and Splashdown offers to record when a call starts.</p>
       </article>
       <article>
         <h3>Ask your notes</h3>
@@ -193,6 +213,44 @@
     </div>
   </section>
 
+  <section class="features" id="meetings">
+    <h2>Meetings that remember who's who.</h2>
+    <img class="demo" src="assets/speakers.svg" width="960" height="480" loading="lazy" alt="Animation: in Monday's meeting note, clicking Speaker 2 offers the people invited, and choosing Priya Shah renames every turn; her voice is kept on this computer. In Thursday's meeting, Priya Shah's turns carry her name and 'recognized by voice', while a new voice stays Speaker 2.">
+    <div class="grid">
+      <article>
+        <h3>Name someone once</h3>
+        <p>After a call, the other people are told apart as Speaker 1, 2 and so on. Pick a name from the invite, and every turn they said takes it.</p>
+      </article>
+      <article>
+        <h3>Known by voice next time</h3>
+        <p>In later meetings, people you've named are recognized by their voice, on a Mac, and only when it's a clear match. Anyone new stays Speaker 1, 2 until you name them.</p>
+      </article>
+      <article>
+        <h3>Voices stay on your computer</h3>
+        <p>It's off until you turn it on. A voiceprint is kept only for people you name, never in your notes and never sent anywhere, and Settings lists them, each with Forget.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="features" id="files">
+    <h2>Drop a file, or just a folder.</h2>
+    <img class="demo" src="assets/folder.svg" width="960" height="480" loading="lazy" alt="Animation: standup.mp4 is copied into a folder Splashdown watches; once it's copied it becomes a transcript note, line by line, on this computer. Then standup.srt appears beside the video, and the video plays with those subtitles.">
+    <div class="grid">
+      <article>
+        <h3>Watched folders</h3>
+        <p>Choose a folder, like where Zoom saves recordings or your recorder imports to, and every new audio or video file there becomes a transcript note by itself, once it's finished copying. Nothing is done twice.</p>
+      </article>
+      <article>
+        <h3>Subtitles in a click</h3>
+        <p>Save any transcript or meeting as SRT or VTT subtitles, or have them saved beside each watched video. Transcribed on your computer, every caption is timed to the words.</p>
+      </article>
+      <article>
+        <h3>Shortcuts on a Mac</h3>
+        <p>Dictate, add to a note, record a voice note or a meeting, transcribe a file, find and read notes, or ask them a question, as actions in your own shortcuts.</p>
+      </article>
+    </div>
+  </section>
+
   <section class="privacy" id="privacy">
     <h2>Private by default</h2>
     <p>Splashdown has no servers, no account and no analytics. Your voice and text go only to the provider you choose, straight from your computer, or nowhere at all with on-device models. API keys stay in your system keychain, history is off unless you turn it on, and the logs never contain what you said. Reading aloud happens on your computer.</p>
@@ -211,7 +269,7 @@
     </details>
     <details>
       <summary>Which languages does it understand?</summary>
-      <p>Dozens. It detects the language as you speak, handles switching languages mid-sentence, and can translate into another language per app. Commands and spoken formatting work in any language too.</p>
+      <p>Dozens. It detects the language as you speak, handles switching languages mid-sentence, and can write what you say in another language: tap T while holding the key, have a preset always translate, or let it reply in the language of the conversation on screen. Commands and spoken formatting work in any language too.</p>
     </details>
     <details>
       <summary>How is it different from built-in dictation?</summary>
@@ -244,6 +302,14 @@
     <details>
       <summary>Does it record meetings? Does a bot join the call?</summary>
       <p>No bot joins. Splashdown records your microphone and what your computer plays, on your computer, and writes the conversation into a note as it goes, each turn marked You or Them. Tell people they're being recorded. With speech-to-text on your computer, nothing leaves it; with a cloud AI, it asks before sending the transcript for a summary.</p>
+    </details>
+    <details>
+      <summary>Can it tell who said what, and remember them?</summary>
+      <p>Yes. At the end of a meeting the other people are told apart (Speaker 1, 2…), and you name them from the invite or by typing. Turn on Recognize people you've named (Mac) and they're named by voice in later meetings when it's a clear match. Their voiceprints stay on your computer, and some places regulate keeping them, so ask people first if you're unsure.</p>
+    </details>
+    <details>
+      <summary>Can it make subtitles?</summary>
+      <p>Yes. Any transcript or meeting can be saved as SRT or VTT subtitles from the note's menu, and a watched folder can save them beside each video it transcribes. With speech-to-text on your computer the captions are timed to each word; with cloud speech the times are estimated.</p>
     </details>
     <details>
       <summary>Where are my notes kept?</summary>
