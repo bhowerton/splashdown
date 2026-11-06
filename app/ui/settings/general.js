@@ -12,6 +12,17 @@ function askDefault(hotkeys) {
   return ["a", "k", "j", "q"].find((c) => c !== hands && c !== note) ?? "a";
 }
 
+/** The translate letter when none is chosen: T, or the next one free
+ *  (matches HotkeySettings::translate_key). */
+function translateDefault(hotkeys) {
+  const hands = (hotkeys.hands_free || "h").toLowerCase();
+  const note = (hotkeys.note || (hands === "n" ? "m" : "n")).toLowerCase();
+  const ask = (hotkeys.ask || askDefault(hotkeys)).toLowerCase();
+  const compose = (hotkeys.compose || "").toLowerCase();
+  const taken = [hands, note, ask, compose];
+  return ["t", "l", "y"].find((c) => !taken.includes(c)) ?? "t";
+}
+
 /** Fallback for a backend that doesn't send `defaults.sound_volume` yet.
  *  Matches splashdown_config's DEFAULT_SOUND_VOLUME. */
 const DEFAULT_SOUND_VOLUME = 0.12;
@@ -33,6 +44,7 @@ function renderGeneral() {
   setValue($("hk-note"), (s.hotkeys.note || noteDefault).toUpperCase());
   setValue($("hk-ask"), (s.hotkeys.ask || askDefault(s.hotkeys)).toUpperCase());
   setValue($("hk-compose"), (s.hotkeys.compose || "").toUpperCase());
+  setValue($("hk-translate"), (s.hotkeys.translate || translateDefault(s.hotkeys)).toUpperCase());
   $("gen-compose-panel").checked = s.general.compose_panel === true;
   $("gen-compose-style").checked = s.general.compose_style !== false;
   const notes = s.notes ?? {};

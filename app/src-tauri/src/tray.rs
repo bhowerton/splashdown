@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use splashdown_config::{GeneralSettings, Preset};
+use splashdown_config::{Preset, Settings};
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
@@ -110,7 +110,7 @@ pub struct TrayMenu {
     pub status: MenuItem<Wry>,
     presets: Submenu<Wry>,
     languages: Submenu<Wry>,
-    /// "Translate into": the languages ⌃⌥T translates into.
+    /// "Translate into": the languages the translate key and ⌃⌥T use.
     translate: Submenu<Wry>,
     menu: Menu<Wry>,
     /// "Update to vX.Y.Z…", in the menu (under the status) only while an
@@ -127,9 +127,9 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
     let presets = Submenu::with_id(app, "presets", "Preset", true)?;
     let languages = Submenu::with_id(app, "languages", "Language", true)?;
     let translate = Submenu::with_id(app, "translate", "Translate into", true)?;
-    let general = crate::engine::load_settings().general;
-    fill_translate(app, &translate, &general)?;
-    let current = general.language;
+    let settings = crate::engine::load_settings();
+    fill_translate(app, &translate, &settings)?;
+    let current = settings.general.language;
     for (code, name) in LANGUAGES {
         languages.append(&CheckMenuItem::with_id(
             app,
@@ -361,10 +361,10 @@ impl TrayMenu {
         }
     }
 
-    /// Lists the languages ⌃⌥T translates into, ticking the one in use.
-    pub fn show_translate(&self, app: &AppHandle, general: &GeneralSettings) {
+    /// Lists the languages to translate into, ticking the one in use.
+    pub fn show_translate(&self, app: &AppHandle, settings: &Settings) {
         let result =
-            clear(&self.translate).and_then(|()| fill_translate(app, &self.translate, general));
+            clear(&self.translate).and_then(|()| fill_translate(app, &self.translate, settings));
         if let Err(e) = result {
             tracing::warn!("couldn't update the Translate into menu: {e}");
         }
@@ -411,11 +411,8 @@ fn set_language(app: &AppHandle, code: &str) {
 
 /// The Translate into menu's items: each language, the one in use ticked,
 /// then where to choose them.
-fn fill_translate(
-    app: &AppHandle,
-    menu: &Submenu<Wry>,
-    general: &GeneralSettings,
-) -> tauri::Result<()> {
+fn fill_translate(app: &AppHandle, menu: &Submenu<Wry>, settings: &Settings) -> tauri::Result<()> {
+    let general = &settings.general;
     let current = general.translate_target();
     let targets: Vec<&str> = general
         .translate_targets
@@ -448,20 +445,24 @@ fn fill_translate(
         None::<&str>,
     )?)?;
     // How to use it, where it's chosen.
+    let letter = match settings.hotkeys.translate_key() {
+        splashdown_core::gesture::PhysicalKey::Letter(c) => c.to_ascii_uppercase(),
+        _ => 'T',
+    };
+    let hint = format!(
+        "Hold {}, press {letter}",
+        settings.hotkeys.dictation_key().label()
+    );
     menu.append(&MenuItem::with_id(
         app,
         "translate-hint",
-        if cfg!(target_os = "macos") {
-            "Select text, then press ⌃⌥T"
-        } else {
-            "Select text, then press Ctrl+Alt+T"
-        },
+        hint,
         false,
         None::<&str>,
     )?)
 }
 
-/// Saves the language ⌃⌥T translates into, picked in the menu bar.
+/// Saves the language to translate into, picked in the menu bar.
 fn set_translate_to(app: &AppHandle, language: &str) {
     let Some(state) = app.try_state::<crate::state::AppState>() else {
         return;

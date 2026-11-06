@@ -191,7 +191,7 @@ impl Controller {
 
     /// Starts a hands-free recording into the focused field, as if the
     /// dictation key had been double-tapped.
-    fn start_external(&mut self) -> Result<(), String> {
+    pub(super) fn start_external(&mut self) -> Result<(), String> {
         let started = self.lock().start_hands_free(Instant::now());
         let Some(start) = started else {
             return Err("Already recording".into());

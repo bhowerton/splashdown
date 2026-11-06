@@ -25,6 +25,10 @@ pub struct HotkeySettings {
     /// dictation a request for a draft. Unset means none: the instruction
     /// key asks for drafts too ("reply saying I'm in").
     pub compose: Option<char>,
+    /// The letter that, pressed while holding the dictation key, translates
+    /// the dictation (or the selected text) into the language picked under
+    /// Translate into. Unset means T (L if another letter is T).
+    pub translate: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
     /// other apps may use a double-tap of Option for their own shortcuts.
     pub double_tap: Option<bool>,
@@ -76,6 +80,25 @@ impl HotkeySettings {
             .unwrap_or('a');
         let letter = self
             .ask
+            .map(|c| c.to_ascii_lowercase())
+            .filter(char::is_ascii_lowercase)
+            .unwrap_or(fallback);
+        PhysicalKey::Letter(letter)
+    }
+
+    pub fn translate_key(&self) -> PhysicalKey {
+        let taken = [
+            Some(self.hands_free_key()),
+            Some(self.note_key()),
+            Some(self.ask_key()),
+            self.compose_key(),
+        ];
+        let fallback = ['t', 'l', 'y']
+            .into_iter()
+            .find(|&c| !taken.contains(&Some(PhysicalKey::Letter(c))))
+            .unwrap_or('t');
+        let letter = self
+            .translate
             .map(|c| c.to_ascii_lowercase())
             .filter(char::is_ascii_lowercase)
             .unwrap_or(fallback);

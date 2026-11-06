@@ -138,6 +138,15 @@ function collect() {
   // The compose letter is off when empty.
   const compose = $("hk-compose").value.trim().toLowerCase();
   s.hotkeys.compose = /^[a-z]$/.test(compose) ? compose : null;
+  // A letter; the default (T, or the next free one) is saved as unset, and
+  // moves like Ask's when another letter takes its place.
+  const translate = $("hk-translate").value.trim().toLowerCase();
+  const translateShown =
+    !state.settings.hotkeys.translate && translate === translateDefault(state.settings.hotkeys);
+  s.hotkeys.translate =
+    /^[a-z]$/.test(translate) && translate !== translateDefault(s.hotkeys) && !translateShown
+      ? translate
+      : null;
   s.notes = { ...(s.notes ?? {}) };
   s.notes.capture_to = $("nt-capture-to").value;
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;

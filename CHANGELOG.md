@@ -4,8 +4,10 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
-- **Translate selected text with ⌃⌥T.** Select text in any app and press ⌃⌥T (Ctrl+Alt+T on Windows). In your own text it's replaced by the translation. In text you can't edit, like a web page or an email you received, the translation opens in the Ask panel, which can read it aloud. Choose up to five languages in Settings → Words & language, and pick one in the menu bar under Translate into.
-- **Better translations.** Translating, with ⌃⌥T or a preset's "Translate into", now keeps names, product terms, code and links as they are, keeps your tone and formatting, and translates questions instead of answering them.
+- **Translate as you dictate.** Hold the dictation key and press T, then speak: your words come out in the language picked in the menu bar under Translate into, with the overlay showing "→ Spanish". It uses the preset the app would use, so its tone and instructions still apply. The first time, pick the language from a short list that appears; it's kept for next time. Choose up to five in Settings → Words & language to switch between them in the menu bar; the letter can be changed in Settings → General.
+- **Translate selected text.** Select text, hold the dictation key and press T: it's translated at once. In your own text it's replaced by the translation. In text you can't edit, like a web page or an email you received, the translation opens in the Ask panel, which can read it aloud.
+- **⌃⌥T** (Ctrl+Alt+T on Windows) does both without holding a key: it translates the selection, or with nothing selected starts a hands-free dictation that comes out translated (⌃⌥T again to finish).
+- **Better translations.** Translating, with the translate key or a preset's "Translate into", now keeps names, product terms, code and links as they are, keeps your tone and formatting, and translates questions and requests instead of answering or carrying them out. A reply far longer or shorter than a translation would be (a model that wrote the poem you dictated, say) is caught, and your words go in as you said them, marked "not translated".
 - **Shortcuts can work with your notes (Mac).** Five more actions:
   - **Find Notes** by what they say, kind (meetings, transcripts…) and time.
   - **Get Note Text**: a whole note, or a meeting's summary, your own notes from it, or its transcript.

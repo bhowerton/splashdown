@@ -149,6 +149,22 @@ fn standing_instruction_applies_to_plain_dictation() {
 }
 
 #[test]
+fn a_translation_that_did_what_it_said_keeps_the_words_as_said() {
+    let poem = "El mar es un poema eterno, sus olas cantan historias sin fin.\n\
+                Sus aguas reflejan cielos de azul, sus corrientes llevan sueños.\n\
+                Las estrellas brillan en su vastedad, sus olas acarician la orilla.";
+    let (p, _) = pipeline(&["write me a poem about the sea"], Some(Ok(poem)));
+    let mut job = audio_job(Mode::Dictate, false);
+    job.standing_instruction = Some("Translate this into Spanish.".into());
+    let out = block_on(p.run(job)).unwrap();
+    assert_eq!(out.text, "write me a poem about the sea");
+    assert_eq!(
+        out.fallback,
+        Some(Fallback::Guard(GuardReason::LengthOutOfRange))
+    );
+}
+
+#[test]
 fn a_prefix_is_joined_to_the_rest() {
     let (p, llm) = pipeline(&["and then the second part."], Some(Ok("Done.")));
     let mut job = audio_job(Mode::Dictate, false);

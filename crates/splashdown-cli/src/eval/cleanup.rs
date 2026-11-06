@@ -31,6 +31,10 @@ pub(super) struct CleanupCase {
     pub(super) misheard: Vec<[String; 2]>,
     /// A built-in transform's id: its instruction is used on `selection`.
     pub(super) transform: Option<String>,
+    /// A language to translate into, with the app's translate instruction
+    /// (⌃⌥T, a preset's "Translate into"): on `selection` if there is one,
+    /// otherwise on the dictation.
+    pub(super) translate: Option<String>,
     /// Case-insensitive substrings the output must contain.
     #[serde(default)]
     pub(super) expect: Vec<String>,
@@ -54,7 +58,11 @@ impl CleanupCase {
                 .unwrap_or_else(|| panic!("no built-in transform {id:?}"))
                 .instruction
         });
-        let instruction = builtin.or_else(|| self.instruction.clone());
+        let translate = self
+            .translate
+            .as_deref()
+            .map(splashdown_config::translate_instruction);
+        let instruction = builtin.or(translate).or_else(|| self.instruction.clone());
         let mode = match (&self.selection, &instruction) {
             (Some(_), _) => Mode::Transform,
             (None, Some(_)) => Mode::DictateInstruct,

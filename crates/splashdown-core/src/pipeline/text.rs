@@ -79,6 +79,14 @@ impl Pipeline {
             json_schema: None,
         };
         let source = [job.content.as_str(), instruction, selection].join("\n");
+        // A translation is judged by its length against what it translates.
+        let translated = match job.mode {
+            Mode::Transform if guard::is_translation(instruction) => Some(selection),
+            Mode::DictateInstruct if guard::is_translation(instruction) => {
+                Some(job.content.as_str())
+            }
+            _ => None,
+        };
 
         // An instruction for selected text may ask to hear it read aloud,
         // or (with voice actions on) to do something with it ("email this
@@ -123,6 +131,7 @@ impl Pipeline {
                 task.mode(),
                 &source,
                 &job.context.earlier,
+                translated,
             )
             .await
         };
@@ -155,7 +164,11 @@ impl Pipeline {
             }
             _ => output,
         };
-        match guard::check(task.mode(), &source, &output) {
+        let verdict = match translated.and_then(|m| guard::check_translation(m, &output)) {
+            Some(reason) => Verdict::UseRaw(reason),
+            None => guard::check(task.mode(), &source, &output),
+        };
+        match verdict {
             Verdict::Accept(text) => match snippets.fill(&text) {
                 Some(filled) => outcome.text = filled,
                 None => outcome.fallback = Some(Fallback::Guard(GuardReason::LostSnippet)),
@@ -193,6 +206,7 @@ async fn complete(
     mode: Mode,
     source: &str,
     earlier: &[String],
+    translated: Option<&str>,
 ) -> ProviderResult<Completion> {
     let Some(on_text) = on_text else {
         return llm.complete(request).await;
@@ -200,6 +214,12 @@ async fn complete(
     let mut passing = true;
     let mut forward = |so_far: &str| {
         if !passing {
+            return;
+        }
+        // Already far longer than a translation would be.
+        if translated.is_some_and(|m| so_far.chars().count() as f32 > guard::longest_translation(m))
+        {
+            passing = false;
             return;
         }
         match guard::partial(mode, source, earlier, so_far) {

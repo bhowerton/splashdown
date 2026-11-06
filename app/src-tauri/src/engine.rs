@@ -158,6 +158,7 @@ pub fn keys(settings: &Settings) -> Keys {
             .hotkeys
             .compose_key()
             .unwrap_or(splashdown_core::gesture::PhysicalKey::Other),
+        translate: settings.hotkeys.translate_key(),
     }
 }
 

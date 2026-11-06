@@ -111,6 +111,15 @@ impl Settings {
             .is_some_and(|c| [h.hands_free_key(), h.note_key(), h.ask_key()].contains(&c))
         {
             Some("The compose letter must differ from the other letters.")
+        } else if [
+            Some(h.hands_free_key()),
+            Some(h.note_key()),
+            Some(h.ask_key()),
+            h.compose_key(),
+        ]
+        .contains(&Some(h.translate_key()))
+        {
+            Some("The translate letter must differ from the other letters.")
         } else {
             None
         }

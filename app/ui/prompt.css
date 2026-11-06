@@ -1,5 +1,6 @@
 /* A question the app asks on its own (380 × 150, no title bar): a title,
-   a line or two, and its answers, the usual one on the right. Colors and
+   a line or two, and its answers, the usual one on the right. With
+   choices (380 × 210), a grid of them to pick from. Colors and
    buttons come from base.css. */
 .pr-body { overflow: hidden; background: var(--surface); }
 .pr { height: 100vh; box-sizing: border-box; padding: 12px 14px 10px; display: flex; flex-direction: column; border: 1px solid var(--border); -webkit-user-select: none; user-select: none; }
@@ -7,3 +8,6 @@
 .pr-text { margin: 4px 0 0; font-size: 12px; color: var(--muted); flex: 1; overflow-y: auto; }
 .pr-acts { display: flex; justify-content: flex-end; gap: 8px; }
 .pr-acts .btn { padding: 4px 11px; font-size: 12px; }
+.pr-choices { flex: 1; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin: 10px 0 8px; align-content: start; }
+.pr-choices[hidden] { display: none; }
+.pr-choices .btn { padding: 5px 6px; font-size: 12px; }

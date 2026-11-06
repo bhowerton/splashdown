@@ -147,7 +147,7 @@ pub fn reflect_settings(app: &AppHandle, state: &AppState, settings: &Settings) 
     state
         .tray
         .show_language(settings.general.language.as_deref());
-    state.tray.show_translate(app, &settings.general);
+    state.tray.show_translate(app, settings);
     crate::minibar::set_visible(settings.general.mini_bar());
     crate::shortcuts::sync(app, &settings.presets(), &settings.transforms());
 }

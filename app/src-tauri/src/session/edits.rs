@@ -197,26 +197,27 @@ impl Controller {
     /// ⌃⌥T: the selection, translated into the language picked in the menu
     /// bar. Where it can be changed, the translation replaces it; where it
     /// can't (a web page, a message received, a PDF), the translation
-    /// opens in the Ask panel, which can read it aloud.
+    /// opens in the Ask panel, which can read it aloud. With nothing
+    /// selected, a hands-free dictation that comes out in that language;
+    /// pressed again, it finishes the recording, like a preset's shortcut.
     pub(super) fn translate_shortcut(&mut self) {
+        if self.lock().is_recording() {
+            let finished = self.lock().finish();
+            if let Some(a) = finished {
+                self.handle(a);
+            }
+            return;
+        }
         if self.active.is_some() {
             return;
         }
-        let language = self
-            .ui
-            .settings()
-            .and_then(|s| s.general.translate_target().map(str::to_string));
-        let Some(language) = language else {
-            crate::tray::open_settings(self.ui.app());
-            return self.notice(
-                Tone::Info,
-                "Choose languages to translate into: Settings → Words & language",
-            );
+        let Some(language) = self.translate_language() else {
+            return;
         };
         // ⌃⌥Z is about this now, not an earlier capture.
         self.last_capture = None;
         let Some(focus) = Focus::capture() else {
-            return self.notice(Tone::Info, "Select the text to translate");
+            return self.dictate_translated(&language);
         };
         if focus.is_secure_field() {
             return self.notice(Tone::Warning, "Can't translate in password fields");
@@ -228,18 +229,136 @@ impl Controller {
         }
         .filter(|s| !s.trim().is_empty());
         let Some(text) = selected else {
-            return self.notice(Tone::Info, "Select the text to translate");
+            return self.dictate_translated(&language);
         };
+        self.translate_selection(&focus, &language, text);
+    }
+
+    /// The language picked under Translate into. With none chosen yet,
+    /// one is asked for there and then, and kept; `None` if it wasn't.
+    fn translate_language(&mut self) -> Option<String> {
+        let settings = self.ui.settings()?;
+        if let Some(language) = settings.general.translate_target() {
+            return Some(language.to_string());
+        }
+        // Not English for someone who speaks it: they'd translate out of it.
+        let speaks_english = settings
+            .general
+            .language
+            .as_deref()
+            .is_some_and(|l| l.starts_with("en"));
+        let choices: Vec<&str> = PICK_LANGUAGES
+            .iter()
+            .copied()
+            .filter(|&l| !(speaks_english && l == "English"))
+            .collect();
+        const OTHER: &str = "Other…";
+        let app = self.ui.app().clone();
+        let picked = crate::prompt::choose(
+            &app,
+            "Translate into…",
+            &choices,
+            &["Cancel", OTHER],
+            PICK_TIMEOUT,
+        );
+        let other = || {
+            crate::tray::open_settings(&app);
+        };
+        match picked {
+            Ok(Some(i)) if i < choices.len() => {
+                let language = choices[i].to_string();
+                keep_translate_language(&app, &language);
+                Some(language)
+            }
+            // Other…, or another question is on screen: Settings has them all.
+            Ok(Some(i)) if i == choices.len() + 1 => {
+                other();
+                self.notice(
+                    Tone::Info,
+                    "Choose a language in Settings → Words & language",
+                );
+                None
+            }
+            Err(()) => {
+                other();
+                self.notice(
+                    Tone::Info,
+                    "Choose languages to translate into: Settings → Words & language",
+                );
+                None
+            }
+            // Cancel, or it was left.
+            _ => None,
+        }
+    }
+
+    /// The translate key while holding the dictation key. With text
+    /// selected, it's translated at once (nothing needs saying), as with
+    /// ⌃⌥T. Otherwise this dictation comes out in the picked language.
+    pub(super) fn translate_key(&mut self) {
+        let Some(active) = &self.active else {
+            return;
+        };
+        let selected = matches!(&active.selection, Selection::Text(t) if !t.trim().is_empty());
+        let Some(language) = self.translate_language() else {
+            // No language picked: a dictation carries on as it was; with a
+            // selection there's nothing else to do.
+            if selected {
+                self.drop_recording();
+                self.ui.hide();
+            }
+            return;
+        };
+        if selected {
+            let Some(active) = self.drop_recording() else {
+                return;
+            };
+            self.last_capture = None;
+            match (active.focus, active.selection) {
+                (Some(focus), Selection::Text(text)) => {
+                    self.translate_selection(&focus, &language, text)
+                }
+                _ => self.notice(Tone::Info, "Select the text to translate"),
+            }
+            return;
+        }
+        let Some(active) = &mut self.active else {
+            return;
+        };
+        active.capture = false;
+        active.ask = false;
+        active.compose = false;
+        let preset = translating(active.preset.clone(), &language);
+        tracing::info!("dictating into {language}");
+        self.use_preset(preset);
+    }
+
+    /// Stops the recording in progress without processing it or saying
+    /// so, and hands it back.
+    fn drop_recording(&mut self) -> Option<Active> {
+        let _ = self.lock().cancel();
+        let active = self.active.take();
+        self.audio.stop();
+        self.refresh_tray();
+        active
+    }
+
+    /// `text`, selected in `focus`, translated: replaced where it can be
+    /// changed, otherwise shown in the Ask panel.
+    fn translate_selection(&mut self, focus: &Focus, language: &str, text: String) {
+        if focus.is_secure_field() {
+            return self.notice(Tone::Warning, "Can't translate in password fields");
+        }
         // Only replaced where it's known to be editable: elsewhere a paste
         // would vanish.
         if focus.takes_text() != Some(true) {
-            return self.show_translation(&focus, &language, text);
+            return self.show_translation(focus, language, text);
         }
         let name = format!("Translated into {language}");
         self.ui.show(OverlayState::Working {
             label: format!("Translating into {language}…"),
         });
-        let instruction = splashdown_config::translate_instruction(&language);
+        let instruction = splashdown_config::translate_instruction(language);
         let out = match self.run_transform("", &text, Some(&instruction)) {
             Ok((_, out)) => out,
             Err(e) => return self.notice(Tone::Warning, &short(&e)),
@@ -247,7 +366,34 @@ impl Controller {
         if let Some(why) = out.unchanged {
             return self.notice(Tone::Info, &format!("Translate: {why}"));
         }
-        self.replace_selection(&focus, out.text, &name);
+        self.replace_selection(focus, out.text, &name);
+    }
+
+    /// ⌃⌥T with nothing selected: a hands-free dictation with the preset
+    /// the app would use, but written in `language`. The dictation key or
+    /// ⌃⌥T finishes it; Esc cancels.
+    fn dictate_translated(&mut self, language: &str) {
+        let has_model = self.engine.as_ref().is_ok_and(|e| {
+            e.pipeline_for(&self.match_preset(None))
+                .llm_name()
+                .is_some()
+        });
+        if !has_model {
+            return self.notice(
+                Tone::Warning,
+                "Translating needs an AI model: choose one in Settings → AI Models",
+            );
+        }
+        if let Err(e) = self.start_external() {
+            tracing::info!("translated dictation: {e}");
+            return;
+        }
+        let Some(active) = &self.active else {
+            return;
+        };
+        let preset = translating(active.preset.clone(), language);
+        tracing::info!("dictating into {language}");
+        self.use_preset(preset);
     }
 
     /// A translation of text that can't be replaced, in the Ask panel.
@@ -410,5 +556,89 @@ impl Controller {
             }
             Err(e) => self.notice(Tone::Warning, &short(&e.to_string())),
         }
+    }
+}
+
+/// Offered when translating with no language chosen yet. The rest are in
+/// Settings ("Other…"); names as Settings lists them.
+const PICK_LANGUAGES: [&str; 9] = [
+    "English",
+    "Spanish",
+    "French",
+    "German",
+    "Italian",
+    "Portuguese",
+    "Chinese (Simplified)",
+    "Japanese",
+    "Korean",
+];
+
+/// How long the language picker waits before it's taken as a no.
+const PICK_TIMEOUT: Duration = Duration::from_secs(30);
+
+/// Makes `language` the one to translate into, adding it to the menu bar's
+/// list (Settings keeps at most five).
+fn keep_translate_language(app: &tauri::AppHandle, language: &str) {
+    use tauri::Manager;
+    let Some(state) = app.try_state::<crate::state::AppState>() else {
+        return;
+    };
+    let result = state.update(app, |s| {
+        let targets = &mut s.general.translate_targets;
+        if !targets.iter().any(|t| t == language) && targets.len() < MOST_TRANSLATE_TARGETS {
+            targets.push(language.to_string());
+        }
+        s.general.translate_to = Some(language.to_string());
+    });
+    if let Err(e) = result {
+        tracing::warn!("couldn't keep the translation language: {e}");
+    }
+}
+
+/// As many languages as Settings lets you choose.
+const MOST_TRANSLATE_TARGETS: usize = 5;
+
+/// `preset` writing in `language`: its AI pass on (translating needs it),
+/// and named for the overlay "→ Spanish", or "Email → Spanish" for a
+/// preset of the user's own.
+fn translating(mut preset: Preset, language: &str) -> Preset {
+    preset.name = match preset_label(&preset) {
+        Some(name) => format!("{name} → {language}"),
+        None => format!("→ {language}"),
+    };
+    preset.translate_to = Some(language.to_string());
+    preset.ai = true;
+    preset
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_translated_dictation_keeps_the_preset_and_names_the_language() {
+        let default = Preset {
+            id: DEFAULT_PRESET_ID.into(),
+            name: "Default".into(),
+            ai: false,
+            ..Preset::default()
+        };
+        let p = translating(default, "Spanish");
+        assert_eq!(p.name, "→ Spanish");
+        assert!(p.ai);
+        assert_eq!(p.translate_to.as_deref(), Some("Spanish"));
+        assert!(p.standing_instruction().unwrap().contains("Spanish"));
+
+        let email = Preset {
+            id: "email".into(),
+            name: "Email".into(),
+            instructions: "Sign off with Ben.".into(),
+            translate_to: Some("French".into()),
+            ..Preset::default()
+        };
+        let p = translating(email, "German");
+        assert_eq!(p.name, "Email → German");
+        assert_eq!(p.translate_to.as_deref(), Some("German"));
+        assert_eq!(p.instructions, "Sign off with Ben.");
     }
 }

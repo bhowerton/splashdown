@@ -128,6 +128,9 @@ pub enum Action {
     /// The compose key while holding the dictation key: this recording
     /// says what to write, and a draft is written.
     Compose,
+    /// The translate key while holding the dictation key: this recording,
+    /// or the selected text, comes out in another language.
+    Translate,
     /// Stop recording and process it.
     Finish,
     /// Stop recording and throw it away. `silent` cancels (accidental tap,
@@ -220,6 +223,10 @@ pub struct Recognizer {
     compose: PhysicalKey,
     /// We swallowed the compose key's key-down: its repeats and key-up too.
     swallow_compose: bool,
+    /// Pressed while holding the dictation key: translate.
+    translate: PhysicalKey,
+    /// We swallowed the translate key's key-down: its repeats and key-up too.
+    swallow_translate: bool,
     timing: Timing,
     state: State,
     /// We swallowed an Esc key-down, so swallow its key-up too.
@@ -252,6 +259,8 @@ impl Recognizer {
             swallow_ask: false,
             compose: PhysicalKey::Other,
             swallow_compose: false,
+            translate: PhysicalKey::Other,
+            swallow_translate: false,
             timing,
             state: State::Idle,
             swallow_escape_up: false,
@@ -290,6 +299,13 @@ impl Recognizer {
     /// the recording a request for a draft.
     pub fn with_compose(mut self, key: PhysicalKey) -> Self {
         self.compose = key;
+        self
+    }
+
+    /// Sets the key that, pressed while holding the dictation key,
+    /// translates the recording or the selection.
+    pub fn with_translate(mut self, key: PhysicalKey) -> Self {
+        self.translate = key;
         self
     }
 
@@ -498,6 +514,28 @@ impl Recognizer {
             {
                 self.swallow_compose = true;
                 return (true, Some(Action::Compose));
+            }
+        }
+
+        // The translate key while holding the dictation key. Swallowed like
+        // the others, and a quick chord (Right Ctrl+T, a new tab) passes
+        // through.
+        if ev.key == self.translate
+            && ev.key != self.hands_free
+            && ev.key != self.capture
+            && ev.key != self.ask
+            && ev.key != self.compose
+            && ev.key != PhysicalKey::Other
+        {
+            if self.swallow_translate {
+                self.swallow_translate = ev.down;
+                return (true, None);
+            }
+            if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
+                && now.duration_since(since) >= self.timing.hold
+            {
+                self.swallow_translate = true;
+                return (true, Some(Action::Translate));
             }
         }
 
@@ -845,6 +883,33 @@ mod tests {
         assert_eq!(c.r.on_event(KeyEvent::up(Letter('c')), c.now), (true, None));
         assert!(c.r.is_recording());
         assert_eq!(c.at(2000).up(DICT), Some(Action::Finish));
+    }
+
+    #[test]
+    fn translate_key_while_holding_translates_and_is_swallowed() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default()).with_translate(Letter('t'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.at(400);
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('t')), c.now),
+            (true, Some(Action::Translate))
+        );
+        assert_eq!(c.r.on_event(KeyEvent::up(Letter('t')), c.now), (true, None));
+        assert!(c.r.is_recording());
+        assert_eq!(c.at(2000).up(DICT), Some(Action::Finish));
+    }
+
+    #[test]
+    fn a_quick_chord_is_a_shortcut_not_translate() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default()).with_translate(Letter('t'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        // Right Ctrl+T, a new tab: reaches the app.
+        c.at(60);
+        let (swallowed, action) = c.r.on_event(KeyEvent::down(Letter('t')), c.now);
+        assert!(!swallowed);
+        assert_ne!(action, Some(Action::Translate));
     }
 
     #[test]

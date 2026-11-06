@@ -472,6 +472,7 @@ impl Controller {
             sent,
             outcome.fallback.as_ref(),
             outcome.llm_name.as_deref(),
+            active.preset.translate_to.is_some(),
         );
         if outcome.usage.on_device_fallback {
             tracing::warn!("a cloud provider failed; a model on this computer stood in");
@@ -623,22 +624,29 @@ pub(super) fn field_changed(focus: &Focus, before: &str) -> bool {
     }
 }
 
-/// The overlay message after a successful insertion.
+/// The overlay message after a successful insertion. When the words were
+/// to be `translated` but went in as said, it says so.
 pub(super) fn inserted_status(
     took: Duration,
     sent: bool,
     fallback: Option<&Fallback>,
     llm_name: Option<&str>,
+    translated: bool,
 ) -> String {
     let mut text = format!("Inserted · {:.1} s", took.as_secs_f32());
     if sent {
         text.push_str(" · sent");
     }
+    let kept = if translated {
+        "not translated"
+    } else {
+        "raw text"
+    };
     match fallback {
-        Some(Fallback::Guard(_)) => text.push_str(" · raw text (AI output looked wrong)"),
+        Some(Fallback::Guard(_)) => text.push_str(&format!(" · {kept} (AI output looked wrong)")),
         Some(Fallback::ModelError(e)) => {
             let reason = errors::fallback_reason(e, llm_name);
-            text.push_str(&format!(" · raw text ({reason})"));
+            text.push_str(&format!(" · {kept} ({reason})"));
         }
         None => {}
     }
@@ -660,9 +668,12 @@ mod tests {
     #[test]
     fn inserted_status_mentions_send_and_fallbacks() {
         let took = Duration::from_millis(1240);
-        assert_eq!(inserted_status(took, false, None, None), "Inserted · 1.2 s");
         assert_eq!(
-            inserted_status(took, true, None, None),
+            inserted_status(took, false, None, None, false),
+            "Inserted · 1.2 s"
+        );
+        assert_eq!(
+            inserted_status(took, true, None, None, false),
             "Inserted · 1.2 s · sent"
         );
         assert_eq!(
@@ -670,7 +681,8 @@ mod tests {
                 took,
                 false,
                 Some(&Fallback::Guard(GuardReason::AnsweredQuestion)),
-                None
+                None,
+                false
             ),
             "Inserted · 1.2 s · raw text (AI output looked wrong)"
         );
@@ -679,9 +691,20 @@ mod tests {
                 took,
                 false,
                 Some(&Fallback::ModelError("network error".into())),
-                Some("openrouter/x")
+                Some("openrouter/x"),
+                false
             ),
             "Inserted · 1.2 s · raw text (offline?)"
+        );
+        assert_eq!(
+            inserted_status(
+                took,
+                false,
+                Some(&Fallback::ModelError("network error".into())),
+                Some("openrouter/x"),
+                true
+            ),
+            "Inserted · 1.2 s · not translated (offline?)"
         );
     }
 }

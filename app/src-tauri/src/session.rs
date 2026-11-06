@@ -127,6 +127,9 @@ pub struct Keys {
     /// write, and Compose writes it. `Other` when there's no compose letter
     /// (the default: the instruction key asks for drafts too).
     pub compose: PhysicalKey,
+    /// Pressed while holding the dictation key: the dictation, or the
+    /// selection, is translated.
+    pub translate: PhysicalKey,
 }
 
 enum Msg {
@@ -509,7 +512,8 @@ impl Controller {
                     .with_hands_free(keys.hands_free, keys.double_tap)
                     .with_capture(keys.note)
                     .with_ask(keys.ask)
-                    .with_compose(keys.compose),
+                    .with_compose(keys.compose)
+                    .with_translate(keys.translate),
             )),
             ui,
             engine,
@@ -722,7 +726,8 @@ impl Controller {
             .with_hands_free(keys.hands_free, keys.double_tap)
             .with_capture(keys.note)
             .with_ask(keys.ask)
-            .with_compose(keys.compose);
+            .with_compose(keys.compose)
+            .with_translate(keys.translate);
         self.preview = preview_worker(&engine, &self.tx);
         self.engine = engine;
         self.keys = keys;
@@ -771,6 +776,7 @@ impl Controller {
             Action::Capture => self.start_capture(),
             Action::Ask => self.start_ask(),
             Action::Compose => self.start_compose(),
+            Action::Translate => self.translate_key(),
             Action::HandsFree => {
                 if let Some(active) = &mut self.active {
                     active.hands_free = true;

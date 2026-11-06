@@ -100,6 +100,7 @@ pub(super) fn ask_to_summarize(app: &AppHandle, ai: &str, one_sided: bool) -> bo
             title: title.clone(),
             text: text.clone(),
             buttons: buttons.map(String::from).to_vec(),
+            choices: Vec::new(),
         }),
     );
     let answer = crate::prompt::ask(app, &title, &text, &buttons);

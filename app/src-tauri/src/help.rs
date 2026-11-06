@@ -186,7 +186,7 @@ pub fn sheet(settings: &Settings) -> Sheet {
                 ),
                 press(
                     "Translate selected text (languages: menu bar → Translate into)",
-                    shortcut('T'),
+                    format!("{dictation} + {}", key(h.translate_key())),
                 ),
                 press("Stop reading", "Esc"),
             ],
@@ -312,6 +312,10 @@ pub fn sheet(settings: &Settings) -> Sheet {
         keys.push(press("Use another preset", "1–9"));
     }
     keys.push(press(
+        "Translate it, or the selected text, into the language in the menu bar",
+        key(h.translate_key()),
+    ));
+    keys.push(press(
         "Press Return once it's typed",
         key(PhysicalKey::Return),
     ));
@@ -333,6 +337,10 @@ pub fn sheet(settings: &Settings) -> Sheet {
             press("Paste exactly what you said last", shortcut('V')),
             press("Open Notes", shortcut('N')),
             press("Record a meeting (again to stop)", shortcut('M')),
+            press(
+                "Translate without holding a key: the selection, or a dictation (again to finish)",
+                shortcut('T'),
+            ),
         ],
         actions: false,
     });

@@ -324,6 +324,7 @@ mod tests {
             screen: None,
             misheard: Vec::new(),
             transform: None,
+            translate: None,
             expect: vec!["friday".into()],
             reject: vec!["um".into(), "you know".into()],
             reject_text: Vec::new(),
