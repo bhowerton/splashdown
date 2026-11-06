@@ -115,6 +115,8 @@ enum NoteSection: String, AppEnum {
     case summary
     case myNotes = "my_notes"
     case transcript
+    case subtitlesSrt = "subtitles_srt"
+    case subtitlesVtt = "subtitles_vtt"
 
     static var typeDisplayRepresentation: TypeDisplayRepresentation = "Part of Note"
     static var caseDisplayRepresentations: [NoteSection: DisplayRepresentation] = [
@@ -122,6 +124,8 @@ enum NoteSection: String, AppEnum {
         .summary: "Summary",
         .myNotes: "My Notes",
         .transcript: "Transcript",
+        .subtitlesSrt: "Subtitles (SRT)",
+        .subtitlesVtt: "Subtitles (VTT)",
     ]
 }
 

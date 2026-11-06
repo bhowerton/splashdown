@@ -99,10 +99,13 @@ pub fn language_name(code: &str) -> Option<&'static str> {
     })
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Default, PartialEq)]
 pub struct Transcript {
     pub text: String,
     pub usage: Usage,
+    /// When each word was said, from the start of the clip, where the
+    /// model says (local models); empty otherwise. For subtitles.
+    pub words: Vec<crate::subtitles::TimedWord>,
 }
 
 /// A text model's answer and what it cost.

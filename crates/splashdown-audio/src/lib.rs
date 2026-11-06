@@ -60,6 +60,25 @@ impl Cleanup {
     }
 }
 
+/// `prepare_with`, and where in `clip` the prepared audio starts (the
+/// silence trimmed from its start), for placing words in time.
+pub fn prepare_at(clip: &AudioClip, cleanup: Cleanup) -> Option<(AudioClip, std::time::Duration)> {
+    let cleaned = if cleanup == Cleanup::default() {
+        clip.clone()
+    } else {
+        cleanup.apply(clip)
+    };
+    let resampled = AudioClip::new(
+        resample::resample(&cleaned.samples, cleaned.sample_rate, TARGET_SAMPLE_RATE),
+        TARGET_SAMPLE_RATE,
+    );
+    let (trimmed, start) = vad::trim_silence_at(&resampled)?;
+    vad::has_voice(&trimmed).then(|| {
+        let offset = std::time::Duration::from_secs_f64(start as f64 / TARGET_SAMPLE_RATE as f64);
+        (trimmed, offset)
+    })
+}
+
 /// `prepare` after the `cleanup` steps.
 pub fn prepare_with(clip: &AudioClip, cleanup: Cleanup) -> Option<AudioClip> {
     if cleanup == Cleanup::default() {

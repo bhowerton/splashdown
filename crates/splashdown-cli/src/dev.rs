@@ -62,6 +62,12 @@ pub(crate) enum DevCommand {
         /// Remove background noise before transcribing (noise reduction).
         #[arg(long)]
         denoise: bool,
+        /// Also write subtitles (SubRip) to this file.
+        #[arg(long)]
+        srt: Option<PathBuf>,
+        /// Also write subtitles (WebVTT) to this file.
+        #[arg(long)]
+        vtt: Option<PathBuf>,
         #[command(flatten)]
         providers: ProviderOpts,
         #[command(flatten)]
@@ -290,6 +296,8 @@ pub(crate) fn run(command: DevCommand) -> Result<()> {
             file,
             whisper,
             denoise,
+            srt,
+            vtt,
             providers,
             context,
         } => {
@@ -304,6 +312,7 @@ pub(crate) fn run(command: DevCommand) -> Result<()> {
                 setup.pipeline.stt().as_ref(),
                 &context.hints(&setup.settings),
                 cleanup,
+                Subtitles { srt, vtt },
             )?;
         }
         DevCommand::Interpret {

@@ -27,6 +27,12 @@ function actions() {
   if (have && hasRecording(body) && !locked()) {
     list.push({ title: "Transcribe again with another model…", icon: "pen", run: () => transcribeAgain(current.path) });
   }
+  if (have && hasTimedTranscript(body) && !locked()) {
+    list.push(
+      { title: "Save subtitles (SRT)…", icon: "down", sub: "For a video player or editor", run: () => exportSubtitles(current.path, "srt") },
+      { title: "Save subtitles (VTT)…", icon: "down", sub: "For the web", run: () => exportSubtitles(current.path, "vtt") },
+    );
+  }
   list.push({ title: "New folder…", icon: "folder", run: () => newFolder(view.kind === "folder" ? view.value : "") });
   if (have) {
     list.push(

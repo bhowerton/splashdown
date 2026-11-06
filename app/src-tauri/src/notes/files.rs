@@ -321,6 +321,10 @@ fn transcribe(
     let started = Instant::now();
     let mut reached = Duration::ZERO;
     let mut heard = false;
+    // For subtitles: every word's time while the model gives them, and
+    // where each line's speech is.
+    let mut timings = super::subtitles::Timings::default();
+    let mut all_timed = true;
     let stopped = loop {
         if stop.load(Ordering::Relaxed) {
             break Some(format!("Stopped at {}.", timestamp(reached)));
@@ -342,9 +346,9 @@ fn transcribe(
                 ));
             }
         };
-        if let Some(clip) = splashdown_audio::prepare_with(&piece.clip, speech.cleanup) {
+        if let Some((clip, offset)) = splashdown_audio::prepare_at(&piece.clip, speech.cleanup) {
             match transcribe_piece(speech.stt.as_ref(), &clip, &speech.hints) {
-                Ok((text, usage)) => {
+                Ok((text, words, usage)) => {
                     crate::spend::shared()
                         .record(&[(stt_name.clone(), usage)], chrono::Local::now());
                     if !text.is_empty() {
@@ -360,6 +364,18 @@ fn transcribe(
                             )
                             .map_err(|e| e.to_string())?;
                         heard = true;
+                        let spoke = (piece.start + offset).as_millis() as u64;
+                        timings
+                            .spans
+                            .push((spoke, spoke + clip.duration().as_millis() as u64));
+                        all_timed &= !words.is_empty();
+                        timings.words.extend(words.into_iter().map(|w| {
+                            splashdown_core::subtitles::TimedWord {
+                                start_ms: w.start_ms + spoke,
+                                end_ms: w.end_ms + spoke,
+                                ..w
+                            }
+                        }));
                     }
                 }
                 Err(e) => {
@@ -387,6 +403,18 @@ fn transcribe(
         None if !heard => Some("*No speech was found in it.*".to_string()),
         None => None,
     };
+    if heard {
+        if !all_timed {
+            timings.words.clear();
+        }
+        let saved = store
+            .id(&note.path)
+            .ok_or_else(|| "the note has no id".to_string())
+            .and_then(|id| super::subtitles::save(&id, &timings));
+        if let Err(e) = saved {
+            tracing::warn!("couldn't keep the times for subtitles: {e}");
+        }
+    }
     if let Some(last) = last {
         store
             .add_paragraph(&note.path, &last)
@@ -490,11 +518,13 @@ fn short_label(model: SpeechModel) -> String {
 }
 
 /// One piece, tried twice before giving up.
+/// A piece's text, its words with their times (when the model gives them)
+/// and what it cost.
 fn transcribe_piece(
     stt: &dyn SpeechToText,
     clip: &AudioClip,
     hints: &SttHints,
-) -> Result<(String, Usage), String> {
+) -> Result<(String, Vec<splashdown_core::subtitles::TimedWord>, Usage), String> {
     let attempt = || tauri::async_runtime::block_on(stt.transcribe(clip, hints));
     let transcript = attempt()
         .or_else(|e| {
@@ -502,7 +532,11 @@ fn transcribe_piece(
             attempt()
         })
         .map_err(|e| e.to_string())?;
-    Ok((transcript.text.trim().to_string(), transcript.usage))
+    Ok((
+        transcript.text.trim().to_string(),
+        transcript.words,
+        transcript.usage,
+    ))
 }
 
 /// Where the audio goes, from the speech-to-text's name, and whether that's

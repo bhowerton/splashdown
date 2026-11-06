@@ -134,6 +134,7 @@ mod tests {
         async fn transcribe(&self, _: &AudioClip, _: &SttHints) -> ProviderResult<Transcript> {
             self.0
                 .map(|text| Transcript {
+                    words: Vec::new(),
                     text: text.into(),
                     usage: Usage::priced(0.01),
                 })

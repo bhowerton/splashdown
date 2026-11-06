@@ -4,6 +4,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
+- **Subtitles.** Save a transcript or a meeting as SRT or VTT subtitles: from a note's menu or ⌘K, "Save subtitles". Captions are a line or two, broken at sentence ends and pauses, with the speaker's name when it changes. A file transcribed on this computer is timed word by word; with cloud speech, or for a meeting, the times are estimated from the transcript. Also as a part of Get Note Text in Shortcuts, and `splashdown-cli transcribe-file --srt` / `--vtt`.
 - **Translate as you dictate.** Hold the dictation key and press T, then speak: your words come out in the language picked in the menu bar under Translate into, with the overlay showing "→ Spanish". It uses the preset the app would use, so its tone and instructions still apply. The first time, pick the language from a short list that appears; it's kept for next time. Choose up to five in Settings → Words & language to switch between them in the menu bar; the letter can be changed in Settings → General.
 - **Translate selected text.** Select text, hold the dictation key and press T: it's translated at once. In your own text it's replaced by the translation. In text you can't edit, like a web page or an email you received, the translation opens in the Ask panel, which can read it aloud.
 - **⌃⌥T** (Ctrl+Alt+T on Windows) does both without holding a key: it translates the selection, or with nothing selected starts a hands-free dictation that comes out translated (⌃⌥T again to finish).

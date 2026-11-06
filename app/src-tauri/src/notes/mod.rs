@@ -29,6 +29,7 @@ pub mod meaning;
 pub mod media;
 mod search;
 pub mod store;
+pub mod subtitles;
 mod window;
 
 use std::path::{Path, PathBuf};

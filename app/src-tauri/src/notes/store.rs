@@ -284,6 +284,14 @@ impl Store {
         Ok(note)
     }
 
+    /// The note's `splashdown-id`, which stays the same when it's renamed
+    /// or moved; `None` for a note without one (written elsewhere).
+    pub fn id(&self, rel: &str) -> Option<String> {
+        let text = std::fs::read_to_string(self.resolve(rel).ok()?).ok()?;
+        let (front, _) = split_front_matter(&text);
+        front_matter_value(front, "splashdown-id").filter(|id| !id.is_empty())
+    }
+
     pub fn read(&self, rel: &str) -> io::Result<Note> {
         let path = self.resolve(rel)?;
         let text = std::fs::read_to_string(&path)?;

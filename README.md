@@ -139,6 +139,7 @@
 - **Transcribe an app's audio:** a webinar in the browser, a podcast app, a call you're only listening to. Only that app's sound is recorded, with a level meter that says whether it's hearing words.
 - **Transcribe the microphone** for a lecture or a conversation in the room, hands-free.
 - **Transcribe files and links:** drop a voice memo, interview or video onto Notes, or paste a YouTube or podcast link.
+- **Subtitles:** save any transcript or meeting as SRT or VTT subtitles from the note's menu or ⌘K. Transcribed on this computer, each caption is timed to the words; with cloud speech the times are estimated.
 
 ### Everything else
 

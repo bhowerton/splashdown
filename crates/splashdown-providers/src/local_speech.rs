@@ -20,6 +20,7 @@ use std::sync::{Arc, Mutex, Once, OnceLock, Weak};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
+use splashdown_core::subtitles::TimedWord;
 use splashdown_core::{
     AudioClip, ProviderError, ProviderResult, SpeechStream, SpeechToText, SttHints, Transcript,
     Usage,
@@ -344,7 +345,14 @@ impl SpeechToText for LocalSpeech {
         }
         let loaded = self.model.clone();
         let (english_only, hints) = (self.english_only, hints.clone());
-        let (text, prompt) = tokio::task::spawn_blocking(move || {
+        // Word times are from the start of what the model heard, lead-in
+        // included.
+        let lead_in = if self.streams {
+            LEAD_IN
+        } else {
+            Duration::ZERO
+        };
+        let (text, words, prompt) = tokio::task::spawn_blocking(move || {
             // Waits here if it's still loading.
             let model = loaded.model()?;
             let options = run_options(&model, english_only, &hints);
@@ -365,7 +373,8 @@ impl SpeechToText for LocalSpeech {
                     }
                 }
             };
-            Ok::<_, ProviderError>((result.text, options.prompt))
+            let words = timed_words(&result.words, lead_in);
+            Ok::<_, ProviderError>((result.text, words, options.prompt))
         })
         .await
         .map_err(|e| ProviderError::Unavailable(format!("transcription task failed: {e}")))??;
@@ -378,9 +387,11 @@ impl SpeechToText for LocalSpeech {
             tracing::info!("the model only repeated its hints; treating it as silence");
             text.clear();
         }
+        let words = if text.is_empty() { Vec::new() } else { words };
         Ok(Transcript {
             text,
             usage: Usage::FREE,
+            words,
         })
     }
 
@@ -393,6 +404,23 @@ impl SpeechToText for LocalSpeech {
             )) as Box<dyn SpeechStream>
         })
     }
+}
+
+/// The model's words with their times, from the start of the clip
+/// (`lead_in` of added silence taken off). Words the model gave no time,
+/// or only a mark of its own ("[BLANK_AUDIO]"), are left out.
+fn timed_words(words: &[transcribe_cpp::Word], lead_in: Duration) -> Vec<TimedWord> {
+    let lead_in = lead_in.as_millis() as i64;
+    words
+        .iter()
+        .filter(|w| w.t1_ms > w.t0_ms && !w.text.trim().is_empty())
+        .filter(|w| !(w.text.trim().starts_with('[') && w.text.trim().ends_with(']')))
+        .map(|w| TimedWord {
+            text: w.text.clone(),
+            start_ms: (w.t0_ms - lead_in).max(0) as u64,
+            end_ms: (w.t1_ms - lead_in).max(0) as u64,
+        })
+        .collect()
 }
 
 fn to_16k(clip: &AudioClip) -> Vec<f32> {

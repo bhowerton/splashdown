@@ -238,6 +238,24 @@ function hasRecording(text) {
   return /^\[Recording\]\(.+\.wav\)\s*$/m.test(text ?? "");
 }
 
+/** A transcript with times (`**[1:02]** …`), which subtitles are made from
+ *  (matches `meeting::Turn::parse`). */
+function hasTimedTranscript(text) {
+  return /^\*\*\[\d+:\d\d(:\d\d)?\]/m.test(text ?? "");
+}
+
+/** Asks where, and saves the note's transcript as subtitles. */
+async function exportSubtitles(path, format) {
+  try {
+    const saved = await invoke("notes_export_subtitles", { path, format });
+    if (!saved) return;
+    const name = saved.file.split(/[\\/]/).pop();
+    toast(saved.approximate ? `Saved ${name}. Times are estimated: transcribe on this computer for exact ones.` : `Saved ${name}`);
+  } catch (err) {
+    toast(String(err), true);
+  }
+}
+
 /** Asks which speech model, then transcribes the note's recording again
  *  in place of its transcript (the progress shows like a file's). */
 async function transcribeAgain(path, at) {

@@ -72,6 +72,7 @@ impl SpeechToText for TranscriptionApi {
             .ok_or_else(|| ProviderError::InvalidResponse("missing \"text\"".into()))?;
         let seconds = clip.samples.len() as f64 / f64::from(clip.sample_rate.max(1));
         Ok(Transcript {
+            words: Vec::new(),
             text: text.to_string(),
             usage: crate::pricing::transcription_usage(&self.model, &json, seconds),
         })
@@ -146,6 +147,7 @@ impl SpeechToText for ChatAudioTranscriber {
         let text = chat_content(&json)?.trim().to_string();
         check_plausible_length(&text, clip)?;
         Ok(Transcript {
+            words: Vec::new(),
             text,
             usage: crate::pricing::text_usage(
                 self.endpoint.flavor(),

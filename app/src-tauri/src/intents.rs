@@ -267,7 +267,25 @@ fn answer(app: &AppHandle, intent: Intent) -> Result<Reply, String> {
         }
         Intent::ReadNote { path, section } => {
             let notes = readable(&state)?;
-            let text = read_all(&notes, &path, section.as_deref())?;
+            // Read whole first: that's where a note hidden from agents is
+            // refused.
+            let subtitles = match section.as_deref() {
+                Some("subtitles_srt") => Some(false),
+                Some("subtitles_vtt") => Some(true),
+                _ => None,
+            };
+            let mut text = read_all(
+                &notes,
+                &path,
+                if subtitles.is_some() {
+                    None
+                } else {
+                    section.as_deref()
+                },
+            )?;
+            if let Some(vtt) = subtitles {
+                text = crate::notes::subtitles::text_for(notes.folder.clone(), &path, vtt)?;
+            }
             Ok(Reply {
                 text: Some(text),
                 ..Reply::default()

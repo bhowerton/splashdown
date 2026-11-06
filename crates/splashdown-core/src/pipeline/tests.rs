@@ -15,6 +15,7 @@ impl SpeechToText for FakeStt {
         let text = self.0[*i].to_string();
         *i += 1;
         Ok(Transcript {
+            words: Vec::new(),
             text,
             usage: Usage::priced(0.001),
         })

@@ -144,6 +144,7 @@ fn main() {
             commands::install_update,
             commands::send_feedback,
             notes::notes_load,
+            notes::subtitles::notes_export_subtitles,
             notes::notes_list,
             notes::notes_open,
             notes::notes_save,

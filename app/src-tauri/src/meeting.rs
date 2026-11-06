@@ -445,6 +445,7 @@ mod tests {
             _: &splashdown_core::SttHints,
         ) -> splashdown_core::ProviderResult<splashdown_core::Transcript> {
             Ok(splashdown_core::Transcript {
+                words: Vec::new(),
                 text: format!("Heard {:.0} seconds.", audio.duration().as_secs_f32()),
                 usage: splashdown_core::Usage::FREE,
             })

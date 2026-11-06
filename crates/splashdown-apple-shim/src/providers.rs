@@ -131,6 +131,7 @@ impl SpeechToText for AppleSpeech {
 
         match code {
             ffi::OK => Ok(Transcript {
+                words: Vec::new(),
                 text,
                 usage: Usage::FREE,
             }),

@@ -4,16 +4,25 @@
 
 use super::*;
 
+/// Where to write subtitles of a transcribed file, if anywhere.
+pub(super) struct Subtitles {
+    pub srt: Option<std::path::PathBuf>,
+    pub vtt: Option<std::path::PathBuf>,
+}
+
 /// Prints the file's transcript as it goes: a title, then a paragraph per
-/// piece starting with its time. Timings go to stderr.
+/// piece starting with its time. Timings go to stderr. Subtitles are timed
+/// by word with a model that places words, and estimated otherwise.
 pub(super) fn transcribe_file(
     rt: &tokio::runtime::Runtime,
     path: &std::path::Path,
     stt: &dyn splashdown_core::SpeechToText,
     hints: &splashdown_core::SttHints,
     cleanup: splashdown_audio::Cleanup,
+    subtitles: Subtitles,
 ) -> Result<()> {
     use splashdown_audio::file::{AudioFile, timestamp};
+    use splashdown_core::subtitles::{self, Line, TimedWord};
 
     let mut file = AudioFile::open(path).with_context(|| format!("reading {}", path.display()))?;
     let length = file.duration();
@@ -21,15 +30,57 @@ pub(super) fn transcribe_file(
     println!("# {stem}");
     let start = std::time::Instant::now();
     let mut audio = std::time::Duration::ZERO;
+    let mut words: Vec<TimedWord> = Vec::new();
+    let mut lines: Vec<(std::time::Duration, std::time::Duration, String)> = Vec::new();
+    let mut all_timed = true;
     while let Some(piece) = file.next_piece()? {
         audio = piece.start + piece.clip.duration();
-        let Some(clip) = splashdown_audio::prepare_with(&piece.clip, cleanup) else {
+        let Some((clip, offset)) = splashdown_audio::prepare_at(&piece.clip, cleanup) else {
             continue;
         };
-        let text = rt.block_on(stt.transcribe(&clip, hints))?.text;
+        let transcript = rt.block_on(stt.transcribe(&clip, hints))?;
+        let text = transcript.text;
         if !text.trim().is_empty() {
             println!("\n**[{}]** {}", timestamp(piece.start), text.trim());
+            let spoke = piece.start + offset;
+            lines.push((spoke, spoke + clip.duration(), text.trim().to_string()));
+            all_timed &= !transcript.words.is_empty();
+            let shift = (piece.start + offset).as_millis() as u64;
+            words.extend(transcript.words.into_iter().map(|w| TimedWord {
+                start_ms: w.start_ms + shift,
+                end_ms: w.end_ms + shift,
+                ..w
+            }));
         }
+    }
+    if subtitles.srt.is_some() || subtitles.vtt.is_some() {
+        let cues = if all_timed && !words.is_empty() {
+            subtitles::from_words(&words)
+        } else {
+            eprintln!(
+                "{} gives no word times: subtitle times are estimated",
+                stt.name()
+            );
+            let lines: Vec<Line> = lines
+                .iter()
+                .map(|(start, end, said)| Line {
+                    start: *start,
+                    end: Some(*end),
+                    who: "",
+                    said,
+                })
+                .collect();
+            subtitles::from_lines(&lines, length)
+        };
+        if let Some(out) = &subtitles.srt {
+            std::fs::write(out, subtitles::srt(&cues))
+                .with_context(|| format!("writing {}", out.display()))?;
+        }
+        if let Some(out) = &subtitles.vtt {
+            std::fs::write(out, subtitles::vtt(&cues))
+                .with_context(|| format!("writing {}", out.display()))?;
+        }
+        eprintln!("{} captions written", cues.len());
     }
     eprintln!(
         "transcribed {:.0} s of audio (the file says {}) in {:.1} s with {}",

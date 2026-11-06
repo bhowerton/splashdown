@@ -263,6 +263,12 @@ function showItemMenu(n, at) {
       invoke("notes_reveal", { path: n.path }).catch((err) => toast(String(err), true)),
     ),
     ...(hasRecording(n.text) ? [item("Transcribe again…", () => transcribeAgain(n.path, at), { disabled: busy })] : []),
+    ...(hasTimedTranscript(n.text)
+      ? [
+          item("Save subtitles (SRT)…", () => exportSubtitles(n.path, "srt"), { disabled: busy }),
+          item("Save subtitles (VTT)…", () => exportSubtitles(n.path, "vtt"), { disabled: busy }),
+        ]
+      : []),
     document.createElement("hr"),
     item("Move to Trash", onIt(deleteNote), { disabled: busy, danger: true }),
   ], at);

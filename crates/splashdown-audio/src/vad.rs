@@ -112,6 +112,11 @@ fn by_loudness(clip: &AudioClip) -> Voicing {
 /// detector hears quiet words that loudness misses, and loudness the
 /// breathy start of a whispered word the detector scores low.
 pub fn trim_silence(clip: &AudioClip) -> Option<AudioClip> {
+    trim_silence_at(clip).map(|(clip, _)| clip)
+}
+
+/// `trim_silence`, and how many samples were cut from the start.
+pub fn trim_silence_at(clip: &AudioClip) -> Option<(AudioClip, usize)> {
     let loud = speech_span(&by_loudness(clip), clip);
     let (start, end) = match by_detector(clip) {
         Some(detected) => {
@@ -120,9 +125,9 @@ pub fn trim_silence(clip: &AudioClip) -> Option<AudioClip> {
         }
         None => loud?,
     };
-    Some(AudioClip::new(
-        clip.samples[start..end].to_vec(),
-        clip.sample_rate,
+    Some((
+        AudioClip::new(clip.samples[start..end].to_vec(), clip.sample_rate),
+        start,
     ))
 }
 

@@ -22,6 +22,7 @@ pub mod prompt;
 pub mod provider;
 pub mod spoken;
 pub mod style;
+pub mod subtitles;
 pub mod vocab;
 
 pub use audio::AudioClip;
