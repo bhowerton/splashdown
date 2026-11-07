@@ -75,11 +75,11 @@ pub fn language(window: &str) -> Option<&'static str> {
 
 /// Confidence that's enough when whatlang doesn't call it reliable (short
 /// text, among the languages it's choosing from).
-const SURE: f64 = 0.5;
+pub(crate) const SURE: f64 = 0.5;
 
 /// whatlang choosing only among the languages Splashdown names: left to
 /// itself, it takes Dutch for Afrikaans and short Spanish for Latvian.
-fn detector() -> &'static whatlang::Detector {
+pub(crate) fn detector() -> &'static whatlang::Detector {
     static DETECTOR: std::sync::OnceLock<whatlang::Detector> = std::sync::OnceLock::new();
     DETECTOR.get_or_init(|| {
         let langs = whatlang::Lang::all()

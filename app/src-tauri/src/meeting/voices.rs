@@ -65,15 +65,16 @@ fn voices_lock() -> MutexGuard<'static, ()> {
     LOCK.lock().unwrap_or_else(|e| e.into_inner())
 }
 
-/// After a meeting's speakers were labelled Speaker 1, 2… (`order`: the
-/// diarization's speakers in that order): voiceprints for those who said
+/// After a meeting's speakers were labelled (`labels`: each label the
+/// transcript gives a speaker of the diarization, "Speaker 2" or, on a
+/// call with one other person, "Them"): voiceprints for those who said
 /// enough, the saved people among them named, and the prints kept.
 pub(super) fn recognize(
     store: &Store,
     note: &str,
     pcm: &[f32],
     turns: &[SpeakerTurn],
-    order: &[u32],
+    labels: &[(String, u32)],
 ) {
     let Ok(models) = crate::engine::paths().map(|p| p.models_dir) else {
         return;
@@ -93,18 +94,17 @@ pub(super) fn recognize(
             return;
         }
     };
-    let speakers: Vec<(String, Vec<f32>)> = order
+    let speakers: Vec<(String, Vec<f32>)> = labels
         .iter()
-        .enumerate()
-        .filter_map(|(i, &speaker)| {
-            let speech = speech_of(pcm, turns, speaker)?;
-            Some((format!("Speaker {}", i + 1), printer.print(&speech)?))
+        .filter_map(|(label, speaker)| {
+            let speech = speech_of(pcm, turns, *speaker)?;
+            Some((label.clone(), printer.print(&speech)?))
         })
         .collect();
     tracing::info!(
         "{} of {} speakers' voices measured in {:.1} s",
         speakers.len(),
-        order.len(),
+        labels.len(),
         started.elapsed().as_secs_f32()
     );
     if speakers.is_empty() {

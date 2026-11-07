@@ -24,6 +24,7 @@ pub mod provider;
 pub mod spoken;
 pub mod style;
 pub mod subtitles;
+pub mod turn_language;
 pub mod vocab;
 pub mod voices;
 

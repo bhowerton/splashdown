@@ -63,8 +63,6 @@ function renderGeneral() {
   // Not on Windows yet: the voice model's runtime isn't installed there.
   $("mt-remember-row").hidden = state.platform === "windows";
   $("mt-remember").checked = !!notes.remember_speakers;
-  // It names the speakers that telling people apart finds.
-  $("mt-remember").disabled = !notes.meeting_speakers && !notes.remember_speakers;
   renderVoices();
   $("nt-meaning").checked = !!notes.ask_by_meaning;
   if (notes.ask_by_meaning) showMeaningProgress();
@@ -428,7 +426,14 @@ function renderHotkeyLegend(d) {
 // Turning it on downloads the speaker model (once); if that fails, it goes
 // back off.
 $("mt-speakers").addEventListener("change", async (e) => {
-  if (!e.target.checked) return;
+  // Recognizing people can't work without it.
+  if (!e.target.checked) {
+    if ($("mt-remember").checked) {
+      $("mt-remember").checked = false;
+      $("mt-remember").dispatchEvent(new Event("change", { bubbles: true }));
+    }
+    return;
+  }
   const note = $("mt-speakers-note");
   const before = note.textContent;
   const stop = await listen("model-download", (ev) => {
@@ -780,10 +785,15 @@ $("mt-voices-forget").addEventListener("click", async () => {
   renderVoices();
 });
 
-// Turning it on downloads the voice model (once); if that fails, it goes
+// Turning it on turns on telling people apart too (it names the speakers
+// that finds), and downloads both models (once); if that fails, it goes
 // back off.
 $("mt-remember").addEventListener("change", async (e) => {
   if (!e.target.checked) return;
+  if (!$("mt-speakers").checked) {
+    $("mt-speakers").checked = true;
+    $("mt-speakers").dispatchEvent(new Event("change", { bubbles: true }));
+  }
   const note = $("mt-remember-note");
   const before = note.textContent;
   const stop = await listen("model-download", (ev) => {

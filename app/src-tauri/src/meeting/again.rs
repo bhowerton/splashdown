@@ -102,7 +102,7 @@ pub(crate) fn transcribe_again(
             })
             .map_err(|e| e.to_string())?;
         drop(spool.flush());
-        if settings.notes.meeting_speakers && !named {
+        if (settings.notes.meeting_speakers || settings.notes.remember_speakers) && !named {
             name_speakers(
                 store,
                 note,

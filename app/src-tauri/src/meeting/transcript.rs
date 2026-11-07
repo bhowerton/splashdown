@@ -29,6 +29,9 @@ pub(super) struct Job<'a> {
     /// Turns are kept here instead of written into the note (transcribing
     /// a recording again).
     pub(super) collected: Option<Vec<String>>,
+    /// With the spoken language on Automatic: the recording's language, to
+    /// transcribe again a short turn that came out in another.
+    pub(super) language: splashdown_core::turn_language::TurnLanguage,
 }
 
 impl<'a> Job<'a> {
@@ -52,6 +55,10 @@ impl<'a> Job<'a> {
             lost_writes: false,
             one_sided: false,
             collected: None,
+            // The computer's language until what's said shows otherwise.
+            language: splashdown_core::turn_language::TurnLanguage::new(
+                splashdown_platform::system_language(),
+            ),
         }
     }
 
@@ -86,7 +93,8 @@ impl<'a> Job<'a> {
                 let text = match splashdown_audio::prepare_with(&piece.clip, self.cleanup) {
                     Some(clip) => {
                         self.heard_at = self.heard_at.max(end);
-                        transcribe(self.stt.as_ref(), &clip, &self.hints)
+                        let text = transcribe(self.stt.as_ref(), &clip, &self.hints);
+                        self.in_its_language(&clip, text)
                     }
                     None => String::new(),
                 };
@@ -103,6 +111,29 @@ impl<'a> Job<'a> {
                 return;
             }
         }
+    }
+
+    /// `text`, a turn transcribed from `clip`, transcribed again in the
+    /// recording's language if it's short and came out in another (a
+    /// multilingual model guessing wrong on a noisy turn). Only with the
+    /// spoken language on Automatic: a language the user set is already
+    /// used for every turn.
+    fn in_its_language(&mut self, clip: &splashdown_core::AudioClip, text: String) -> String {
+        let automatic = self.hints.language.as_deref().is_none_or(str::is_empty);
+        let text = match self.language.language() {
+            Some(lang) if automatic && self.language.is_stray(&text) => {
+                let hints = splashdown_core::SttHints {
+                    language: Some(lang.to_string()),
+                    ..self.hints.clone()
+                };
+                let again = transcribe(self.stt.as_ref(), clip, &hints);
+                tracing::info!("a turn came out in another language: transcribed again in {lang}");
+                if again.is_empty() { text } else { again }
+            }
+            _ => text,
+        };
+        self.language.heard(&text);
+        text
     }
 
     /// Transcribes what's left and writes the rest. Returns how many
@@ -179,8 +210,9 @@ pub(super) fn finish(
     settings: &Settings,
     one_sided: bool,
 ) {
-    // Speakers first, so the summary can say who said what.
-    if settings.notes.meeting_speakers {
+    // Speakers first, so the summary can say who said what. Recognizing
+    // people needs them told apart first.
+    if settings.notes.meeting_speakers || settings.notes.remember_speakers {
         name_speakers(
             store,
             note,
@@ -258,8 +290,35 @@ pub(super) fn name_speakers(
         tracing::warn!("couldn't label the speakers: {e}");
         return;
     }
-    if remember && !order.is_empty() {
-        super::voices::recognize(store, note, &pcm, &turns, &order);
+    if remember {
+        let labels = voice_labels(&order, &turns, side);
+        if !labels.is_empty() {
+            super::voices::recognize(store, note, &pcm, &turns, &labels);
+        }
+    }
+}
+
+/// Who gets a voiceprint, by the label the transcript gives them: Speaker
+/// 1, 2… when the other side was split; on a call with one other person,
+/// that person, still labelled `side` ("Them").
+fn voice_labels(
+    order: &[u32],
+    turns: &[splashdown_providers::SpeakerTurn],
+    side: Option<&str>,
+) -> Vec<(String, u32)> {
+    if !order.is_empty() {
+        return order
+            .iter()
+            .enumerate()
+            .map(|(i, &speaker)| (format!("Speaker {}", i + 1), speaker))
+            .collect();
+    }
+    let mut speakers: Vec<u32> = turns.iter().map(|t| t.speaker).collect();
+    speakers.sort_unstable();
+    speakers.dedup();
+    match (side, speakers.as_slice()) {
+        (Some(side), [only]) => vec![(side.to_string(), *only)],
+        _ => Vec::new(),
     }
 }
 
@@ -357,4 +416,40 @@ pub(super) fn keep_recording(store: &Store, note: &str, raw: &Path) -> Result<St
     }
     writer.finalize().map_err(|e| e.to_string())?;
     Ok(rel)
+}
+
+#[cfg(test)]
+mod voice_tests {
+    use super::*;
+    use splashdown_providers::SpeakerTurn;
+
+    fn turn(speaker: u32, start: u64) -> SpeakerTurn {
+        SpeakerTurn {
+            speaker,
+            start: Duration::from_secs(start),
+            end: Duration::from_secs(start + 5),
+        }
+    }
+
+    #[test]
+    fn a_split_side_gets_its_speaker_labels() {
+        let turns = [turn(3, 0), turn(1, 10)];
+        assert_eq!(
+            voice_labels(&[3, 1], &turns, Some("Them")),
+            [("Speaker 1".to_string(), 3), ("Speaker 2".to_string(), 1)]
+        );
+    }
+
+    #[test]
+    fn one_other_person_is_them() {
+        let turns = [turn(2, 0), turn(2, 30)];
+        assert_eq!(
+            voice_labels(&[], &turns, Some("Them")),
+            [("Them".to_string(), 2)]
+        );
+        // A recording of the room has no label to name.
+        assert!(voice_labels(&[], &turns, None).is_empty());
+        // Nothing heard on their side.
+        assert!(voice_labels(&[], &[], Some("Them")).is_empty());
+    }
 }

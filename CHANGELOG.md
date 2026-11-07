@@ -2,6 +2,13 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **One-on-one calls remember the other person too.** With Recognize people you've named on, a call with one other person now keeps their voice as well: rename "Them" in the transcript and they're named by voice in later calls. Before, only meetings with two or more other people had voices kept.
+- **Recognize people you've named turns on Tell the other people apart**, which it needs, and turning that off turns Recognize off.
+- **Fewer turns in the wrong language.** With your spoken language on Automatic, a short turn of a meeting or a transcribed app that came out in another language (Hindi letters in an English call, say) is transcribed again in the recording's language: your computer's at first, then the one actually spoken once there's enough to tell. Long turns are kept as heard, so a conversation in two languages stays as it was. Setting your language in Settings → Words & language avoids the guessing altogether.
+- **The live transcript scrolls during a meeting.** It grew past the window instead, so earlier turns couldn't be reached. In a narrow Notes window, the transcript and My notes now stack, each scrolling on its own.
+
 ## 0.10.0 — 2026-11-06
 
 - **Translate as you dictate.** Hold the dictation key and press T, then speak: your words come out in the language picked in the menu bar under Translate into, with the overlay showing "→ Spanish". Press T again for the next of your languages; the overlay says which, and the menu bar follows. It uses the preset the app would use, so its tone and instructions still apply. The first time, pick the language from a short list that appears; it's kept for next time. Choose up to five in Settings → Words & language to switch between them in the menu bar; the letter can be changed in Settings → General.
