@@ -17,8 +17,8 @@ fn main() {
     let package = PathBuf::from(env::var("CARGO_MANIFEST_DIR").unwrap()).join("swift");
     let scratch = PathBuf::from(env::var("OUT_DIR").unwrap()).join("swift-build");
     let triple = match env::var("CARGO_CFG_TARGET_ARCH").as_deref() {
-        Ok("x86_64") => "x86_64-apple-macosx13.0",
-        _ => "arm64-apple-macosx13.0",
+        Ok("x86_64") => "x86_64-apple-macosx12.0",
+        _ => "arm64-apple-macosx12.0",
     };
     let swift_args = |extra: &[&str]| {
         let mut cmd = Command::new("xcrun");
@@ -93,15 +93,14 @@ fn main() {
         "CoreMedia",
         "CoreAudio",
         "AudioToolbox",
-        "ScreenCaptureKit",
         "ImageIO",
         "CoreGraphics",
         "UniformTypeIdentifiers",
-        "AppIntents",
     ] {
         println!("cargo:rustc-link-lib=framework={framework}");
     }
-    // FoundationModels (macOS 26+) is linked weakly by .cargo/config.toml.
+    // FoundationModels, AppIntents and ScreenCaptureKit, newer than the
+    // app's minimum, are linked weakly by .cargo/config.toml.
 
     // `toolchain` is …/XcodeDefault.xctoolchain/usr.
     let toolchain_dir = toolchain.parent().unwrap();
@@ -154,7 +153,7 @@ fn app_intents_metadata(
         .args(["--sdk-root", sdk])
         .args(["--xcode-version", &xcode])
         .args(["--platform-family", "macOS"])
-        .args(["--deployment-target", "13.0"])
+        .args(["--deployment-target", "12.0"])
         .args(["--target-triple", triple])
         .arg("--source-file-list")
         .arg(&source_list)

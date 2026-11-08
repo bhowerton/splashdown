@@ -51,7 +51,7 @@ jobs:
       fail-fast: false
       matrix:
         # The Apple shim needs the macOS 26 SDK (Xcode 26), so the Mac job
-        # runs on the macOS 26 image. The app itself supports macOS 13+.
+        # runs on the macOS 26 image. The app itself supports macOS 12+.
         os: [macos-26, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:

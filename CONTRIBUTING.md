@@ -9,7 +9,7 @@ Thanks for helping. This file covers setting up, the checks a change has to pass
 - `cmake`, for local speech-to-text (transcribe.cpp). Without it, build the CLI with `--no-default-features --features full` (everything but local speech-to-text and the natural voice). `--no-default-features` alone builds only the remote control, as the app ships it.
 
 **macOS**
-- Xcode 26 or later (the macOS 26 SDK), for the Swift shim that talks to Apple's on-device models. The app itself runs on macOS 13 and later.
+- Xcode 26 or later (the macOS 26 SDK), for the Swift shim that talks to Apple's on-device models. The app itself runs on macOS 12 and later.
 - To package releases: `cargo install tauri-cli --locked` and `rustup target add x86_64-apple-darwin`.
 
 **Windows**

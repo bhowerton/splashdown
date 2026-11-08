@@ -71,7 +71,12 @@ private func pickVoice(_ id: String, _ language: String) -> AVSpeechSynthesisVoi
     if language.isEmpty {
         return nil
     }
-    let region = Locale.current.region?.identifier ?? ""
+    let region: String
+    if #available(macOS 13, *) {
+        region = Locale.current.region?.identifier ?? ""
+    } else {
+        region = Locale.current.regionCode ?? ""
+    }
     let fallback = AVSpeechSynthesisVoice(language: language)
     let score = { (voice: AVSpeechSynthesisVoice) -> Int in
         var score = voice.quality.rawValue * 10

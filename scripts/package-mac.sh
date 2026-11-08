@@ -184,8 +184,11 @@ HELPER="$APP/Contents/MacOS/splashdown-llm"
     echo "  local model helper: present, signed ($(lipo -archs "$HELPER"))"
 # Captured first: `grep -q` stopping early would fail the pipe under pipefail.
 links=$(otool -l "$EXE")
-grep -A2 LC_LOAD_WEAK_DYLIB <<<"$links" | grep -q FoundationModels &&
-    echo "  FoundationModels: weak-linked (runs on macOS 13–25)"
+weak=$(grep -A2 LC_LOAD_WEAK_DYLIB <<<"$links")
+for framework in FoundationModels AppIntents ScreenCaptureKit; do
+    grep -q "$framework" <<<"$weak" &&
+        echo "  $framework: weak-linked (runs on older macOS)"
+done
 /usr/libexec/PlistBuddy -c "Print :LSUIElement" "$APP/Contents/Info.plist" >/dev/null &&
     echo "  Info.plist: menu bar only (LSUIElement)"
 /usr/libexec/PlistBuddy -c "Print :NSMicrophoneUsageDescription" "$APP/Contents/Info.plist" >/dev/null &&

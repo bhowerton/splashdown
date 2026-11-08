@@ -34,8 +34,12 @@ private func currentHandler() -> SplashdownIntentHandler? {
 }
 
 /// An error Shortcuts and Siri show as it is.
-struct SplashdownError: Error, CustomLocalizedStringResourceConvertible {
+struct SplashdownError: Error {
     let message: String
+}
+
+@available(macOS 13.0, *)
+extension SplashdownError: CustomLocalizedStringResourceConvertible {
     var localizedStringResource: LocalizedStringResource {
         LocalizedStringResource(stringLiteral: message)
     }
@@ -71,7 +75,10 @@ struct Answer: Decodable {
     var note: NoteInfo?
     /// Notes found, or the ones an answer drew on.
     var notes: [NoteInfo]?
+}
 
+@available(macOS 13.0, *)
+extension Answer {
     /// `message` as Siri and Shortcuts say it.
     var dialog: IntentDialog {
         IntentDialog(stringLiteral: message ?? "Done")

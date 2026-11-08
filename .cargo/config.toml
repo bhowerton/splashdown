@@ -1,16 +1,22 @@
 [env]
 # Matches the app's minimum (tauri.conf.json) and the Swift shim's target,
 # so linking doesn't warn about mismatched deployment targets.
-MACOSX_DEPLOYMENT_TARGET = "13.0"
+MACOSX_DEPLOYMENT_TARGET = "12.0"
 
-# FoundationModels exists only on macOS 26+. Link it weakly into every binary
+# Frameworks newer than the app's minimum are linked weakly into every binary
 # (a build script's link args don't reach dependents) so the app still runs on
-# older systems; the Swift shim checks availability before using it.
+# older systems; the Swift shim checks availability before using them.
+# FoundationModels is macOS 26+, AppIntents (Shortcuts) 13+, ScreenCaptureKit
+# 12.3+.
 [target.'cfg(target_os = "macos")']
-rustflags = ["-C", "link-arg=-Wl,-weak_framework,FoundationModels"]
+rustflags = [
+    "-C", "link-arg=-Wl,-weak_framework,FoundationModels",
+    "-C", "link-arg=-Wl,-weak_framework,AppIntents",
+    "-C", "link-arg=-Wl,-weak_framework,ScreenCaptureKit",
+]
 
-# The Intel half of the universal Mac app: every Mac that macOS 13 supports
-# has AVX2, which llama.cpp (the built-in text model) leans on; without
+# The Intel half of the universal Mac app: every Mac that macOS 12 supports
+# but the 2013 Mac Pro has AVX2, which llama.cpp (the built-in text model) leans on; without
 # these it's built for the baseline x86-64 processor and runs several times
 # slower. Joined with the flags above.
 [target.x86_64-apple-darwin]

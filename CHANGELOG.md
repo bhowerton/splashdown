@@ -4,6 +4,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 
 ## Unreleased
 
+- **Runs on macOS 12 Monterey.** Splashdown needed macOS 13 before. On Monterey, dictation, commands, Compose, reading aloud, Notes and transcribing files, links and the microphone all work; Shortcuts actions need macOS 13, and recording meetings or an app's sound macOS 14.2, as before. The 2013 Mac Pro isn't supported.
 - **One-on-one calls remember the other person too.** With Recognize people you've named on, a call with one other person now keeps their voice as well: rename "Them" in the transcript and they're named by voice in later calls. Before, only meetings with two or more other people had voices kept.
 - **Recognize people you've named turns on Tell the other people apart**, which it needs, and turning that off turns Recognize off.
 - **Fewer turns in the wrong language.** With your spoken language on Automatic, a short turn of a meeting or a transcribed app that came out in another language (Hindi letters in an English call, say) is transcribed again in the recording's language: your computer's at first, then the one actually spoken once there's enough to tell. Long turns are kept as heard, so a conversation in two languages stays as it was. Setting your language in Settings → Words & language avoids the guessing altogether.

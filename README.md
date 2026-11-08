@@ -21,7 +21,7 @@
 
 <p align="center">
   <a href="https://github.com/bhowerton/splashdown/releases/latest"><img src="https://img.shields.io/github/v/release/bhowerton/splashdown?label=version&color=F2551F" alt="Latest version"></a>
-  <a href="#what-you-need"><img src="https://img.shields.io/badge/macOS%2013%2B%20%C2%B7%20Windows%2010%2B-16337A" alt="macOS 13 or later, Windows 10 or later"></a>
+  <a href="#what-you-need"><img src="https://img.shields.io/badge/macOS%2012%2B%20%C2%B7%20Windows%2010%2B-16337A" alt="macOS 12 or later, Windows 10 or later"></a>
   <a href="#license"><img src="https://img.shields.io/badge/license-MIT%20%2F%20Apache--2.0-16337A" alt="MIT or Apache-2.0"></a>
   <a href="https://github.com/bhowerton/splashdown/releases"><img src="https://img.shields.io/github/downloads/bhowerton/splashdown/total?color=16337A" alt="Downloads"></a>
   <a href="https://github.com/bhowerton/splashdown/actions/workflows/ci.yml"><img src="https://github.com/bhowerton/splashdown/actions/workflows/ci.yml/badge.svg?branch=main&event=push" alt="CI status"></a>
@@ -244,7 +244,7 @@ Settings → Privacy shows where your words go for your current settings. The fu
 
 ## What you need
 
-- **Mac:** macOS 13 or later, Apple Silicon or Intel. Apple's on-device models need Apple Silicon and macOS 26.
+- **Mac:** macOS 12 or later, Apple Silicon or Intel (any Intel Mac but the 2013 Mac Pro). Recording meetings and an app's sound needs macOS 14.2, Shortcuts actions macOS 13, and Apple's on-device models Apple Silicon and macOS 26.
 - **Windows:** Windows 10 or 11, x64. ARM PCs run it through emulation.
 - **For the AI:** a key for OpenAI, OpenRouter or Anthropic, or nothing at all with the on-device models. The built-in local model uses about 3 GB of memory; a smaller one (about 1.7 GB) suits 8 GB machines.
 
