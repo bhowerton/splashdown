@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.11.0 — 2026-11-08
 
 - **Runs on macOS 12 Monterey.** Splashdown needed macOS 13 before. On Monterey, dictation, commands, Compose, reading aloud, Notes and transcribing files, links and the microphone all work; Shortcuts actions need macOS 13, and recording meetings or an app's sound macOS 14.2, as before. The 2013 Mac Pro isn't supported.
 - **One-on-one calls remember the other person too.** With Recognize people you've named on, a call with one other person now keeps their voice as well: rename "Them" in the transcript and they're named by voice in later calls. Before, only meetings with two or more other people had voices kept.
