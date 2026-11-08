@@ -8,6 +8,7 @@
 //! folder), not beside the notes, so they don't fill a synced folder; lost,
 //! they're made again. A note's are made again whenever it changes.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashMap;
 use std::io::{self, Read, Write};
 use std::path::{Path, PathBuf};
@@ -69,10 +70,7 @@ fn index_slot() -> &'static Mutex<Option<Index>> {
 /// itself when idle, and starts again on the next use).
 fn embedder() -> Option<Arc<LocalEmbedder>> {
     static EMBEDDER: OnceLock<Mutex<Option<Arc<LocalEmbedder>>>> = OnceLock::new();
-    let mut slot = EMBEDDER
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut slot = EMBEDDER.get_or_init(Mutex::default).locked();
     if slot.is_none() {
         let models = crate::engine::paths().ok()?.models_dir;
         match LocalEmbedder::new(&Embedder::path_in(&models)) {
@@ -116,7 +114,7 @@ pub fn search(store: &Arc<Store>, notes: &[Summary], question: &str, limit: usiz
         .iter()
         .map(|n| (n.path.as_str(), n.modified))
         .collect();
-    let slot = index_slot().lock().unwrap_or_else(|e| e.into_inner());
+    let slot = index_slot().locked();
     let Some(index) = slot.as_ref().filter(|i| i.root == store.root()) else {
         return Vec::new();
     };
@@ -149,7 +147,7 @@ pub fn search(store: &Arc<Store>, notes: &[Summary], question: &str, limit: usiz
 pub fn update_soon(store: Arc<Store>) {
     static RUNNING: Mutex<(bool, bool)> = Mutex::new((false, false));
     {
-        let mut running = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+        let mut running = RUNNING.locked();
         if running.0 {
             running.1 = true;
             return;
@@ -161,7 +159,7 @@ pub fn update_soon(store: Arc<Store>) {
             if let Some(model) = embedder() {
                 update(store.root(), &store.list(), &model);
             }
-            let mut running = RUNNING.lock().unwrap_or_else(|e| e.into_inner());
+            let mut running = RUNNING.locked();
             if running.1 {
                 running.1 = false;
             } else {
@@ -174,7 +172,7 @@ pub fn update_soon(store: Arc<Store>) {
 
 /// How far along the vectors are for `notes`: notes read, of all of them.
 pub fn progress(root: &Path, notes: &[Summary]) -> (usize, usize) {
-    let mut slot = index_slot().lock().unwrap_or_else(|e| e.into_inner());
+    let mut slot = index_slot().locked();
     let index = loaded(&mut slot, root);
     let done = notes
         .iter()
@@ -190,7 +188,7 @@ pub fn progress(root: &Path, notes: &[Summary]) -> (usize, usize) {
 
 /// Pieces of `notes` whose vectors are missing or out of date.
 fn stale_pieces(root: &Path, notes: &[Summary]) -> usize {
-    let mut slot = index_slot().lock().unwrap_or_else(|e| e.into_inner());
+    let mut slot = index_slot().locked();
     let index = loaded(&mut slot, root);
     notes
         .iter()
@@ -208,7 +206,7 @@ fn stale_pieces(root: &Path, notes: &[Summary]) -> usize {
 /// saved as it goes, so a long first run isn't lost if the app quits.
 fn update(root: &Path, notes: &[Summary], model: &LocalEmbedder) {
     let changed: Vec<&Summary> = {
-        let mut slot = index_slot().lock().unwrap_or_else(|e| e.into_inner());
+        let mut slot = index_slot().locked();
         let index = loaded(&mut slot, root);
         let present: std::collections::HashSet<&str> =
             notes.iter().map(|n| n.path.as_str()).collect();
@@ -248,7 +246,7 @@ fn update(root: &Path, notes: &[Summary], model: &LocalEmbedder) {
             }
         }
         {
-            let mut slot = index_slot().lock().unwrap_or_else(|e| e.into_inner());
+            let mut slot = index_slot().locked();
             let index = loaded(&mut slot, root);
             index.notes.insert(
                 note.path.clone(),
@@ -290,7 +288,7 @@ fn save_now(root: &Path) {
     let Some(file) = file_for(root) else {
         return;
     };
-    let slot = index_slot().lock().unwrap_or_else(|e| e.into_inner());
+    let slot = index_slot().locked();
     let Some(index) = slot.as_ref().filter(|i| i.root == root) else {
         return;
     };

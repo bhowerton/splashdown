@@ -271,7 +271,7 @@ async function transcribeAgain(path, at) {
   if (!models.length) return toast("This note's recording isn't kept, so it can't be transcribed again.", true);
   const start = async (model) => {
     if (path === current.path) await saveNow();
-    invoke("notes_transcribe_again", { path, model }).catch((err) => toast(String(err), true));
+    call("notes_transcribe_again", { path, model });
   };
   const head = document.createElement("div");
   head.className = "nt-menu-head";

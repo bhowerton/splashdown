@@ -3,6 +3,7 @@
 //! with when it last worked. The guide asks for what happened since a
 //! step began, so a step only ticks off when it was actually done.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashMap;
 use std::sync::Mutex;
 
@@ -45,24 +46,20 @@ pub fn note(what: &'static str, text: &str) {
     let at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as u64);
-    LAST.lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get_or_insert_with(HashMap::new)
-        .insert(
+    LAST.locked().get_or_insert_with(HashMap::new).insert(
+        what,
+        Did {
             what,
-            Did {
-                what,
-                at,
-                text: text.to_string(),
-            },
-        );
+            at,
+            text: text.to_string(),
+        },
+    );
 }
 
 /// What was done at or after `since` (milliseconds since the epoch).
 #[tauri::command]
 pub fn did_since(since: u64) -> Vec<Did> {
-    LAST.lock()
-        .unwrap_or_else(|e| e.into_inner())
+    LAST.locked()
         .as_ref()
         .map(|last| last.values().filter(|d| d.at >= since).cloned().collect())
         .unwrap_or_default()

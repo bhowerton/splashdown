@@ -11,11 +11,14 @@ const LEAST_CJK_CHARS: usize = 8;
 const SHARE: f64 = 0.6;
 
 /// The language to reply in (a two-letter code), when the conversation in
-/// `window` is clearly in one that isn't `spoken`; `None` when it's in
-/// `spoken`, or unclear.
-pub fn reply_language(window: &str, spoken: &str) -> Option<&'static str> {
+/// `window` is clearly in one the user doesn't dictate in (`spoken`,
+/// language tags); `None` when it's in one of them, or unclear.
+pub fn reply_language<S: AsRef<str>>(window: &str, spoken: &[S]) -> Option<&'static str> {
     let lang = language(window)?;
-    (!lang.eq_ignore_ascii_case(spoken.split(['-', '_']).next().unwrap_or(spoken))).then_some(lang)
+    let speaks = spoken
+        .iter()
+        .any(|s| crate::language::base(s.as_ref()) == lang);
+    (!speaks).then_some(lang)
 }
 
 /// The conversation's language, when it's clear: most of the messages'
@@ -173,46 +176,6 @@ fn is_cjk_char(c: char) -> bool {
     matches!(c as u32, 0x3040..=0x30FF | 0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xAC00..=0xD7AF | 0x0E00..=0x0E7F)
 }
 
-/// The English name of a language `language` and `reply_language` can
-/// answer, as the translate instruction wants it ("de" → "German").
-pub fn english_name(code: &str) -> Option<&'static str> {
-    Some(match code {
-        "en" => "English",
-        "de" => "German",
-        "fr" => "French",
-        "es" => "Spanish",
-        "it" => "Italian",
-        "pt" => "Portuguese",
-        "nl" => "Dutch",
-        "sv" => "Swedish",
-        "da" => "Danish",
-        "nb" => "Norwegian",
-        "fi" => "Finnish",
-        "pl" => "Polish",
-        "cs" => "Czech",
-        "sk" => "Slovak",
-        "hu" => "Hungarian",
-        "ro" => "Romanian",
-        "bg" => "Bulgarian",
-        "hr" => "Croatian",
-        "el" => "Greek",
-        "tr" => "Turkish",
-        "ru" => "Russian",
-        "uk" => "Ukrainian",
-        "he" => "Hebrew",
-        "ar" => "Arabic",
-        "hi" => "Hindi",
-        "th" => "Thai",
-        "vi" => "Vietnamese",
-        "id" => "Indonesian",
-        "ca" => "Catalan",
-        "zh" => "Chinese",
-        "ja" => "Japanese",
-        "ko" => "Korean",
-        _ => return None,
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -220,35 +183,35 @@ mod tests {
     #[test]
     fn a_conversation_in_another_language_is_answered_in_it() {
         let slack = "#projekt\nLukas Becker 09:12\nGuten Morgen! Habt ihr die neuen Zahlen schon gesehen?\nLukas Becker 09:14\nIch glaube, wir sollten den Termin auf nächste Woche verschieben.\nPeople\nThreads\nMessage #projekt";
-        assert_eq!(reply_language(slack, "en"), Some("de"));
+        assert_eq!(reply_language(slack, &["en"]), Some("de"));
         // Already the user's language.
-        assert_eq!(reply_language(slack, "de"), None);
-        assert_eq!(reply_language(slack, "de-DE"), None);
+        assert_eq!(reply_language(slack, &["de"]), None);
+        assert_eq!(reply_language(slack, &["de-DE"]), None);
     }
 
     #[test]
     fn labels_names_times_and_quotes_dont_count() {
         let english = "Bandeja de entrada (4)\nDestacados\nBorradores\nDe: Sarah Kim\nHi Ben, can we push our review to Thursday? Something came up. Thanks, Sarah";
-        assert_eq!(reply_language(english, "en"), None);
+        assert_eq!(reply_language(english, &["en"]), None);
         let french = "Inbox\nFrom: Antoine Dubois\nBonjour Ben, merci pour votre message. Je suis disponible jeudi matin pour en discuter.\nOn Tue, Ben wrote:\n> Hi Antoine, would you have time this week to talk about the partnership? We would love to show you the product.";
-        assert_eq!(reply_language(french, "en"), Some("fr"));
+        assert_eq!(reply_language(french, &["en"]), Some("fr"));
     }
 
     #[test]
     fn unclear_conversations_get_no_answer() {
         assert_eq!(
-            reply_language("Messages\nLéa\nok 👍\n😂😂\nDelivered", "en"),
+            reply_language("Messages\nLéa\nok 👍\n😂😂\nDelivered", &["en"]),
             None
         );
         let mixed = "#product\nPriya 10:02 AM\nThe beta build is up, please test the onboarding flow today.\nJordan 10:20 AM\nOn it, I'll file anything I find in Linear.\nDiego 10:31 AM\nPerfecto, yo reviso la parte de pagos esta tarde.";
-        assert_eq!(reply_language(mixed, "en"), None);
+        assert_eq!(reply_language(mixed, &["en"]), None);
     }
 
     #[test]
     fn every_language_answered_has_a_name() {
         for lang in whatlang::Lang::all() {
             if let Some(code) = crate::aloud::code(*lang) {
-                assert!(english_name(code).is_some(), "{code}");
+                assert!(crate::language::english_name(code).is_some(), "{code}");
             }
         }
     }

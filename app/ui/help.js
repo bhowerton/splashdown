@@ -25,7 +25,7 @@ function render(sheet) {
         block.append(row);
       }
       if (section.actions && sheet.actions_off) {
-        block.append(button("Turn on voice actions", () => invoke("help_open_actions"), "btn primary hp-turn-on"));
+        block.append(button("Turn on voice actions", () => call("help_open_actions"), "btn primary hp-turn-on"));
       }
       return block;
     }),
@@ -33,11 +33,11 @@ function render(sheet) {
   $("hp-sections").scrollTop = 0;
 }
 
-$("hp-close").addEventListener("click", () => invoke("help_close"));
+$("hp-close").addEventListener("click", () => call("help_close"));
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") {
     e.preventDefault();
-    invoke("help_close");
+    call("help_close");
   }
 });
 

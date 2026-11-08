@@ -1,6 +1,7 @@
 "use strict";
 
-// History tab: search, list, redo with another preset, copy and delete.
+// History tab: search, list, redo with another preset, transcribe again,
+// copy, save to notes, pin and delete.
 // (The "Keep a history" switch is a normal setting, drawn in general.js.)
 
 /** The only place mode ids get display labels. The ids are written by the
@@ -114,11 +115,11 @@ function historyRow(e) {
       }
     }),
     button(e.pinned ? "Unpin" : "Pin", async () => {
-      await invoke("pin_history", { at: e.at, pinned: !e.pinned }).catch((err) => toast(String(err), true));
+      await call("pin_history", { at: e.at, pinned: !e.pinned });
       loadHistory();
     }),
     button("Delete", async () => {
-      await invoke("delete_history", { at: e.at }).catch((err) => toast(String(err), true));
+      await call("delete_history", { at: e.at });
       loadHistory();
     }, "btn danger")
   );
@@ -176,6 +177,6 @@ $("hist-clear").addEventListener("click", async () => {
     detail: "Every saved dictation and recording on this computer is removed, pinned ones too. This can't be undone.",
   });
   if (!sure) return;
-  await invoke("clear_history").catch((e) => toast(String(e), true));
+  await call("clear_history");
   loadHistory();
 });

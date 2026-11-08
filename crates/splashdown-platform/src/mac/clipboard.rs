@@ -1,6 +1,7 @@
 //! Pasteboard snapshot/restore, paste and typing via synthetic key events,
 //! and the copy-based selection fallback.
 
+use splashdown_core::sync::Locked;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
@@ -304,8 +305,7 @@ pub(crate) fn paste_text(text: &str) -> Result<()> {
     // A paste moments ago may not have put the user's clipboard back yet:
     // that's the one to restore, not our earlier text.
     let pending = PENDING_RESTORE
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .locked()
         .take()
         .filter(|p| p.ours == pb.changeCount());
     let saved = pending.map_or_else(|| snapshot(&pb), |p| p.saved);
@@ -324,11 +324,10 @@ pub(crate) fn paste_text(text: &str) -> Result<()> {
     // the user's clipboard goes back later, in the background, and only if
     // nobody (the user, another app) changed it meanwhile.
     let paste = PASTES.fetch_add(1, Ordering::Relaxed) + 1;
-    *PENDING_RESTORE.lock().unwrap_or_else(|e| e.into_inner()) =
-        Some(PendingRestore { saved, ours, paste });
+    *PENDING_RESTORE.locked() = Some(PendingRestore { saved, ours, paste });
     std::thread::spawn(move || {
         std::thread::sleep(RESTORE_AFTER);
-        let mut slot = PENDING_RESTORE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut slot = PENDING_RESTORE.locked();
         // A later paste took over the restore.
         if slot.as_ref().is_none_or(|p| p.paste != paste) {
             return;

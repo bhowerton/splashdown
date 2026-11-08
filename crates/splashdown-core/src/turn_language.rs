@@ -9,31 +9,37 @@
 //! has long turns in each, and those are kept as heard.
 
 /// Text needed before the recording's language is taken from what was
-/// said rather than the computer's language.
+/// said rather than the computer's language; tried again after as much
+/// more each time it isn't clear yet.
 const SETTLE_CHARS: usize = 200;
+/// Past this much text with no clear language, it stops trying (and keeps
+/// what it expected): a long meeting mustn't be detected over and over.
+const MOST_CHARS: usize = 2_000;
 /// A turn longer than this is never redone, in words.
 const MOST_WORDS: usize = 15;
 /// …or, for scripts written without spaces, characters.
 const MOST_CJK_CHARS: usize = 30;
 
+/// A recording's language, learned turn by turn (`heard`), and which
+/// turns stray from it (`is_stray`).
 pub struct TurnLanguage {
     /// What to expect until the recording settles: the computer's
     /// language (two-letter code).
     expected: Option<String>,
     said: String,
+    /// Characters in `said` when it was last tried.
+    tried_at: usize,
     settled: Option<&'static str>,
 }
 
 impl TurnLanguage {
+    /// Starts out expecting `expected` (a language tag such as "en-US",
+    /// usually the computer's language).
     pub fn new(expected: Option<String>) -> Self {
         Self {
-            expected: expected.map(|e| {
-                e.split(['-', '_'])
-                    .next()
-                    .unwrap_or_default()
-                    .to_ascii_lowercase()
-            }),
+            expected: expected.map(|e| crate::language::base(&e)),
             said: String::new(),
+            tried_at: 0,
             settled: None,
         }
     }
@@ -45,13 +51,18 @@ impl TurnLanguage {
 
     /// Notes a turn as transcribed (after any redo).
     pub fn heard(&mut self, text: &str) {
-        if self.settled.is_some() || text.trim().is_empty() {
+        if self.settled.is_some() || self.tried_at >= MOST_CHARS || text.trim().is_empty() {
             return;
         }
         self.said.push_str(text);
         self.said.push('\n');
-        if self.said.chars().count() >= SETTLE_CHARS {
-            self.settled = crate::aloud::language(&self.said);
+        let chars = self.said.chars().count();
+        if chars >= self.tried_at + SETTLE_CHARS {
+            self.tried_at = chars;
+            self.settled = clearly(&self.said);
+            if self.settled.is_some() || chars >= MOST_CHARS {
+                self.said = String::new();
+            }
         }
     }
 
@@ -78,14 +89,16 @@ impl TurnLanguage {
         }
         // Same script: only when it's plainly another language (a few
         // words aren't enough to tell).
-        text.split_whitespace().count() >= 4
-            && crate::conversation::detector()
-                .detect(text)
-                .is_some_and(|info| {
-                    (info.is_reliable() || info.confidence() >= crate::conversation::SURE)
-                        && crate::aloud::code(info.lang()).is_some_and(|l| l != lang)
-                })
+        text.split_whitespace().count() >= 4 && clearly(text).is_some_and(|l| l != lang)
     }
+}
+
+/// The language `text` is clearly in, if it is.
+fn clearly(text: &str) -> Option<&'static str> {
+    crate::conversation::detector()
+        .detect(text)
+        .filter(|info| info.is_reliable() || info.confidence() >= crate::conversation::SURE)
+        .and_then(|info| crate::aloud::code(info.lang()))
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -189,5 +202,15 @@ mod tests {
     fn nothing_to_go_on_redoes_nothing() {
         let lang = TurnLanguage::new(None);
         assert!(!lang.is_stray("क्यों बेबी"));
+    }
+
+    #[test]
+    fn unclear_text_is_given_up_on() {
+        let mut lang = TurnLanguage::new(Some("en".into()));
+        for _ in 0..500 {
+            lang.heard("ok ok 123 hm");
+        }
+        assert!(lang.said.is_empty(), "stopped keeping what was said");
+        assert_eq!(lang.language(), Some("en"));
     }
 }

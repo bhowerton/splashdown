@@ -53,7 +53,7 @@ function actions() {
     { title: "Change notes folder…", icon: "folder", run: changeFolder, off: !!job || !!meeting },
     { title: "Edit rewrites…", icon: "pen", sub: "Settings → Words", run: editRewrites },
   );
-  if (have) list.push({ title: "Move this note to the Trash", icon: "x", run: deleteNote, off: locked() });
+  if (have) list.push({ title: `Move this note to the ${TRASH}`, icon: "x", run: deleteNote, off: locked() });
   return list.filter((a) => !a.off);
 }
 
@@ -144,7 +144,7 @@ function renderPalette() {
         if (has(node.path)) {
           places.push({
             title: kind === "folder" ? node.name : `#${node.path}`,
-            sub: kind === "folder" ? `${node.path.split("/").join(" › ")} · ${node.count} ${node.count === 1 ? "note" : "notes"}` : `${node.count} ${node.count === 1 ? "note" : "notes"}`,
+            sub: kind === "folder" ? `${node.path.split("/").join(" › ")} · ${plural(node.count, "note")}` : plural(node.count, "note"),
             icon: kind === "folder" ? "folder" : "tag",
             run: () => {
               toggleNav(true);
@@ -261,6 +261,6 @@ $("nt-find").addEventListener("click", openPalette);
 function keysLabel(keys) {
   const kbd = document.createElement("kbd");
   kbd.className = "nt-kbd";
-  kbd.textContent = isMac ? keys : keys.replace("⌘", "Ctrl+").replace("↩", "Enter");
+  kbd.textContent = isMac ? keys : keys.replace("⌘", "Ctrl+").replace("⇧", "Shift+").replace("↩", "Enter");
   return kbd;
 }

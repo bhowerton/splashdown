@@ -2,6 +2,7 @@
 //! terminal's working folder, an editor's open file), and its files, for
 //! `@file` mentions (`splashdown_core::files`) and spelling hints.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
@@ -49,7 +50,7 @@ pub fn for_document(document: &Path) -> Option<Arc<Project>> {
     let root = root_for(document)?;
     static CACHE: OnceLock<Mutex<HashMap<PathBuf, Listed>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Mutex::default);
-    if let Some((at, project)) = cache.lock().unwrap_or_else(|e| e.into_inner()).get(&root)
+    if let Some((at, project)) = cache.locked().get(&root)
         && at.elapsed() < FRESH
     {
         return Some(project.clone());
@@ -63,8 +64,7 @@ pub fn for_document(document: &Path) -> Option<Arc<Project>> {
         started.elapsed()
     );
     cache
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .locked()
         .insert(root, (Instant::now(), project.clone()));
     Some(project)
 }

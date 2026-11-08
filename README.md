@@ -208,7 +208,7 @@
 | Start or finish from a terminal or script | `splashdown-cli toggle` (also `start`, `stop`, `cancel`); `splashdown-cli listen` prints what you say instead of typing it |
 | Add to your notes from a terminal or launcher | `splashdown-cli note buy oat milk`, or `splashdown-cli note` (and `splashdown://note`) to dictate one hands-free |
 | Go through your notes and meetings from a terminal | `splashdown-cli notes list --when this_week --kind meeting --summary`, `notes search <words>`, `notes read <path> --section transcript --speaker Dana` (with notes allowed for coding agents in Settings → Privacy) |
-| Script Splashdown | `splashdown-cli status --json`; `settings get`, `set`, `unset` and `list` by key (`general.language`); `history <words>`; `words import <file>`. Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running, 4 no such setting or model. (`models` and `say`, like the pipeline and eval commands, are in the full `splashdown-cli` you build from source.) |
+| Script Splashdown | `splashdown-cli status --json`; `settings get`, `set`, `unset` and `list` by key (`general.language`), and `settings path` for where the file is; `history <words>`; `words import <file>`. Exit codes: 0 worked, 1 failed, 2 wrong usage, 3 the app isn't running, 4 no such setting or model. (`models` and `say`, like the pipeline and eval commands, are in the full `splashdown-cli` you build from source.) |
 
 On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 
@@ -307,7 +307,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 | `crates/splashdown-control` | The running app's control socket: protocol, client, server |
 | `crates/splashdown-mcp` | `splashdown-mcp`, voice input and notes for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
 | `app/` | The menu bar and tray app (Tauri) and its windows: Settings, setup guide, Notes, Ask, Compose and a few small panels; `app/editor` builds the Notes editor |
-| `docs/` | [Architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md) |
+| `docs/` | [Architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md), [coding agents](docs/AGENTS.md), [privacy](docs/PRIVACY.md), [troubleshooting](docs/TROUBLESHOOTING.md) |
 
 </details>
 

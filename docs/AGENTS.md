@@ -27,7 +27,7 @@ Splashdown must be running. The server talks to it over the app's control socket
 - **Cursor and VS Code:** their install link opens, and they ask you to confirm.
 - **Claude Desktop:** **Copy setup** copies the lines to add under Settings → Developer → Edit Config; then restart it.
 
-Start a new session in the agent afterwards. The same is there from a terminal, which is handy over SSH or in scripts:
+Start a new session in the agent afterward. The same is there from a terminal, which is handy over SSH or in scripts:
 
 ```sh
 splashdown-mcp agents                    # which agents are set up

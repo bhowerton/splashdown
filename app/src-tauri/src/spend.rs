@@ -6,6 +6,7 @@
 //! Costs are estimates (see `splashdown_providers::pricing`). A call whose
 //! price isn't known is counted, not priced.
 
+use splashdown_core::sync::Locked;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -112,7 +113,7 @@ impl Spend {
     }
 
     fn ledger(&self) -> std::sync::MutexGuard<'_, Ledger> {
-        self.ledger.lock().unwrap_or_else(|e| e.into_inner())
+        self.ledger.locked()
     }
 
     /// Adds one request's costs. `parts` names each provider and what it

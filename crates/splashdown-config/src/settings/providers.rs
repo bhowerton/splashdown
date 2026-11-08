@@ -68,6 +68,35 @@ pub enum AiProvider {
     Off,
 }
 
+impl SpeechProvider {
+    /// The name people see, in Settings and the menu bar.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Openai => "OpenAI",
+            Self::Openrouter => "OpenRouter",
+            Self::WhisperLocal => "On this computer",
+            Self::Apple => "Apple on-device",
+        }
+    }
+}
+
+impl AiProvider {
+    /// The name people see, in Settings and the menu bar.
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Auto => "Auto",
+            Self::Openai => "OpenAI",
+            Self::Openrouter => "OpenRouter",
+            Self::Anthropic => "Anthropic",
+            Self::Custom => "Local server",
+            Self::Apple => "Apple on-device",
+            Self::Local => "Built-in local model",
+            Self::Off => "Off",
+        }
+    }
+}
+
 impl std::str::FromStr for SpeechProvider {
     type Err = String;
     fn from_str(s: &str) -> Result<Self, Self::Err> {

@@ -1,6 +1,6 @@
 # Evals
 
-These eval sets drive the model defaults in `crates/splashdown-config/src/settings.rs` (`defaults`).
+These eval sets drive the model defaults in `crates/splashdown-config/src/settings/providers.rs` (`pub mod defaults`).
 
 | Set | What it checks | Run |
 |---|---|---|
@@ -24,8 +24,10 @@ Keys come from `.env.local` in the repo root (see `.env.local.example`). Run fro
 
 Useful flags:
 - `--ai-model`, `--stt-model`: a model other than the provider's default.
-- `--models a,b,c`: compare several models of the same provider in one run (not `stt`).
+- `--models a,b,c`: compare several models of the same provider in one run (not `stt` or `window-language`).
 - `--filter <id-substring>`: only the cases whose id contains it (not `stt`).
+- `--detect-language` (`stt` only): let the model detect each clip's language instead of telling it, as the app's "Detect automatically" does.
+- `--voice <name>` (`make-audio` only): the macOS `say` voice (default `Samantha`).
 - `-v`: print every output, not just failures.
 - `--cloud-instructions`: with a local AI pass, send instructions and transforms to a cloud model, as the app's "Send instructions to the cloud" does.
 - `--config <file>`: use these settings instead of the app's `config.toml`.

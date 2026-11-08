@@ -33,6 +33,7 @@ pub mod subtitles;
 pub mod watch;
 mod window;
 
+use splashdown_core::sync::Locked;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -398,7 +399,7 @@ pub fn notes_reveal(path: Option<String>, state: State<'_, AppState>) -> Result<
 /// triggers the Documents prompt.
 #[tauri::command]
 pub fn notes_folder(state: State<'_, AppState>) -> Result<Folder, String> {
-    let slot = current_slot().lock().unwrap_or_else(|e| e.into_inner());
+    let slot = current_slot().locked();
     if let Some(c) = slot.as_ref() {
         return Ok(folder_of(c.store.root(), c.problem.clone()));
     }
@@ -454,7 +455,7 @@ pub fn notes_set_folder(
     }
     let kept = (Some(&folder) != default_folder().as_ref()).then_some(folder);
     state.update(&app, |s| s.notes.folder = kept)?;
-    *current_slot().lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *current_slot().locked() = None;
     view(&state)
 }
 

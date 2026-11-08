@@ -346,7 +346,8 @@ fn context_section(mode: Mode, ctx: &PromptContext) -> String {
             ctx.vocabulary.join(", ")
         ));
     }
-    if !ctx.misheard.is_empty() {
+    // "Some of these" refers to the vocabulary line just above.
+    if !ctx.vocabulary.is_empty() && !ctx.misheard.is_empty() {
         let pairs: Vec<String> = ctx
             .misheard
             .iter()
@@ -362,8 +363,17 @@ fn context_section(mode: Mode, ctx: &PromptContext) -> String {
 
 /// Wraps `text` in `<tag>` blocks, neutralizing any closing tag inside it so
 /// dictated text can't break out of its block.
-fn tagged(tag: &str, text: &str) -> String {
+pub(crate) fn tagged(tag: &str, text: &str) -> String {
     format!("<{tag}>\n{}\n</{tag}>", escape(text, tag))
+}
+
+/// Adds `text` to `out` as a `tagged` block on its own line, unless it's
+/// blank.
+pub(crate) fn push_block(out: &mut String, tag: &str, text: &str) {
+    if !text.trim().is_empty() {
+        out.push_str(&tagged(tag, text.trim()));
+        out.push('\n');
+    }
 }
 
 /// Today as prompts give it ("Monday, 3 November 2026"), so "tomorrow" and

@@ -93,8 +93,9 @@ $("nt-send").addEventListener("click", sendNote);
 $("nt-rename").addEventListener("submit", finishRename);
 $("nt-rename-cancel").addEventListener("click", endRename);
 $("nt-history-back").addEventListener("click", () => showHistory(false));
-$("nt-folder").addEventListener("click", () => invoke("notes_reveal", { path: null }).catch((e) => toast(String(e), true)));
+$("nt-folder").addEventListener("click", () => call("notes_reveal", { path: null }));
 $("nt-reveal").textContent = isMac ? "Show in Finder" : "Show in File Explorer";
+$("nt-delete").textContent = `Move to ${TRASH}`;
 for (const kbd of document.querySelectorAll("kbd[data-keys]")) {
   kbd.textContent = keysLabel(kbd.dataset.keys).textContent;
 }

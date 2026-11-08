@@ -8,6 +8,7 @@ use splashdown_config::{
     SpeechProvider,
 };
 use splashdown_core::gesture::PhysicalKey;
+use splashdown_core::sync::Locked;
 use splashdown_platform::Access;
 use splashdown_providers::apple::AppleStatus;
 use splashdown_providers::{LocalModel, SpeechModel};
@@ -147,41 +148,26 @@ pub(super) fn preset_ai_options(
 ) -> Vec<AiOption> {
     let cloud = !settings.general.local_only;
     let options = [
-        (
-            AiProvider::Apple,
-            "Apple on-device",
-            on_device.apple_language_model,
-        ),
-        (
-            AiProvider::Local,
-            "Built-in local model",
-            on_device.local_model,
-        ),
-        (
-            AiProvider::Openai,
-            "OpenAI",
-            cloud && secrets.openai.is_some(),
-        ),
+        (AiProvider::Apple, on_device.apple_language_model),
+        (AiProvider::Local, on_device.local_model),
+        (AiProvider::Openai, cloud && secrets.openai.is_some()),
         (
             AiProvider::Openrouter,
-            "OpenRouter",
             cloud && secrets.openrouter.is_some(),
         ),
-        (
-            AiProvider::Anthropic,
-            "Anthropic (Claude)",
-            cloud && secrets.anthropic.is_some(),
-        ),
+        (AiProvider::Anthropic, cloud && secrets.anthropic.is_some()),
         (
             AiProvider::Custom,
-            "Local server",
             settings.ai.base_url.is_some() || settings.ai.provider == AiProvider::Custom,
         ),
     ];
     options
         .into_iter()
-        .filter(|(_, _, usable)| *usable)
-        .map(|(value, label, _)| AiOption { value, label })
+        .filter(|(_, usable)| *usable)
+        .map(|(value, _)| AiOption {
+            value,
+            label: value.label(),
+        })
         .collect()
 }
 
@@ -293,18 +279,18 @@ pub(super) fn snapshot(
         Ok(None) | Err(_) => Destination::Off,
     };
     let resolved_speech = speech
-        .map(|c| with_model(speech_label(c.provider), &c.model))
+        .map(|c| with_model(c.provider.label(), &c.model))
         .map_err(|e| e.to_string());
     let resolved_ai = ai
         .map(|c| match c {
-            Some(c) => with_model(ai_label(c.provider), &c.model),
+            Some(c) => with_model(c.provider.label(), &c.model),
             None => "Off".to_string(),
         })
         .map_err(|e| e.to_string());
 
     let resolved_instructions = settings
         .resolve_instruction_ai_with(&secrets, on_device)
-        .map(|c| with_model(ai_label(c.provider), &c.model));
+        .map(|c| with_model(c.provider.label(), &c.model));
     let can_route_instructions = {
         let mut on = settings.clone();
         on.ai.cloud_for_instructions = true;
@@ -325,7 +311,7 @@ pub(super) fn snapshot(
         },
         speech_models,
         local_models,
-        downloads: DOWNLOADS.lock().unwrap_or_else(|e| e.into_inner()).clone(),
+        downloads: DOWNLOADS.locked().clone(),
         key_options,
         resolved_speech,
         resolved_ai,
@@ -362,29 +348,6 @@ pub(super) fn with_model(label: &str, model: &str) -> String {
         label.to_string()
     } else {
         format!("{label} · {model}")
-    }
-}
-
-pub(super) fn ai_label(p: AiProvider) -> &'static str {
-    match p {
-        AiProvider::Auto => "Auto",
-        AiProvider::Openai => "OpenAI",
-        AiProvider::Openrouter => "OpenRouter",
-        AiProvider::Anthropic => "Anthropic",
-        AiProvider::Custom => "Local server",
-        AiProvider::Apple => "Apple on-device",
-        AiProvider::Local => "Built-in local model",
-        AiProvider::Off => "Off",
-    }
-}
-
-pub(super) fn speech_label(p: SpeechProvider) -> &'static str {
-    match p {
-        SpeechProvider::Auto => "Auto",
-        SpeechProvider::Openai => "OpenAI",
-        SpeechProvider::Openrouter => "OpenRouter",
-        SpeechProvider::WhisperLocal => "On this computer",
-        SpeechProvider::Apple => "Apple on-device",
     }
 }
 

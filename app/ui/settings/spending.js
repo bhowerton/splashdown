@@ -16,7 +16,7 @@ function renderSpending() {
   $("spend-month").textContent = money(month.cost_usd);
   const per = month.requests ? ` · about ${money(month.cost_usd / month.requests)} each` : "";
   const unpriced = month.unpriced ? ` · ${month.unpriced} with an unknown price` : "";
-  $("spend-month-detail").textContent = `${month.requests} paid request${month.requests === 1 ? "" : "s"}${per}${unpriced}`;
+  $("spend-month-detail").textContent = `${plural(month.requests, "paid request")}${per}${unpriced}`;
   $("spend-today").textContent = money(sp.today.cost_usd);
 
   const providers = Object.entries(month.by_provider).sort((a, b) => b[1] - a[1]);
@@ -50,6 +50,6 @@ function collectBudget() {
 
 document.querySelectorAll("[data-limits]").forEach((b) =>
   b.addEventListener("click", () =>
-    invoke("open_limits_page", { provider: b.dataset.limits }).catch((e) => toast(String(e), true))
+    call("open_limits_page", { provider: b.dataset.limits })
   )
 );

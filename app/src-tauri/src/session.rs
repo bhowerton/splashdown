@@ -35,6 +35,7 @@ mod job;
 mod recording;
 mod spoken;
 
+use splashdown_core::sync::Locked;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -335,8 +336,7 @@ impl Handle {
 
     /// Ignore hotkeys (while Settings listens for a new key) or resume.
     pub fn pause_hotkeys(&self, paused: bool) {
-        *self.paused_until.lock().unwrap_or_else(|e| e.into_inner()) =
-            paused.then(|| Instant::now() + PAUSE_LIMIT);
+        *self.paused_until.locked() = paused.then(|| Instant::now() + PAUSE_LIMIT);
     }
 
     /// Blocks until the session has re-run the AI pass (behind any
@@ -643,7 +643,7 @@ impl Controller {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Recognizer> {
-        self.recognizer.lock().unwrap_or_else(|e| e.into_inner())
+        self.recognizer.locked()
     }
 
     fn try_listen(&mut self) {
@@ -663,7 +663,7 @@ impl Controller {
             if paused {
                 return false;
             }
-            let mut r = recognizer.lock().unwrap_or_else(|e| e.into_inner());
+            let mut r = recognizer.locked();
             // Esc stops a reading aloud, unless it's for a recording.
             if ev.key == PhysicalKey::Escape
                 && !r.is_recording()

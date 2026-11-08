@@ -4,6 +4,7 @@
 //! a time; the rest wait their turn. A meeting's kept recording can be
 //! transcribed again the same way, with another speech model.
 
+use splashdown_core::sync::Locked;
 use std::collections::VecDeque;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -126,10 +127,7 @@ pub(super) struct Queue {
 
 pub(super) fn queue() -> MutexGuard<'static, Queue> {
     static QUEUE: OnceLock<Mutex<Queue>> = OnceLock::new();
-    QUEUE
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    QUEUE.get_or_init(Mutex::default).locked()
 }
 
 pub(super) fn is_media(path: &Path) -> bool {
@@ -536,9 +534,8 @@ fn short_label(model: SpeechModel) -> String {
         .to_string()
 }
 
-/// One piece, tried twice before giving up.
-/// A piece's text, its words with their times (when the model gives them)
-/// and what it cost.
+/// One piece transcribed, tried twice before giving up: its text, its
+/// words with their times (when the model gives them) and what it cost.
 fn transcribe_piece(
     stt: &dyn SpeechToText,
     clip: &AudioClip,

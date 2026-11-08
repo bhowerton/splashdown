@@ -1,6 +1,7 @@
 //! Accessibility (AX) API: focused app and field, selected text, password
 //! fields, and permission checks.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashSet;
 use std::sync::Mutex;
 
@@ -364,7 +365,7 @@ fn page_url(el: &AxElement) -> Option<String> {
 /// process. The first dictation in such an app may still miss the
 /// selection while the tree builds; the copy fallback covers that.
 fn prepare_app(pid: i32, bundle_id: &str, app: &AxElement) {
-    let mut guard = PREPARED_PIDS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = PREPARED_PIDS.locked();
     let prepared = guard.get_or_insert_with(HashSet::new);
     if !prepared.insert(pid) {
         return;

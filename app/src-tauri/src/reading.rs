@@ -10,6 +10,7 @@
 //! so the voice starts at once and an answer can be read while it's still
 //! being written.
 
+use splashdown_core::sync::Locked;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard, OnceLock};
@@ -66,7 +67,7 @@ static UI: OnceLock<Ui> = OnceLock::new();
 static SWALLOW_ESC_UP: AtomicBool = AtomicBool::new(false);
 
 fn reading() -> MutexGuard<'static, Option<Reading>> {
-    READING.lock().unwrap_or_else(|e| e.into_inner())
+    READING.locked()
 }
 
 /// Called once at start-up with the status pill.
@@ -352,7 +353,7 @@ fn offer_download(n: u64) -> bool {
 fn natural_speech() -> Option<std::sync::Arc<splashdown_providers::NaturalSpeech>> {
     static LOADED: Mutex<Option<std::sync::Arc<splashdown_providers::NaturalSpeech>>> =
         Mutex::new(None);
-    let mut loaded = LOADED.lock().unwrap_or_else(|e| e.into_inner());
+    let mut loaded = LOADED.locked();
     if let Some(speech) = loaded.as_ref() {
         return Some(speech.clone());
     }
@@ -558,7 +559,11 @@ pub fn reading_try(voice: Option<String>, speed: f32) {
         .and_then(|id| voices().into_iter().find(|v| &v.id == id))
         .map(|v| v.language);
     // In the voice's own language, where there's a sentence for it.
-    let sample = match language.as_deref().and_then(|l| l.split(['-', '_']).next()) {
+    let sample = match language
+        .as_deref()
+        .map(splashdown_core::language::base)
+        .as_deref()
+    {
         Some("de") => "So liest Splashdown dir deinen Text vor.",
         Some("fr") => "Voici comment Splashdown vous lit votre texte.",
         Some("es") => "Así es como Splashdown te lee el texto.",

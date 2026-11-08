@@ -270,8 +270,8 @@ fn answer(app: &AppHandle, intent: Intent) -> Result<Reply, String> {
             // Read whole first: that's where a note hidden from agents is
             // refused.
             let subtitles = match section.as_deref() {
-                Some("subtitles_srt") => Some(false),
-                Some("subtitles_vtt") => Some(true),
+                Some("subtitles_srt") => Some(splashdown_core::subtitles::Format::Srt),
+                Some("subtitles_vtt") => Some(splashdown_core::subtitles::Format::Vtt),
                 _ => None,
             };
             let mut text = read_all(
@@ -283,8 +283,8 @@ fn answer(app: &AppHandle, intent: Intent) -> Result<Reply, String> {
                     section.as_deref()
                 },
             )?;
-            if let Some(vtt) = subtitles {
-                text = crate::notes::subtitles::text_for(notes.folder.clone(), &path, vtt)?;
+            if let Some(format) = subtitles {
+                text = crate::notes::subtitles::text_for(notes.folder.clone(), &path, format)?;
             }
             Ok(Reply {
                 text: Some(text),

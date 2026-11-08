@@ -1,6 +1,7 @@
 //! Dictation history: a JSON-lines file in the app's config
 //! folder, newest last. Local only; never sent anywhere.
 
+use splashdown_core::sync::Locked;
 use std::fs::{File, OpenOptions};
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -116,7 +117,7 @@ impl History {
     /// Sets how many days entries are kept (from the settings, at startup
     /// and whenever they change) and deletes any that are already older.
     pub fn set_keep_days(&self, days: Option<u32>) {
-        *self.keep_days.lock().unwrap_or_else(|e| e.into_inner()) = days;
+        *self.keep_days.locked() = days;
         self.expire(Entry::now_ms());
     }
 
@@ -134,7 +135,7 @@ impl History {
     /// Removes expired entries from `entries` and deletes their recordings.
     /// Returns how many there were.
     fn drop_expired(&self, entries: &mut Vec<Entry>, now: u64) -> usize {
-        let Some(days) = *self.keep_days.lock().unwrap_or_else(|e| e.into_inner()) else {
+        let Some(days) = *self.keep_days.locked() else {
             return 0;
         };
         let cutoff = now.saturating_sub(u64::from(days) * DAY_MS);
@@ -151,11 +152,7 @@ impl History {
 
     /// Newest first.
     pub fn recent_apps(&self) -> Vec<RecentApp> {
-        let mut v = self
-            .recent_apps
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let mut v = self.recent_apps.locked().clone();
         v.reverse();
         v
     }
@@ -165,16 +162,13 @@ impl History {
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, Vec<Entry>> {
-        self.entries.lock().unwrap_or_else(|e| e.into_inner())
+        self.entries.locked()
     }
 
     /// Remembers the latest result in memory only (history turned off).
     pub fn remember(&self, entry: Entry) {
-        push_recent(
-            &mut self.recent_apps.lock().unwrap_or_else(|e| e.into_inner()),
-            &entry,
-        );
-        *self.latest.lock().unwrap_or_else(|e| e.into_inner()) = Some(entry);
+        push_recent(&mut self.recent_apps.locked(), &entry);
+        *self.latest.locked() = Some(entry);
     }
 
     pub fn add(&self, entry: Entry) {
@@ -205,10 +199,7 @@ impl History {
     }
 
     pub fn last(&self) -> Option<Entry> {
-        self.latest
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.latest.locked().clone()
     }
 
     /// Pinned entries first, then newest first, optionally filtered by a

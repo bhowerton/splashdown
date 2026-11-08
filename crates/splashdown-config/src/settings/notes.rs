@@ -64,7 +64,8 @@ pub struct NotesSettings {
     /// with the downloaded diarization model.
     pub meeting_speakers: bool,
     /// Know people the user named in a meeting again in later ones, by
-    /// voice (with the downloaded voice model). Needs `meeting_speakers`.
+    /// voice (with the downloaded voice model). Tells speakers apart too,
+    /// whatever `meeting_speakers` says (`tells_speakers_apart`).
     pub remember_speakers: bool,
     /// Ask finds notes by what they mean too, not only by their words,
     /// with the downloaded embedding model.
@@ -97,6 +98,12 @@ pub enum MeetingSummary {
 }
 
 impl NotesSettings {
+    /// Whether a meeting's speakers are told apart: asked for, or needed
+    /// to recognize people by voice.
+    pub fn tells_speakers_apart(&self) -> bool {
+        self.meeting_speakers || self.remember_speakers
+    }
+
     pub fn meeting_folder(&self) -> &str {
         self.meeting_folder
             .as_deref()

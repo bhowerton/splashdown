@@ -3,7 +3,6 @@
 //! answer may draw on the selection, the text around the cursor, the
 //! clipboard and excerpts of the user's own notes that match the question.
 
-use crate::prompt::escape;
 use crate::provider::TextRequest;
 
 /// What a question may be answered from, besides what the model knows.
@@ -76,14 +75,7 @@ pub fn request(question: &str, ctx: &AskContext) -> TextRequest {
     }
 
     let mut user = String::new();
-    let mut block = |tag: &str, text: &str| {
-        if !text.trim().is_empty() {
-            user.push_str(&format!(
-                "<{tag}>\n{}\n</{tag}>\n",
-                escape(text.trim(), tag)
-            ));
-        }
-    };
+    let mut block = |tag: &str, text: &str| crate::prompt::push_block(&mut user, tag, text);
     if let Some(selection) = &ctx.selection {
         block("selection", selection);
     }

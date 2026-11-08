@@ -598,7 +598,7 @@ fn their_preset(active: &Active) -> Option<Preset> {
     {
         return None;
     }
-    let language = splashdown_core::conversation::english_name(code)?;
+    let language = splashdown_core::language::english_name(code)?;
     let mut preset = super::edits::translating(active.preset.clone(), language);
     preset.name = match preset_label(&active.preset) {
         Some(name) => format!("{name} → {language} (their language)"),

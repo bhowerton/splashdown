@@ -1,20 +1,19 @@
 "use strict";
 
-// Shared state, constants and saving.
-
-// The Notes window (notes.html), in notes/ in load order: this file,
-// then list, folders, note, meeting, actions, app-audio, rewrites, ask,
-// palette, transcribe, recording, menus, wiring and preview. They are
-// classic scripts sharing one global scope, so a later file may use an
-// earlier one's names at load, not the reverse.
-//
-// The Notes window: Markdown files in the notes folder, listed
+// The Notes window (notes.html): Markdown files in the notes folder, listed
 // on the left and edited on the right. A new note becomes a file once it
 // has text; after that it's saved as you type. A meeting's note shows as
 // tabs (its summary, transcript and the user's own notes); while it
 // records, the transcript grows beside a place to write. ⌘K finds any
 // note or action, ⌘J asks the notes a question, and a rewrite shows what
 // it changed before it's kept.
+//
+// Its scripts, in notes/ in load order: this file (shared state, constants
+// and saving), then list, folders, note, meeting, actions, app-audio,
+// rewrites, ask, palette, transcribe, recording, menus, wiring and preview.
+// They are classic scripts sharing one global scope (with common.js, loaded
+// first), so a later file may use an earlier one's names at load, not the
+// reverse.
 
 /** How long typing pauses before the note is saved (ms). */
 const SAVE_DELAY = 500;
@@ -30,6 +29,8 @@ const SPEEDS = [1, 1.25, 1.5, 2];
 
 const isMac = navigator.platform.startsWith("Mac");
 const isWindows = navigator.platform.startsWith("Win");
+/** Where a deleted note goes, as this computer calls it. */
+const TRASH = isMac ? "Trash" : "Recycle Bin";
 const MY_NOTES = "My notes";
 
 /** The note open: its file (null until it has text), the file's time when

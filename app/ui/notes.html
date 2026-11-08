@@ -61,7 +61,7 @@
         <button class="nt-iconbtn sm" id="nt-new-folder" aria-label="New folder" title="New folder"><svg class="ic sm"><use href="#i-plus"></use></svg></button>
       </div>
       <ul id="nt-folders" class="nt-tree" role="tree" aria-label="Folders"></ul>
-      <div class="nt-nav-head" id="nt-tags-head"><span>Tags</span></div>
+      <div class="nt-nav-head"><span>Tags</span></div>
       <ul id="nt-tags" class="nt-tree" role="tree" aria-label="Tags"></ul>
       <p id="nt-tags-empty" class="nt-hint nt-nav-hint" hidden>Type <b>#</b> and a word in a note, or add a tag above a note.</p>
     </div>
@@ -113,8 +113,8 @@
       </div>
       <div class="nt-tools">
         <button class="btn nt-tool" id="nt-record" title="Record both sides of a call into a note">
-          <svg class="ic" id="nt-record-icon"><use href="#i-rec"></use></svg>
-          <span class="nt-lbl" id="nt-record-label">Record meeting</span>
+          <svg class="ic"><use href="#i-rec"></use></svg>
+          <span class="nt-lbl">Record meeting</span>
         </button>
         <div class="nt-menu-wrap">
           <button class="btn nt-tool" id="nt-transcribe" aria-haspopup="menu" aria-expanded="false" title="Transcribe a recording or a link into a note">
@@ -154,7 +154,7 @@
           <button role="menuitem" data-act="edit-rewrites">Edit rewrites…</button>
           <button role="menuitem" data-act="folder">Change notes folder…</button>
           <hr>
-          <button role="menuitem" data-act="delete" class="danger">Move to Trash</button>
+          <button role="menuitem" data-act="delete" id="nt-delete" class="danger">Move to Trash</button>
         </div>
       </div>
     </header>
@@ -266,7 +266,7 @@
           <div class="nt-edit-wrap" id="nt-edit-wrap">
             <div id="nt-edit" class="nt-edit"></div>
             <div id="nt-start" class="nt-start" hidden>
-              <div class="nt-start-key"><kbd id="nt-start-key" class="dict-key">fn</kbd></div>
+              <div class="nt-start-key"><kbd class="dict-key">fn</kbd></div>
               <p class="nt-start-title">Hold <span class="dict-key">your dictation key</span> and talk. It lands here.</p>
               <p class="nt-muted">Or start typing. Everything saves as you go.</p>
               <div class="nt-cards">
@@ -339,7 +339,7 @@
           <button class="nt-iconbtn" id="nt-ask-close" aria-label="Close" title="Close"><svg class="ic"><use href="#i-x"></use></svg></button>
         </header>
         <div id="nt-ask-log" class="nt-ask-log" aria-live="polite">
-          <p id="nt-ask-hint" class="nt-hint">Ask about this note or all your notes. Answers say which notes they came from.</p>
+          <p class="nt-hint">Ask about this note or all your notes. Answers say which notes they came from.</p>
         </div>
         <form id="nt-ask-form" class="nt-ask-foot">
           <div class="nt-askbox">

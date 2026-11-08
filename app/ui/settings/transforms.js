@@ -1,6 +1,6 @@
 "use strict";
 
-// Transforms (on the Words tab): saved instructions run over a note or
+// Transforms (on the Words & language tab): saved instructions run over a note or
 // selected text without speaking. The built-ins are used
 // until the list is edited; then the whole list is saved.
 
@@ -54,7 +54,7 @@ function transformCard(t, i) {
   if (error) {
     const warn = document.createElement("small");
     warn.className = "warn-text";
-    warn.textContent = `${shortcutLabel(t.shortcut ?? "")} ${error}. Choose another.`;
+    warn.textContent = `${shortcutLabel(t.shortcut ?? "", state.platform)} ${error}. Choose another.`;
     card.append(warn);
   }
   return card;
@@ -70,13 +70,13 @@ function transformShortcut(t, i) {
   const cap = document.createElement("span");
   if (t.shortcut) {
     cap.className = "kbd";
-    cap.textContent = shortcutLabel(t.shortcut);
+    cap.textContent = shortcutLabel(t.shortcut, state.platform);
   } else {
     cap.className = "kp-hint none";
     cap.textContent = "No shortcut";
   }
   main.append(cap);
-  main.setAttribute("aria-label", `Shortcut for ${t.name}: ${t.shortcut ? shortcutLabel(t.shortcut) : "none"}. Click, then press the shortcut.`);
+  main.setAttribute("aria-label", `Shortcut for ${t.name}: ${t.shortcut ? shortcutLabel(t.shortcut, state.platform) : "none"}. Click, then press the shortcut.`);
   main.onclick = () =>
     recordShortcut((s) => saveTransforms((list) => (list[i].shortcut = s)), renderTransforms, wrap, main);
   wrap.append(main);

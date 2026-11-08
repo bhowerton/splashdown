@@ -2,8 +2,8 @@
 //! the user named, and which of a new meeting's speakers clearly match one.
 //! A voiceprint is a speaker model's summary of someone's speech (a vector
 //! of 192 numbers, unit length); two of the same person score high.
-//! Thresholds were measured on 40 speakers, phone-quality audio included
-//! (see the plan): no wrong names, no strangers named.
+//! Thresholds were measured on 40 speakers, phone-quality audio included:
+//! no wrong names, no strangers named.
 
 use serde::{Deserialize, Serialize};
 
@@ -55,7 +55,10 @@ impl Voice {
 /// Adds `print` to `name`'s voice (a new one if there's none), keeping the
 /// newest `MOST_PRINTS`.
 pub fn learn(voices: &mut Vec<Voice>, name: &str, print: Vec<f32>) {
-    let voice = match voices.iter().position(|v| v.name == name) {
+    let voice = match voices
+        .iter()
+        .position(|v| v.name.eq_ignore_ascii_case(name))
+    {
         Some(i) => &mut voices[i],
         None => {
             voices.push(Voice {
@@ -71,6 +74,27 @@ pub fn learn(voices: &mut Vec<Voice>, name: &str, print: Vec<f32>) {
         voice.prints.remove(0);
     }
     voice.meetings += 1;
+}
+
+/// Takes `print` back from `name`'s voice (the name was a mistake), and
+/// forgets them if it was their only one.
+pub fn unlearn(voices: &mut Vec<Voice>, name: &str, print: &[f32]) {
+    let Some(i) = voices
+        .iter()
+        .position(|v| v.name.eq_ignore_ascii_case(name))
+    else {
+        return;
+    };
+    let voice = &mut voices[i];
+    let before = voice.prints.len();
+    voice.prints.retain(|p| p.as_slice() != print);
+    if voice.prints.len() == before {
+        return;
+    }
+    voice.meetings = voice.meetings.saturating_sub(1);
+    if voice.prints.is_empty() {
+        voices.remove(i);
+    }
 }
 
 /// Which of a meeting's speakers (label, voiceprint) are clearly someone
@@ -193,5 +217,20 @@ mod tests {
         assert_eq!(voices[0].prints.len(), MOST_PRINTS);
         assert_eq!(voices[0].prints[0], print(2, 2, 0.0));
         assert_eq!(voices[0].meetings, 7);
+    }
+
+    #[test]
+    fn a_voice_named_wrong_moves_to_the_right_name() {
+        let mut voices = Vec::new();
+        let p = print(0, 1, 0.0);
+        learn(&mut voices, "Dan", p.clone());
+        unlearn(&mut voices, "Dan", &p);
+        learn(&mut voices, "Dana", p.clone());
+        assert_eq!(voices.len(), 1);
+        assert_eq!(voices[0].name, "Dana");
+        // Names match whatever their case.
+        learn(&mut voices, "dana", print(0, 2, 0.1));
+        assert_eq!(voices.len(), 1);
+        assert_eq!(voices[0].prints.len(), 2);
     }
 }

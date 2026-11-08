@@ -4,6 +4,7 @@
 //! login and the microphone list. Features own their commands (notes,
 //! meeting, compose, history, models, …); all are registered in main.rs.
 
+use splashdown_core::sync::Locked;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -37,17 +38,22 @@ pub async fn save_settings(
     if let Some(problem) = splashdown_config::replacement_problem(&settings.replacements) {
         return Err(problem);
     }
-    // The notes folder is changed from the Notes window, so a Settings
-    // window opened earlier mustn't put the old one back.
-    let mut settings = settings;
-    let current = state.settings();
-    settings.notes.folder = current.notes.folder;
-    // Set by the first meeting, which Settings may not have seen.
-    settings.notes.meeting_reminded |= current.notes.meeting_reminded;
-    settings.general.settle_learned();
-    settings.save(&engine::paths()?.config_file())?;
+    // Locked from reading to storing, so a change made elsewhere at the
+    // same moment (`AppState::update`) isn't lost in between.
+    let settings = {
+        let mut current = state.settings.locked();
+        let mut settings = settings;
+        // The notes folder is changed from the Notes window, so a Settings
+        // window opened earlier mustn't put the old one back.
+        settings.notes.folder = current.notes.folder.clone();
+        // Set by the first meeting, which Settings may not have seen.
+        settings.notes.meeting_reminded |= current.notes.meeting_reminded;
+        settings.general.settle_learned();
+        settings.save(&engine::paths()?.config_file())?;
+        *current = settings.clone();
+        settings
+    };
     reflect_settings(&app, &state, &settings);
-    *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings.clone();
     let engine_error = state.apply().await;
     Ok(Saved {
         state: state.snapshot(),
@@ -285,7 +291,7 @@ fn look_up_app(id: String) -> AppInfo {
     use std::sync::OnceLock;
     static CACHE: OnceLock<Mutex<HashMap<String, AppInfo>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Mutex::default);
-    if let Some(hit) = cache.lock().unwrap_or_else(|e| e.into_inner()).get(&id) {
+    if let Some(hit) = cache.locked().get(&id) {
         return hit.clone();
     }
     // Wildcard rules ("com.jetbrains.*") name a family, not one app.
@@ -302,10 +308,7 @@ fn look_up_app(id: String) -> AppInfo {
         }),
         id: id.clone(),
     };
-    cache
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .insert(id, info.clone());
+    cache.locked().insert(id, info.clone());
     info
 }
 

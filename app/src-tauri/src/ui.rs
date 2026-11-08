@@ -1,6 +1,7 @@
 //! Bridges the session thread to UI that must live on the main thread: the
 //! status overlay, sounds and the tray status line.
 
+use splashdown_core::sync::Locked;
 use std::cell::RefCell;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -66,9 +67,14 @@ impl Ui {
         let Some(state) = self.app.try_state::<crate::state::AppState>() else {
             return;
         };
-        let settings = crate::engine::load_settings();
+        // Read under the lock: a change being saved right now
+        // (`AppState::update`) is either in the file or not yet started.
+        let settings = {
+            let mut current = state.settings.locked();
+            *current = crate::engine::load_settings();
+            current.clone()
+        };
         crate::state::reflect_settings(&self.app, &state, &settings);
-        *state.settings.lock().unwrap_or_else(|e| e.into_inner()) = settings;
         let app = self.app.clone();
         tauri::async_runtime::spawn(async move {
             let state = app.state::<crate::state::AppState>();

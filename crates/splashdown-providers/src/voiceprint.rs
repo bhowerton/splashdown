@@ -10,7 +10,7 @@ use sherpa_onnx::{SpeakerEmbeddingExtractor, SpeakerEmbeddingExtractorConfig};
 
 /// The rate the model takes.
 #[cfg(not(windows))]
-const RATE: i32 = 16_000;
+const RATE: i32 = splashdown_audio::TARGET_SAMPLE_RATE as i32;
 
 #[cfg(not(windows))]
 pub struct Voiceprinter {

@@ -4,6 +4,7 @@
 //! speech models the first time they're needed, so it works with no
 //! download, whichever speech-to-text is chosen.
 
+use splashdown_core::sync::Locked;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -80,7 +81,7 @@ impl SpeechDetector for Silero {
         } else {
             samples
         };
-        let mut session = self.session.lock().unwrap_or_else(|e| e.into_inner());
+        let mut session = self.session.locked();
         match session.run(samples, &VadOptions::default()) {
             Ok(result) => Some(result.probs),
             Err(e) => {

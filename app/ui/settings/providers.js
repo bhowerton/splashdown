@@ -94,6 +94,7 @@ function fillList(id, items = []) {
 // ---------------------------------------------------------------- API keys
 
 function renderKeys() {
+  $("keys-where").textContent = state.platform === "macos" ? "stored in your Keychain" : "stored in Windows Credential Manager";
   const host = $("keys");
   host.replaceChildren(
     ...state.keys.map((k) => {
@@ -112,7 +113,7 @@ function renderKeys() {
       } else if (k.source === "environment") {
         badge.className = "badge muted";
         badge.textContent = `From .env · …${k.hint}`;
-        badge.title = "Set by an environment variable or .env.local, which overrides the Keychain";
+        badge.title = "Set by an environment variable or .env.local, which overrides a saved key";
       }
       const stateEl = row.querySelector(".state");
       if (k.source) stateEl.append(badge);
@@ -639,8 +640,8 @@ $("gen-natural-get").addEventListener("click", async (e) => {
 
 $("gen-read-try").addEventListener("click", () => {
   const provider = $("tts-provider").value;
-  invoke("reading_try", {
+  call("reading_try", {
     voice: provider === "auto" ? null : $("gen-read-voice").value || null,
     speed: Number($("gen-read-speed").value) / 100,
-  }).catch((e) => toast(String(e), true));
+  });
 });

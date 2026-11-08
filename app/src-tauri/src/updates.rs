@@ -3,6 +3,7 @@
 //! Settings → About, and installs only when the user clicks. A failed check
 //! (offline, nothing published yet) is logged and otherwise ignored.
 
+use splashdown_core::sync::Locked;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -64,10 +65,7 @@ impl Updates {
     }
 
     pub fn status(&self) -> Status {
-        self.status
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.status.locked().clone()
     }
 
     pub fn available(&self) -> Option<String> {
@@ -76,7 +74,7 @@ impl Updates {
 
     fn update(&self, app: &AppHandle, change: impl FnOnce(&mut Status)) {
         let status = {
-            let mut s = self.status.lock().unwrap_or_else(|e| e.into_inner());
+            let mut s = self.status.locked();
             change(&mut s);
             s.clone()
         };
@@ -118,11 +116,7 @@ fn check_due(app: &AppHandle) -> bool {
     if !state.settings().general.check_for_updates() {
         return false;
     }
-    let last = *state
-        .updates
-        .last_success
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let last = *state.updates.last_success.locked();
     last.is_none_or(|at| at.elapsed().unwrap_or(CHECK_INTERVAL) >= CHECK_INTERVAL)
 }
 
@@ -150,11 +144,8 @@ pub async fn check(app: &AppHandle, manual: bool) -> Result<Option<String>, Stri
                 .as_ref()
                 .and_then(|u| u.body.clone())
                 .filter(|b| !b.trim().is_empty());
-            *updates.pending.lock().unwrap_or_else(|e| e.into_inner()) = update;
-            *updates
-                .last_success
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()) = Some(SystemTime::now());
+            *updates.pending.locked() = update;
+            *updates.last_success.locked() = Some(SystemTime::now());
             updates.update(app, |s| {
                 s.available = version.clone();
                 s.notes = notes;
@@ -194,8 +185,7 @@ pub async fn install(app: &AppHandle) -> Result<(), String> {
     let updates = &app.state::<crate::state::AppState>().inner().updates;
     let update = updates
         .pending
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+        .locked()
         .clone()
         .ok_or("There's no update to install. Check again.")?;
     // On Windows the installer takes over at once: a meeting would be

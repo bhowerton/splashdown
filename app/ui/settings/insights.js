@@ -17,7 +17,7 @@ async function loadInsights() {
     [s.week_words.toLocaleString(), "words this week", `${s.today_words.toLocaleString()} today · ${s.total_words.toLocaleString()} in all`],
     [s.speaking_wpm ? `${Math.round(s.speaking_wpm)}` : "—", "words per minute", `Typing is about ${s.typing_wpm}`],
     [saved, "saved", "Compared with typing the same words"],
-    [String(s.streak_days), s.streak_days === 1 ? "day streak" : "day streak", "Days in a row you've dictated"],
+    [String(s.streak_days), "day streak", "Days in a row you've dictated"],
   ];
   $("ins-stats").replaceChildren(
     ...cards.map(([value, label, detail]) => {
@@ -76,6 +76,6 @@ async function loadInsights() {
 $("ins-clear").addEventListener("click", async () => {
   const sure = await askConfirm("Reset your usage stats?", { action: "Reset", detail: "Words, speaking time and app counts start again from zero." });
   if (!sure) return;
-  await invoke("clear_insights").catch((e) => toast(String(e), true));
+  await call("clear_insights");
   loadInsights();
 });

@@ -134,7 +134,7 @@ pub(super) fn record(
     let with = event
         .as_ref()
         .filter(|e| !e.people.is_empty())
-        .map(|e| format!("With {}.\n\n", e.people.join(", ")))
+        .map(|e| format!("{}\n\n", super::voices::with_line(&e.people)))
         .unwrap_or_default();
     let header = format!(
         "# {title} · {}\n\n{with}{recorded_from} · transcribed {place}.\n",

@@ -2,6 +2,7 @@
 //! (for "Paste into {app}"), and pasting a note back into that app.
 
 use super::*;
+use splashdown_core::sync::Locked;
 
 /// The app that was in front when the window opened: (pid, name).
 pub(super) fn target() -> &'static Mutex<Option<(i32, String)>> {
@@ -10,7 +11,7 @@ pub(super) fn target() -> &'static Mutex<Option<(i32, String)>> {
 }
 
 pub(super) fn target_lock() -> std::sync::MutexGuard<'static, Option<(i32, String)>> {
-    target().lock().unwrap_or_else(|e| e.into_inner())
+    target().locked()
 }
 
 /// Apps that take no text, so Send never goes to them: the file manager,

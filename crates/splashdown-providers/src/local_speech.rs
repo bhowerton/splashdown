@@ -13,6 +13,7 @@
 //! file being transcribed waits for a dictation), and a stream that's
 //! dropped or too slow stops at once to let them in.
 
+use splashdown_core::sync::Locked;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
@@ -81,8 +82,8 @@ pub fn loading() -> bool {
 
 impl Loaded {
     fn model(&self) -> ProviderResult<Model> {
-        *self.last_used.lock().unwrap_or_else(|e| e.into_inner()) = Instant::now();
-        let mut loaded = self.loaded.lock().unwrap_or_else(|e| e.into_inner());
+        *self.last_used.locked() = Instant::now();
+        let mut loaded = self.loaded.locked();
         if let Some(model) = &*loaded {
             return Ok(model.clone());
         }
@@ -103,13 +104,9 @@ impl Loaded {
     }
 
     fn unload_if_idle(&self) {
-        let idle = self
-            .last_used
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .elapsed();
+        let idle = self.last_used.locked().elapsed();
         if idle >= UNLOAD_AFTER {
-            let mut loaded = self.loaded.lock().unwrap_or_else(|e| e.into_inner());
+            let mut loaded = self.loaded.locked();
             if loaded.take().is_some() {
                 tracing::debug!(
                     "unloaded {} after {} min unused",
@@ -229,10 +226,7 @@ impl LocalSpeech {
 fn shared(path: &Path, cpu: bool) -> Arc<Loaded> {
     type Models = Mutex<Vec<(PathBuf, bool, Weak<Loaded>)>>;
     static MODELS: OnceLock<Models> = OnceLock::new();
-    let mut models = MODELS
-        .get_or_init(Models::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner());
+    let mut models = MODELS.get_or_init(Models::default).locked();
     models.retain(|(_, _, m)| m.strong_count() > 0);
     if let Some(loaded) = models
         .iter()
@@ -509,8 +503,7 @@ fn run_stream(
         match msg {
             Feed::Audio(samples) if failed.is_none() => match stream.feed(&samples) {
                 Ok(update) if update.result_changed => {
-                    *partial.lock().unwrap_or_else(|e| e.into_inner()) =
-                        Some(stream.text().full.trim().to_string());
+                    *partial.locked() = Some(stream.text().full.trim().to_string());
                 }
                 Ok(_) => {}
                 Err(e) => failed = Some(error(e)),
@@ -554,10 +547,7 @@ impl SpeechStream for LocalStream {
     }
 
     fn partial(&mut self) -> Option<String> {
-        self.partial
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
+        self.partial.locked().take()
     }
 
     fn finish(self: Box<Self>) -> ProviderResult<String> {

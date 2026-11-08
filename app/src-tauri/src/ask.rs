@@ -4,6 +4,7 @@
 //! asked from, Copy puts it on the clipboard. A question typed into the
 //! panel, or asked again while it's open, follows on from the ones before.
 
+use splashdown_core::sync::Locked;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
@@ -69,10 +70,7 @@ struct Panel {
 
 fn panel() -> std::sync::MutexGuard<'static, Panel> {
     static PANEL: OnceLock<Mutex<Panel>> = OnceLock::new();
-    PANEL
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    PANEL.get_or_init(Mutex::default).locked()
 }
 
 /// Shows the panel with `q` and answers it in the background. While the

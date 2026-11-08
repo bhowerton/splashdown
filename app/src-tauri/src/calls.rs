@@ -4,6 +4,7 @@
 //! Nothing is recorded until the user clicks. Settings → Notes → Meetings
 //! turns the offer off.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashMap;
 use std::sync::{Mutex, MutexGuard, OnceLock};
 use std::time::{Duration, Instant};
@@ -14,7 +15,7 @@ use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, Windo
 use crate::state::AppState;
 
 pub const WINDOW: &str = "call-offer";
-/// App event with what the panel should show (`Offer`).
+/// App event with what the panel should show (`Panel`).
 const CHANGED: &str = "call-offer-changed";
 /// How often the microphone is checked.
 const POLL: Duration = Duration::from_secs(2);
@@ -128,7 +129,7 @@ fn panel(app: &AppHandle, offer: Offer) -> Panel {
                     format!("Transcribed {place}")
                 });
             }
-            if notes.meeting_speakers || notes.remember_speakers {
+            if notes.tells_speakers_apart() {
                 panel.summary.push("speakers told apart".into());
             }
             if notes.remember_speakers && cfg!(target_os = "macos") {
@@ -149,10 +150,7 @@ fn panel(app: &AppHandle, offer: Offer) -> Panel {
 /// The offer on screen, if any.
 fn shown() -> MutexGuard<'static, Option<(Panel, Instant)>> {
     static SHOWN: OnceLock<Mutex<Option<(Panel, Instant)>>> = OnceLock::new();
-    SHOWN
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    SHOWN.get_or_init(Mutex::default).locked()
 }
 
 /// Call apps on the microphone, and since when.
@@ -171,7 +169,15 @@ struct Watcher {
 impl Watcher {
     /// Takes the call apps using the microphone now; returns an offer to
     /// make, if any.
-    fn poll(&mut self, now: Instant, using: &[&'static str], meeting: bool) -> Option<Offer> {
+    /// `skip`: apps the user said not to offer to record for (still
+    /// followed, to offer to stop a meeting they started themselves).
+    fn poll(
+        &mut self,
+        now: Instant,
+        using: &[&'static str],
+        meeting: bool,
+        skip: &[String],
+    ) -> Option<Offer> {
         self.using.retain(|app, _| using.contains(app));
         self.offered.retain(|app| using.contains(app));
         for app in using {
@@ -184,7 +190,9 @@ impl Watcher {
                 .using
                 .iter()
                 .filter(|(app, since)| {
-                    now.duration_since(**since) >= SETTLE && !self.offered.contains(app)
+                    now.duration_since(**since) >= SETTLE
+                        && !self.offered.contains(app)
+                        && !skip.iter().any(|s| s == *app)
                 })
                 .min_by_key(|(_, since)| **since)?;
             let app = *app;
@@ -233,16 +241,26 @@ pub fn watch(app: &AppHandle) {
                     watcher = Watcher::default();
                     continue;
                 }
-                // Apps the user said not to offer for.
+                let meeting = match crate::meeting::recording_call() {
+                    Some(true) => true,
+                    None => false,
+                    // An app's sound or the microphone alone is recording:
+                    // a call can't be recorded too, and its end isn't this
+                    // recording's end.
+                    Some(false) => {
+                        watcher = Watcher::default();
+                        continue;
+                    }
+                };
                 let mut using: Vec<&'static str> = splashdown_platform::microphone_users()
                     .iter()
                     .filter_map(|id| call_app(id))
-                    .filter(|app| !notes.offer_skip.iter().any(|s| s == app))
                     .collect();
                 using.sort_unstable();
                 using.dedup();
-                let meeting = crate::meeting::is_running();
-                if let Some(offer) = watcher.poll(Instant::now(), &using, meeting) {
+                if let Some(offer) =
+                    watcher.poll(Instant::now(), &using, meeting, &notes.offer_skip)
+                {
                     tracing::info!("call offer: {offer:?}");
                     show(&app, offer);
                 }
@@ -301,7 +319,7 @@ fn show(app: &AppHandle, offer: Offer) {
     crate::placement::place(
         &window,
         crate::placement::Spot::TopRight {
-            top: 40.0,
+            top: TOP,
             right: 16.0,
         },
     );
@@ -309,14 +327,22 @@ fn show(app: &AppHandle, offer: Offer) {
     let _ = app.emit_to(WINDOW, CHANGED, panel);
 }
 
+/// Where the panel goes, from the top of the screen's work area.
+const TOP: f64 = 40.0;
 /// The panel's size: wider and taller than a plain question, for what to
-/// know before recording.
+/// know before recording. The stop offer is shorter: a line and two
+/// buttons.
 const WIDTH: f64 = 360.0;
 const STOP_HEIGHT: f64 = 132.0;
 
+/// The record offer's height: 180, and 200 with the calendar event's line.
 fn record_height(event: bool) -> f64 {
     if event { 200.0 } else { 180.0 }
 }
+
+/// Below the panel at its tallest: where another panel can go without
+/// covering it (the app's questions).
+pub const BELOW: f64 = TOP + 200.0 + 12.0;
 
 /// Hides the panel once it has been up long enough.
 fn expire(app: &AppHandle) {
@@ -398,28 +424,31 @@ mod tests {
         let t0 = Instant::now();
         let at = |s: u64| t0 + Duration::from_secs(s);
         // A quick microphone check isn't a call.
-        assert_eq!(w.poll(at(0), &["Zoom"], false), None);
-        assert_eq!(w.poll(at(2), &[], false), None);
+        assert_eq!(w.poll(at(0), &["Zoom"], false, &[]), None);
+        assert_eq!(w.poll(at(2), &[], false, &[]), None);
         // A call: offered once it has settled, and only once.
-        assert_eq!(w.poll(at(4), &["Zoom"], false), None);
+        assert_eq!(w.poll(at(4), &["Zoom"], false, &[]), None);
         assert_eq!(
-            w.poll(at(8), &["Zoom"], false),
+            w.poll(at(8), &["Zoom"], false, &[]),
             Some(Offer::Record { app: "Zoom" })
         );
-        assert_eq!(w.poll(at(10), &["Zoom"], false), None);
+        assert_eq!(w.poll(at(10), &["Zoom"], false, &[]), None);
         // Recording; Zoom lets go of the microphone for a moment (no
         // offer), then for good.
-        assert_eq!(w.poll(at(12), &["Zoom"], true), None);
-        assert_eq!(w.poll(at(14), &[], true), None);
-        assert_eq!(w.poll(at(16), &["Zoom"], true), None);
-        assert_eq!(w.poll(at(18), &[], true), None);
-        assert_eq!(w.poll(at(40), &[], true), Some(Offer::Stop { app: "Zoom" }));
-        assert_eq!(w.poll(at(60), &[], true), None, "offered once");
-        // The meeting stopped; the next call is offered again.
-        assert_eq!(w.poll(at(62), &[], false), None);
-        assert_eq!(w.poll(at(64), &["Teams"], false), None);
+        assert_eq!(w.poll(at(12), &["Zoom"], true, &[]), None);
+        assert_eq!(w.poll(at(14), &[], true, &[]), None);
+        assert_eq!(w.poll(at(16), &["Zoom"], true, &[]), None);
+        assert_eq!(w.poll(at(18), &[], true, &[]), None);
         assert_eq!(
-            w.poll(at(68), &["Teams"], false),
+            w.poll(at(40), &[], true, &[]),
+            Some(Offer::Stop { app: "Zoom" })
+        );
+        assert_eq!(w.poll(at(60), &[], true, &[]), None, "offered once");
+        // The meeting stopped; the next call is offered again.
+        assert_eq!(w.poll(at(62), &[], false, &[]), None);
+        assert_eq!(w.poll(at(64), &["Teams"], false, &[]), None);
+        assert_eq!(
+            w.poll(at(68), &["Teams"], false, &[]),
             Some(Offer::Record { app: "Teams" })
         );
     }
@@ -429,9 +458,26 @@ mod tests {
         let mut w = Watcher::default();
         let t0 = Instant::now();
         let at = |s: u64| t0 + Duration::from_secs(s);
-        assert_eq!(w.poll(at(0), &["Zoom"], true), None);
-        assert_eq!(w.poll(at(10), &["Zoom"], true), None);
+        assert_eq!(w.poll(at(0), &["Zoom"], true, &[]), None);
+        assert_eq!(w.poll(at(10), &["Zoom"], true, &[]), None);
         // Stopped by hand while the call goes on: no offer to record it.
-        assert_eq!(w.poll(at(12), &["Zoom"], false), None);
+        assert_eq!(w.poll(at(12), &["Zoom"], false, &[]), None);
+    }
+
+    #[test]
+    fn a_skipped_app_is_never_offered_but_its_end_is_noticed() {
+        let mut w = Watcher::default();
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        let skip = ["Zoom".to_string()];
+        assert_eq!(w.poll(at(0), &["Zoom"], false, &skip), None);
+        assert_eq!(w.poll(at(8), &["Zoom"], false, &skip), None);
+        // Recorded by hand anyway: when Zoom lets go, stopping is offered.
+        assert_eq!(w.poll(at(10), &["Zoom"], true, &skip), None);
+        assert_eq!(w.poll(at(12), &[], true, &skip), None);
+        assert_eq!(
+            w.poll(at(40), &[], true, &skip),
+            Some(Offer::Stop { app: "Zoom" })
+        );
     }
 }

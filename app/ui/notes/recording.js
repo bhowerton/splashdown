@@ -22,7 +22,7 @@ function flushLiveNotes() {
   const note = meeting?.note ?? current.path;
   const text = liveEditor.text;
   liveNotesSaving = liveNotesSaving.then(() =>
-    invoke("meeting_set_notes", { note, text }).catch((e) => toast(String(e), true)),
+    call("meeting_set_notes", { note, text }),
   );
   return liveNotesSaving;
 }
@@ -142,7 +142,7 @@ function showQuestion(q) {
   $("nt-live-question-text").textContent = q.text;
   $("nt-live-question-acts").replaceChildren(
     ...q.buttons.map((label, index) =>
-      button(label, () => invoke("prompt_answer", { index }).catch((e) => toast(String(e), true)), index === 0 ? "btn primary" : "btn"),
+      button(label, () => call("prompt_answer", { index }), index === 0 ? "btn primary" : "btn"),
     ),
   );
 }

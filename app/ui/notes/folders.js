@@ -260,7 +260,7 @@ function folderMenu(path, at) {
     menuItem("Rename…", () => renameFolder(path), { disabled: busy }),
     menuItem("Move to…", () => moveFolderTo(path), { disabled: busy }),
     document.createElement("hr"),
-    menuItem("Move to Trash", () => deleteFolder(path), { disabled: busy, danger: true }),
+    menuItem(`Move to ${TRASH}`, () => deleteFolder(path), { disabled: busy, danger: true }),
   ], at);
 }
 
@@ -323,8 +323,8 @@ async function moveFolder(path, parent) {
 async function deleteFolder(path) {
   const name = path.split("/").pop();
   const count = notes.filter((n) => within(n.folder, path)).length;
-  const ok = await askConfirm(`Move “${name}” to the Trash?`, {
-    action: "Move to Trash",
+  const ok = await askConfirm(`Move “${name}” to the ${TRASH}?`, {
+    action: `Move to ${TRASH}`,
     detail: `${count ? `The ${count === 1 ? "note" : `${count} notes`} in it go too. ` : ""}${isMac ? "You can get it back from the Trash in Finder." : "You can get it back from the Recycle Bin."}`,
   });
   if (!ok) return;

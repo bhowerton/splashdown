@@ -1,6 +1,7 @@
 //! Downloading models (speech, the built-in text model, Apple's speech
 //! model) with progress for every window.
 
+use splashdown_core::sync::Locked;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -31,7 +32,7 @@ pub(super) struct DownloadDone {
 pub(super) static DOWNLOADS: Mutex<Vec<DownloadProgress>> = Mutex::new(Vec::new());
 
 pub(super) fn downloads() -> std::sync::MutexGuard<'static, Vec<DownloadProgress>> {
-    DOWNLOADS.lock().unwrap_or_else(|e| e.into_inner())
+    DOWNLOADS.locked()
 }
 
 /// Takes a model off `DOWNLOADS` however its download ends.

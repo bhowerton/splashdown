@@ -2,6 +2,7 @@
 //! speaking and the apps they went to, per day, in `insights.json` next to
 //! the settings. Never what was said, and never sent anywhere.
 
+use splashdown_core::sync::Locked;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
@@ -95,7 +96,7 @@ impl Insights {
     }
 
     fn ledger(&self) -> std::sync::MutexGuard<'_, Ledger> {
-        self.ledger.lock().unwrap_or_else(|e| e.into_inner())
+        self.ledger.locked()
     }
 
     /// Counts one inserted dictation.

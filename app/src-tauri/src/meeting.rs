@@ -13,8 +13,9 @@
 //!
 //! This file starts and stops recordings and has the commands; the rest is
 //! in `meeting/`: `record.rs` (the audio), `transcript.rs` (turns into the
-//! note, speakers), `summary.rs`, `again.rs` (transcribing a recording
-//! again) and `recover.rs` (after a crash).
+//! note, speakers, each turn's language), `voices.rs` (recognizing people
+//! by voice), `summary.rs`, `again.rs` (transcribing a recording again)
+//! and `recover.rs` (after a crash).
 
 mod again;
 mod record;
@@ -23,6 +24,7 @@ mod summary;
 mod transcript;
 pub mod voices;
 
+use splashdown_core::sync::Locked;
 use std::io::Write as _;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
@@ -124,15 +126,26 @@ struct Running {
     keep: Arc<AtomicBool>,
     status: Status,
     thread: Option<std::thread::JoinHandle<()>>,
+    /// Recording a call (`Source::Meeting`), not an app's sound or the
+    /// microphone alone.
+    call: bool,
 }
 
 fn running() -> MutexGuard<'static, Option<Running>> {
     static RUNNING: Mutex<Option<Running>> = Mutex::new(None);
-    RUNNING.lock().unwrap_or_else(|e| e.into_inner())
+    RUNNING.locked()
 }
 
+/// Whether anything is recording: a meeting, an app's sound or the
+/// microphone.
 pub fn is_running() -> bool {
     running().is_some()
+}
+
+/// What's recording, if anything: `Some(true)` for a call, `Some(false)`
+/// for an app's sound or the microphone alone.
+pub fn recording_call() -> Option<bool> {
+    running().as_ref().map(|r| r.call)
 }
 
 /// The meeting in progress, if any.
@@ -161,14 +174,17 @@ pub fn start(app: &AppHandle) -> Result<String, String> {
 
 /// Starts recording `source`, as `start`.
 pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String> {
+    // Held until the thread's handle is stored, so a thread that ends at
+    // once (and clears the slot) can't leave its handle on a later meeting.
     let mut slot = running();
     if slot.is_some() {
         return Err("A meeting is already recording.".into());
     }
-    let run = Running::default();
+    let run = Running {
+        call: matches!(source, Source::Meeting),
+        ..Running::default()
+    };
     let (stop, keep) = (run.stop.clone(), run.keep.clone());
-    *slot = Some(run);
-    drop(slot);
     let handle = app.clone();
     let thread = std::thread::Builder::new()
         .name("meeting".into())
@@ -185,13 +201,12 @@ pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String
             *running() = None;
             show(&handle, None);
         })
-        .map_err(|e| {
-            *running() = None;
-            e.to_string()
-        })?;
-    if let Some(run) = running().as_mut() {
-        run.thread = Some(thread);
-    }
+        .map_err(|e| e.to_string())?;
+    *slot = Some(Running {
+        thread: Some(thread),
+        ..run
+    });
+    drop(slot);
     Ok("Starting a meeting".into())
 }
 
@@ -323,10 +338,6 @@ fn show(app: &AppHandle, status: Option<&Status>) {
     crate::pill::update(app, status);
     let _ = app.emit_to(crate::notes::WINDOW, STATUS, status);
 }
-
-// ---------------------------------------------------------------- again
-
-// ---------------------------------------------------------------- after a crash
 
 // ---------------------------------------------------------------- commands
 

@@ -50,7 +50,7 @@ impl SttHints {
         }
         self.languages
             .iter()
-            .filter_map(|c| language_name(c))
+            .filter_map(|c| crate::language::english_name(c))
             .collect()
     }
 
@@ -79,24 +79,6 @@ pub fn list(names: &[&str]) -> String {
         [one] => (*one).to_string(),
         [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
     }
-}
-
-/// English names for the languages offered in Settings.
-pub fn language_name(code: &str) -> Option<&'static str> {
-    Some(match code {
-        "en" => "English",
-        "es" => "Spanish",
-        "fr" => "French",
-        "de" => "German",
-        "it" => "Italian",
-        "pt" => "Portuguese",
-        "nl" => "Dutch",
-        "ja" => "Japanese",
-        "zh" => "Chinese",
-        "ko" => "Korean",
-        "hi" => "Hindi",
-        _ => return None,
-    })
 }
 
 #[derive(Debug, Clone, Default, PartialEq)]

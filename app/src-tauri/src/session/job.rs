@@ -284,15 +284,7 @@ pub(super) fn read_screen_words(pid: i32, spoken: Option<Vec<String>>) -> mpsc::
             .map(|text| splashdown_core::vocab::terms_on_screen(text, SCREEN_TERMS))
             .unwrap_or_default();
         let their_language = spoken.zip(text.as_deref()).and_then(|(spoken, text)| {
-            let lang = splashdown_core::conversation::language(text)?;
-            let speaks = |code: &str| {
-                spoken.iter().any(|s| {
-                    s.split(['-', '_'])
-                        .next()
-                        .is_some_and(|s| s.eq_ignore_ascii_case(code))
-                })
-            };
-            (!speaks(lang)).then_some(lang)
+            splashdown_core::conversation::reply_language(text, &spoken)
         });
         let _ = tx.send(Screen {
             words,

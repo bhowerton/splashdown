@@ -5,7 +5,6 @@
 //! and each one is a new version of the same draft.
 
 use crate::ask::NoteExcerpt;
-use crate::prompt::escape;
 use crate::provider::TextRequest;
 
 /// What a draft is written from, besides what was said.
@@ -203,14 +202,7 @@ fn build(ctx: &ComposeContext, revision: Option<(&str, &str)>, asked: &str) -> T
     }
 
     let mut user = String::new();
-    let mut block = |tag: &str, text: &str| {
-        if !text.trim().is_empty() {
-            user.push_str(&format!(
-                "<{tag}>\n{}\n</{tag}>\n",
-                escape(text.trim(), tag)
-            ));
-        }
-    };
+    let mut block = |tag: &str, text: &str| crate::prompt::push_block(&mut user, tag, text);
     if let Some(text) = &ctx.replying_to {
         block("replying_to", text);
     }

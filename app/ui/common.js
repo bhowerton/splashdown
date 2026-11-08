@@ -138,13 +138,21 @@ async function call(cmd, args) {
   try {
     return await invoke(cmd, args);
   } catch (e) {
-    if ($("toast")) toast(String(e), true);
-    else console.error(`${cmd}: ${e}`);
+    toast(`${e}`, true, cmd);
   }
 }
 
-function toast(text, error = false) {
+/** Shows a short message, or writes it to the console on pages without a
+ *  #toast (the offer, the pill, the prompt). `source` prefixes the console
+ *  line, e.g. the command that failed. */
+function toast(text, error = false, source = "") {
   const t = $("toast");
+  if (!t) {
+    const line = source ? `${source}: ${text}` : text;
+    if (error) console.error(line);
+    else console.log(line);
+    return;
+  }
   t.textContent = text;
   t.className = `toast${error ? " error" : ""}`;
   t.hidden = false;
@@ -152,9 +160,37 @@ function toast(text, error = false) {
   toastTimer = setTimeout(() => (t.hidden = true), error ? 6000 : 1800);
 }
 
+// ---------------------------------------------------------------- text
+
+/** "1 note", "3 notes"; `many` for words that don't just add an s. */
+function plural(n, one, many = `${one}s`) {
+  return `${n} ${n === 1 ? one : many}`;
+}
+
+/** A length of time as a clock shows it: "12:30", or "1:02:30" past an
+ *  hour. */
+function clock(seconds) {
+  const s = Math.floor(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor(s / 60) % 60;
+  const rest = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${rest}` : `${m}:${rest}`;
+}
+
+/** Mac symbols for shortcut modifiers. */
+const MOD_SYMBOL = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Cmd: "⌘", Super: "⊞" };
+
+/** A saved shortcut as this computer writes it: "Ctrl+Alt+KeyE" → "⌃⌥E"
+ *  on a Mac (`platform` "macos"), "Ctrl+Alt+E" elsewhere. */
+function shortcutLabel(s, platform) {
+  const parts = s.split("+");
+  const key = parts.pop().replace(/^Key/, "").replace(/^Digit/, "");
+  if (platform !== "macos") return [...parts, key].join("+");
+  return parts.map((m) => MOD_SYMBOL[m] ?? m).join("") + key;
+}
+
 // ---------------------------------------------------------------- dictation key
 
-/** The dictation key used while none is chosen. */
 /** A ⌃⌥ shortcut as this computer writes it: "⌃⌥N" on a Mac, "Ctrl+Alt+N"
  *  elsewhere. */
 function comboLabel(letter, platform) {
@@ -163,13 +199,16 @@ function comboLabel(letter, platform) {
 
 /** Fills in what differs by platform in static text: `data-combo="N"`
  *  elements get the shortcut (comboLabel), `.menubar` elements "the menu
- *  bar" on a Mac and "the tray menu" (Splashdown's icon by the clock) on
- *  Windows. */
+ *  bar" on a Mac and "Splashdown's icon by the clock" on Windows, and
+ *  `.alt-key` elements "Option" or "Alt". */
 function fitPlatform(platform, root = document) {
+  const mac = platform === "macos";
   root.querySelectorAll("[data-combo]").forEach((el) => (el.textContent = comboLabel(el.dataset.combo, platform)));
-  root.querySelectorAll(".menubar").forEach((el) => (el.textContent = platform === "macos" ? "the menu bar" : "the tray menu"));
+  root.querySelectorAll(".menubar").forEach((el) => (el.textContent = mac ? "the menu bar" : "Splashdown's icon by the clock"));
+  root.querySelectorAll(".alt-key").forEach((el) => (el.textContent = mac ? "Option" : "Alt"));
 }
 
+/** The dictation key used while none is chosen. */
 function defaultDictationKey(platform) {
   return platform === "macos" ? "right-alt" : "right-control";
 }
@@ -197,7 +236,7 @@ function showDictationKey(snapshot) {
 // ---------------------------------------------------------------- permissions
 
 function openPerm(permission) {
-  invoke("open_permission", { permission }).catch((e) => toast(String(e), true));
+  call("open_permission", { permission });
 }
 
 /** The Accessibility and Microphone rows. Both pages use the same markup:
@@ -212,7 +251,7 @@ function renderPermissionRows(p, prefix, dotClass) {
   } else if (!ax.querySelector("button")) {
     ax.replaceChildren(
       button("Allow…", () => {
-        invoke("request_accessibility");
+        call("request_accessibility");
         $(`${prefix}ax-howto`).hidden = false;
         // The system prompt only appears once; offer a direct route too.
         if (!ax.querySelector(".open")) {

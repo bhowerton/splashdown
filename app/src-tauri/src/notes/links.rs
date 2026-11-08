@@ -3,6 +3,7 @@
 //! `link_helper.rs`), into the transcription queue, with a Stop that ends
 //! the download.
 
+use splashdown_core::sync::Locked;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -376,10 +377,10 @@ pub(super) fn run_stoppable(
     };
     let stdout = read(child.stdout.take().map(|p| Box::new(p) as _));
     let stderr = read(child.stderr.take().map(|p| Box::new(p) as _));
-    *DOWNLOADER.lock().unwrap_or_else(|e| e.into_inner()) = Some(child);
+    *DOWNLOADER.locked() = Some(child);
     let status = loop {
         std::thread::sleep(Duration::from_millis(200));
-        let mut slot = DOWNLOADER.lock().unwrap_or_else(|e| e.into_inner());
+        let mut slot = DOWNLOADER.locked();
         let Some(child) = slot.as_mut() else {
             break None;
         };
@@ -416,7 +417,7 @@ pub fn notes_transcribe_stop() {
     drop(queue);
     // And a link still downloading.
     CANCEL.store(true, Ordering::Relaxed);
-    if let Some(mut child) = DOWNLOADER.lock().unwrap_or_else(|e| e.into_inner()).take() {
+    if let Some(mut child) = DOWNLOADER.locked().take() {
         end_tree(&mut child);
         let _ = child.wait();
     }

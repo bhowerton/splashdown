@@ -1,4 +1,4 @@
-//! Remembering people by voice (Settings → Meetings → "Recognize people
+//! Remembering people by voice (Settings → Notes → Meetings → "Recognize people
 //! you've named"). After a meeting's speakers are told apart, each one's
 //! voiceprint is made and checked against the people the user named
 //! before (`voices.json`); a clear match gets the name. The meeting's
@@ -6,8 +6,9 @@
 //! speaker in Notes later saves their voice under that name.
 //!
 //! Voiceprints are other people's biometric data: they stay in the app's
-//! data folder, never in notes, never sent, and Forget removes them.
+//! settings folder, never in notes, never sent, and Forget removes them.
 
+use splashdown_core::sync::Locked;
 use std::collections::BTreeMap;
 
 use splashdown_core::voices::{self, Voice};
@@ -21,55 +22,31 @@ use super::*;
 const SHORTEST_TURN: f64 = 1.5;
 /// Speech used for a voiceprint, at most, in seconds.
 const MOST_SPEECH: f64 = 120.0;
-const RATE: f64 = 16_000.0;
+const RATE: f64 = splashdown_audio::TARGET_SAMPLE_RATE as f64;
 
 /// A meeting's voiceprints, by the label the transcript gives them now.
 type Prints = BTreeMap<String, Vec<f32>>;
 
-fn data_dir() -> Result<PathBuf, String> {
-    Ok(crate::engine::paths()?.config_dir)
-}
-
 fn voices_file() -> Result<PathBuf, String> {
-    Ok(data_dir()?.join("voices.json"))
+    crate::data::path("voices.json")
 }
 
 fn meeting_file(id: &str) -> Result<PathBuf, String> {
-    // The id is read from a note the user can edit: nothing that leaves the
-    // folder.
-    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-        return Err("This note's id isn't one Splashdown wrote.".into());
-    }
-    Ok(data_dir()?.join("speakers").join(format!("{id}.json")))
-}
-
-fn read<T: serde::de::DeserializeOwned + Default>(path: &Path) -> T {
-    std::fs::read_to_string(path)
-        .ok()
-        .and_then(|t| serde_json::from_str(&t).ok())
-        .unwrap_or_default()
-}
-
-fn write<T: Serialize>(path: &Path, value: &T) -> Result<(), String> {
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    let json = serde_json::to_string(value).map_err(|e| e.to_string())?;
-    std::fs::write(path, json).map_err(|e| e.to_string())
+    crate::data::for_note("speakers", id)
 }
 
 /// One change at a time to the saved voices (a meeting ending while a
 /// speaker is renamed).
 fn voices_lock() -> MutexGuard<'static, ()> {
     static LOCK: Mutex<()> = Mutex::new(());
-    LOCK.lock().unwrap_or_else(|e| e.into_inner())
+    LOCK.locked()
 }
 
-/// After a meeting's speakers were labelled (`labels`: each label the
+/// After a meeting's speakers were labeled (`labels`: each label the
 /// transcript gives a speaker of the diarization, "Speaker 2" or, on a
 /// call with one other person, "Them"): voiceprints for those who said
 /// enough, the saved people among them named, and the prints kept.
-pub(super) fn recognize(
+pub(super) fn recognize_speakers(
     store: &Store,
     note: &str,
     pcm: &[f32],
@@ -114,7 +91,7 @@ pub(super) fn recognize(
     let Ok(voices_path) = voices_file() else {
         return;
     };
-    let mut saved: Vec<Voice> = read(&voices_path);
+    let mut saved: Vec<Voice> = crate::data::read(&voices_path);
     let invited = store
         .read(note)
         .map(|n| invited(&n.body))
@@ -141,14 +118,14 @@ pub(super) fn recognize(
                     }
                 }
                 tracing::info!("{} speaker(s) recognized by voice", found.len());
-                if let Err(e) = write(&voices_path, &saved) {
+                if let Err(e) = crate::data::write(&voices_path, &saved) {
                     tracing::warn!("couldn't save the voices: {e}");
                 }
             }
             Err(e) => tracing::warn!("couldn't name the recognized speakers: {e}"),
         }
     }
-    let kept = meeting_file(&id).and_then(|path| write(&path, &prints));
+    let kept = meeting_file(&id).and_then(|path| crate::data::write(&path, &prints));
     if let Err(e) = kept {
         tracing::warn!("couldn't keep the meeting's voiceprints: {e}");
     }
@@ -176,10 +153,17 @@ fn speech_of(pcm: &[f32], turns: &[SpeakerTurn], speaker: u32) -> Option<Vec<f32
     (speech.len() as f64 >= f64::from(voices::LEAST_SPEECH_SECS) * RATE).then_some(speech)
 }
 
-/// The people a meeting's note says were invited: its "With Dana, Sam."
-/// line (from the calendar).
+/// The line under a meeting note's title naming who was invited (from the
+/// calendar): "With Dana, Sam."
+pub(super) fn with_line(people: &[String]) -> String {
+    format!("With {}.", people.join(", "))
+}
+
+/// The people a meeting's note says were invited: its `with_line`, looked
+/// for above the first section so a "With Sam." in My notes doesn't count.
 fn invited(body: &str) -> Vec<String> {
     body.lines()
+        .take_while(|l| !l.starts_with("## "))
         .find_map(|l| l.trim().strip_prefix("With ")?.strip_suffix('.'))
         .map(|names| {
             names
@@ -223,16 +207,19 @@ pub fn notes_speaker_named(
     };
     let _lock = voices_lock();
     let meeting = meeting_file(&id)?;
-    let mut prints: Prints = read(&meeting);
+    let mut prints: Prints = crate::data::read(&meeting);
     let Some(print) = prints.remove(&who) else {
         return Ok(());
     };
     let voices_path = voices_file()?;
-    let mut saved: Vec<Voice> = read(&voices_path);
+    let mut saved: Vec<Voice> = crate::data::read(&voices_path);
+    // Renamed again ("Dan", then "Dana"): the voice moves to the new name
+    // rather than staying under the old one too.
+    voices::unlearn(&mut saved, &who, &print);
     voices::learn(&mut saved, &name, print.clone());
     prints.insert(name.clone(), print);
-    write(&voices_path, &saved)?;
-    write(&meeting, &prints)?;
+    crate::data::write(&voices_path, &saved)?;
+    crate::data::write(&meeting, &prints)?;
     tracing::info!("a voice saved under a name");
     Ok(())
 }
@@ -250,7 +237,7 @@ pub fn voices_list() -> Vec<SavedVoice> {
     let Ok(path) = voices_file() else {
         return Vec::new();
     };
-    let mut saved: Vec<Voice> = read(&path);
+    let mut saved: Vec<Voice> = crate::data::read(&path);
     saved.sort_by_key(|v| v.name.to_lowercase());
     saved
         .into_iter()
@@ -269,13 +256,25 @@ pub fn voices_forget(name: Option<String>) -> Result<(), String> {
     let path = voices_file()?;
     match name {
         Some(name) => {
-            let mut saved: Vec<Voice> = read(&path);
-            saved.retain(|v| v.name != name);
-            write(&path, &saved)
+            let mut saved: Vec<Voice> = crate::data::read(&path);
+            saved.retain(|v| !v.name.eq_ignore_ascii_case(&name));
+            crate::data::write(&path, &saved)?;
+            // And their prints kept with each meeting.
+            let speakers = crate::data::path("speakers")?;
+            for file in std::fs::read_dir(&speakers).into_iter().flatten().flatten() {
+                let file = file.path();
+                let mut prints: Prints = crate::data::read(&file);
+                let before = prints.len();
+                prints.retain(|label, _| !label.eq_ignore_ascii_case(&name));
+                if prints.len() != before {
+                    crate::data::write(&file, &prints)?;
+                }
+            }
+            Ok(())
         }
         None => {
             let _ = std::fs::remove_file(&path);
-            let speakers = data_dir()?.join("speakers");
+            let speakers = crate::data::path("speakers")?;
             match std::fs::remove_dir_all(&speakers) {
                 Err(e) if e.kind() != std::io::ErrorKind::NotFound => Err(e.to_string()),
                 _ => Ok(()),
@@ -298,6 +297,9 @@ mod tests {
         // What was said is left alone.
         assert!(out.contains("**[0:09] Dana:** Speaker 2 here."));
         assert_eq!(invited(body), ["Dana", "Sam"]);
+        assert_eq!(with_line(&["Dana".into(), "Sam".into()]), "With Dana, Sam.");
+        // Only the header counts, not a line in My notes.
+        assert!(invited("# Sync\n\n## My notes\nWith Sam.").is_empty());
     }
 
     #[test]

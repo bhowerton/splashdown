@@ -9,6 +9,7 @@
 //! change; every version is kept, to go back to. Insert pastes the draft
 //! into the app it's for; nothing is ever sent.
 
+use splashdown_core::sync::Locked;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use serde::Serialize;
@@ -70,10 +71,7 @@ struct Panel {
 
 fn panel() -> std::sync::MutexGuard<'static, Panel> {
     static PANEL: OnceLock<Mutex<Panel>> = OnceLock::new();
-    PANEL
-        .get_or_init(Mutex::default)
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
+    PANEL.get_or_init(Mutex::default).locked()
 }
 
 /// Whether the panel is on screen (a dictation then changes the draft).

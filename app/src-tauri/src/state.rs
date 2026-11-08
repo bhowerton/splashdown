@@ -3,6 +3,7 @@
 //! every command. Also the one way to change settings from outside the
 //! Settings window (`AppState::update`).
 
+use splashdown_core::sync::Locked;
 use std::sync::{Arc, Mutex};
 
 use splashdown_config::Settings;
@@ -40,7 +41,7 @@ impl AppState {
         change: impl FnOnce(&mut Settings),
     ) -> Result<Settings, String> {
         let settings = {
-            let mut current = self.settings.lock().unwrap_or_else(|e| e.into_inner());
+            let mut current = self.settings.locked();
             let mut settings = current.clone();
             change(&mut settings);
             settings.save(&engine::paths()?.config_file())?;
@@ -84,10 +85,7 @@ impl AppState {
     }
 
     pub fn settings(&self) -> Settings {
-        self.settings
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone()
+        self.settings.locked().clone()
     }
 
     /// Rebuilds the engine from current settings and keys, and hands it to
@@ -100,17 +98,13 @@ impl AppState {
             .await
             .unwrap_or_else(|e| Err(e.to_string()));
         let error = built.as_ref().err().cloned();
-        *self.engine_error.lock().unwrap_or_else(|e| e.into_inner()) = error.clone();
+        *self.engine_error.locked() = error.clone();
         self.session.reconfigure(built, keys);
         error
     }
 
     pub fn snapshot(&self) -> Snapshot {
-        let error = self
-            .engine_error
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .clone();
+        let error = self.engine_error.locked().clone();
         snapshot(self.settings(), error, self.updates.status())
     }
 
@@ -129,8 +123,6 @@ impl AppState {
     }
 }
 
-/// Brings what settings show outside the engine up to date: the menu bar,
-/// the mini bar and global shortcuts.
 /// Rebuilds the engine without waiting for it (`AppState::apply`).
 pub fn rebuild_in_background(app: &AppHandle) {
     let app = app.clone();

@@ -1,8 +1,9 @@
 //! Subtitles for a transcript or meeting note. A file transcribed with a
 //! local speech model keeps when each word was said; that's saved in the
-//! app's data folder by the note's `splashdown-id`, not in the notes
+//! settings folder by the note's `splashdown-id`, not in the notes
 //! folder, so the note stays as it was. Without it (cloud speech, meetings,
-//! older notes), captions are estimated from the note's timed lines.
+//! older notes, or a transcript edited since), captions are estimated from
+//! the note's timed lines.
 
 use super::*;
 use splashdown_core::meeting::Turn;
@@ -21,30 +22,16 @@ pub(super) struct Timings {
 }
 
 fn file(id: &str) -> Result<PathBuf, String> {
-    // The id is ours ("1730000000-ab12"), but it's read from a file the
-    // user can edit: nothing that leaves the folder.
-    if id.is_empty() || !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '-') {
-        return Err("This note's id isn't one Splashdown wrote.".into());
-    }
-    Ok(engine::paths()?
-        .config_dir
-        .join("subtitles")
-        .join(format!("{id}.json")))
+    crate::data::for_note("subtitles", id)
 }
 
 /// Keeps `timings` for the note with `id`.
 pub(super) fn save(id: &str, timings: &Timings) -> Result<(), String> {
-    let path = file(id)?;
-    if let Some(dir) = path.parent() {
-        std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
-    }
-    let json = serde_json::to_string(timings).map_err(|e| e.to_string())?;
-    std::fs::write(&path, json).map_err(|e| e.to_string())
+    crate::data::write(&file(id)?, timings)
 }
 
 fn load(id: &str) -> Option<Timings> {
-    let text = std::fs::read_to_string(file(id).ok()?).ok()?;
-    serde_json::from_str(&text).ok()
+    Some(crate::data::read(&file(id).ok()?))
 }
 
 /// Captions for the note `rel`, and whether their times are estimated.
@@ -58,9 +45,22 @@ pub(super) fn cues(store: &Store, rel: &str) -> Result<(Vec<Cue>, bool), String>
     Ok(cues_from(&turns, &timings))
 }
 
-/// `cues`, from the note's lines and what was kept.
+/// `cues`, from the note's lines and what was kept: the kept words while
+/// the note still says them (an edit, such as a misheard name put right,
+/// would otherwise be lost from the captions).
 fn cues_from(turns: &[Turn], timings: &Timings) -> (Vec<Cue>, bool) {
-    if !timings.words.is_empty() {
+    let letters = |text: &str| -> String {
+        text.chars()
+            .filter(|c| c.is_alphanumeric())
+            .flat_map(char::to_lowercase)
+            .collect()
+    };
+    let unedited = || {
+        let words: String = timings.words.iter().map(|w| letters(&w.text)).collect();
+        let note: String = turns.iter().map(|t| letters(t.said)).collect();
+        words == note
+    };
+    if !timings.words.is_empty() && unedited() {
         return (subtitles::from_words(&timings.words), false);
     }
     // Spans line up with the lines only if the note's lines are the ones
@@ -86,14 +86,14 @@ fn cues_from(turns: &[Turn], timings: &Timings) -> (Vec<Cue>, bool) {
 /// shortcut (Get Note Text → Subtitles). The caller has checked it may
 /// read the note.
 #[cfg(target_os = "macos")]
-pub(crate) fn text_for(folder: Option<PathBuf>, rel: &str, vtt: bool) -> Result<String, String> {
+pub(crate) fn text_for(
+    folder: Option<PathBuf>,
+    rel: &str,
+    format: subtitles::Format,
+) -> Result<String, String> {
     let (store, _) = store_for(folder)?;
     let (cues, _) = cues(&store, rel)?;
-    Ok(if vtt {
-        subtitles::vtt(&cues)
-    } else {
-        subtitles::srt(&cues)
-    })
+    Ok(format.render(&cues))
 }
 
 /// Saves the note's subtitles next to the file it was transcribed from
@@ -128,29 +128,25 @@ pub async fn notes_export_subtitles(
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<Option<Exported>, String> {
-    let vtt = match format.as_str() {
-        "srt" => false,
-        "vtt" => true,
-        _ => return Err(format!("Subtitles can't be saved as {format}.")),
+    let Some(format) = subtitles::Format::named(&format) else {
+        return Err(format!("Subtitles can't be saved as {format}."));
     };
     let (store, _) = store(&state)?;
     let (cues, approximate) = cues(&store, &path)?;
     if cues.is_empty() {
         return Err("This note's transcript has nothing to show as subtitles.".into());
     }
-    let text = if vtt {
-        subtitles::vtt(&cues)
-    } else {
-        subtitles::srt(&cues)
-    };
+    let text = format.render(&cues);
     let title = store
         .read(&path)
         .map(|n| markdown::title_of(&n.body))
         .unwrap_or_default();
     let name = format!(
         "{}.{}",
-        safe_file_name(&title).unwrap_or_else(|| "Subtitles".into()),
-        if vtt { "vtt" } else { "srt" }
+        Some(super::markdown::file_name_part(&title))
+            .filter(|name| !name.is_empty())
+            .unwrap_or_else(|| "Subtitles".into()),
+        format.extension()
     );
     let picked = tauri::async_runtime::spawn_blocking(move || {
         app.dialog()
@@ -169,22 +165,6 @@ pub async fn notes_export_subtitles(
         file: target.display().to_string(),
         approximate,
     }))
-}
-
-/// `title` as a file name: without characters file systems refuse.
-fn safe_file_name(title: &str) -> Option<String> {
-    let name: String = title
-        .chars()
-        .map(|c| {
-            if "/\\:*?\"<>|".contains(c) || c.is_control() {
-                ' '
-            } else {
-                c
-            }
-        })
-        .collect();
-    let name = name.split_whitespace().collect::<Vec<_>>().join(" ");
-    (!name.is_empty()).then_some(name)
 }
 
 #[cfg(test)]
@@ -216,6 +196,11 @@ mod tests {
         assert!(!approximate);
         assert_eq!(cues[0].start, Duration::from_millis(500));
         assert_eq!(cues[0].text, "Hello there.");
+
+        // Edited since: the note's words, at estimated times.
+        let (cues, approximate) = cues_from(&turns("**[0:00]** Hello, Dana."), &timings);
+        assert!(approximate);
+        assert_eq!(cues[0].text, "Hello, Dana.");
     }
 
     #[test]
@@ -238,14 +223,5 @@ mod tests {
         let (cues, _) = cues_from(&turns(edited), &kept);
         assert_eq!(cues[0].start, Duration::ZERO);
         assert_eq!(cues[1].start, Duration::from_secs(30));
-    }
-
-    #[test]
-    fn a_title_becomes_a_file_name() {
-        assert_eq!(
-            safe_file_name("Q3: plan / review?").as_deref(),
-            Some("Q3 plan review")
-        );
-        assert_eq!(safe_file_name("  "), None);
     }
 }

@@ -1,12 +1,17 @@
 //! Sanity guard: decides whether the model's output is safe to insert, or
-//! whether to fall back to the raw transcript.
+//! whether to fall back to the raw transcript. It catches a reply instead
+//! of a cleanup, lost snippets, a translation that isn't one (too short or
+//! too long for its source, `check_translation`) and a dictation repeated
+//! from earlier text.
 
 use crate::Mode;
 
+/// Why the guard turned the model's output down.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GuardReason {
     Empty,
-    /// Cleanup output is much shorter or longer than what was said.
+    /// The output (a cleanup or a translation) is much shorter or longer
+    /// than what was said.
     LengthOutOfRange,
     /// The model dropped a snippet placeholder.
     LostSnippet,
@@ -25,6 +30,7 @@ impl GuardReason {
     }
 }
 
+/// What to insert: the model's output, or the raw transcript.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Verdict {
     /// Insert this (normalized) text.
@@ -178,8 +184,9 @@ pub fn drop_repeated_earlier(output: &str, source: &str, earlier: &[String]) -> 
                 continue;
             }
             if let Some(end) = end_of_words(rest, &repeat) {
-                let after = rest[end..]
-                    .trim_start_matches(|c: char| c.is_whitespace() || SENTENCE_ENDS.contains(&c));
+                let after = rest[end..].trim_start_matches(|c: char| {
+                    c.is_whitespace() || REPEAT_TRAILING_PUNCT.contains(&c)
+                });
                 if after.is_empty() {
                     // Nothing new after it: leave it to the other checks.
                     break 'again;
@@ -212,7 +219,7 @@ fn may_repeat_earlier(so_far: &str, source: &str, earlier: &[String]) -> bool {
 }
 
 /// Punctuation that ends a sentence or clause, dropped with a repeat.
-const SENTENCE_ENDS: &[char] = &[
+const REPEAT_TRAILING_PUNCT: &[char] = &[
     '.', ',', ';', ':', '!', '?', '…', '。', '，', '、', '！', '？', '；', '：', '¿', '¡', '؟',
 ];
 

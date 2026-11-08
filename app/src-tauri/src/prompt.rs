@@ -1,8 +1,10 @@
 //! Questions the app asks on its own, outside any window (a meeting's
-//! summary, finishing one after a crash, quitting mid-meeting): a small
-//! panel of ours near the top right, like the call offer. The system's own
+//! summary, finishing one after a crash, quitting mid-meeting), and
+//! `choose`, a grid of choices (the "Translate into…" languages): a small
+//! panel of ours near the top right, below the call offer. The system's own
 //! alerts don't show for a menu-bar app on recent macOS.
 
+use splashdown_core::sync::Locked;
 use std::sync::mpsc;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -35,14 +37,14 @@ type Pending = Option<(Prompt, mpsc::Sender<Option<usize>>)>;
 
 fn pending() -> MutexGuard<'static, Pending> {
     static PENDING: Mutex<Pending> = Mutex::new(None);
-    PENDING.lock().unwrap_or_else(|e| e.into_inner())
+    PENDING.locked()
 }
 
 /// Shows a question and waits for the answer: the index of the button
 /// clicked, or `None` if the panel was closed. One at a time; call it off
 /// the main thread.
 pub fn ask(app: &AppHandle, title: &str, text: &str, buttons: &[&str]) -> Option<usize> {
-    let _turn = one_at_a_time().lock().unwrap_or_else(|e| e.into_inner());
+    let _turn = one_at_a_time().locked();
     let prompt = Prompt {
         title: title.into(),
         text: text.into(),
@@ -145,7 +147,7 @@ fn show(app: &AppHandle, tall: bool) {
     crate::placement::place(
         &window,
         crate::placement::Spot::TopRight {
-            top: 170.0,
+            top: crate::calls::BELOW,
             right: 16.0,
         },
     );

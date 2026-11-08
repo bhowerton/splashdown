@@ -14,11 +14,11 @@ pub fn free_disk_bytes(path: &Path) -> Option<u64> {
     imp::free_disk_bytes(path)
 }
 
-/// The language the user set the computer to, as a two-letter code ("de"),
-/// the first of their preferred languages.
+/// The language the user set the computer to, as a two- or three-letter
+/// code ("de"): the first of their preferred languages.
 pub fn system_language() -> Option<String> {
     let tag = imp::preferred_language()?;
-    let code = tag.split(['-', '_']).next()?.to_ascii_lowercase();
+    let code = splashdown_core::language::base(&tag);
     (code.len() == 2 || code.len() == 3).then_some(code)
 }
 
@@ -61,11 +61,15 @@ mod imp {
     use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
     use windows::core::PCWSTR;
 
+    /// The display language Windows is set to (not the regional format,
+    /// which can differ: English Windows with German dates).
     pub fn preferred_language() -> Option<String> {
+        use windows::Win32::Globalization::{GetUserDefaultUILanguage, LCIDToLocaleName};
         let mut name = [0u16; 85];
         // SAFETY: the buffer is LOCALE_NAME_MAX_LENGTH (85) wide characters,
         // and the call writes at most that, NUL included.
-        let len = unsafe { windows::Win32::Globalization::GetUserDefaultLocaleName(&mut name) };
+        let len =
+            unsafe { LCIDToLocaleName(u32::from(GetUserDefaultUILanguage()), Some(&mut name), 0) };
         (len > 1).then(|| String::from_utf16_lossy(&name[..len as usize - 1]))
     }
 
@@ -99,6 +103,10 @@ mod imp {
     }
 
     pub fn free_disk_bytes(_path: &Path) -> Option<u64> {
+        None
+    }
+
+    pub fn preferred_language() -> Option<String> {
         None
     }
 }

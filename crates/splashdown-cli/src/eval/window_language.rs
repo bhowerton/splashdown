@@ -60,6 +60,6 @@ pub(super) fn run(cases: &[&WindowCase], verbose: bool) {
     };
     score("whole", &naive);
     score("messages", &|w, s| {
-        splashdown_core::conversation::reply_language(w, s)
+        splashdown_core::conversation::reply_language(w, &[s])
     });
 }

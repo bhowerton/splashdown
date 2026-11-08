@@ -1,7 +1,8 @@
 "use strict";
 
 // Privacy tab: where speech and text are sent, local-only mode, what the AI
-// is told, and what's kept on this computer.
+// is told, what's kept on this computer, the notes folder, and setting up
+// coding agents.
 
 function renderPrivacy() {
   const s = state.settings;
@@ -52,10 +53,10 @@ function renderPrivacy() {
   $("pv-shortcuts-group").hidden = state.platform !== "macos";
   $("pv-shortcuts-read").checked = s.notes?.shortcuts_read !== false;
   const days = s.general.history_days;
-  const kept = days ? `, deleted after ${days === 1 ? "1 day" : `${days} days`}` : "";
+  const kept = days ? `, deleted after ${plural(days, "day")}` : "";
   $("pv-history").textContent = s.general.keep_history === true
     ? `On: the last 300 dictations${s.general.keep_audio ? " and their recordings" : ""}${kept}, in this app's settings folder.`
-    : `Off (the default). Only the last result is kept in memory, for “Paste last raw transcript”.${days ? ` Anything saved earlier is deleted after ${days === 1 ? "1 day" : `${days} days`}.` : ""}`;
+    : `Off (the default). Only the last result is kept in memory, for “Paste last raw transcript”.${days ? ` Anything saved earlier is deleted after ${plural(days, "day")}.` : ""}`;
   $("pv-keys").textContent = state.platform === "macos"
     ? "Stored in your macOS Keychain. Keys in a .env.local file (for development) override it."
     : "Stored in Windows Credential Manager.";
@@ -63,8 +64,8 @@ function renderPrivacy() {
 
 // "Manage" / "Change" links that jump to another tab.
 document.querySelectorAll("[data-goto]").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.goto)));
-$("nt-open").addEventListener("click", () => invoke("open_notes").catch((e) => toast(String(e), true)));
-$("pv-notes-open").addEventListener("click", () => invoke("open_notes").catch((e) => toast(String(e), true)));
+$("nt-open").addEventListener("click", () => call("open_notes"));
+$("pv-notes-open").addEventListener("click", () => call("open_notes"));
 
 /** Where notes are kept, and whether a sync service has a copy. Asking
  *  doesn't create the folder. */

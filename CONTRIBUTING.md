@@ -6,7 +6,7 @@ Thanks for helping. This file covers setting up, the checks a change has to pass
 
 **All platforms**
 - Rust stable (pinned by `rust-toolchain.toml`; `rustup` picks it up).
-- `cmake`, for local speech-to-text (transcribe.cpp). Without it, build the CLI with `--no-default-features`.
+- `cmake`, for local speech-to-text (transcribe.cpp). Without it, build the CLI with `--no-default-features --features full` (everything but local speech-to-text and the natural voice). `--no-default-features` alone builds only the remote control, as the app ships it.
 
 **macOS**
 - Xcode 26 or later (the macOS 26 SDK), for the Swift shim that talks to Apple's on-device models. The app itself runs on macOS 13 and later.
@@ -19,7 +19,7 @@ Thanks for helping. This file covers setting up, the checks a change has to pass
   winget install Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
   ```
   On an ARM64 PC, also add the "MSVC ARM64 build tools" component in the Visual Studio Installer.
-- The Windows platform layer (`crates/splashdown-platform/src/win/`) is complete, and signed Windows releases ship from it. A few things are macOS only for now, such as `splashdown://` links and the computer-use spike.
+- The Windows platform layer (`crates/splashdown-platform/src/win/`) is complete, and signed Windows releases ship from it. A few things are macOS only for now: `splashdown://` links, Shortcuts actions, Apple's on-device models, remembering people by voice in meetings, and the computer-use spike.
 
 ## Building and running
 
@@ -30,7 +30,9 @@ scripts/run-mac-app.sh        # macOS: build, bundle, sign and launch the menu b
 scripts\run-win-app.ps1       # Windows: build and launch the tray app (checks the build tools first)
 ```
 
-The built-in local text model runs in a separate helper, `splashdown-llm` (see the architecture doc); `cargo build --workspace` builds it next to the app, which is where the app looks for it. The same goes for `splashdown-mcp`, which Settings → Privacy → Coding agents runs to set agents up; both ship inside the app (Tauri's external binaries, added in `tauri.release.conf.json` and the packaging scripts). Download its model with `cargo run --release -p splashdown-cli -- models download qwen3-4b` (2.5 GB).
+The built-in local text model runs in a separate helper, `splashdown-llm` (see the architecture doc); `cargo build --workspace` builds it next to the app, which is where the app looks for it. The same goes for `splashdown-mcp`, which Settings → Privacy → Coding agents runs to set agents up. Download the text model with `cargo run --release -p splashdown-cli -- models download qwen3-4b` (2.5 GB).
+
+Three binaries ship inside the app, as Tauri's external binaries (`tauri.release.conf.json`; `scripts/run-mac-app.sh` and `scripts/package-win.ps1` build and copy them): `splashdown-llm`, `splashdown-mcp` and the slim `splashdown-cli` (built with `--no-default-features`). On Windows there's a fourth, `splashdown-llm-basic`, the helper for processors without AVX2.
 
 `scripts/run-mac-app.sh` builds a real `.app` bundle so macOS grants Accessibility and Microphone to Splashdown rather than to your terminal. It signs with the first "Apple Development" certificate in your keychain, so permissions survive rebuilds. Without one it signs ad hoc, and macOS asks again after every build. Set `SPLASHDOWN_SIGN_IDENTITY` to choose a certificate. Logs go to `target/macos/splashdown.log`. On Windows, `scripts\run-win-app.ps1` needs no signing (Windows asks for no permissions), passes `.env.local` the same way, and logs to `%LOCALAPPDATA%\Splashdown\logs\splashdown.log`. If PowerShell refuses to run scripts, use `powershell -ExecutionPolicy Bypass -File scripts\run-win-app.ps1`.
 
@@ -52,8 +54,9 @@ CI runs these (clippy and the tests on both macOS and Windows); please run them 
 
 ```sh
 cargo fmt --all --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy --workspace --all-targets --locked -- -D warnings
+cargo clippy -p splashdown-cli --no-default-features --all-targets --locked -- -D warnings   # the CLI as the app ships it
+cargo test --workspace --locked
 cargo deny check licenses     # once: cargo install cargo-deny --locked
 ```
 
@@ -69,7 +72,7 @@ cargo clippy --target x86_64-pc-windows-msvc --no-default-features \
 
 **Tests that need hardware or keys** are marked `#[ignore]` with the reason, and don't run by default:
 - `splashdown-apple-shim`: Apple Intelligence turned on, and Apple's speech model downloaded. Run with `cargo test -p splashdown-apple-shim -- --ignored`.
-- The evals (`splashdown-cli eval cleanup`, `commands`, `actions`, `compose`, `style` and `stt`; `eval make-audio` makes the audio for `stt`) are commands, not tests. They call real providers and need keys or local models; see [eval/README.md](eval/README.md).
+- The evals (`splashdown-cli eval cleanup`, `commands`, `actions`, `compose`, `style`, `window-language` and `stt`; `eval make-audio` makes the audio for `stt`) are commands, not tests. All but `window-language`, which needs no model, call real providers and need keys or local models; see [eval/README.md](eval/README.md).
 
 ## Packaging a release
 
@@ -121,15 +124,18 @@ Whoever can run this workflow with these secrets can ship an update to every ins
 
 ## Changing the AI prompts
 
-Each prompt lives next to the code that uses it, in `crates/splashdown-core/src/` unless noted, and each but one has an eval:
+Each prompt lives next to the code that uses it, in `crates/splashdown-core/src/` unless noted, and most have an eval:
 
 | Prompt | Where | Eval |
 |---|---|---|
 | The AI pass: cleanup, spoken instructions, transforms of selected text; and the sanity guard that checks its answer | `prompt.rs`, `guard.rs` | `eval cleanup` |
 | The built-in transforms' instructions, such as the meeting summary | `crates/splashdown-config/src/transforms.rs` | `eval cleanup` (the `transform-*` and `meeting-summary-*` cases) |
 | Spoken commands: which action a command names | `command.rs` | `eval commands` |
-| Voice actions: planning a "do" into one action | `action.rs` | `eval actions` |
+| Voice actions: planning a "do" into one action | `action/planner.rs` | `eval actions` |
 | Compose: drafts, changes to them, and writing in the user's voice | `compose.rs` | `eval compose`, `eval style` |
+| Your writing style: the profile written from the user's edits to drafts | `style.rs` (`PROFILE_SYSTEM`) | `eval style` (the `edits-*` cases) |
+| Translation: the translate key, ⌃⌥T and a preset's "Translate into"; and the length check that catches a reply that isn't a translation | `translate_instruction` in `crates/splashdown-config/src/presets.rs`, `guard.rs` | `eval cleanup` (the `translate-*` cases) |
+| Translating selected text that can't be edited, answered in the Ask panel | `show_translation` in `app/src-tauri/src/session/edits.rs` | none yet |
 | Ask: answers in the panel, and spoken summaries | `ask.rs` | none yet; try it by hand with `splashdown-cli ask "…"` |
 
 Small wording changes can move results a lot, so any prompt or guard change needs an eval run, before and after, on the cloud default and the built-in local model:
@@ -158,10 +164,15 @@ The interpreter's prompt is shared by commands and voice actions, so a change to
 4. A `case` in the page's `mockInvoke`, if it has one (`settings/mock.js`, `onboarding.js`, `notes/preview.js`).
 
 **A voice action**
-1. A `Spec` in `CATALOG` in `crates/splashdown-core/src/action.rs`, with its parameters and what each takes, a variant of `Action` (with its `id` and `fields`), and its arm where the planner's answer is turned into an `Action`. Parameters are checked here; nothing in the catalog may send, delete or pay.
+1. A `Spec` in `CATALOG` in `crates/splashdown-core/src/action/catalog.rs`, with its parameters and what each takes, and a variant of `Action` there (with its `id` and `fields`); then its arm in `check` in `action/check.rs`, where the planner's answer is turned into an `Action`. Parameters are checked there; nothing in the catalog may send, delete or pay.
 2. What it does: an arm in `carry_out` in `app/src-tauri/src/voice_actions.rs`. It runs off the session thread, so it may ask the user first (`prompt::ask`), as Shortcuts and calendar events do.
 3. Its checkbox in Settings → Actions: an `<input type="checkbox" class="switch" data-action="<id>" data-setting>` in `app/ui/index.html`, and its line in `help.rs` ("What can I say?").
 4. Cases in `eval/actions.toml`, including requests that must do nothing, then a run of `eval actions` and `eval commands` (an edit must never become an action).
+
+**A Shortcuts action** (macOS)
+1. An `AppIntent` in `crates/splashdown-apple-shim/swift/Sources/SplashdownAppleShim/`: `Intents.swift`, or `Notes.swift` for one about notes. Its `perform()` sends a request with `Splashdown.send(["cmd": "<name>", …])` and returns the answer. For Siri and Spotlight, add a phrase to `SplashdownShortcuts`; every phrase names the app.
+2. A matching variant of `Intent` in `app/src-tauri/src/intents.rs` (`cmd` is its name in snake_case) and its arm in `answer`, returning a `Reply`. Where the control channel already has the request, send it through the session (`state.session.control`). An action that reads notes goes through `readable`, so Settings → Privacy → Shortcuts applies. Add the JSON the Swift side sends to the test `intents_read_as_swift_sends_them`.
+3. Rebuild with `scripts/run-mac-app.sh`. The shim's `build.rs` extracts the actions' metadata into `target/appintents/Metadata.appintents`, which the script (and `scripts/package-mac.sh`) puts in the app bundle; without it, Shortcuts doesn't know the action exists.
 
 **An eval case**
 Add a `[[case]]` to the right file in `eval/` with a new `id`; the file's header says what the fields mean. Run just that case with `--filter <id>` on the cloud default and the built-in model, then the whole set, and put the scores in the pull request. When you compare models, add a row to the results in [eval/README.md](eval/README.md).

@@ -5,6 +5,7 @@
 //! preset (or finishes the one in progress), and each transform's, which
 //! runs it on the selected text.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -39,7 +40,7 @@ fn registered() -> &'static Mutex<Registered> {
 }
 
 fn lock() -> std::sync::MutexGuard<'static, Registered> {
-    registered().lock().unwrap_or_else(|e| e.into_inner())
+    registered().locked()
 }
 
 /// ⌃⌥T: translate the selection.

@@ -3,6 +3,10 @@
 
 use super::*;
 
+/// Languages to translate into, at most (`translate_targets`). Settings
+/// has its own copy (`app/ui/settings/general.js`).
+pub const MOST_TRANSLATE_TARGETS: usize = 5;
+
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
 pub struct GeneralSettings {
@@ -112,10 +116,11 @@ pub struct GeneralSettings {
     /// The natural voices were offered (and downloaded, or not) the first
     /// time something was read without them.
     pub natural_voice_offered: bool,
-    /// Languages to translate into with ⌃⌥T, by English name ("Spanish"),
-    /// as the menu bar lists them. Up to five.
+    /// Languages to translate into (Right Option + T, ⌃⌥T), by English
+    /// name ("Spanish"), as the menu bar lists them. Up to
+    /// `MOST_TRANSLATE_TARGETS`.
     pub translate_targets: Vec<String>,
-    /// The one ⌃⌥T translates into now (picked in the menu bar). Unset,
+    /// The one translating goes into now (picked in the menu bar). Unset,
     /// or no longer in the list, means the first.
     pub translate_to: Option<String>,
     /// In email and chat apps, write a dictation in the language of the

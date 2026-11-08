@@ -69,13 +69,13 @@
           <input id="hk-ask" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" data-setting></div>
         <div class="row"><span class="lbl"><label for="hk-compose">Compose</label><small>Off unless you choose a letter. You don't need one: tap the instruction key and say what to write ("reply saying I'm in"). With a letter, holding the dictation key and pressing it always writes a draft.</small></span>
           <input id="hk-compose" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" placeholder="Off" data-setting></div>
-        <div class="row"><span class="lbl"><label for="hk-translate">Translate</label><small>Hold the dictation key and press this letter: what you say comes out in the language picked in the menu bar under Translate into. With text selected, it's translated at once. Choose languages under Words &amp; language.</small></span>
+        <div class="row"><span class="lbl"><label for="hk-translate">Translate</label><small>Hold the dictation key and press this letter: what you say comes out in the language picked under Translate into (from <span class="menubar">the menu bar</span>). With text selected, it's translated at once. Choose languages under Words &amp; language.</small></span>
           <input id="hk-translate" class="letter-key" type="text" maxlength="1" spellcheck="false" autocomplete="off" data-setting></div>
         <label class="row"><span class="lbl">Write drafts in my style<small>Compose writes the way you do in your own earlier messages in the conversation on screen: your greeting and sign-off, length, how formal you are, emoji. Nothing is stored.</small></span>
           <input id="gen-compose-style" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Check drafts in a panel first<small>Compose shows the draft in a panel to change by voice, with every version kept, and you choose Insert.</small></span>
           <input id="gen-compose-panel" type="checkbox" class="switch" data-setting></label>
-        <label class="row"><span class="lbl">Double-tap for hands-free too<small>Off by default: Claude and some other apps use a double-tap of Option. Mouse buttons always double-click into hands-free.</small></span>
+        <label class="row"><span class="lbl">Double-tap for hands-free too<small>Off by default: some apps use a double-tap of <span class="alt-key">Option</span>. Mouse buttons always double-click into hands-free.</small></span>
           <input id="hk-double-tap" type="checkbox" class="switch" data-setting></label>
         <div class="row note-row" id="hk-tip-row" hidden><span class="lbl"><small id="hk-tip"></small></span></div>
         <div class="legend" id="hk-legend" aria-label="What the dictation key does"></div>
@@ -89,7 +89,7 @@
       </div>
       <div class="group">
         <div class="gh">Microphone</div>
-        <div class="row"><span class="lbl"><label for="gen-mic">Microphone</label><small id="gen-mic-note">Automatic uses your system's microphone, but avoids Bluetooth headsets like AirPods (their mic switches them to low-quality call audio)</small></span>
+        <div class="row"><span class="lbl"><label for="gen-mic">Microphone</label><small>Automatic uses your system's microphone, but avoids Bluetooth headsets like AirPods (their mic switches them to low-quality call audio)</small></span>
           <select id="gen-mic" data-setting></select></div>
         <div class="row" id="gen-mic-backup-row" hidden><span class="lbl"><label for="gen-mic-backup">If it's not connected</label><small>Use this one instead, e.g. your laptop's own microphone when the desk mic is unplugged</small></span>
           <select id="gen-mic-backup" data-setting></select></div>
@@ -108,7 +108,7 @@
           <input id="nt-keep-audio" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Find notes by meaning<small id="nt-meaning-note">Ask finds notes about what you mean, not only ones with the same words: “why was the launch delayed?” finds the note that says it was pushed back. Runs on this computer; the first time downloads the Qwen3 Embedding model (about 639 MB).</small></span>
           <input id="nt-meaning" type="checkbox" class="switch" data-setting></label>
-        <div class="row"><span class="lbl">Notes window<small><span data-combo="N">⌃⌥N</span>, or Notes in <span class="menubar">the menu bar</span>. Transforms are on the Words tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
+        <div class="row"><span class="lbl">Notes window<small><span data-combo="N">⌃⌥N</span>, or Notes from <span class="menubar">the menu bar</span>. Transforms are on the Words &amp; language tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
       </div>
       <div class="group">
         <div class="gh">Transcribe new files in a folder</div>
@@ -118,7 +118,7 @@
       </div>
       <div class="group">
         <div class="gh">Meetings</div>
-        <div class="row"><span class="lbl">Record a meeting<small><span data-combo="M">⌃⌥M</span>, or Record a meeting in <span class="menubar">the menu bar</span> or Notes. Your microphone is You, and what your computer plays is Them. The transcript goes into Meetings in your notes folder as the call goes.</small></span></div>
+        <div class="row"><span class="lbl">Record a meeting<small><span data-combo="M">⌃⌥M</span>, or Record a meeting from <span class="menubar">the menu bar</span> or Notes. Your microphone is You, and what your computer plays is Them. The transcript goes into Meetings in your notes folder as the call goes.</small></span></div>
         <label class="row"><span class="lbl">Show a bar on screen while recording<small>The time, both sides' levels and Stop, at the top of the screen. Drag it anywhere.</small></span>
           <input id="mt-pill" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Offer to record when a call starts<small>When Zoom, Teams, Slack, FaceTime, a browser or another call app starts using the microphone, a small panel offers to record, and offers to stop when the call ends. Nothing is recorded until you click.</small></span>
@@ -133,7 +133,7 @@
           <input id="mt-remember" type="checkbox" class="switch" data-setting></label>
         <div class="row" id="mt-voices-row" hidden><span class="lbl">People known by voice<small id="mt-voices"></small></span>
           <button type="button" class="link danger" id="mt-voices-forget">Forget all</button></div>
-        <label class="row"><span class="lbl">Summarize when it ends<small id="mt-summary-note">Decisions, action items and open questions, at the top of the note.</small></span>
+        <label class="row"><span class="lbl">Summarize when it ends<small>Decisions, action items and open questions, at the top of the note.</small></span>
           <select id="mt-summary" data-setting>
             <option value="">Ask first (with an AI on this computer, just summarize)</option>
             <option value="ask">Always ask first</option>
@@ -153,7 +153,7 @@
           <input id="gen-stream" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Sounds<small>A quiet click when recording starts and stops</small></span>
           <input id="gen-sounds" type="checkbox" class="switch" data-setting></label>
-        <label class="row" id="gen-volume-row"><span class="lbl">Sound volume</span>
+        <label class="row"><span class="lbl">Sound volume</span>
           <span class="volume"><span aria-hidden="true">🔈</span><input id="gen-volume" type="range" min="0" max="100" step="1" aria-label="Sound volume"><span aria-hidden="true">🔊</span></span></label>
         <label class="row"><span class="lbl">Show the status next to the text cursor<small>Where the app reports its cursor; otherwise at the bottom of the screen.</small></span>
           <input id="gen-near-cursor" type="checkbox" class="switch" data-setting></label>
@@ -250,14 +250,14 @@
             <option value="zh">Chinese</option>
             <option value="ko">Korean</option>
           </select></label>
-        <div class="row column" id="gen-languages-row"><span class="lbl">Languages you mix<small>If you switch between languages, even mid-sentence, tick them. Works best with OpenAI or OpenRouter speech; Apple's speech model hears one language at a time.</small></span>
+        <div class="row column" id="gen-languages-row"><span class="lbl">Languages you mix<small>If you switch between languages, even mid-sentence, check them. Works best with OpenAI or OpenRouter speech; Apple's speech model hears one language at a time.</small></span>
           <div class="lang-chips" id="gen-languages" role="group" aria-label="Languages you mix"></div></div>
       </div>
       <div class="group">
         <div class="gh">Translate</div>
-        <div class="row column"><span class="lbl">Languages to translate into<small>Hold the dictation key and press the translate letter (T, under General) to dictate in the language ticked in the menu bar, under Translate into; with text selected, it's translated instead. <span data-combo="T">⌃⌥T</span> does both without holding a key. Text you can't edit, like a web page, opens in the Ask panel, which can read it aloud. Uses the AI. Up to five.</small></span>
+        <div class="row column"><span class="lbl">Languages to translate into<small>Hold the dictation key and press the translate letter (T, under General) to dictate in the language checked under Translate into (from <span class="menubar">the menu bar</span>); with text selected, it's translated instead. <span data-combo="T">⌃⌥T</span> does both without holding a key. Text you can't edit, like a web page, opens in the Ask panel, which can read it aloud. Uses the AI. Up to five.</small></span>
           <div class="lang-chips" id="gen-translate" role="group" aria-label="Languages to translate into"></div></div>
-        <label class="row"><span class="lbl">Reply in the conversation's language<small id="gen-their-note">In email and chat apps, when the conversation on screen is clearly in another language than you speak, what you dictate comes out in theirs: the bar shows “→ German (their language)” while you speak, and Esc cancels. ⌃⌥Z puts back what you said. Reads the conversation with “Names and words on screen” (Privacy); nothing else is sent.</small></span>
+        <label class="row"><span class="lbl">Reply in the conversation's language<small id="gen-their-note">In email and chat apps, when the conversation on screen is clearly in another language than you speak, what you dictate comes out in theirs: the bar shows “→ German (their language)” while you speak, and Esc cancels. <span data-combo="Z">⌃⌥Z</span> puts back what you said. Reads the conversation with “Names and words on screen” (Privacy); nothing else is sent.</small></span>
           <input id="gen-their" type="checkbox" class="switch" data-setting></label>
       </div>
       <div class="group">
@@ -293,7 +293,7 @@
       <div class="group">
         <div class="gh">Replacements</div>
         <div class="row column">
-          <span class="lbl">Always change one word or phrase to another<small>Applied to the final text, e.g. “teh” → “the”, or “gonna” → “going to”. Whole words, ignoring case; tick Regex for a pattern (<code>$1</code> for groups).</small></span>
+          <span class="lbl">Always change one word or phrase to another<small>Applied to the final text, e.g. “teh” → “the”, or “gonna” → “going to”. Whole words, ignoring case; check Regex for a pattern (<code>$1</code> for groups).</small></span>
           <div id="replacements" class="rules"></div>
           <small id="replacement-warn" class="warn-text" hidden></small>
           <div><button class="btn" id="replacement-add">+ Add replacement</button></div>
@@ -319,7 +319,7 @@
       <div class="banner warn" id="budget-banner" hidden>Your spending limit is reached, so Splashdown is using models on this computer until it resets. Raise the limit under <button class="link" data-goto="spending">Spending</button> to switch back.</div>
 
       <div class="group">
-        <div class="gh">API keys <span class="gh-note">stored in your Keychain</span></div>
+        <div class="gh">API keys <span class="gh-note" id="keys-where">stored in your Keychain</span></div>
         <div id="keys"></div>
       </div>
 
@@ -422,12 +422,12 @@
     <section id="tab-permissions" class="tab" hidden>
       <header class="page-head">
         <span class="tile big t-permissions" aria-hidden="true"><svg><use href="#i-permissions"/></svg></span>
-        <div><h1>Permissions</h1><p>What macOS needs to let Splashdown hear the key and type for you.</p></div>
+        <div><h1>Permissions</h1><p id="perm-lead">What macOS needs to let Splashdown hear the key and type for you.</p></div>
       </header>
       <div class="banner ok" id="perm-done" hidden>You're all set. Click into any text field, hold <b id="perm-key">Right Option</b> and speak.</div>
       <p class="sub" id="perm-intro">Two quick steps. Each one updates here by itself as soon as you allow it.</p>
       <div class="group">
-        <div class="row perm">
+        <div class="row perm" id="perm-ax-row">
           <span class="step" id="perm-ax-step">1</span>
           <span class="lbl">Accessibility
             <small>Lets Splashdown notice the hotkey, see which field you're in, and type your words into it.</small>
@@ -444,7 +444,7 @@
           <span class="state" id="perm-mic-state"></span>
         </div>
       </div>
-      <p class="note">If the hotkey still does nothing after both are allowed, a password field or Terminal's <em>Secure Keyboard Entry</em> may be on. Secure input blocks all hotkeys while it's active.</p>
+      <p class="note" id="perm-secure-note">If the hotkey still does nothing after both are allowed, a password field or Terminal's <em>Secure Keyboard Entry</em> may be on. Secure input blocks all hotkeys while it's active.</p>
     </section>
 
     <!-- ================= Presets ================= -->
@@ -559,7 +559,7 @@
           <input id="pv-agents-meetings" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">…and add to them<small>Agents can add a paragraph to the end of a note, e.g. “note that down”. To keep one note from agents, choose Hide from coding agents in its ⋯ menu.</small></span>
           <input id="pv-agents-write" type="checkbox" class="switch" data-setting></label>
-        <div class="row"><span class="lbl">Set up an agent<small>Adds Splashdown's MCP server to the agent, so it can ask you questions by voice and, if you allow it above, use your notes. Start a new session in the agent afterwards.<span id="pv-agents-server"></span></small></span></div>
+        <div class="row"><span class="lbl">Set up an agent<small>Adds Splashdown's MCP server to the agent, so it can ask you questions by voice and, if you allow it above, use your notes. Start a new session in the agent afterward.<span id="pv-agents-server"></span></small></span></div>
         <div id="pv-agents-list" aria-live="polite"><div class="row"><span class="lbl"><small>Looking for coding agents…</small></span></div></div>
       </div>
       <div class="group" id="pv-shortcuts-group" hidden>

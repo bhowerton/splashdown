@@ -10,6 +10,7 @@
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+use splashdown_core::sync::Locked;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
@@ -51,7 +52,7 @@ static RUNNING: Mutex<Vec<u32>> = Mutex::new(Vec::new());
 /// while it runs, so the updater would fail on it; one is started again
 /// when it's next needed.
 pub fn stop_all_helpers() {
-    let pids = std::mem::take(&mut *RUNNING.lock().unwrap_or_else(|e| e.into_inner()));
+    let pids = std::mem::take(&mut *RUNNING.locked());
     for pid in pids {
         #[cfg(windows)]
         let mut command = {
@@ -121,14 +122,9 @@ impl TextModel for LocalLlm {
             max_tokens: req.max_tokens,
         };
         let helper = self.helper.clone();
-        let reply = tokio::task::spawn_blocking(move || {
-            helper
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .request(&request)
-        })
-        .await
-        .map_err(|e| ProviderError::Unavailable(format!("local model: {e}")))??;
+        let reply = tokio::task::spawn_blocking(move || helper.locked().request(&request))
+            .await
+            .map_err(|e| ProviderError::Unavailable(format!("local model: {e}")))??;
         match reply {
             LocalLlmReply::Ok { text } => Ok(Completion {
                 text,
@@ -152,11 +148,7 @@ impl TextModel for LocalLlm {
         };
         let helper = self.helper.clone();
         std::thread::spawn(move || {
-            if let Err(e) = helper
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .request(&request)
-            {
+            if let Err(e) = helper.locked().request(&request) {
                 tracing::warn!("local model didn't start: {e}");
             }
         });
@@ -211,11 +203,7 @@ impl LocalEmbedder {
             cpu_only: false,
             texts: texts.to_vec(),
         };
-        let reply = self
-            .helper
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .request(&request)?;
+        let reply = self.helper.locked().request(&request)?;
         match reply {
             LocalLlmReply::Vectors { vectors } if vectors.len() == texts.len() => Ok(vectors),
             LocalLlmReply::Error { message } => Err(ProviderError::Unavailable(format!(
@@ -300,10 +288,7 @@ impl Helper {
             })?;
         let stdin = child.stdin.take().expect("piped");
         let stdout = BufReader::new(child.stdout.take().expect("piped"));
-        RUNNING
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(child.id());
+        RUNNING.locked().push(child.id());
         Ok(Process {
             child,
             stdin,
@@ -314,10 +299,7 @@ impl Helper {
     fn stop(&mut self) {
         if let Some(mut p) = self.process.take() {
             let pid = p.child.id();
-            RUNNING
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .retain(|&r| r != pid);
+            RUNNING.locked().retain(|&r| r != pid);
             let _ = p.child.kill();
             let _ = p.child.wait();
         }

@@ -5,15 +5,6 @@
 /** Saved instructions, from Settings → Words. */
 let transforms = [];
 
-/** "Ctrl+Alt+Digit1" → "⌃⌥1" on a Mac, "Ctrl+Alt+1" elsewhere. */
-function shortcutLabel(s) {
-  const parts = s.split("+");
-  const key = parts.pop().replace(/^Key/, "").replace(/^Digit/, "");
-  if (!isMac) return [...parts, key].join("+");
-  const symbol = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Cmd: "⌘" };
-  return parts.map((m) => symbol[m] ?? m).join("") + key;
-}
-
 async function loadTransforms() {
   try {
     transforms = await invoke("notes_transforms") ?? [];
@@ -25,7 +16,7 @@ async function loadTransforms() {
     const b = document.createElement("button");
     b.className = "nt-chip";
     b.textContent = t.name;
-    b.title = t.shortcut ? `${t.name} (${shortcutLabel(t.shortcut)})` : t.name;
+    b.title = t.shortcut ? `${t.name} (${shortcutLabel(t.shortcut, isMac ? "macos" : "windows")})` : t.name;
     b.addEventListener("click", () => runTransform(t.id));
     return b;
   });

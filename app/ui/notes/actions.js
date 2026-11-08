@@ -89,8 +89,8 @@ async function finishRename(e) {
 
 async function deleteNote() {
   if (!current.path || locked()) return;
-  const ok = await askConfirm("Move this note to the Trash?", {
-    action: "Move to Trash",
+  const ok = await askConfirm(`Move this note to the ${TRASH}?`, {
+    action: `Move to ${TRASH}`,
     detail: isMac ? "You can get it back from the Trash in Finder." : "You can get it back from the Recycle Bin.",
   });
   if (!ok) return;
@@ -132,17 +132,17 @@ async function changeFolder() {
 }
 
 function reveal() {
-  invoke("notes_reveal", { path: current.path }).catch((err) => toast(String(err), true));
+  call("notes_reveal", { path: current.path });
 }
 
 async function toggleMeeting() {
   // Stopping: what was just typed beside it goes into the summary too.
   if (meeting) await flushLiveNotes();
-  invoke("meeting_toggle").catch((err) => toast(String(err), true));
+  call("meeting_toggle");
 }
 
 function pickFile() {
-  invoke("notes_transcribe_pick").catch((err) => toast(String(err), true));
+  call("notes_transcribe_pick");
 }
 
 async function askForLink() {

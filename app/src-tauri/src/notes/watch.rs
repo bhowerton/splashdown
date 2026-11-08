@@ -6,6 +6,7 @@
 //! What was taken (or was already there when the folder was added) is kept
 //! in `watched.json`, so a restart does nothing twice.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashMap;
 
 use serde::Deserialize;
@@ -17,10 +18,10 @@ use super::*;
 /// How often the folders are looked at.
 const EVERY: Duration = Duration::from_secs(10);
 
-/// What's been seen, kept between runs.
+/// What's been seen, kept between runs (`watched.json`).
 #[derive(Debug, Default, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
-struct Record {
+struct Ledger {
     /// Folders looked at already: their files when first seen are known.
     folders: Vec<PathBuf>,
     files: HashMap<PathBuf, Seen>,
@@ -43,33 +44,26 @@ struct Found {
     modified: u64,
 }
 
-fn record_file() -> Result<PathBuf, String> {
-    Ok(engine::paths()?.config_dir.join("watched.json"))
+/// The ledger, held while it's read and changed (the scanner and Settings
+/// both change it). Read from its file the first time.
+fn ledger() -> std::sync::MutexGuard<'static, Ledger> {
+    static LEDGER: OnceLock<Mutex<Ledger>> = OnceLock::new();
+    LEDGER
+        .get_or_init(|| {
+            Mutex::new(
+                crate::data::path("watched.json")
+                    .map(|p| crate::data::read(&p))
+                    .unwrap_or_default(),
+            )
+        })
+        .locked()
 }
 
-/// The record, held while it's read and changed (the scanner and Settings
-/// both change it).
-fn record() -> std::sync::MutexGuard<'static, Option<Record>> {
-    static RECORD: Mutex<Option<Record>> = Mutex::new(None);
-    let mut guard = RECORD.lock().unwrap_or_else(|e| e.into_inner());
-    if guard.is_none() {
-        let loaded = record_file()
-            .ok()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|t| serde_json::from_str(&t).ok())
-            .unwrap_or_default();
-        *guard = Some(loaded);
-    }
-    guard
-}
-
-fn save(record: &Record) {
-    let saved = record_file().and_then(|path| {
-        let json = serde_json::to_string(record).map_err(|e| e.to_string())?;
-        std::fs::write(path, json).map_err(|e| e.to_string())
-    });
+fn save(ledger: &Ledger) {
+    let saved =
+        crate::data::path("watched.json").and_then(|path| crate::data::write(&path, ledger));
     if let Err(e) = saved {
-        tracing::warn!("couldn't keep the watched folders' record: {e}");
+        tracing::warn!("couldn't keep the watched folders' ledger: {e}");
     }
 }
 
@@ -109,26 +103,26 @@ fn media_in(folder: &Path) -> Vec<Found> {
 /// What a scan does: the files to transcribe now. `pending` holds files
 /// seen changing, as they were at the last scan.
 fn scan(
-    record: &mut Record,
+    ledger: &mut Ledger,
     watched: &[WatchedFolder],
     pending: &mut HashMap<PathBuf, (u64, u64)>,
     listed: impl Fn(&Path) -> Vec<Found>,
 ) -> Vec<(Found, WatchedFolder)> {
     // A folder taken off the list is looked at afresh if it comes back.
-    record
+    ledger
         .folders
         .retain(|f| watched.iter().any(|w| &w.path == f));
     let mut take = Vec::new();
     let mut still = HashMap::new();
     for folder in watched {
         let found = listed(&folder.path);
-        if !record.folders.contains(&folder.path) {
-            remember_as_left(record, &folder.path, &found);
+        if !ledger.folders.contains(&folder.path) {
+            remember_as_left(ledger, &folder.path, &found);
             continue;
         }
         for file in found {
             let now = (file.size, file.modified);
-            if record
+            if ledger
                 .files
                 .get(&file.path)
                 .is_some_and(|s| (s.size, s.modified) == now)
@@ -136,7 +130,7 @@ fn scan(
                 continue;
             }
             if pending.get(&file.path) == Some(&now) {
-                record.files.insert(
+                ledger.files.insert(
                     file.path.clone(),
                     Seen {
                         size: file.size,
@@ -155,9 +149,9 @@ fn scan(
 }
 
 /// A folder seen for the first time: what's in it already is left alone.
-fn remember_as_left(record: &mut Record, folder: &Path, found: &[Found]) {
+fn remember_as_left(ledger: &mut Ledger, folder: &Path, found: &[Found]) {
     for file in found {
-        record.files.insert(
+        ledger.files.insert(
             file.path.clone(),
             Seen {
                 size: file.size,
@@ -166,7 +160,7 @@ fn remember_as_left(record: &mut Record, folder: &Path, found: &[Found]) {
             },
         );
     }
-    record.folders.push(folder.to_path_buf());
+    ledger.folders.push(folder.to_path_buf());
 }
 
 /// Starts looking at the watched folders, for as long as the app runs.
@@ -184,12 +178,11 @@ pub fn watch_folders(app: &AppHandle) {
                 };
                 let watched = state.settings().notes.watched;
                 let take = {
-                    let mut guard = record();
-                    let record = guard.get_or_insert_with(Record::default);
-                    let before = record.clone();
-                    let take = scan(record, &watched, &mut pending, media_in);
-                    if *record != before {
-                        save(record);
+                    let mut ledger = ledger();
+                    let before = ledger.clone();
+                    let take = scan(&mut ledger, &watched, &mut pending, media_in);
+                    if *ledger != before {
+                        save(&ledger);
                     }
                     take
                 };
@@ -217,16 +210,16 @@ fn item((file, folder): (Found, WatchedFolder)) -> Item {
 
 /// The files that were already in `folder` when it was added and are
 /// still there unchanged, noting them as such if it's new.
-fn waiting_in(record: &mut Record, folder: &Path) -> Vec<Found> {
+fn waiting_in(ledger: &mut Ledger, folder: &Path) -> Vec<Found> {
     let found = media_in(folder);
-    if !record.folders.iter().any(|f| f == folder) {
-        remember_as_left(record, folder, &found);
-        save(record);
+    if !ledger.folders.iter().any(|f| f == folder) {
+        remember_as_left(ledger, folder, &found);
+        save(ledger);
     }
     found
         .into_iter()
         .filter(|f| {
-            record
+            ledger
                 .files
                 .get(&f.path)
                 .is_some_and(|s| s.left && (s.size, s.modified) == (f.size, f.modified))
@@ -238,9 +231,7 @@ fn waiting_in(record: &mut Record, folder: &Path) -> Vec<Found> {
 /// "Transcribe the 12 files already here".
 #[tauri::command]
 pub fn notes_watch_waiting(path: String) -> usize {
-    let mut guard = record();
-    let record = guard.get_or_insert_with(Record::default);
-    waiting_in(record, Path::new(&path)).len()
+    waiting_in(&mut ledger(), Path::new(&path)).len()
 }
 
 /// Settings: transcribes those files too.
@@ -258,15 +249,14 @@ pub fn notes_watch_take_waiting(
         .find(|w| w.path == Path::new(&path))
         .ok_or("Save the folder in Settings first.")?;
     let take: Vec<Found> = {
-        let mut guard = record();
-        let record = guard.get_or_insert_with(Record::default);
-        let waiting = waiting_in(record, &folder.path);
+        let mut ledger = ledger();
+        let waiting = waiting_in(&mut ledger, &folder.path);
         for file in &waiting {
-            if let Some(seen) = record.files.get_mut(&file.path) {
+            if let Some(seen) = ledger.files.get_mut(&file.path) {
                 seen.left = false;
             }
         }
-        save(record);
+        save(&ledger);
         waiting
     };
     let count = take.len();
@@ -329,53 +319,53 @@ mod tests {
     #[test]
     fn a_new_file_is_taken_once_it_stops_changing_and_only_once() {
         let watched = [folder("/in")];
-        let mut record = Record::default();
+        let mut ledger = Ledger::default();
         let mut pending = HashMap::new();
         let mut files = vec![found("/in/old.m4a", 10, 1)];
-        let mut run = |record: &mut Record, files: &[Found]| {
+        let mut run = |ledger: &mut Ledger, files: &[Found]| {
             let files = files.to_vec();
-            scan(record, &watched, &mut pending, move |_| files.clone())
+            scan(ledger, &watched, &mut pending, move |_| files.clone())
                 .into_iter()
                 .map(|(f, _)| f.path)
                 .collect::<Vec<_>>()
         };
         // First look: what's there already is left alone.
-        assert!(run(&mut record, &files).is_empty());
-        assert!(record.files[Path::new("/in/old.m4a")].left);
-        assert!(run(&mut record, &files).is_empty());
+        assert!(run(&mut ledger, &files).is_empty());
+        assert!(ledger.files[Path::new("/in/old.m4a")].left);
+        assert!(run(&mut ledger, &files).is_empty());
 
         // A file being copied in: growing, then settled.
         files.push(found("/in/talk.mp4", 100, 5));
-        assert!(run(&mut record, &files).is_empty());
+        assert!(run(&mut ledger, &files).is_empty());
         files[1] = found("/in/talk.mp4", 900, 6);
-        assert!(run(&mut record, &files).is_empty());
-        assert_eq!(run(&mut record, &files), [PathBuf::from("/in/talk.mp4")]);
+        assert!(run(&mut ledger, &files).is_empty());
+        assert_eq!(run(&mut ledger, &files), [PathBuf::from("/in/talk.mp4")]);
         // Not again.
-        assert!(run(&mut record, &files).is_empty());
-        assert!(run(&mut record, &files).is_empty());
+        assert!(run(&mut ledger, &files).is_empty());
+        assert!(run(&mut ledger, &files).is_empty());
 
         // Replaced by a new version: taken again once settled.
         files[1] = found("/in/talk.mp4", 950, 9);
-        assert!(run(&mut record, &files).is_empty());
-        assert_eq!(run(&mut record, &files), [PathBuf::from("/in/talk.mp4")]);
+        assert!(run(&mut ledger, &files).is_empty());
+        assert_eq!(run(&mut ledger, &files), [PathBuf::from("/in/talk.mp4")]);
     }
 
     #[test]
     fn a_folder_taken_off_the_list_starts_afresh() {
-        let mut record = Record::default();
+        let mut ledger = Ledger::default();
         let mut pending = HashMap::new();
         let files = vec![found("/in/a.wav", 1, 1)];
         let list = |_: &Path| files.clone();
-        scan(&mut record, &[folder("/in")], &mut pending, list);
-        assert_eq!(record.folders, [PathBuf::from("/in")]);
-        scan(&mut record, &[], &mut pending, list);
-        assert!(record.folders.is_empty());
+        scan(&mut ledger, &[folder("/in")], &mut pending, list);
+        assert_eq!(ledger.folders, [PathBuf::from("/in")]);
+        scan(&mut ledger, &[], &mut pending, list);
+        assert!(ledger.folders.is_empty());
         // Back again: a.wav is left alone, not transcribed.
         let more = vec![found("/in/a.wav", 1, 1), found("/in/b.wav", 2, 2)];
         let list = |_: &Path| more.clone();
-        assert!(scan(&mut record, &[folder("/in")], &mut pending, list).is_empty());
-        assert!(scan(&mut record, &[folder("/in")], &mut pending, list).is_empty());
-        assert!(record.files[Path::new("/in/b.wav")].left);
+        assert!(scan(&mut ledger, &[folder("/in")], &mut pending, list).is_empty());
+        assert!(scan(&mut ledger, &[folder("/in")], &mut pending, list).is_empty());
+        assert!(ledger.files[Path::new("/in/b.wav")].left);
     }
 
     #[test]

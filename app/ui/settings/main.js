@@ -244,9 +244,15 @@ async function save(settings = collect()) {
   }
 }
 
-/** Re-reads everything (used after errors). */
+/** Re-reads everything (used after errors). Shows what went wrong if it
+ *  can't, keeping the last snapshot. */
 async function refresh() {
-  state = await invoke("get_state");
+  try {
+    state = await invoke("get_state");
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
   render();
 }
 
@@ -258,10 +264,10 @@ document.querySelectorAll("[data-setting]").forEach((el) => {
 });
 $("run-setup").addEventListener("click", () => call("open_onboarding"));
 // The log never contains dictated text, so it's safe to attach to a bug report.
-$("show-log").addEventListener("click", () => invoke("show_log_file").catch((e) => toast(String(e), true)));
+$("show-log").addEventListener("click", () => call("show_log_file"));
 
 // The settings file changed outside the app (`splashdown-cli words import`).
-listen("settings-reloaded", () => refresh().catch((e) => toast(String(e), true)));
+listen("settings-reloaded", () => refresh());
 
 // Updates: the Rust side sends the new status whenever it changes.
 listen("update-status", (event) => {
@@ -279,8 +285,8 @@ $("upd-check").addEventListener("click", async () => {
   await refresh();
 });
 // Only ever on this click: downloads, installs and relaunches.
-$("upd-install").addEventListener("click", () => invoke("install_update").catch((e) => toast(String(e), true)));
-$("send-feedback").addEventListener("click", () => invoke("send_feedback").catch((e) => toast(String(e), true)));
+$("upd-install").addEventListener("click", () => call("install_update"));
+$("send-feedback").addEventListener("click", () => call("send_feedback"));
 
 // About → Settings: export writes config.toml (no keys) to Downloads; import
 // reads a file chosen here and hands its text to the app.
@@ -307,16 +313,15 @@ $("words-import-file").addEventListener("change", async () => {
   if (!file) return;
   try {
     const r = await invoke("import_words", { text: await file.text(), settings: collect() });
-    const count = (n, one, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
     const parts = [
-      r.vocabulary && count(r.vocabulary, "word"),
-      r.replacements && count(r.replacements, "correction"),
-      r.snippets && count(r.snippets, "snippet"),
+      r.vocabulary && plural(r.vocabulary, "word"),
+      r.replacements && plural(r.replacements, "correction"),
+      r.snippets && plural(r.snippets, "snippet"),
     ].filter(Boolean);
     const notes = [
       r.duplicates && `${r.duplicates} already here`,
-      r.conflicts && `${count(r.conflicts, "entry", "entries")} kept as you have ${r.conflicts === 1 ? "it" : "them"}`,
-      r.skipped && `${count(r.skipped, "line")} couldn't be used`,
+      r.conflicts && `${plural(r.conflicts, "entry", "entries")} kept as you have ${r.conflicts === 1 ? "it" : "them"}`,
+      r.skipped && `${plural(r.skipped, "line")} couldn't be used`,
     ].filter(Boolean);
     if (!parts.length) {
       toast(`Nothing new in “${file.name}”${notes.length ? ` (${notes.join(", ")})` : ""}`);
@@ -341,11 +346,10 @@ $("cfg-import-file").addEventListener("change", async () => {
   try {
     const text = await file.text();
     const found = await invoke("check_settings_file", { text });
-    const count = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
-    const presets = found.presets == null ? "the built-in presets" : count(found.presets, "preset");
+    const presets = found.presets == null ? "the built-in presets" : plural(found.presets, "preset");
     const sure = await askConfirm(`Replace your settings with “${file.name}”?`, {
       action: "Import",
-      detail: `Every setting here is replaced: ${presets}, ${count(found.snippets, "snippet")}, ${count(found.vocabulary, "vocabulary word")}. Your API keys and history stay as they are.`,
+      detail: `Every setting here is replaced: ${presets}, ${plural(found.snippets, "snippet")}, ${plural(found.vocabulary, "vocabulary word")}. Your API keys and history stay as they are.`,
     });
     if (!sure) return;
     const r = await invoke("import_settings", { text });
@@ -363,6 +367,8 @@ listen("show-tab", (event) => showTab(event.payload));
 (async () => {
   showTab();
   await refresh();
+  // Nothing to show without a first snapshot; the toast says why.
+  if (!state) return;
   loadMicrophones();
   // Until setup is finished, start on the Permissions tab.
   if (!location.hash && !permissionsDone()) showTab("permissions");

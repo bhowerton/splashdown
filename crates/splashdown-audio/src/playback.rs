@@ -2,6 +2,7 @@
 //! pieces at their own rate, played on the default output device as they
 //! arrive, converted to its rate and channels.
 
+use splashdown_core::sync::Locked;
 use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -44,23 +45,16 @@ where
         }
         let piece = piece?;
         let converted = convert.push(&piece);
-        queue
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .extend(converted);
+        queue.locked().extend(converted);
         // Speech is made much faster than it's played: keep only a few
         // seconds ahead, so a long text doesn't fill memory.
         let ahead = AHEAD_SECONDS * config.sample_rate().0 as usize;
-        while !stop.load(Ordering::SeqCst)
-            && queue.lock().unwrap_or_else(|e| e.into_inner()).len() > ahead
-        {
+        while !stop.load(Ordering::SeqCst) && queue.locked().len() > ahead {
             std::thread::sleep(Duration::from_millis(50));
         }
     }
     // Until what's queued has been played.
-    while !stop.load(Ordering::SeqCst)
-        && !queue.lock().unwrap_or_else(|e| e.into_inner()).is_empty()
-    {
+    while !stop.load(Ordering::SeqCst) && !queue.locked().is_empty() {
         std::thread::sleep(Duration::from_millis(20));
     }
     // The device's own buffer.
@@ -84,7 +78,7 @@ where
         .build_output_stream(
             config,
             move |out: &mut [T], _| {
-                let mut queue = queue.lock().unwrap_or_else(|e| e.into_inner());
+                let mut queue = queue.locked();
                 for frame in out.chunks_mut(channels) {
                     let sample = queue.pop_front().unwrap_or(0.0);
                     frame.fill(T::from_sample(sample));

@@ -154,7 +154,7 @@ function renderList() {
       meetings: "No meetings or recordings yet.",
       imported: "Nothing transcribed yet.",
       folder: "No notes in this folder. Drag one here, or press + to start one.",
-      todo: "Nothing to do. A note with an unticked - [ ] checkbox shows here.",
+      todo: "Nothing to do. A note with an unchecked - [ ] checkbox shows here.",
       today: "No notes changed today.",
       untagged: "Every note has a tag.",
       tag: "No notes with this tag.",
@@ -203,7 +203,7 @@ function listItem(n) {
   more.className = "nt-iconbtn nt-item-more";
   more.setAttribute("aria-label", `Actions for ${n.title || "Untitled"}`);
   more.setAttribute("aria-haspopup", "menu");
-  more.title = "Pin, rename, show in Finder or move to the Trash";
+  more.title = `Pin, rename, show in ${isMac ? "Finder" : "File Explorer"} or move to the ${TRASH}`;
   more.append(icon("more"));
   more.addEventListener("click", (e) => {
     e.stopPropagation();
@@ -260,7 +260,7 @@ function showItemMenu(n, at) {
     item("Rename…", onIt(startRename), { disabled: busy }),
     item("Move to…", () => moveNoteTo(n.path), { disabled: busy }),
     item(isMac ? "Show in Finder" : "Show in File Explorer", () =>
-      invoke("notes_reveal", { path: n.path }).catch((err) => toast(String(err), true)),
+      call("notes_reveal", { path: n.path }),
     ),
     ...(hasRecording(n.text) ? [item("Transcribe again…", () => transcribeAgain(n.path, at), { disabled: busy })] : []),
     ...(hasTimedTranscript(n.text)
@@ -270,7 +270,7 @@ function showItemMenu(n, at) {
         ]
       : []),
     document.createElement("hr"),
-    item("Move to Trash", onIt(deleteNote), { disabled: busy, danger: true }),
+    item(`Move to ${TRASH}`, onIt(deleteNote), { disabled: busy, danger: true }),
   ], at);
 }
 

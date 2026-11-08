@@ -3,6 +3,7 @@
 //! lives in `splashdown-apple-shim` and feeds a `Pusher`). Unlike a
 //! dictation's `Recorder`, nothing is kept beyond what hasn't been taken.
 
+use splashdown_core::sync::Locked;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -114,10 +115,7 @@ impl LiveAudio {
                     std::thread::sleep(MOVE_EVERY);
                     let clip = recorder.take();
                     into.rate.store(clip.sample_rate, Ordering::Relaxed);
-                    into.samples
-                        .lock()
-                        .unwrap_or_else(|e| e.into_inner())
-                        .extend(clip.samples);
+                    into.samples.locked().extend(clip.samples);
                     if recorder.level().lost() {
                         into.lost.store(true, Ordering::Relaxed);
                     }
@@ -141,13 +139,7 @@ impl LiveAudio {
     /// Everything recorded since the last call, at 16 kHz.
     pub fn take(&mut self) -> Vec<f32> {
         let rate = self.shared.rate.load(Ordering::Relaxed);
-        let new = std::mem::take(
-            &mut *self
-                .shared
-                .samples
-                .lock()
-                .unwrap_or_else(|e| e.into_inner()),
-        );
+        let new = std::mem::take(&mut *self.shared.samples.locked());
         if rate == 0 {
             return Vec::new();
         }

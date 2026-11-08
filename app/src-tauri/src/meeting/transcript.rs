@@ -119,9 +119,11 @@ impl<'a> Job<'a> {
     /// spoken language on Automatic: a language the user set is already
     /// used for every turn.
     fn in_its_language(&mut self, clip: &splashdown_core::AudioClip, text: String) -> String {
-        let automatic = self.hints.language.as_deref().is_none_or(str::is_empty);
+        if !self.hints.language.as_deref().is_none_or(str::is_empty) {
+            return text;
+        }
         let text = match self.language.language() {
-            Some(lang) if automatic && self.language.is_stray(&text) => {
+            Some(lang) if self.language.is_stray(&text) => {
                 let hints = splashdown_core::SttHints {
                     language: Some(lang.to_string()),
                     ..self.hints.clone()
@@ -212,7 +214,7 @@ pub(super) fn finish(
 ) {
     // Speakers first, so the summary can say who said what. Recognizing
     // people needs them told apart first.
-    if settings.notes.meeting_speakers || settings.notes.remember_speakers {
+    if settings.notes.tells_speakers_apart() {
         name_speakers(
             store,
             note,
@@ -293,7 +295,7 @@ pub(super) fn name_speakers(
     if remember {
         let labels = voice_labels(&order, &turns, side);
         if !labels.is_empty() {
-            super::voices::recognize(store, note, &pcm, &turns, &labels);
+            super::voices::recognize_speakers(store, note, &pcm, &turns, &labels);
         }
     }
 }

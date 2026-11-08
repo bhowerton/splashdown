@@ -3,7 +3,7 @@
 // Sample backend for previewing the Settings window as a plain file:// page.
 // Only called when window.__TAURI__ is absent (see invoke in common.js).
 // Keep it in step with the real commands: the state below mirrors
-// `Snapshot` in app/src-tauri/src/commands.rs, and a command the page calls
+// `Snapshot` in app/src-tauri/src/snapshot.rs, and a command the page calls
 // that isn't answered here logs a warning and returns null.
 
 /** Sample data so the page can be designed in a normal browser. */
@@ -17,6 +17,15 @@ async function mockInvoke(cmd, args) {
       hotkeys: { dictation: null, instruction: null },
       presets: null,
       snippets: [{ trigger: "my address", text: "1 Infinite Loop, Cupertino" }],
+      replacements: [{ find: "teh", replace: "the", regex: false }, { find: "gonna", replace: "going to", regex: false }],
+      notes: {
+        folder: null, capture_to: "inbox", daily_folder: null, daily_format: null, keep_audio: false,
+        agents_read: false, agents_write: false, agents_meetings: null, shortcuts_read: null,
+        meeting_folder: null, meeting_summary: null, keep_meeting_audio: false, stop_when_quiet: null,
+        meeting_pill: null, offer_on_calls: null, ask_uses_notes: null, meeting_reminded: false, keep_on_top: false,
+        meeting_calendar: false, meeting_speakers: false, remember_speakers: false, ask_by_meaning: false,
+        watched: [{ path: "/Users/alex/Movies/Zoom", into: "Meetings", subtitles: false }],
+      },
       actions: { enabled: true, off: ["run_shortcut"], search_engine: "google", confirm_events: false, trusted_shortcuts: ["Log water"] },
     },
     keys: [
@@ -184,6 +193,28 @@ async function mockInvoke(cmd, args) {
       return false;
     case "notes_meaning_progress":
       return [0, 0];
+    case "coding_agents":
+      return { server: "/Applications/Splashdown.app/Contents/MacOS/splashdown-mcp", agents: [] };
+    case "save_key":
+    case "delete_key": {
+      const key = mockInvoke.state.keys.find((k) => k.name === args.name);
+      if (key) Object.assign(key, cmd === "save_key" ? { source: "keychain", hint: args.value.slice(-4) } : { source: null, hint: null });
+      return { state: mockInvoke.state, engine_error: null };
+    }
+    case "prepare_apple_speech":
+      return { state: mockInvoke.state, engine_error: null };
+    case "retranscribe_history":
+      return { text: "Hi Sam, quick update: the deploy has slipped to Thursday.", stt: "local/nemotron-speech-streaming-en-0.6b-Q4_K_M" };
+    case "import_words":
+      return { settings: args.settings, kind: "dictionary export", vocabulary: 12, replacements: 3, snippets: 1, duplicates: 2, conflicts: 1, skipped: 0 };
+    case "read_preset_file":
+      return { id: "shared", name: "Release notes", instructions: "Short bullet points, newest first.", ai: true, insert: "paste", rules: [] };
+    case "export_preset":
+      return `~/Downloads/${args.preset.name}.toml`;
+    case "notes_add":
+      return "Inbox";
+    case "my_action_problem":
+      return null;
     default:
       console.warn(`mock: no sample answer for ${cmd}`);
       return null;

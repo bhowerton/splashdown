@@ -13,9 +13,9 @@ pub(super) fn summary_ai(settings: &Settings) -> Option<(String, bool)> {
         .or_else(|| settings.resolve_ai_with(&secrets, on_device).ok().flatten())?;
     let local = choice.destination() == Destination::Local;
     let name = match choice.provider {
-        splashdown_config::AiProvider::Openai => "OpenAI",
-        splashdown_config::AiProvider::Openrouter => "OpenRouter",
-        splashdown_config::AiProvider::Anthropic => "Anthropic",
+        p @ (splashdown_config::AiProvider::Openai
+        | splashdown_config::AiProvider::Openrouter
+        | splashdown_config::AiProvider::Anthropic) => p.label(),
         _ if local => "the AI on this computer",
         _ => "your AI server",
     };

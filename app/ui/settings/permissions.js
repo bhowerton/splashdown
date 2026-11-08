@@ -9,6 +9,17 @@ function permissionsDone(p = state.permissions) {
 
 function renderPermissions() {
   renderPermissionRows(state.permissions, "perm-", "step");
+  // Windows asks only for the microphone (like the setup guide).
+  const windows = state.platform !== "macos";
+  $("perm-ax-row").hidden = windows;
+  $("perm-mic-step").textContent = windows ? "1" : "2";
+  $("perm-secure-note").hidden = windows;
+  $("perm-lead").textContent = windows
+    ? "What Windows needs to let Splashdown hear you."
+    : "What macOS needs to let Splashdown hear the key and type for you.";
+  $("perm-intro").textContent = windows
+    ? "One quick step. It updates here by itself as soon as you allow it."
+    : "Two quick steps. Each one updates here by itself as soon as you allow it.";
   const done = permissionsDone();
   $("perm-done").hidden = !done;
   $("perm-intro").hidden = done;

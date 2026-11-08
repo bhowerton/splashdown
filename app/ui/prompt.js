@@ -12,14 +12,14 @@ function show(prompt) {
   const choices = prompt.choices ?? [];
   $("pr-choices").hidden = choices.length === 0;
   $("pr-choices").replaceChildren(
-    ...choices.map((label, i) => button(label, () => invoke("prompt_answer", { index: i }), "btn")),
+    ...choices.map((label, i) => button(label, () => call("prompt_answer", { index: i }), "btn")),
   );
   // The usual answer (the first) goes on the right; with choices, none is
   // the usual one.
   const buttons = prompt.buttons.map((label, i) =>
     button(
       label,
-      () => invoke("prompt_answer", { index: choices.length + i }),
+      () => call("prompt_answer", { index: choices.length + i }),
       i === 0 && choices.length === 0 ? "btn primary" : "btn",
     ),
   );
@@ -27,7 +27,7 @@ function show(prompt) {
 }
 
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") invoke("prompt_answer", { index: null });
+  if (e.key === "Escape") call("prompt_answer", { index: null });
 });
 
 listen("prompt-changed", (event) => show(event.payload));

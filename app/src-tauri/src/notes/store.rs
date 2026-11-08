@@ -3,6 +3,7 @@
 //! versions and pins. There's no database: the folder is the truth, and
 //! other apps (Obsidian, a sync service) may change it at any time.
 
+use splashdown_core::sync::Locked;
 use std::collections::{HashMap, HashSet};
 use std::io;
 use std::path::{Component, Path, PathBuf};
@@ -171,7 +172,7 @@ impl Store {
         let pinned: HashSet<String> = self.state().pinned.into_iter().collect();
         let mut files = Vec::new();
         walk(&self.root, 0, &mut files);
-        let mut cache = self.cache.lock().unwrap_or_else(|e| e.into_inner());
+        let mut cache = self.cache.locked();
         let mut seen = HashSet::new();
         let mut notes: Vec<Summary> = files
             .into_iter()
@@ -276,10 +277,7 @@ impl Store {
     /// text as it was in a version.
     pub fn open(&self, rel: &str) -> io::Result<Note> {
         let note = self.read(rel)?;
-        self.needs_version
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(rel.to_string());
+        self.needs_version.locked().insert(rel.to_string());
         self.set_last(Some(rel));
         Ok(note)
     }
@@ -381,11 +379,7 @@ impl Store {
                     conflict: false,
                 });
             }
-            let first_change = self
-                .needs_version
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .remove(rel);
+            let first_change = self.needs_version.locked().remove(rel);
             if first_change || changed_elsewhere {
                 self.keep_version(&path, text)?;
                 conflict = changed_elsewhere;
@@ -831,7 +825,7 @@ impl Store {
     /// Today's daily note (`target`, a `Target::Daily`), made with its date
     /// as a heading if it isn't there yet, the way a capture would make it.
     pub fn daily(&self, target: &Target, now: DateTime<Local>) -> io::Result<Note> {
-        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let _appending = self.appending.locked();
         self.ensure()?;
         let rel = self.target_path(target, now);
         let path = self.resolve(&rel)?;
@@ -848,7 +842,7 @@ impl Store {
         text: &str,
         now: DateTime<Local>,
     ) -> io::Result<Appended> {
-        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let _appending = self.appending.locked();
         self.ensure()?;
         let rel = self.target_path(target, now);
         let path = self.resolve(&rel)?;
@@ -886,7 +880,7 @@ impl Store {
     /// Takes back what `append` added, if the note hasn't changed since.
     /// Returns whether it did.
     pub fn undo_append(&self, appended: &Appended) -> io::Result<bool> {
-        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let _appending = self.appending.locked();
         let path = self.resolve(&appended.path)?;
         let text = std::fs::read_to_string(&path)?;
         let unchanged = mtime_ms(&std::fs::metadata(&path)?) == appended.modified;
@@ -900,7 +894,7 @@ impl Store {
     /// Adds `text` to the end of note `rel` as its own paragraph, as is
     /// (a file transcript's next piece).
     pub fn add_paragraph(&self, rel: &str, text: &str) -> io::Result<()> {
-        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let _appending = self.appending.locked();
         let path = self.resolve(rel)?;
         let existing = std::fs::read_to_string(&path)?;
         let separator = if existing.ends_with("\n\n") {
@@ -916,7 +910,7 @@ impl Store {
     /// Puts `summary` under `## Summary` above the transcript of note `rel`
     /// (before its first `**[` paragraph), with `## Transcript` after it.
     pub fn insert_summary(&self, rel: &str, summary: &str) -> io::Result<()> {
-        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let _appending = self.appending.locked();
         let path = self.resolve(rel)?;
         let text = std::fs::read_to_string(&path)?;
         let at = transcript_start(&text).unwrap_or(text.len());
@@ -929,7 +923,7 @@ impl Store {
     /// Rewrites note `rel`'s text with `change` (its front matter kept), while
     /// nothing else is added to it.
     pub fn rewrite(&self, rel: &str, change: impl FnOnce(&str) -> String) -> io::Result<()> {
-        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let _appending = self.appending.locked();
         let path = self.resolve(rel)?;
         let file = std::fs::read_to_string(&path)?;
         let (front, body) = split_front_matter(&file);
@@ -943,7 +937,7 @@ impl Store {
     /// Puts `text` under `## {heading}` in note `rel` (a meeting's own
     /// notes, written while the transcript grows below them).
     pub fn set_section(&self, rel: &str, heading: &str, text: &str) -> io::Result<()> {
-        let _appending = self.appending.lock().unwrap_or_else(|e| e.into_inner());
+        let _appending = self.appending.locked();
         let path = self.resolve(rel)?;
         let file = std::fs::read_to_string(&path)?;
         let (front, body) = split_front_matter(&file);

@@ -622,7 +622,9 @@ fn keep_translate_language(app: &tauri::AppHandle, language: &str) {
     };
     let result = state.update(app, |s| {
         let targets = &mut s.general.translate_targets;
-        if !targets.iter().any(|t| t == language) && targets.len() < MOST_TRANSLATE_TARGETS {
+        if !targets.iter().any(|t| t == language)
+            && targets.len() < splashdown_config::MOST_TRANSLATE_TARGETS
+        {
             targets.push(language.to_string());
         }
         s.general.translate_to = Some(language.to_string());
@@ -631,9 +633,6 @@ fn keep_translate_language(app: &tauri::AppHandle, language: &str) {
         tracing::warn!("couldn't keep the translation language: {e}");
     }
 }
-
-/// As many languages as Settings lets you choose.
-const MOST_TRANSLATE_TARGETS: usize = 5;
 
 /// `preset` writing in `language`: its AI pass on (translating needs it),
 /// and named for the overlay "→ Spanish", or "Email → Spanish" for a

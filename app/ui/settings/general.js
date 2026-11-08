@@ -1,8 +1,10 @@
 "use strict";
 
 // General tab: hotkey pickers and their legend, launch at login, updates,
-// microphone, live preview, sounds. Also the Words & language tab's name,
-// language and vocabulary (its snippets live in snippets.js).
+// microphone, live preview, sounds. Also the Notes and Meetings sections
+// (watched folders, people known by voice, the calendar), and the Words &
+// language tab's name, languages, translate targets, vocabulary, learned
+// words and writing style (its snippets live in snippets.js).
 
 /** The ask letter when none is set: the first of A, K, J, Q that hands-free
  *  and notes don't use (as `Hotkeys::ask_key`). */
@@ -332,7 +334,9 @@ function startCapture(picker) {
     if (e.code === "Escape") return stopCapture();
     const key = CODE_TO_KEY[e.code];
     if (!key) {
-      showHotkeyWarning("Use a modifier key: Option, Command, Control or Shift. Fn and mouse buttons are in the ▾ list.");
+      showHotkeyWarning(state.platform === "macos"
+        ? "Use a modifier key: Option, Command, Control or Shift. Fn and mouse buttons are in the ▾ list."
+        : "Use a modifier key: Ctrl, Alt, Shift or Windows.");
       return;
     }
     finishCapture(picker, key);
@@ -590,8 +594,8 @@ async function loadStyles() {
       lbl.className = "lbl";
       const small = document.createElement("small");
       small.textContent = k.profile
-        ? `From ${k.edits} edited draft${k.edits === 1 ? "" : "s"}. Change it as you like: the next update starts from your wording.`
-        : `${k.edits} edited draft${k.edits === 1 ? "" : "s"} so far; a description is written after a few more.`;
+        ? `From ${plural(k.edits, "edited draft")}. Change it as you like: the next update starts from your wording.`
+        : `${plural(k.edits, "edited draft")} so far; a description is written after a few more.`;
       lbl.append(k.label, small);
       const text = document.createElement("textarea");
       text.rows = 3;
@@ -639,7 +643,7 @@ function showLearned(words) {
       forget.title = `Forget ${w}`;
       forget.setAttribute("aria-label", `Forget ${w}`);
       // Settings reloads once it's saved (settings-reloaded).
-      forget.onclick = () => invoke("forget_learned_word", { word: w }).catch((e) => toast(String(e), true));
+      forget.onclick = () => call("forget_learned_word", { word: w });
       chip.append(forget);
       return chip;
     })
@@ -715,7 +719,7 @@ async function showWaiting(path, button) {
     try {
       const n = await invoke("notes_watch_take_waiting", { path });
       button.hidden = true;
-      toast(n === 1 ? "Transcribing 1 file: see Notes" : `Transcribing ${n} files: see Notes`);
+      toast(`Transcribing ${plural(n, "file")}: see Notes`);
     } catch (e) {
       toast(String(e), true);
     }
@@ -770,10 +774,10 @@ async function renderVoices() {
       forget.textContent = "forget";
       forget.title = `Forget ${v.name}'s voice`;
       forget.addEventListener("click", async () => {
-        await invoke("voices_forget", { name: v.name }).catch((e) => toast(String(e), true));
+        await call("voices_forget", { name: v.name });
         renderVoices();
       });
-      const meetings = v.meetings === 1 ? "1 meeting" : `${v.meetings} meetings`;
+      const meetings = plural(v.meetings, "meeting");
       return [...(i ? ["; "] : []), `${v.name} (${meetings}, `, forget, ")"];
     }),
   );

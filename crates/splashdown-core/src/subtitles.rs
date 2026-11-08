@@ -77,7 +77,7 @@ pub fn from_words(words: &[TimedWord]) -> Vec<Cue> {
         group.push(word);
         let len = text_of(&group).trim().chars().count();
         let ends_sentence = word.text.trim_end().ends_with(SENTENCE_ENDS);
-        let ends_clause = word.text.trim_end().ends_with([',', ';', ':', '，', '、']);
+        let ends_clause = word.text.trim_end().ends_with(CLAUSE_ENDS);
         // A sentence end closes a caption that has some length; a comma one
         // that's most of the way full.
         if (ends_sentence && len >= LINE / 2) || (ends_clause && len >= LINE * LINES * 2 / 3) {
@@ -183,6 +183,41 @@ pub fn from_lines(lines: &[Line<'_>], length: Option<Duration>) -> Vec<Cue> {
     cues
 }
 
+/// A subtitle file format.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Format {
+    /// SubRip (`.srt`): what most players and editors take.
+    Srt,
+    /// WebVTT (`.vtt`): for the web.
+    Vtt,
+}
+
+impl Format {
+    /// "srt" or "vtt" (also the file extension); `None` for anything else.
+    pub fn named(name: &str) -> Option<Self> {
+        match name {
+            "srt" => Some(Self::Srt),
+            "vtt" => Some(Self::Vtt),
+            _ => None,
+        }
+    }
+
+    pub fn extension(self) -> &'static str {
+        match self {
+            Self::Srt => "srt",
+            Self::Vtt => "vtt",
+        }
+    }
+
+    /// `cues` written in this format.
+    pub fn render(self, cues: &[Cue]) -> String {
+        match self {
+            Self::Srt => srt(cues),
+            Self::Vtt => vtt(cues),
+        }
+    }
+}
+
 /// SubRip: numbered captions, `00:01:02,500 --> 00:01:05,000`.
 pub fn srt(cues: &[Cue]) -> String {
     let mut out = String::new();
@@ -214,6 +249,8 @@ pub fn vtt(cues: &[Cue]) -> String {
 }
 
 const SENTENCE_ENDS: [char; 6] = ['.', '?', '!', '。', '？', '！'];
+/// Punctuation that ends a clause: a second-best place for a cue to end.
+const CLAUSE_ENDS: [char; 5] = [',', ';', ':', '，', '、'];
 
 /// `hh:mm:ss<sep>mmm`.
 fn stamp(at: Duration, separator: char) -> String {
@@ -266,7 +303,7 @@ fn split(text: &str) -> Vec<String> {
         // end past its first third, then a comma past half, then a space.
         let (third, half) = (head.len() / 3, head.len() / 2);
         let cut = last_after(&head, &SENTENCE_ENDS, third)
-            .or_else(|| last_after(&head, &[',', ';', ':', '，', '、'], half))
+            .or_else(|| last_after(&head, &CLAUSE_ENDS, half))
             .or_else(|| head.rfind(' ').filter(|&i| i > 0))
             .unwrap_or(head.len());
         let (piece, after) = rest.split_at(cut);

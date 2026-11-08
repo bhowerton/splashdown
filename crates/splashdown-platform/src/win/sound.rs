@@ -4,6 +4,7 @@
 //! `%WINDIR%\Media`, scaled to the chosen volume and played asynchronously
 //! from memory with `PlaySound`. If a file is missing, nothing plays.
 
+use splashdown_core::sync::Locked;
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
@@ -46,7 +47,7 @@ pub(crate) fn play_sound(sound: Sound, volume: f32) {
     let mut data = wav.to_vec();
     scale_wav(&mut data, volume);
 
-    let mut playing = PLAYING.lock().unwrap_or_else(|e| e.into_inner());
+    let mut playing = PLAYING.locked();
     // SAFETY: a null sound stops whatever this process is playing; once it
     // returns, PlaySound no longer reads the previous buffer, so it can be
     // replaced below.

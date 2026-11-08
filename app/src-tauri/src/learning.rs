@@ -4,6 +4,7 @@
 //! forgotten from the menu bar or Settings, and a forgotten word is never
 //! learned again.
 
+use splashdown_core::sync::Locked;
 use std::sync::Mutex;
 
 use splashdown_core::vocab::Correction;
@@ -55,7 +56,7 @@ pub fn learn(app: &AppHandle, corrections: Vec<Correction>) -> Vec<String> {
     crate::state::rebuild_in_background(app);
     if !added.is_empty() {
         tracing::info!("learned {} word(s) from corrections", added.len());
-        *LAST.lock().unwrap_or_else(|e| e.into_inner()) = added.clone();
+        *LAST.locked() = added.clone();
         crate::tray::show_forget(added.last().map(String::as_str));
     }
     added
@@ -78,7 +79,7 @@ pub fn forget(app: &AppHandle, word: &str) -> Result<(), String> {
     })?;
     crate::state::rebuild_in_background(app);
     tracing::info!("forgot a learned word");
-    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    let mut last = LAST.locked();
     last.retain(|w| !w.eq_ignore_ascii_case(word));
     crate::tray::show_forget(last.last().map(String::as_str));
     Ok(())
@@ -86,11 +87,7 @@ pub fn forget(app: &AppHandle, word: &str) -> Result<(), String> {
 
 /// The menu bar's Forget item: the word learned last.
 pub fn forget_last(app: &AppHandle) {
-    let word = LAST
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .last()
-        .cloned();
+    let word = LAST.locked().last().cloned();
     if let Some(word) = word
         && let Err(e) = forget(app, &word)
     {

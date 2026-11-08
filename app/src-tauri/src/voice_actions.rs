@@ -9,6 +9,7 @@
 //! Nothing here sends, deletes or pays: an email opens as a draft, and a
 //! Shortcut or (if the user asked for it) an event is confirmed first.
 
+use splashdown_core::sync::Locked;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -129,7 +130,7 @@ static APPS: Mutex<Option<(Instant, Vec<InstalledApp>)>> = Mutex::new(None);
 const APPS_FRESH: Duration = Duration::from_secs(10 * 60);
 
 fn apps(fresh: bool) -> Vec<InstalledApp> {
-    let mut slot = APPS.lock().unwrap_or_else(|e| e.into_inner());
+    let mut slot = APPS.locked();
     if fresh
         || slot
             .as_ref()
@@ -576,7 +577,7 @@ static SHORTCUTS: Mutex<Option<(Instant, Vec<String>)>> = Mutex::new(None);
 pub fn shortcuts() -> Vec<String> {
     #[cfg(target_os = "macos")]
     {
-        let mut slot = SHORTCUTS.lock().unwrap_or_else(|e| e.into_inner());
+        let mut slot = SHORTCUTS.locked();
         if slot
             .as_ref()
             .is_none_or(|(at, _)| at.elapsed() > APPS_FRESH)

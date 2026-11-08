@@ -43,7 +43,7 @@ function render() {
   $("ak-copy").disabled = !ready;
   $("ak-insert").disabled = !ready || !shown.app;
   $("ak-insert").textContent = shown.app ? `Insert into ${shown.app}` : "Insert";
-  const notes = shown.notes ? `Used ${shown.notes} matching note${shown.notes === 1 ? "" : "s"}` : "";
+  const notes = shown.notes ? `Used ${plural(shown.notes, "matching note")}` : "";
   $("ak-note").textContent = notes;
   renderRead();
   const follow = $("ak-follow-input");

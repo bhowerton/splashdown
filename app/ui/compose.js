@@ -109,7 +109,7 @@ document.addEventListener("keydown", (e) => {
   const typing = document.activeElement === $("cp-change-input");
   if (e.key === "Escape") {
     e.preventDefault();
-    invoke("compose_close");
+    call("compose_close");
   } else if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
     e.preventDefault();
     insert();

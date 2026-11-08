@@ -4,6 +4,7 @@
 //! writes from them, which Settings shows and the user can edit. Compose
 //! follows the profile for the app it's writing into.
 
+use splashdown_core::sync::Locked;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -51,7 +52,7 @@ fn path() -> Option<PathBuf> {
 /// Runs `f` on the stored styles (read from disk the first time), and
 /// saves them if it says so.
 fn with_stored<T>(f: impl FnOnce(&mut Stored) -> (T, bool)) -> T {
-    let mut slot = STORED.lock().unwrap_or_else(|e| e.into_inner());
+    let mut slot = STORED.locked();
     let stored = slot.get_or_insert_with(|| {
         path()
             .and_then(|p| std::fs::read_to_string(p).ok())

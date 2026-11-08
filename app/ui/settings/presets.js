@@ -172,7 +172,7 @@ function presetListItem(p, i) {
   where.textContent = whereSummary(p);
   text.append(name, where);
   item.append(num, text);
-  item.title = "Drag to change the order. Alt+↑/↓ also moves it.";
+  item.title = `Drag to change the order. ${state.platform === "macos" ? "⌥↑/↓" : "Alt+↑/↓"} also moves it.`;
   item.setAttribute("aria-label", `${i + 1}. ${p.name}: ${whereSummary(p)}`);
   item.onclick = () => {
     selectedPreset = p.id;
@@ -321,7 +321,7 @@ function whereGroup(p) {
   if (hidden) {
     const note = document.createElement("small");
     note.className = "muted";
-    note.textContent = `Also ${hidden} ${state.platform === "macos" ? "Windows" : "Mac"} app${hidden === 1 ? "" : "s"}, kept for that platform.`;
+    note.textContent = `Also ${plural(hidden, `${state.platform === "macos" ? "Windows" : "Mac"} app`)}, kept for that platform.`;
     body.append(note);
   }
   const conflicts = conflictNotes(p);
@@ -608,17 +608,6 @@ function modelRow(p) {
 
 // ---------------------------------------------------------------- Shortcut
 
-/** Mac symbols for shortcut modifiers. */
-const MOD_SYMBOL = { Ctrl: "⌃", Alt: "⌥", Shift: "⇧", Cmd: "⌘", Super: "⊞" };
-
-/** "Ctrl+Alt+KeyE" → "⌃⌥E" on a Mac, "Ctrl+Alt+E" elsewhere. */
-function shortcutLabel(s) {
-  const parts = s.split("+");
-  const key = parts.pop().replace(/^Key/, "").replace(/^Digit/, "");
-  if (state.platform !== "macos") return [...parts, key].join("+");
-  return parts.map((m) => MOD_SYMBOL[m] ?? m).join("") + key;
-}
-
 let shortcutCapture = null;
 
 function shortcutRow(p) {
@@ -630,7 +619,7 @@ function shortcutRow(p) {
   const cap = document.createElement("span");
   if (p.shortcut) {
     cap.className = "kbd";
-    cap.textContent = shortcutLabel(p.shortcut);
+    cap.textContent = shortcutLabel(p.shortcut, state.platform);
   } else {
     cap.className = "kp-hint none";
     cap.textContent = "None";
@@ -639,7 +628,7 @@ function shortcutRow(p) {
   hint.className = "kp-hint";
   hint.textContent = "Click to record";
   main.append(cap, hint);
-  main.setAttribute("aria-label", `Shortcut for this preset: ${p.shortcut ? shortcutLabel(p.shortcut) : "none"}. Click, then press the shortcut.`);
+  main.setAttribute("aria-label", `Shortcut for this preset: ${p.shortcut ? shortcutLabel(p.shortcut, state.platform) : "none"}. Click, then press the shortcut.`);
   main.onclick = () => recordShortcut((s) => updatePreset(p.id, (x) => (x.shortcut = s)), renderPresets, wrap, main);
   wrap.append(main);
   if (p.shortcut) {
@@ -656,7 +645,7 @@ function shortcutRow(p) {
   if (error) {
     const warn = document.createElement("small");
     warn.className = "warn-text";
-    warn.textContent = `${shortcutLabel(p.shortcut ?? "")} ${error}. Choose another.`;
+    warn.textContent = `${shortcutLabel(p.shortcut ?? "", state.platform)} ${error}. Choose another.`;
     r.querySelector(".lbl").append(warn);
   }
   return r;
@@ -682,7 +671,7 @@ function recordShortcut(set, redraw, wrap, main) {
     if (e.metaKey) mods.push(state.platform === "macos" ? "Cmd" : "Super");
     const plainKey = !/^F\d+$/.test(e.code);
     if (plainKey && (!mods.length || (mods.length === 1 && mods[0] === "Shift"))) {
-      main.querySelector("span:nth-child(2)").textContent = "Add ⌃, ⌥ or ⌘";
+      main.querySelector("span:nth-child(2)").textContent = state.platform === "macos" ? "Add ⌃, ⌥ or ⌘" : "Add Ctrl, Alt or Win";
       return;
     }
     stopShortcutCapture();

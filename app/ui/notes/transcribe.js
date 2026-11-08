@@ -5,15 +5,6 @@
 /** The file being transcribed, or null. */
 let job = null;
 
-/** "12:30", or "1:02:30" past an hour. */
-function clock(secs) {
-  const s = Math.floor(secs);
-  const h = Math.floor(s / 3600);
-  const m = Math.floor(s / 60) % 60;
-  const rest = String(s % 60).padStart(2, "0");
-  return h ? `${h}:${String(m).padStart(2, "0")}:${rest}` : `${m}:${rest}`;
-}
-
 async function showJob(next) {
   const before = job;
   job = next;
@@ -71,7 +62,7 @@ async function reloadTranscript() {
 listen("notes-transcribing", (event) => showJob(event.payload ?? null));
 listen("notes-transcribe-message", (event) => toast(event.payload.text, event.payload.error));
 listen("notes-dragging", (event) => { $("nt-drop").hidden = !event.payload; });
-$("nt-job-stop").addEventListener("click", () => invoke("notes_transcribe_stop").catch((e) => toast(String(e), true)));
+$("nt-job-stop").addEventListener("click", () => call("notes_transcribe_stop"));
 $("nt-job-show").addEventListener("click", () => job && openNote(job.note));
 
 /** Transcribes a link; a page (YouTube) first needs the link helper,

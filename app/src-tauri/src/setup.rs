@@ -14,6 +14,7 @@
 //! slow computer (no graphics chip it can use, an older processor) can
 //! take many seconds, and the guide then suggests a cloud key.
 
+use splashdown_core::sync::Locked;
 use std::sync::Mutex;
 use std::time::Instant;
 
@@ -154,7 +155,7 @@ pub struct Status {
 static STATUS: Mutex<Option<Status>> = Mutex::new(None);
 
 fn status() -> std::sync::MutexGuard<'static, Option<Status>> {
-    STATUS.lock().unwrap_or_else(|e| e.into_inner())
+    STATUS.locked()
 }
 
 /// What `local_setup_plan` says before anything starts.

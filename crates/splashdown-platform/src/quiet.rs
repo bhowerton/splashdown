@@ -2,6 +2,7 @@
 //! it, or pausing players), and putting them back, even after a crash.
 
 use super::*;
+use splashdown_core::sync::Locked;
 
 /// How other sounds (music, videos, calls) are quieted while recording.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -34,7 +35,7 @@ pub(super) static QUIETED: std::sync::Mutex<Option<(u64, Quieted)>> = std::sync:
 pub(super) static QUIET_COUNT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 pub(super) fn quieted() -> std::sync::MutexGuard<'static, Option<(u64, Quieted)>> {
-    QUIETED.lock().unwrap_or_else(|e| e.into_inner())
+    QUIETED.locked()
 }
 
 /// Lowers or mutes the default output device, or pauses music. A device

@@ -1,9 +1,10 @@
 "use strict";
 
-// Sample backend for previewing the window as a plain file:// page (only when window.__TAURI__ is absent).
+// Sample backend for previewing the Notes window as a plain file:// page.
+// Only called when window.__TAURI__ is absent (see invoke in common.js); a
+// command that isn't answered here logs a warning and returns null.
 
-/** Sample backend for opening this page as a plain file:// page (see
- *  invoke in common.js). */
+/** Sample data so the page can be designed in a normal browser. */
 async function mockInvoke(cmd, args) {
   const hour = 3600 * 1000;
   const meetingBody = "# Weekly product sync · Oct 28, 9:00 AM\n\nRecorded on this computer · transcribed on this computer.\n\n## My notes\n\n- Comparison table → 3 rows\n- Annual: 2 months free?\n\n## Summary\n\n### Overview\nThe team agreed to shorten the pricing page's comparison table and to look at an annual plan.\n\n### Decisions\n- Cut the comparison table to three rows; the rest moves to a details page.\n\n### Action items\n- [ ] Model per-seat pricing with and without the annual discount, by Thursday (Them)\n- [x] Reply to Dana with the plan (You)\n\n## Transcript\n\n**[16:58] Them:** So for the pricing page I think the comparison table is doing more harm than good.\n\n**[17:20] You:** Agreed. Dana said the same in the beta notes.\n\n**[17:41] Them:** And the annual plan. If we do two months free, does that change the team price per seat?\n\n**[18:15] You:** It shouldn't. Can you model both and bring it Thursday?\n\n*Ended at 34:10.*\n\n[Recording](Attachments/2026-10-28%20Weekly%20product%20sync.wav)\n";
@@ -35,6 +36,13 @@ async function mockInvoke(cmd, args) {
       return ["Meetings", "Personal", "Personal/Recipes", "Work", "Work/Launch", "Archive"];
     case "notes_open":
       return open(args.path);
+    case "notes_rename": {
+      // The new path: same folder, the name typed.
+      const dir = args.path.includes("/") ? args.path.slice(0, args.path.lastIndexOf("/") + 1) : "";
+      return `${dir}${args.name}.md`;
+    }
+    case "notes_set_tags":
+      return { ...open(args.path), modified: Date.now(), front_tags: args.tags };
     case "notes_transcribe_again_models":
       return [{ id: null, label: "The speech model in Settings" }, { id: "parakeet-v3", label: "Parakeet v3 · 25 European languages" }, { id: "large-v3-turbo", label: "Whisper large-v3-turbo · about 100 languages" }];
     case "notes_save":
@@ -64,6 +72,7 @@ async function mockInvoke(cmd, args) {
       setTimeout(() => askUpdated({ asked: args.asked, answer: "Lead with the hold-to-talk demo [1], and say it's free [1]. The meeting agreed to cut the table [2].", done: true, error: null, sources: [{ title: "Launch post", path: list[0].path }, { title: "Weekly product sync", path: list[1].path }] }), 200);
       return null;
     default:
+      console.warn(`mock: no sample answer for ${cmd}`);
       return null;
   }
 }

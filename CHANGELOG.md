@@ -8,6 +8,12 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 - **Recognize people you've named turns on Tell the other people apart**, which it needs, and turning that off turns Recognize off.
 - **Fewer turns in the wrong language.** With your spoken language on Automatic, a short turn of a meeting or a transcribed app that came out in another language (Hindi letters in an English call, say) is transcribed again in the recording's language: your computer's at first, then the one actually spoken once there's enough to tell. Long turns are kept as heard, so a conversation in two languages stays as it was. Setting your language in Settings → Words & language avoids the guessing altogether.
 - **The offer to record a call says it's Splashdown's**, with the app's icon and name, and says more before you click: the calendar event it's for (with calendar naming on), what recording will do with your settings ("Transcribed on this computer · speakers told apart · recording kept", with Change… to Settings), and a reminder to let people know you're recording. A bar shows how long it stays up. "Don't offer for Zoom" now leaves out only that app (Settings → Meetings lists the ones left out, with Offer for all again), and the offer to stop says how long was recorded.
+- **Forgetting a person removes every trace of their voice.** Forget in Settings removed them from the people you've named, but their voiceprints stayed with the meetings they were in.
+- **Renaming a speaker twice saves their voice once.** Naming Speaker 2 "Dan" and then correcting it to "Dana" kept the voice under both names.
+- **Recording an app's sound or the microphone isn't taken for a call.** A call ending while a podcast or lecture was recording offered to stop that recording.
+- **Subtitles keep your corrections.** A transcript you edited (a misheard name put right) exported its subtitles as first heard.
+- **Windows: the computer's language is its display language**, not its regional format, so English Windows with German dates no longer expects German in meetings.
+- **Windows: Settings says Windows things.** Alt instead of Option, Ctrl and Win instead of ⌃ and ⌘, the Recycle Bin, Windows Credential Manager, and Permissions without the Mac-only Accessibility step.
 - **The live transcript scrolls during a meeting.** It grew past the window instead, so earlier turns couldn't be reached. In a narrow Notes window, the transcript and My notes now stack, each scrolling on its own.
 
 ## 0.10.0 — 2026-11-06

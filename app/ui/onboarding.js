@@ -310,7 +310,7 @@ function timeLeft() {
   const seconds = (setup.total - setup.done) / rate;
   if (seconds < 60) return " · less than a minute left";
   const minutes = Math.round(seconds / 60);
-  return ` · about ${minutes} minute${minutes === 1 ? "" : "s"} left`;
+  return ` · about ${plural(minutes, "minute")} left`;
 }
 
 /** Can dictation be tried yet? */
@@ -815,7 +815,12 @@ async function poll() {
 }
 
 (async () => {
-  state = await invoke("get_state");
+  try {
+    state = await invoke("get_state");
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
   showDictationKey(state);
   // The demo with the keys of this computer.
   if (state.platform !== "macos") {

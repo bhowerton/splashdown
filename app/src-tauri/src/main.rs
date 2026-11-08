@@ -13,6 +13,7 @@ mod chunks;
 mod coding_agents;
 mod commands;
 mod compose;
+mod data;
 mod did;
 mod engine;
 mod errors;

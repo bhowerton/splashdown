@@ -98,7 +98,7 @@ $("nt-apps-refresh").addEventListener("click", listApps);
 $("nt-apps-cancel").addEventListener("click", () => $("nt-apps").close());
 
 function editRewrites() {
-  invoke("notes_edit_transforms").catch((err) => toast(String(err), true));
+  call("notes_edit_transforms");
 }
 
 async function showHistory(show) {

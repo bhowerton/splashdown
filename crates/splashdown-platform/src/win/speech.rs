@@ -2,6 +2,7 @@
 //! & language → Speech): the text is turned into speech in one go, then
 //! played. `speaking` says whether it still is.
 
+use splashdown_core::sync::Locked;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -29,7 +30,7 @@ pub struct Voice {
 static PLAYING: Mutex<Option<(MediaPlayer, Arc<AtomicBool>)>> = Mutex::new(None);
 
 fn playing() -> std::sync::MutexGuard<'static, Option<(MediaPlayer, Arc<AtomicBool>)>> {
-    PLAYING.lock().unwrap_or_else(|e| e.into_inner())
+    PLAYING.locked()
 }
 
 fn failed(what: &str, e: windows::core::Error) -> PlatformError {
