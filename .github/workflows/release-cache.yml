@@ -48,6 +48,13 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: mac-release
+      - name: Fetch sherpa-onnx's libraries again
+        # sherpa-onnx-sys's build script downloads its libraries into
+        # target/. The cache keeps that folder but not the files in it, and
+        # the script, finding the folder, wouldn't download them again.
+        run: |
+          [ -d target ] || exit 0
+          find target -type d \( -name sherpa-onnx-prebuilt -o -name 'sherpa-onnx-sys-*' \) -prune -exec rm -rf {} +
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-binstall
