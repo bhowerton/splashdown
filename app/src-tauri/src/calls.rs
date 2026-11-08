@@ -85,9 +85,70 @@ pub enum Offer {
     Stop { app: &'static str },
 }
 
+/// What the panel shows: the offer, and what to know before answering.
+#[derive(Debug, Clone, Serialize)]
+pub struct Panel {
+    offer: Offer,
+    /// The calendar event on now (macOS, with calendar naming on), so the
+    /// user can tell it's the right call.
+    event: Option<crate::meeting::Event>,
+    /// What recording will do with the settings as they are:
+    /// "Transcribed on this computer", "Speakers told apart"…
+    summary: Vec<String>,
+    /// For the offer to stop: how long has been recorded ("34 min").
+    recorded: Option<String>,
+    /// Seconds the panel stays up.
+    seconds: u64,
+}
+
+/// The panel for `offer`, with the settings as they are now.
+fn panel(app: &AppHandle, offer: Offer) -> Panel {
+    let mut panel = Panel {
+        offer,
+        event: None,
+        summary: Vec::new(),
+        recorded: None,
+        seconds: SHOW_FOR.as_secs(),
+    };
+    match offer {
+        Offer::Record { .. } => {
+            let Some(state) = app.try_state::<AppState>() else {
+                return panel;
+            };
+            let notes = state.settings().notes;
+            if notes.meeting_calendar {
+                panel.event = crate::meeting::calendar_event();
+            }
+            // Where the speech goes, as the meeting would send it.
+            if let Ok(speech) = state.session.file_speech() {
+                let (place, local) = crate::notes::files::place(&speech.stt.name());
+                panel.summary.push(if local {
+                    "Transcribed on this computer".to_string()
+                } else {
+                    format!("Transcribed {place}")
+                });
+            }
+            if notes.meeting_speakers || notes.remember_speakers {
+                panel.summary.push("speakers told apart".into());
+            }
+            if notes.remember_speakers && cfg!(target_os = "macos") {
+                panel.summary.push("people you've named recognized".into());
+            }
+            if notes.keep_meeting_audio {
+                panel.summary.push("recording kept".into());
+            }
+        }
+        Offer::Stop { .. } => {
+            panel.recorded = crate::meeting::status()
+                .map(|s| crate::notes::files::length(Duration::from_secs_f64(s.elapsed.max(0.0))));
+        }
+    }
+    panel
+}
+
 /// The offer on screen, if any.
-fn shown() -> MutexGuard<'static, Option<(Offer, Instant)>> {
-    static SHOWN: OnceLock<Mutex<Option<(Offer, Instant)>>> = OnceLock::new();
+fn shown() -> MutexGuard<'static, Option<(Panel, Instant)>> {
+    static SHOWN: OnceLock<Mutex<Option<(Panel, Instant)>>> = OnceLock::new();
     SHOWN
         .get_or_init(Mutex::default)
         .lock()
@@ -165,16 +226,18 @@ pub fn watch(app: &AppHandle) {
                 std::thread::sleep(POLL);
                 expire(&app);
                 // (Settings are in place a moment after launch.)
-                let on = app
-                    .try_state::<AppState>()
-                    .is_some_and(|s| s.settings().notes.offer_on_calls());
-                if !on {
+                let Some(notes) = app.try_state::<AppState>().map(|s| s.settings().notes) else {
+                    continue;
+                };
+                if !notes.offer_on_calls() {
                     watcher = Watcher::default();
                     continue;
                 }
+                // Apps the user said not to offer for.
                 let mut using: Vec<&'static str> = splashdown_platform::microphone_users()
                     .iter()
                     .filter_map(|id| call_app(id))
+                    .filter(|app| !notes.offer_skip.iter().any(|s| s == app))
                     .collect();
                 using.sort_unstable();
                 using.dedup();
@@ -193,14 +256,15 @@ pub fn watch(app: &AppHandle) {
 /// Shows the panel in the top right corner, without taking focus from the
 /// call.
 fn show(app: &AppHandle, offer: Offer) {
-    *shown() = Some((offer, Instant::now()));
+    let panel = panel(app, offer);
+    *shown() = Some((panel.clone(), Instant::now()));
     let window = match app.get_webview_window(WINDOW) {
         Some(window) => window,
         None => {
             let built =
                 WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App("offer.html".into()))
                     .title("Splashdown")
-                    .inner_size(340.0, 112.0)
+                    .inner_size(WIDTH, record_height(false))
                     .resizable(false)
                     .decorations(false)
                     .always_on_top(true)
@@ -229,6 +293,11 @@ fn show(app: &AppHandle, offer: Offer) {
             }
         }
     };
+    let height = match offer {
+        Offer::Record { .. } => record_height(panel.event.is_some()),
+        Offer::Stop { .. } => STOP_HEIGHT,
+    };
+    let _ = window.set_size(tauri::LogicalSize::new(WIDTH, height));
     crate::placement::place(
         &window,
         crate::placement::Spot::TopRight {
@@ -237,13 +306,25 @@ fn show(app: &AppHandle, offer: Offer) {
         },
     );
     let _ = window.show();
-    let _ = app.emit_to(WINDOW, CHANGED, offer);
+    let _ = app.emit_to(WINDOW, CHANGED, panel);
+}
+
+/// The panel's size: wider and taller than a plain question, for what to
+/// know before recording.
+const WIDTH: f64 = 360.0;
+const STOP_HEIGHT: f64 = 132.0;
+
+fn record_height(event: bool) -> f64 {
+    if event { 200.0 } else { 180.0 }
 }
 
 /// Hides the panel once it has been up long enough.
 fn expire(app: &AppHandle) {
     let mut shown = shown();
-    if shown.is_some_and(|(_, at)| at.elapsed() >= SHOW_FOR) {
+    if shown
+        .as_ref()
+        .is_some_and(|(_, at)| at.elapsed() >= SHOW_FOR)
+    {
         *shown = None;
         if let Some(window) = app.get_webview_window(WINDOW) {
             let _ = window.hide();
@@ -262,22 +343,35 @@ fn hide(app: &AppHandle) {
 
 /// The offer on screen (for a page that just loaded).
 #[tauri::command]
-pub fn call_offer_state() -> Option<Offer> {
-    shown().map(|(offer, _)| offer)
+pub fn call_offer_state() -> Option<Panel> {
+    shown().as_ref().map(|(panel, _)| panel.clone())
 }
 
-/// The panel's buttons: "record", "stop", "never" (don't offer again), or
-/// anything else to dismiss it.
+/// The panel's buttons: "record", "stop", "never" (don't offer for this
+/// app again), "settings" (Change…, which leaves the panel up), or anything
+/// else to dismiss it.
 #[tauri::command]
 pub async fn call_offer_answer(answer: String, app: AppHandle) -> Result<(), String> {
+    if answer == "settings" {
+        crate::tray::open_settings(&app);
+        return Ok(());
+    }
+    let offered = shown().as_ref().map(|(panel, _)| panel.offer);
     hide(&app);
     match answer.as_str() {
         "record" => crate::meeting::start(&app).map(|_| ()),
         "stop" => crate::meeting::stop(),
         "never" => {
+            let Some(Offer::Record { app: call }) = offered else {
+                return Ok(());
+            };
             let state = app.state::<AppState>();
             state
-                .update(&app, |s| s.notes.offer_on_calls = Some(false))
+                .update(&app, |s| {
+                    if !s.notes.offer_skip.iter().any(|a| a == call) {
+                        s.notes.offer_skip.push(call.to_string());
+                    }
+                })
                 .map(|_| ())
         }
         _ => Ok(()),

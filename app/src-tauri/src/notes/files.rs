@@ -570,7 +570,7 @@ pub(crate) fn place(stt_name: &str) -> (&'static str, bool) {
 }
 
 /// "35 s", "42 min", "1 h 5 min".
-fn length(d: Duration) -> String {
+pub(crate) fn length(d: Duration) -> String {
     let secs = d.as_secs();
     match secs {
         0..60 => format!("{secs} s"),

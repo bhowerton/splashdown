@@ -58,6 +58,10 @@ function renderGeneral() {
   $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
   $("mt-offer").checked = notes.offer_on_calls ?? true;
+  // Apps the offer's "Don't offer for Zoom" left out.
+  const skipped = notes.offer_skip ?? [];
+  $("mt-skip-row").hidden = skipped.length === 0;
+  $("mt-skip").textContent = skipped.join(", ");
   $("mt-calendar").checked = !!notes.meeting_calendar;
   $("mt-speakers").checked = !!notes.meeting_speakers;
   // Not on Windows yet: the voice model's runtime isn't installed there.
@@ -810,4 +814,10 @@ $("mt-remember").addEventListener("change", async (e) => {
     stop();
     note.textContent = before;
   }
+});
+
+$("mt-skip-clear").addEventListener("click", () => {
+  const settings = collect();
+  settings.notes.offer_skip = [];
+  save(settings);
 });

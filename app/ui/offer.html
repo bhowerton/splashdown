@@ -9,14 +9,19 @@
 </head>
 <body class="of-body">
 <main class="of" aria-live="polite">
+  <header class="of-brand"><img src="img/icon.png" alt="" width="16" height="16"><span>Splashdown</span></header>
   <p id="of-title" class="of-title"></p>
+  <p id="of-event" class="of-event" hidden></p>
   <p id="of-text" class="of-text"></p>
+  <p id="of-summary" class="of-summary" hidden></p>
+  <p id="of-remind" class="of-remind" hidden>Let people know you're recording.</p>
   <div class="of-acts">
-    <button class="link" id="of-never">Don't offer again</button>
+    <button class="link" id="of-never"></button>
     <span class="of-grow"></span>
     <button class="btn" id="of-no"></button>
     <button class="btn primary" id="of-yes"></button>
   </div>
+  <div class="of-time" aria-hidden="true"><i id="of-left"></i></div>
 </main>
 <script src="common.js"></script>
 <script src="offer.js"></script>

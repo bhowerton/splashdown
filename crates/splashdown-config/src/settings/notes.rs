@@ -46,6 +46,10 @@ pub struct NotesSettings {
     /// Offer to record a meeting when a call app starts using the
     /// microphone. Unset means on.
     pub offer_on_calls: Option<bool>,
+    /// Call apps not to offer for ("Zoom"), from the offer's "Don't offer
+    /// for Zoom".
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub offer_skip: Vec<String>,
     /// Questions asked with the ask key may use excerpts of matching notes.
     /// Unset means on.
     pub ask_uses_notes: Option<bool>,

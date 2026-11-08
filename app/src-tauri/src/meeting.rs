@@ -196,17 +196,17 @@ pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String
 }
 
 /// The calendar event on now: its title and who else is invited.
-#[derive(Debug, Clone)]
-struct Event {
-    title: String,
-    people: Vec<String>,
+#[derive(Debug, Clone, Serialize)]
+pub(crate) struct Event {
+    pub(crate) title: String,
+    pub(crate) people: Vec<String>,
 }
 
 #[cfg(target_os = "macos")]
-fn calendar_event() -> Option<Event> {
+pub(crate) fn calendar_event() -> Option<Event> {
     let event = tauri::async_runtime::block_on(splashdown_apple_shim::calendar_now())?;
     tracing::info!(
-        "meeting named from the calendar ({} other people)",
+        "a calendar event is on ({} other people)",
         event.people.len()
     );
     Some(Event {
@@ -216,7 +216,7 @@ fn calendar_event() -> Option<Event> {
 }
 
 #[cfg(not(target_os = "macos"))]
-fn calendar_event() -> Option<Event> {
+pub(crate) fn calendar_event() -> Option<Event> {
     None
 }
 
