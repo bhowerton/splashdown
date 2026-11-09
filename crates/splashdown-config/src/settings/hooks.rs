@@ -148,7 +148,13 @@ mod tests {
         Hook {
             when,
             run: HookTarget::Program {
-                path: "/usr/local/bin/log-it".into(),
+                // A full path on this system.
+                path: if cfg!(windows) {
+                    r"C:\Tools\log-it.exe"
+                } else {
+                    "/usr/local/bin/log-it"
+                }
+                .into(),
                 args: vec![],
             },
             preset: preset.map(str::to_string),
