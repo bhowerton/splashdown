@@ -6,7 +6,7 @@
 //! happen, until the user chooses Always allow.
 
 use std::path::Path;
-use std::process::{Command, Stdio};
+use std::process::Stdio;
 use std::time::{Duration, Instant};
 
 use splashdown_config::{ActionSettings, MyAction, MyActionKind, TEXT_SLOT};
@@ -128,74 +128,12 @@ fn fill_args(args: &[String], text: &str) -> Result<Vec<String>, String> {
     Ok(args.iter().map(|a| a.replace(TEXT_SLOT, text)).collect())
 }
 
-/// How to start `path` with `args`: directly, or through the program that
-/// runs that kind of script. Never through a shell that reads the
-/// arguments, except Windows batch files, which only cmd can run: their
-/// arguments mustn't hold cmd's special characters.
-fn command_for(path: &str, args: &[String]) -> Result<Command, String> {
-    let ext = Path::new(path)
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(str::to_ascii_lowercase)
-        .unwrap_or_default();
-    let mut command = match ext.as_str() {
-        #[cfg(target_os = "macos")]
-        "app" => {
-            let mut c = Command::new("/usr/bin/open");
-            c.arg("-a").arg(path).arg("--args");
-            c
-        }
-        #[cfg(not(windows))]
-        "sh" | "command" if !executable(path) => {
-            let mut c = Command::new("/bin/sh");
-            c.arg(path);
-            c
-        }
-        #[cfg(windows)]
-        "ps1" => {
-            let mut c = Command::new("powershell.exe");
-            c.args(["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path]);
-            c
-        }
-        #[cfg(windows)]
-        "bat" | "cmd" => {
-            if args
-                .iter()
-                .any(|a| a.contains(['&', '|', '<', '>', '^', '%', '"', '!']))
-            {
-                return Err("The text has characters a batch file can't take safely".into());
-            }
-            let mut c = Command::new("cmd.exe");
-            c.args(["/D", "/C"]).arg(path);
-            c
-        }
-        _ => Command::new(path),
-    };
-    command.args(args);
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        // No console window flashing up for a script.
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-        if matches!(ext.as_str(), "ps1" | "bat" | "cmd") {
-            command.creation_flags(CREATE_NO_WINDOW);
-        }
-    }
-    Ok(command)
-}
-
-#[cfg(not(windows))]
-fn executable(path: &str) -> bool {
-    use std::os::unix::fs::PermissionsExt;
-    std::fs::metadata(path).is_ok_and(|m| m.permissions().mode() & 0o111 != 0)
-}
-
 /// Runs it, waiting a little for it to finish; what the pill says.
 fn run_program(name: &str, path: &str, args: &[String]) -> Result<String, String> {
     if !Path::new(path).exists() {
         return Err(format!("“{name}”: {path} isn't there any more"));
     }
-    let mut child = command_for(path, args)?
+    let mut child = crate::programs::command_for(path, args)?
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::piped())
@@ -362,7 +300,7 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn batch_files_refuse_special_characters() {
-        assert!(command_for("C:\\x.bat", &["a & b".into()]).is_err());
-        assert!(command_for("C:\\x.bat", &["a b".into()]).is_ok());
+        assert!(crate::programs::command_for("C:\\x.bat", &["a & b".into()]).is_err());
+        assert!(crate::programs::command_for("C:\\x.bat", &["a b".into()]).is_ok());
     }
 }

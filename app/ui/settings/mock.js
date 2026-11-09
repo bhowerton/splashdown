@@ -226,7 +226,14 @@ async function mockInvoke(cmd, args) {
     case "notes_add":
       return "Inbox";
     case "my_action_problem":
+    case "hooks_problem":
+    case "hooks_docs_page":
       return null;
+    case "hooks_test":
+      return args.hook.when === "before-insert" ? "It gave back: “This is a test from Splashdown.”" : "Sent, and the server took it.";
+    case "hooks_secret":
+    case "hooks_new_secret":
+      return "sds_0123456789abcdef";
     default:
       console.warn(`mock: no sample answer for ${cmd}`);
       return null;

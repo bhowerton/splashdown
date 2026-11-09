@@ -154,8 +154,8 @@ fn text_of(raw: &str) -> &str {
 }
 
 /// Adds the note in `file` to the capture note, at `when`, and deletes the
-/// file. A note that's empty is only deleted.
-fn take(settings: &NotesSettings, file: &Path, when: DateTime<Local>) -> Result<(), String> {
+/// file: what it said. A note that's empty is only deleted.
+fn take(settings: &NotesSettings, file: &Path, when: DateTime<Local>) -> Result<String, String> {
     let raw = std::fs::read_to_string(file).map_err(|e| e.to_string())?;
     let text = text_of(&raw);
     if !text.is_empty() {
@@ -170,7 +170,8 @@ fn take(settings: &NotesSettings, file: &Path, when: DateTime<Local>) -> Result<
             .append(&target, text, when)
             .map_err(|e| e.to_string())?;
     }
-    std::fs::remove_file(file).map_err(|e| e.to_string())
+    std::fs::remove_file(file).map_err(|e| e.to_string())?;
+    Ok(text.to_string())
 }
 
 /// Starts looking for notes from the iPhone, for as long as the app runs.
@@ -197,7 +198,15 @@ pub fn watch_phone(app: &AppHandle) {
                             continue;
                         }
                         match take(&settings, &file, when) {
-                            Ok(()) => added += 1,
+                            Ok(text) => {
+                                added += 1;
+                                if !text.is_empty() {
+                                    crate::hooks::fire(
+                                        &app,
+                                        crate::hooks::Happened::phone(&text, when),
+                                    );
+                                }
+                            }
                             Err(e) => {
                                 tracing::warn!("a note from the iPhone: {e}");
                                 // Added, but still there: don't add it again.

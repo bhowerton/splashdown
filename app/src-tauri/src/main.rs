@@ -21,6 +21,7 @@ mod export;
 mod feedback;
 mod help;
 mod history;
+mod hooks;
 mod insights;
 #[cfg(target_os = "macos")]
 mod intents;
@@ -33,6 +34,7 @@ mod notes;
 mod pill;
 mod placement;
 mod preview;
+mod programs;
 mod project;
 mod prompt;
 mod reading;
@@ -227,6 +229,11 @@ fn main() {
             help::help_close,
             help::help_open_actions,
             my_actions::my_action_problem,
+            hooks::hooks_problem,
+            hooks::hooks_test,
+            hooks::hooks_secret,
+            hooks::hooks_new_secret,
+            hooks::hooks_docs_page,
             my_actions::my_action_pick_program,
             did::did_since,
             prompt::prompt_state,
@@ -277,6 +284,7 @@ fn main() {
             let updates = updates::Updates::new(tray_menu.clone());
             let ui = ui::Ui::new(app.handle().clone(), tray_menu.clone());
             reading::init(ui.clone());
+            hooks::init(ui.clone());
             let session = session::spawn(ui, built, engine::keys(&settings), history.clone());
             let only_copy = triggers::serve(session.clone());
             // The session asks for a rebuild when spending crosses a limit.

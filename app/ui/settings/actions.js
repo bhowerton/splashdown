@@ -31,6 +31,7 @@ function renderActions() {
   $("ac-confirm").closest(".row").hidden = !mac;
   renderTrusted(a.trusted_shortcuts ?? [], mac);
   renderMine(a.mine ?? [], !!a.enabled);
+  renderHooks(state.settings.hooks ?? []);
 }
 
 // ---------------------------------------------------------------- your actions
@@ -207,6 +208,283 @@ function editMine(index) {
   document.body.append(dialog);
   dialog.showModal();
   name.focus();
+}
+
+// ---------------------------------------------------------------- hooks
+
+/** When a hook runs, as the list and the editor say it. */
+const HOOK_EVENTS = [
+  ["dictation", "After a dictation"],
+  ["before-insert", "Before a dictation goes in (changes its text)"],
+  ["meeting", "When a meeting ends"],
+  ["transcript", "When a transcript is finished"],
+  ["phone-note", "When a note comes from your iPhone"],
+];
+
+/** A preset's name, from its id. */
+function presetName(id) {
+  return (state.presets ?? []).find((p) => p.id === id)?.name ?? id;
+}
+
+/** What a hook runs, in a few words. */
+function hookSummary(h) {
+  if (h.kind === "web") return `Sends to ${h.url}`;
+  return `Runs ${h.path}${h.args?.length ? ` ${h.args.join(" ")}` : ""}`;
+}
+
+/** What a hook does, in a sentence, for the editor. */
+function hookSentence(h) {
+  const what = h.kind === "web"
+    ? `Splashdown sends the text and its details to ${h.url || "the web address"}, signed with your webhook secret.`
+    : `Splashdown runs ${h.path || "the program"} with the text as its input, never through a shell.`;
+  const preset = h.preset ? ` with the ${presetName(h.preset)} preset` : "";
+  const when = {
+    dictation: ` After every dictation${preset} that goes into a text field.`,
+    "before-insert": ` Before each dictation${preset} goes in: what it writes back is inserted instead. If it takes over 2 seconds or fails, the dictation goes in as said.`,
+    meeting: " When a meeting's note is finished, with its summary.",
+    transcript: " When a transcript of a file, a link, an app's audio or the microphone is finished.",
+    "phone-note": " For each note from your iPhone.",
+  }[h.when];
+  return what + when;
+}
+
+/** The hooks, each with Turn off or on, Edit and Delete. */
+function renderHooks(hooks) {
+  $("hk-secret-row").hidden = !hooks.some((h) => h.kind === "web");
+  $("hk-list").replaceChildren(
+    ...hooks.map((h, i) => {
+      const on = h.on !== false;
+      const row = document.createElement("div");
+      row.className = "row";
+      row.classList.toggle("dim", !on);
+      const lbl = document.createElement("span");
+      lbl.className = "lbl";
+      const when = HOOK_EVENTS.find(([v]) => v === h.when)?.[1] ?? h.when;
+      lbl.textContent = h.preset ? `${when} · ${presetName(h.preset)}` : when;
+      const small = document.createElement("small");
+      small.textContent = hookSummary(h) + (on ? "" : " · off");
+      lbl.append(small);
+      const buttons = document.createElement("span");
+      buttons.className = "ma-buttons";
+      buttons.append(
+        button(on ? "Turn off" : "Turn on", () => updateHooks((list) => (list[i] = { ...list[i], on: !on })), "link"),
+        button("Edit…", () => editHook(i), "btn"),
+        button("Delete", async () => {
+          if (await askConfirm("Delete this hook?", { detail: hookSummary(h) })) updateHooks((list) => list.splice(i, 1));
+        }, "btn"),
+      );
+      row.append(lbl, buttons);
+      return row;
+    }),
+  );
+}
+
+/** Changes the list of hooks and saves. */
+function updateHooks(change) {
+  const s = collect();
+  s.hooks = [...(state.settings.hooks ?? [])];
+  change(s.hooks);
+  save(s);
+}
+
+$("hk-add").addEventListener("click", () => editHook(null));
+$("hk-docs").addEventListener("click", () => invoke("hooks_docs_page").catch((e) => toast(String(e), true)));
+$("hk-secret-copy").addEventListener("click", async () => {
+  try {
+    await navigator.clipboard.writeText(await invoke("hooks_secret"));
+    toast("Webhook secret copied");
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
+$("hk-secret-new").addEventListener("click", async () => {
+  const sure = await askConfirm("Make a new webhook secret?", {
+    action: "Make a new one",
+    detail: "Whatever checks the old one stops accepting Splashdown's webhooks until you give it the new one.",
+  });
+  if (!sure) return;
+  try {
+    await navigator.clipboard.writeText(await invoke("hooks_new_secret"));
+    toast("New webhook secret copied");
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
+
+/** The editor for a new hook (`index` null) or an existing one. */
+function editHook(index) {
+  const hooks = state.settings.hooks ?? [];
+  const h = index === null ? { when: "meeting", kind: "web", url: "" } : hooks[index];
+  const mac = state.platform === "macos";
+  const dialog = document.createElement("dialog");
+  dialog.className = "confirm my-action";
+  const form = document.createElement("form");
+  form.className = "ma-form";
+  const field = (label, input, note) => {
+    const l = document.createElement("label");
+    l.textContent = label;
+    if (note) {
+      const small = document.createElement("small");
+      small.textContent = ` ${note}`;
+      l.append(small);
+    }
+    const wrap = document.createElement("div");
+    wrap.append(l, input);
+    return wrap;
+  };
+  const text = (value, placeholder) => {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.value = value ?? "";
+    input.placeholder = placeholder;
+    input.spellcheck = false;
+    return input;
+  };
+  const title = document.createElement("p");
+  title.className = "confirm-title";
+  title.textContent = index === null ? "Add a hook" : "Edit hook";
+  const when = document.createElement("select");
+  for (const [value, label] of HOOK_EVENTS) when.append(new Option(label, value));
+  when.value = h.when;
+  const preset = document.createElement("select");
+  const presetPart = field("Preset", preset);
+  const kind = document.createElement("select");
+  kind.append(new Option("Run a script or program", "program"), new Option("Send to a web address", "web"));
+  kind.value = h.kind;
+  const url = text(h.url, "https://hooks.zapier.com/hooks/catch/…");
+  const path = text(h.path, mac ? "/Users/you/bin/to-slack.sh" : "C:\\Scripts\\to-slack.ps1");
+  const pick = button("Choose…", async () => {
+    const picked = await invoke("my_action_pick_program").catch(() => null);
+    if (picked) {
+      path.value = picked;
+      describe();
+    }
+  }, "btn");
+  pick.type = "button";
+  const pathRow = document.createElement("div");
+  pathRow.className = "ma-pick";
+  pathRow.append(path, pick);
+  const args = document.createElement("textarea");
+  args.value = (h.args ?? []).join("\n");
+  args.placeholder = "--channel\n#notes";
+  args.spellcheck = false;
+  const webPart = field("Web address", url, "The text and its details are sent as JSON.");
+  const programPart = document.createElement("div");
+  programPart.append(
+    field("Script or program", pathRow, "It gets the text as its input, and the details in SPLASHDOWN_ variables."),
+    field("Arguments", args, "One per line, never through a shell."),
+  );
+  const sentence = document.createElement("p");
+  sentence.className = "ma-note";
+  const result = document.createElement("p");
+  result.className = "ma-note";
+  result.hidden = true;
+  const error = document.createElement("p");
+  error.className = "ma-error";
+  error.hidden = true;
+  // The hook as the form has it now.
+  const current = () => {
+    const hook = { when: when.value, kind: kind.value, on: h.on !== false };
+    if (preset.value) hook.preset = preset.value;
+    if (kind.value === "web") hook.url = url.value.trim();
+    else {
+      hook.path = path.value.trim();
+      hook.args = args.value.split("\n").map((a) => a.trim()).filter(Boolean);
+    }
+    return hook;
+  };
+  const describe = () => {
+    sentence.textContent = hookSentence(current());
+  };
+  const showPresets = () => {
+    const changes = when.value === "before-insert";
+    const kept = preset.value || h.preset || "";
+    preset.replaceChildren(
+      ...(changes ? [] : [new Option("Every preset", "")]),
+      ...(state.presets ?? []).map((p) => new Option(p.name, p.id)),
+    );
+    preset.value = [...preset.options].some((o) => o.value === kept) ? kept : preset.options[0]?.value ?? "";
+    presetPart.hidden = when.value !== "dictation" && !changes;
+    if (!presetPart.hidden) return;
+    preset.replaceChildren(new Option("", ""));
+    preset.value = "";
+  };
+  const showKind = () => {
+    // Changing the text: only a program, which can answer in time.
+    const changes = when.value === "before-insert";
+    kind.options[1].disabled = changes;
+    if (changes) kind.value = "program";
+    webPart.hidden = kind.value !== "web";
+    programPart.hidden = kind.value !== "program";
+  };
+  const refresh = () => {
+    showPresets();
+    showKind();
+    describe();
+    result.hidden = true;
+  };
+  when.addEventListener("change", refresh);
+  kind.addEventListener("change", refresh);
+  preset.addEventListener("change", describe);
+  for (const input of [url, path, args]) input.addEventListener("input", describe);
+  refresh();
+  const check = async (hook) => {
+    const problem = await invoke("hooks_problem", { hook }).catch((err) => String(err));
+    error.textContent = problem ?? "";
+    error.hidden = !problem;
+    return !problem;
+  };
+  const acts = document.createElement("div");
+  acts.className = "confirm-acts";
+  const test = button("Test", async () => {
+    const hook = current();
+    if (!(await check(hook))) return;
+    test.disabled = true;
+    result.hidden = false;
+    result.classList.remove("warn-text");
+    result.textContent = "Testing…";
+    try {
+      result.textContent = await invoke("hooks_test", { hook });
+    } catch (e) {
+      result.textContent = String(e);
+      result.classList.add("warn-text");
+    } finally {
+      test.disabled = false;
+    }
+  }, "btn");
+  test.type = "button";
+  const cancel = button("Cancel", () => dialog.close(), "btn");
+  cancel.type = "button";
+  const ok = document.createElement("button");
+  ok.className = "btn primary";
+  ok.textContent = "Save";
+  acts.append(test, cancel, ok);
+  form.append(
+    title,
+    field("When", when),
+    presetPart,
+    field("What it does", kind),
+    webPart,
+    programPart,
+    sentence,
+    result,
+    error,
+    acts,
+  );
+  form.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const hook = current();
+    if (!(await check(hook))) return;
+    // Saved here, with what it does said above: it runs without asking.
+    hook.trusted = true;
+    dialog.close();
+    updateHooks((list) => (index === null ? list.push(hook) : (list[index] = hook)));
+  });
+  dialog.append(form);
+  dialog.addEventListener("close", () => dialog.remove());
+  document.body.append(dialog);
+  dialog.showModal();
+  when.focus();
 }
 
 /** Shortcuts allowed with "Always allow", each with a way to take it back. */

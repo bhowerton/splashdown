@@ -86,8 +86,6 @@ pub(super) struct Item {
 /// (what was done is kept).
 #[derive(Debug, Clone)]
 pub(crate) struct Done {
-    /// Only a Shortcuts action (macOS) asks which note it was.
-    #[cfg_attr(not(target_os = "macos"), allow(dead_code))]
     pub(crate) note: String,
     pub(crate) stopped: Option<String>,
 }
@@ -250,7 +248,19 @@ fn work(app: AppHandle) {
             Err("something went wrong reading it".into())
         });
         match &result {
-            Ok(Done { stopped: None, .. }) => {}
+            Ok(Done {
+                stopped: None,
+                note,
+            }) => {
+                // A new transcript, not one done again.
+                if item.again.is_none() {
+                    crate::hooks::note_finished(
+                        &app,
+                        splashdown_config::HookEvent::Transcript,
+                        note,
+                    );
+                }
+            }
             Ok(Done {
                 stopped: Some(stopped),
                 ..

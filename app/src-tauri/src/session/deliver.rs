@@ -161,12 +161,44 @@ impl Controller {
             self.read_aloud(&active, what.clone(), selected, None);
             return;
         }
-        if let Some((outcome, took)) = outcome {
+        if let Some((mut outcome, took)) = outcome {
             crate::spend::record_outcome(&outcome);
             self.pending_audio = recording;
             let typer = typer.filter(StreamTyper::started);
+            let unchanged = self.change_by_hooks(&active, &mut outcome);
             self.deliver(active, outcome, took, send, spoke, typer);
+            if let Some(why) = unchanged {
+                self.notice(Tone::Warning, &format!("Inserted as said · {why}"));
+            }
             self.check_budget();
+        }
+    }
+
+    /// The user's hooks that change this preset's dictations, run before
+    /// it's inserted. Why it's inserted as it was, if one failed.
+    fn change_by_hooks(&self, active: &Active, outcome: &mut Outcome) -> Option<String> {
+        if active.capture || outcome.mode == Mode::Transform {
+            return None;
+        }
+        let settings = self.ui.settings()?;
+        if !crate::hooks::changes_text(&settings, &active.preset.id) {
+            return None;
+        }
+        let happened = crate::hooks::Happened::dictation(
+            splashdown_config::HookEvent::BeforeInsert,
+            &outcome.text,
+            active.focus.as_ref().map(|f| f.app.name.as_str()),
+            (&active.preset.id, &active.preset.name),
+        );
+        match crate::hooks::change(self.ui.app(), &settings, happened) {
+            Ok(text) => {
+                outcome.text = text;
+                None
+            }
+            Err(why) => {
+                tracing::warn!("a hook didn't change the dictation: {why}");
+                Some(why)
+            }
         }
     }
 
@@ -213,6 +245,14 @@ impl Controller {
     ) -> Option<StreamTyper> {
         let engine = self.engine.as_ref().ok()?;
         if !engine.stream_typing || active.capture {
+            return None;
+        }
+        // A hook changes the text before it goes in.
+        if self
+            .ui
+            .settings()
+            .is_some_and(|s| crate::hooks::changes_text(&s, &active.preset.id))
+        {
             return None;
         }
         let focus = active.focus.as_ref().filter(|f| f.is_current())?;
@@ -402,6 +442,17 @@ impl Controller {
         self.last_insert = target_pid.map(|pid| (pid, Instant::now()));
         self.last_text = outcome.text.clone();
         self.last_capture = None;
+        if outcome.mode != Mode::Transform {
+            crate::hooks::fire(
+                self.ui.app(),
+                crate::hooks::Happened::dictation(
+                    splashdown_config::HookEvent::Dictation,
+                    &outcome.text,
+                    active.focus.as_ref().map(|f| f.app.name.as_str()),
+                    (&active.preset.id, &active.preset.name),
+                ),
+            );
+        }
         if outcome.mode != Mode::Transform && self.engine.as_ref().is_ok_and(|e| e.share_recent) {
             self.recent.push(app_id, &outcome.text, Instant::now());
         }

@@ -233,6 +233,12 @@ pub(super) fn finish(
             Err(e) => tracing::warn!("couldn't keep the meeting recording: {e}"),
         }
     }
+    let event = if one_sided {
+        splashdown_config::HookEvent::Transcript
+    } else {
+        splashdown_config::HookEvent::Meeting
+    };
+    crate::hooks::note_finished(app, event, note);
 }
 
 /// Tells the other people apart (a meeting's Them side, or everyone in a

@@ -218,6 +218,14 @@
         <div class="row"><span class="lbl">Add your own<small>Open a link, run a script or program, or press keys. Say its name to run it: “deploy staging”, “next slide”. Splashdown asks before running one, until you choose Always allow.</small></span>
           <button type="button" class="btn" id="ac-mine-add">Add an action…</button></div>
       </div>
+      <div class="group" id="hk">
+        <div class="gh">When something happens</div>
+        <div id="hk-list"></div>
+        <div class="row"><span class="lbl">Add a hook<small>Run your own script or program, or send to a web address (Zapier, Make, n8n, Slack), after a dictation, a meeting, a transcript or a note from your iPhone. Or have a script change a preset's dictations before they go in. <button type="button" class="link" id="hk-docs">What each one gets</button></small></span>
+          <button type="button" class="btn" id="hk-add">Add a hook…</button></div>
+        <div class="row" id="hk-secret-row"><span class="lbl">Webhook secret<small>Each web address gets a signature made with it, so what receives it can check it came from you. Keep it private.</small></span>
+          <span class="ma-buttons"><button type="button" class="btn" id="hk-secret-copy">Copy</button><button type="button" class="btn" id="hk-secret-new">New secret</button></span></div>
+      </div>
       <div class="group" id="ac-choices">
         <div class="gh">Choices</div>
         <label class="row"><span class="lbl">Search with</span>

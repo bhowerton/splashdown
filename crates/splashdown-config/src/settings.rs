@@ -11,6 +11,7 @@
 //! | `resolve.rs` | What "Automatic" comes to: the provider and model that run |
 //! | `notes.rs` | `[notes]` |
 //! | `actions.rs` | `[actions]` |
+//! | `hooks.rs` | `[[hooks]]` |
 //! | `replacements.rs` | `[[replacements]]` |
 //!
 //! A choice whose default may change later is an `Option`, unset (`None`)
@@ -36,6 +37,7 @@
 
 mod actions;
 mod general;
+mod hooks;
 mod hotkeys;
 mod notes;
 mod providers;
@@ -44,6 +46,7 @@ mod resolve;
 
 pub use actions::*;
 pub use general::*;
+pub use hooks::*;
 pub use hotkeys::*;
 pub use notes::*;
 pub use providers::*;
@@ -82,6 +85,8 @@ pub struct Settings {
     /// Unset means the built-in ones; once edited, the full list is saved.
     pub transforms: Option<Vec<crate::Transform>>,
     pub actions: ActionSettings,
+    /// Scripts, programs and web addresses run when something happens.
+    pub hooks: Vec<Hook>,
 }
 
 #[derive(Debug, thiserror::Error)]

@@ -16,10 +16,11 @@ pub use secrets::{
 };
 pub use settings::{
     ActionSettings, AiChoice, AiProvider, AiSettings, Budget, CaptureTo, DEFAULT_SOUND_VOLUME,
-    Destination, GeneralSettings, HotkeySettings, LOCAL_FAST_MS, LOCAL_SLOW_MS, LoadError,
-    MOST_TRANSLATE_TARGETS, MeetingSummary, MyAction, MyActionKind, NotesSettings, OtherAudio,
-    Replacement, ResolveError, SearchEngine, Settings, Situation, SpeechChoice, SpeechProvider,
-    SpeechSettings, TEXT_SLOT, WatchedFolder, defaults, is_local_url, replacement_problem,
+    Destination, GeneralSettings, Hook, HookEvent, HookTarget, HotkeySettings, LOCAL_FAST_MS,
+    LOCAL_SLOW_MS, LoadError, MOST_TRANSLATE_TARGETS, MeetingSummary, MyAction, MyActionKind,
+    NotesSettings, OtherAudio, Replacement, ResolveError, SearchEngine, Settings, Situation,
+    SpeechChoice, SpeechProvider, SpeechSettings, TEXT_SLOT, WatchedFolder, defaults, is_local_url,
+    replacement_problem,
 };
 pub use transforms::{
     NOTHING_TO_DO, Place, Transform, builtin_transforms, is_nothing_to_do, tidy_answer,

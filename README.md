@@ -82,6 +82,7 @@
 - **Spoken commands, in any language.** Hold Right Option and tap Right Shift *before* speaking: "delete that last sentence", "make that more formal", "envíalo". The AI works out what you meant; nothing depends on exact phrases. Editing commands need an app that lets Splashdown read and select its text; when one doesn't, it says so rather than guess.
 - **Voice actions.** Turn them on in Settings → Actions, and the same commands can do things: "open Spotify", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "search YouTube for paella recipes", "pause the music", "start recording the meeting", or, with text selected, "email this to Sam". "Undo that" takes back an event, reminder or to-do. Nothing is sent, deleted or bought for you: an email opens as a draft, and a Shortcut asks before it runs.
 - **Your own actions.** Give a link, a script or program, or keys to press a name, and say it: "deploy staging", "next slide", "open issue ENG-42" (whatever you say after the name can go into the link or the script). Splashdown shows exactly what will run and asks first, until you choose Always allow.
+- **Hooks.** Run your own script, or send to Zapier, Make, n8n or Slack, after a dictation, a meeting, a transcript or a note from your iPhone, or have a script fix a preset's dictations before they go in ([docs/HOOKS.md](docs/HOOKS.md)).
 - **"What can I say?"** Say it (or "help") for a window with everything you can say or press, with your own keys and actions. Also in the menu bar under Help.
 - **Rewrite a selection.** Select text, hold the key, say what to change.
 - **Undo the AI.** **⌃⌥Z** right after it's typed swaps in exactly what you said; **⌃⌥V** pastes your last raw words.
@@ -309,7 +310,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 | `crates/splashdown-control` | The running app's control socket: protocol, client, server |
 | `crates/splashdown-mcp` | `splashdown-mcp`, voice input and notes for coding agents ([docs/AGENTS.md](docs/AGENTS.md)) |
 | `app/` | The menu bar and tray app (Tauri) and its windows: Settings, setup guide, Notes, Ask, Compose and a few small panels; `app/editor` builds the Notes editor |
-| `docs/` | [Architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md), [coding agents](docs/AGENTS.md), [privacy](docs/PRIVACY.md), [troubleshooting](docs/TROUBLESHOOTING.md) |
+| `docs/` | [Architecture](docs/ARCHITECTURE.md), [roadmap](docs/ROADMAP.md), [coding agents](docs/AGENTS.md), [privacy](docs/PRIVACY.md), [hooks](docs/HOOKS.md), [troubleshooting](docs/TROUBLESHOOTING.md) |
 
 </details>
 
