@@ -17,6 +17,7 @@
 //! | `agents.rs` | Coding agents' access |
 //! | `files.rs`, `media.rs` | Transcribing a file or an app's audio into a note |
 //! | `links.rs`, `link_helper.rs` | Transcribing a link, and the helper that downloads pages |
+//! | `phone.rs` | Notes said on an iPhone, through iCloud Drive |
 
 mod agents;
 mod capture;
@@ -27,6 +28,7 @@ pub mod links;
 pub mod markdown;
 pub mod meaning;
 pub mod media;
+pub mod phone;
 mod search;
 pub mod store;
 pub mod subtitles;
@@ -406,6 +408,29 @@ pub fn notes_folder(state: State<'_, AppState>) -> Result<Folder, String> {
     drop(slot);
     let wanted = wanted_folder(&state).ok_or("Couldn't find your Documents folder.")?;
     Ok(folder_of(&wanted, None))
+}
+
+/// Settings: the sync services notes could be kept in, and the folder on
+/// this computer to bring them back to.
+#[derive(Serialize)]
+pub struct Places {
+    cloud: Vec<CloudPlace>,
+    local: Option<CloudPlace>,
+}
+
+#[tauri::command]
+pub async fn notes_cloud_places() -> Result<Places, String> {
+    tauri::async_runtime::spawn_blocking(|| Places {
+        cloud: cloud_places(),
+        local: default_folder().map(|folder| CloudPlace {
+            service: "this computer".into(),
+            account: None,
+            label: label(&folder),
+            folder: folder.display().to_string(),
+        }),
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 /// A native folder picker, starting at the current folder. `None` if the

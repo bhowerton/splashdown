@@ -10,7 +10,7 @@ pub(super) fn default_folder() -> Option<PathBuf> {
     let documents = directories::UserDirs::new()
         .and_then(|d| d.document_dir().map(Path::to_path_buf))
         .or_else(|| directories::BaseDirs::new().map(|b| b.home_dir().join("Documents")))?;
-    Some(documents.join("Splashdown Notes"))
+    Some(documents.join(NOTES_FOLDER_NAME))
 }
 
 /// The folder in settings, or the default.
@@ -136,15 +136,40 @@ pub(super) fn migrate_scratchpad(store: &Store) {
     }
 }
 
-/// "Documents › Splashdown Notes", or the full path outside the home folder.
+/// "Documents › Splashdown Notes", "Dropbox › Splashdown Notes", or the
+/// full path outside the home folder.
 pub(super) fn label(path: &Path) -> String {
     let home = directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf());
     match home.as_deref().and_then(|h| path.strip_prefix(h).ok()) {
-        Some(rel) if rel.components().count() > 0 => rel
-            .components()
-            .map(|c| c.as_os_str().to_string_lossy().into_owned())
-            .collect::<Vec<_>>()
-            .join(" › "),
+        Some(rel) if rel.components().count() > 0 => {
+            let mut parts: Vec<String> = rel
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect();
+            // macOS keeps sync services' folders deep in Library, under
+            // names nobody sees in Finder.
+            if cfg!(target_os = "macos") && parts.len() >= 3 && parts[0] == "Library" {
+                let named = match (parts[1].as_str(), parts[2].as_str()) {
+                    ("Mobile Documents", "com~apple~CloudDocs") => Some((3, "iCloud Drive")),
+                    ("CloudStorage", p) if p.starts_with("GoogleDrive") => {
+                        let skip = if parts.get(3).is_some_and(|d| d == "My Drive") {
+                            4
+                        } else {
+                            3
+                        };
+                        Some((skip, "Google Drive"))
+                    }
+                    ("CloudStorage", p) if p.starts_with("Dropbox") => Some((3, "Dropbox")),
+                    ("CloudStorage", p) if p.starts_with("OneDrive") => Some((3, "OneDrive")),
+                    ("CloudStorage", p) if p.starts_with("Box") => Some((3, "Box")),
+                    _ => None,
+                };
+                if let Some((skip, name)) = named {
+                    parts.splice(..skip, [name.to_string()]);
+                }
+            }
+            parts.join(" › ")
+        }
         _ => path.display().to_string(),
     }
 }
@@ -249,4 +274,206 @@ pub(super) fn merge_into(from: &Path, to: &Path) -> std::io::Result<()> {
         std::fs::remove_file(from)?;
     }
     Ok(())
+}
+
+/// A sync service on this computer that notes could be kept in, for
+/// Settings' "Keep notes in Dropbox" buttons.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CloudPlace {
+    /// "Dropbox".
+    pub service: String,
+    /// The account, when there's more than one of a service ("ben@example.com").
+    pub account: Option<String>,
+    /// Where the notes would go: `Splashdown Notes` at the top of it.
+    pub folder: String,
+    pub label: String,
+}
+
+/// The sync services this computer has (best effort), each once.
+pub fn cloud_places() -> Vec<CloudPlace> {
+    let Some(home) = directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf()) else {
+        return Vec::new();
+    };
+    let mut roots: Vec<(String, Option<String>, PathBuf)> = Vec::new();
+    if cfg!(target_os = "macos") {
+        roots.push((
+            "iCloud Drive".into(),
+            None,
+            home.join("Library/Mobile Documents/com~apple~CloudDocs"),
+        ));
+        // Dropbox, OneDrive, Google Drive and Box as File Provider folders:
+        // `GoogleDrive-ben@example.com`, `OneDrive-Personal`, `Dropbox`.
+        let storage = home.join("Library/CloudStorage");
+        let mut found: Vec<PathBuf> = std::fs::read_dir(&storage)
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .collect();
+        found.sort();
+        for dir in found {
+            let name = dir
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let (provider, account) = match name.split_once('-') {
+                Some((p, a)) => (p.to_string(), Some(a.to_string())),
+                None => (name.clone(), None),
+            };
+            let (service, root) = match provider.as_str() {
+                "Dropbox" => ("Dropbox", dir),
+                "OneDrive" => ("OneDrive", dir),
+                "GoogleDrive" => ("Google Drive", dir.join("My Drive")),
+                "Box" => ("Box", dir),
+                _ => continue,
+            };
+            roots.push((service.into(), account, root));
+        }
+        roots.extend(dropbox_roots(&home.join(".dropbox/info.json")));
+        roots.push(("Dropbox".into(), None, home.join("Dropbox")));
+    } else {
+        for name in ["iCloudDrive", "iCloud Drive"] {
+            roots.push(("iCloud Drive".into(), None, home.join(name)));
+        }
+        for (var, account) in [
+            ("OneDriveConsumer", None),
+            ("OneDrive", None),
+            ("OneDriveCommercial", Some("work")),
+        ] {
+            if let Some(dir) = std::env::var_os(var) {
+                roots.push(("OneDrive".into(), account.map(String::from), dir.into()));
+            }
+        }
+        for var in ["APPDATA", "LOCALAPPDATA"] {
+            if let Some(dir) = std::env::var_os(var) {
+                roots.extend(dropbox_roots(&Path::new(&dir).join("Dropbox/info.json")));
+            }
+        }
+        roots.push(("Dropbox".into(), None, home.join("Dropbox")));
+        // Google Drive for desktop: a drive letter (G: unless changed) with
+        // My Drive in it, or My Drive in the home folder when mirroring.
+        let google = std::env::var_os("LOCALAPPDATA")
+            .is_some_and(|dir| Path::new(&dir).join("Google/DriveFS").is_dir());
+        if google {
+            for letter in ('D'..='Z').rev() {
+                roots.push((
+                    "Google Drive".into(),
+                    None,
+                    PathBuf::from(format!("{letter}:\\My Drive")),
+                ));
+            }
+            roots.push(("Google Drive".into(), None, home.join("My Drive")));
+        }
+        roots.push(("Box".into(), None, home.join("Box")));
+    }
+    let mut places: Vec<CloudPlace> = Vec::new();
+    let mut seen: Vec<PathBuf> = Vec::new();
+    for (service, account, root) in roots {
+        if !root.is_dir() || seen.contains(&root) {
+            continue;
+        }
+        seen.push(root.clone());
+        let folder = root.join(NOTES_FOLDER_NAME);
+        places.push(CloudPlace {
+            service,
+            account,
+            label: label(&folder),
+            folder: folder.display().to_string(),
+        });
+    }
+    // An account is only worth showing when there's more than one.
+    let counts = |service: &str| places.iter().filter(|p| p.service == service).count();
+    let single: Vec<bool> = places.iter().map(|p| counts(&p.service) == 1).collect();
+    for (place, single) in places.iter_mut().zip(single) {
+        if single {
+            place.account = None;
+        }
+    }
+    places
+}
+
+/// The folder notes get inside a sync service, as in Documents.
+const NOTES_FOLDER_NAME: &str = "Splashdown Notes";
+
+/// Dropbox's own record of where its folders are (`info.json`): personal
+/// and business.
+fn dropbox_roots(info: &Path) -> Vec<(String, Option<String>, PathBuf)> {
+    let Ok(text) = std::fs::read_to_string(info) else {
+        return Vec::new();
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return Vec::new();
+    };
+    ["personal", "business"]
+        .into_iter()
+        .filter_map(|kind| {
+            let path = json.get(kind)?.get("path")?.as_str()?;
+            Some((
+                "Dropbox".to_string(),
+                (kind == "business").then(|| "work".to_string()),
+                PathBuf::from(path),
+            ))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    #[cfg(target_os = "macos")]
+    fn sync_folders_are_named_as_people_know_them() {
+        let home = directories::BaseDirs::new()
+            .unwrap()
+            .home_dir()
+            .to_path_buf();
+        let at = |rel: &str| label(&home.join(rel));
+        assert_eq!(
+            at("Documents/Splashdown Notes"),
+            "Documents › Splashdown Notes"
+        );
+        assert_eq!(
+            at("Library/Mobile Documents/com~apple~CloudDocs/Splashdown Notes"),
+            "iCloud Drive › Splashdown Notes"
+        );
+        assert_eq!(
+            at("Library/CloudStorage/GoogleDrive-a@example.com/My Drive/Splashdown Notes"),
+            "Google Drive › Splashdown Notes"
+        );
+        assert_eq!(
+            at("Library/CloudStorage/Dropbox/Work/Notes"),
+            "Dropbox › Work › Notes"
+        );
+        assert_eq!(
+            at("Library/Application Support/x"),
+            "Library › Application Support › x"
+        );
+    }
+
+    #[test]
+    fn dropbox_says_where_its_folders_are() {
+        let dir = std::env::temp_dir().join(format!("sd-dropbox-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let info = dir.join("info.json");
+        std::fs::write(
+            &info,
+            r#"{"personal": {"path": "/x/Dropbox", "host": 1}, "business": {"path": "/x/Dropbox (Acme)"}}"#,
+        )
+        .unwrap();
+        let roots = dropbox_roots(&info);
+        assert_eq!(
+            roots,
+            [
+                ("Dropbox".to_string(), None, PathBuf::from("/x/Dropbox")),
+                (
+                    "Dropbox".to_string(),
+                    Some("work".to_string()),
+                    PathBuf::from("/x/Dropbox (Acme)")
+                ),
+            ]
+        );
+        assert!(dropbox_roots(&dir.join("missing.json")).is_empty());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

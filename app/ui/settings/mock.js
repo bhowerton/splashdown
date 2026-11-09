@@ -150,6 +150,18 @@ async function mockInvoke(cmd, args) {
         { at: Date.now() - 60000, app: "Mail", mode: "dictate_instruct", raw: "hey sam um the deploy slipped to thursday", instruction: "make it a short email", text: "Hi Sam,\n\nQuick update: the deploy has slipped to Thursday.\n\nThanks,\nAlex", note: null, stt: "local/nemotron-speech-streaming-en-0.6b-Q4_K_M", llm: "openrouter/google/gemini-2.5-flash-lite", millis: 1400 },
         { at: Date.now() - 3600000, app: "Slack", mode: "dictate", raw: "sounds good I'll take a look after lunch", instruction: null, text: "Sounds good, I'll take a look after lunch.", note: null, stt: null, llm: null, millis: 900 },
       ].filter((e) => !args.query || e.text.toLowerCase().includes(args.query.toLowerCase()));
+    case "notes_folder":
+      return { path: "/Users/alex/Documents/Splashdown Notes", label: "Documents › Splashdown Notes", synced: null, problem: null };
+    case "notes_cloud_places":
+      return {
+        cloud: [
+          { service: "iCloud Drive", account: null, folder: "/Users/alex/Library/Mobile Documents/com~apple~CloudDocs/Splashdown Notes", label: "iCloud Drive › Splashdown Notes" },
+          { service: "Dropbox", account: null, folder: "/Users/alex/Library/CloudStorage/Dropbox/Splashdown Notes", label: "Dropbox › Splashdown Notes" },
+        ],
+        local: { service: "this computer", account: null, folder: "/Users/alex/Documents/Splashdown Notes", label: "Documents › Splashdown Notes" },
+      };
+    case "notes_phone":
+      return { icloud: true, used: false };
     case "voices_list":
       return [{ name: "Priya", meetings: 4 }, { name: "Sam", meetings: 1 }];
     case "voices_forget":

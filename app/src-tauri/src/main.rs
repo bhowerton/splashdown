@@ -165,6 +165,9 @@ fn main() {
             notes::notes_folder,
             notes::notes_pick_folder,
             notes::notes_set_folder,
+            notes::notes_cloud_places,
+            notes::phone::notes_phone,
+            notes::phone::notes_phone_page,
             notes::notes_send,
             notes::notes_transforms,
             notes::notes_transform,
@@ -263,6 +266,7 @@ fn main() {
             calls::watch(app.handle());
             notes::watch_front_app(app.handle());
             notes::watch::watch_folders(app.handle());
+            notes::phone::watch_phone(app.handle());
             history.set_keep_days(settings.general.history_days());
             let onboarded = settings.general.onboarded;
             let built = engine::build(&settings);

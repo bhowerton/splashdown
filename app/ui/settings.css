@@ -256,6 +256,7 @@ input.letter-key { width: 44px !important; text-align: center; text-transform: u
 .transform textarea { width: 100%; resize: vertical; font-size: 12.5px; }
 .transform .warn-text { font-size: 12px; }
 .transform-acts { display: flex; gap: 12px; align-items: center; }
+.nt-places { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
 .nt-daily { display: flex; align-items: center; gap: 6px; color: var(--muted); }
 .nt-daily input { width: 110px !important; }
 /* Actions: the list while actions are off. */

@@ -96,6 +96,10 @@
       </div>
       <div class="group">
         <div class="gh">Notes</div>
+        <div class="row"><span class="lbl">Notes folder<small id="nt-folder-note"></small></span>
+          <button type="button" class="link" id="nt-folder-choose">Choose…</button></div>
+        <div class="row" id="nt-places-row" hidden><span class="lbl">Keep them in<small>To have them on your other computers and your phone. Your notes move to a Splashdown Notes folder there, and that service keeps a copy.</small></span>
+          <span class="nt-places" id="nt-places"></span></div>
         <label class="row"><span class="lbl">Dictations into a note go to<small>When you hold the dictation key and press the note letter, or use <code>splashdown-cli note</code></small></span>
           <select id="nt-capture-to" data-setting>
             <option value="inbox">Inbox</option>
@@ -108,6 +112,8 @@
           <input id="nt-keep-audio" type="checkbox" class="switch" data-setting></label>
         <label class="row"><span class="lbl">Find notes by meaning<small id="nt-meaning-note">Ask finds notes about what you mean, not only ones with the same words: “why was the launch delayed?” finds the note that says it was pushed back. Runs on this computer; the first time downloads the Qwen3 Embedding model (about 639 MB).</small></span>
           <input id="nt-meaning" type="checkbox" class="switch" data-setting></label>
+        <div class="row"><span class="lbl">From your iPhone<small id="nt-phone-note">Say a note with the Splashdown Note shortcut, from the Action Button, the Lock Screen or Siri, and it's added where dictations into a note go, at the time you said it. It travels through iCloud Drive, so it arrives while this computer has iCloud Drive and Splashdown is running.</small></span>
+          <button type="button" class="link" id="nt-phone-get">Get the shortcut</button></div>
         <div class="row"><span class="lbl">Notes window<small><span data-combo="N">⌃⌥N</span>, or Notes from <span class="menubar">the menu bar</span>. Transforms are on the Words &amp; language tab.</small></span><button class="link" id="nt-open">Open Notes</button></div>
       </div>
       <div class="group">

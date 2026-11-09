@@ -2,6 +2,12 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Notes from your iPhone.** The new Splashdown Note shortcut (splashdown.app/iphone) turns what you say on your iPhone into text and saves it to your iCloud Drive; Splashdown on your Mac or PC adds it where dictations into a note go (Inbox or today's note), at the time you said it. Start it from the Action Button, Control Center, the Lock Screen or Siri. Windows needs iCloud for Windows.
+- **Keep your notes in a sync service with one click.** Settings → Notes shows the notes folder and a button for each of iCloud Drive, Dropbox, Google Drive, OneDrive and Box that this computer has; your notes move to a Splashdown Notes folder there. Once they're in one, a button brings them back to this computer. Notes stay on your computer unless you choose.
+- **Folders in sync services are named as you know them**, "Google Drive › Splashdown Notes" rather than the path macOS keeps them at.
+
 ## 0.11.0 — 2026-11-08
 
 - **Runs on macOS 12 Monterey.** Splashdown needed macOS 13 before. On Monterey, dictation, commands, Compose, reading aloud, Notes and transcribing files, links and the microphone all work; Shortcuts actions need macOS 13, and recording meetings or an app's sound macOS 14.2, as before. The 2013 Mac Pro isn't supported.

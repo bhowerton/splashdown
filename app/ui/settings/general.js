@@ -56,6 +56,7 @@ function renderGeneral() {
   setValue($("nt-daily-format"), notes.daily_format ?? "");
   $("nt-keep-audio").checked = !!notes.keep_audio;
   renderWatched(notes.watched ?? []);
+  renderNotesPlace();
   setValue($("mt-summary"), notes.meeting_summary ?? "");
   $("mt-keep-audio").checked = !!notes.keep_meeting_audio;
   $("mt-stop-quiet").checked = notes.stop_when_quiet ?? true;
@@ -734,6 +735,111 @@ function watchedFolders() {
     subtitles: row.querySelector(".watch-subs").checked,
   }));
 }
+
+// ---------------------------------------------------------------- where notes are kept
+
+/** The notes folder, and a button for each sync service on this computer
+ *  (and for this computer, when they're in one) that moves them there.
+ *  Asking doesn't create the folder. */
+async function renderNotesPlace() {
+  let folder, places;
+  try {
+    [folder, places] = await Promise.all([invoke("notes_folder"), invoke("notes_cloud_places")]);
+  } catch {
+    return;
+  }
+  const note = $("nt-folder-note");
+  note.textContent = folder.synced
+    ? `${folder.label}, in ${folder.synced}.`
+    : `${folder.label}, on this computer.`;
+  note.title = folder.path;
+  const inside = (p) => folder.path === p.folder || folder.path.startsWith(p.folder.replace(/Splashdown Notes$/, ""));
+  const options = places.cloud.filter((p) => !inside(p));
+  // Back to Documents, once they're kept in a sync service.
+  if (folder.synced && places.local && places.local.folder !== folder.path) options.push(places.local);
+  const list = $("nt-places");
+  list.replaceChildren(...options.map((p) => {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "btn";
+    b.textContent = p.account ? `${p.service} (${p.account})` : p.service;
+    b.title = p.folder;
+    b.addEventListener("click", () => moveNotesTo(p));
+    return b;
+  }));
+  $("nt-places-row").hidden = options.length === 0;
+  renderPhone();
+}
+
+// What "From your iPhone" says, before what's known about this computer.
+const PHONE_NOTE = $("nt-phone-note").textContent;
+
+/** "From your iPhone", with whether this computer can get the notes. */
+async function renderPhone() {
+  let phone;
+  try {
+    phone = await invoke("notes_phone");
+  } catch {
+    return;
+  }
+  const note = $("nt-phone-note");
+  note.textContent = PHONE_NOTE;
+  note.classList.toggle("warn-text", !phone.icloud);
+  if (!phone.icloud) {
+    note.textContent += state.platform === "windows"
+      ? " This computer doesn't have iCloud Drive yet: install iCloud for Windows from the Microsoft Store and turn on iCloud Drive."
+      : " iCloud Drive is off on this Mac: turn it on in System Settings → your name → iCloud.";
+  } else if (phone.used) {
+    note.textContent += " Your iPhone's notes are arriving here.";
+  }
+}
+
+/** Moves the notes to `place` (a sync service, or this computer). */
+async function moveNotesTo(place) {
+  const where = place.service === "this computer" ? "this computer" : place.service;
+  const sure = await askConfirm(`Keep your notes in ${where}?`, {
+    action: "Move",
+    danger: false,
+    detail: place.service === "this computer"
+      ? `They move to ${place.label}. Your other devices stop getting new ones.`
+      : `They move to ${place.label}, and ${place.service} keeps a copy. A note that's there already is kept: yours gets a number.`,
+  });
+  if (!sure) return;
+  try {
+    const view = await invoke("notes_set_folder", { folder: place.folder, moveNotesToo: true });
+    toast(`Notes are now in ${view.folder.label}`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+  renderNotesPlace();
+  renderNotesFolder();
+}
+
+$("nt-folder-choose").addEventListener("click", async () => {
+  let picked;
+  try {
+    picked = await invoke("notes_pick_folder");
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
+  if (!picked) return;
+  const moveToo = await askConfirm("Move your notes there too?", {
+    action: "Move",
+    danger: false,
+    detail: "Otherwise they stay where they are, and Notes shows the new folder's notes.",
+  });
+  try {
+    const view = await invoke("notes_set_folder", { folder: picked, moveNotesToo: moveToo });
+    toast(`Notes are now in ${view.folder.label}`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+  renderNotesPlace();
+  renderNotesFolder();
+});
+
+$("nt-phone-get").addEventListener("click", () => call("notes_phone_page"));
 
 $("nt-watch-add").addEventListener("click", async () => {
   let path;
