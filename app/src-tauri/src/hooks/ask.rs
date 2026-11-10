@@ -404,20 +404,23 @@ fn remind(
         }
     }
     let notes = came_from(asked.name, happened);
+    // The list the user named in Settings, or their default one.
+    let list = asked.to.map(str::trim).filter(|l| !l.is_empty());
     for (done, todo) in adding.iter().enumerate() {
-        add_reminder(todo, &notes).map_err(|e| match done {
+        add_reminder(todo, &notes, list).map_err(|e| match done {
             0 => e,
             done => format!("added {} of {}, then: {e}", done, adding.len()),
         })?;
     }
+    let to = list.map_or_else(String::new, |list| format!(" to {list}"));
     Ok(if adding.len() < found.len() {
         format!(
-            "Added the first {} of {} to-dos as reminders",
+            "Added the first {} of {} to-dos as reminders{to}",
             adding.len(),
             found.len()
         )
     } else {
-        format!("Added {}", reminders(adding.len()))
+        format!("Added {}{to}", reminders(adding.len()))
     })
 }
 
@@ -438,18 +441,19 @@ fn question(name: &str, happened: &Happened, adding: &[Todo]) -> String {
 }
 
 #[cfg(target_os = "macos")]
-fn add_reminder(todo: &Todo, notes: &str) -> Result<(), String> {
+fn add_reminder(todo: &Todo, notes: &str, list: Option<&str>) -> Result<(), String> {
     tauri::async_runtime::block_on(splashdown_apple_shim::add_reminder(
         &todo.text,
         todo.due.as_deref(),
         Some(notes),
+        list,
     ))
     .map(|_| ())
     .map_err(|e| crate::voice_actions::calendar_error(e, "reminders", "Reminders"))
 }
 
 #[cfg(not(target_os = "macos"))]
-fn add_reminder(_: &Todo, _: &str) -> Result<(), String> {
+fn add_reminder(_: &Todo, _: &str, _: Option<&str>) -> Result<(), String> {
     Err(NO_REMINDERS.into())
 }
 
@@ -1032,6 +1036,10 @@ mod tests {
         assert_eq!(
             describe(&hook(PutIn::Reminders, None)),
             "Gives the text to the AI with “List what I said I'd do.” and adds a reminder to your Reminders for each to-do it writes"
+        );
+        assert_eq!(
+            describe(&hook(PutIn::Reminders, Some(" Work "))),
+            "Gives the text to the AI with “List what I said I'd do.” and adds a reminder to your Reminders list Work for each to-do it writes"
         );
         assert_eq!(
             describe(&hook(

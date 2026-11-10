@@ -498,9 +498,10 @@ fn create_reminder(
         if !confirmed(app, settings, &format!("Remind you of {described}.")) {
             return done("Not added");
         }
-        let added =
-            tauri::async_runtime::block_on(splashdown_apple_shim::add_reminder(text, due, None))
-                .map_err(|e| calendar_error(e, "reminders", "Reminders"))?;
+        let added = tauri::async_runtime::block_on(splashdown_apple_shim::add_reminder(
+            text, due, None, None,
+        ))
+        .map_err(|e| calendar_error(e, "reminders", "Reminders"))?;
         Ok(Done {
             text: format!("Reminder: {described} · say “undo that” to remove it"),
             undo: Some(Undo::Calendar(added)),

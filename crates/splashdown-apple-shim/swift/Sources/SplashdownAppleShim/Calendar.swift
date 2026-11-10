@@ -203,11 +203,12 @@ public func splashdown_reminders_access(_ ctx: UnsafeMutableRawPointer?, _ callb
     }
 }
 
-/// Adds a reminder to the default list. `fields` holds the text, when it's
-/// due (may be empty: a time as yyyy-MM-ddTHH:mm local, which gets an alert,
-/// or a day as yyyy-MM-dd, which gets none) and its notes (may be empty),
-/// one per line. Replies OK with its identifier, REFUSED without access, or
-/// an error.
+/// Adds a reminder. `fields` holds the text, when it's due (may be empty:
+/// a time as yyyy-MM-ddTHH:mm local, which gets an alert, or a day as
+/// yyyy-MM-dd, which gets none), its notes (may be empty) and the name of
+/// the list it goes in (empty for the default list), one per line. Replies
+/// OK with its identifier, REFUSED without access, or an error: a list
+/// that's named has to be there, since making one could hide a typing slip.
 @_cdecl("splashdown_calendar_add_reminder")
 public func splashdown_calendar_add_reminder(
     _ fields: UnsafePointer<CChar>,
@@ -229,10 +230,23 @@ public func splashdown_calendar_add_reminder(
             reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: day)
         }
         if !field(2).isEmpty { reminder.notes = field(2) }
-        guard let list = reminders.defaultCalendarForNewReminders() else {
-            return reply.send(-1, "there's no reminders list to add it to")
+        let named = field(3).trimmingCharacters(in: .whitespaces)
+        if named.isEmpty {
+            guard let list = reminders.defaultCalendarForNewReminders() else {
+                return reply.send(-1, "there's no reminders list to add it to")
+            }
+            reminder.calendar = list
+        } else {
+            // By name in any capitals; of two with one name, one that can be
+            // added to.
+            let lists = reminders.calendars(for: .reminder).filter {
+                $0.title.compare(named, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+            }
+            guard let list = lists.first(where: { $0.allowsContentModifications }) ?? lists.first else {
+                return reply.send(-1, "Reminders has no list called “\(named)”")
+            }
+            reminder.calendar = list
         }
-        reminder.calendar = list
         do {
             try reminders.save(reminder, commit: true)
             reply.send(OK, reminder.calendarItemIdentifier)

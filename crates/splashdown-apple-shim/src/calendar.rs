@@ -135,15 +135,22 @@ pub async fn reminders_access() -> bool {
 
 /// Adds a reminder, due at `due` if given: `YYYY-MM-DDTHH:MM` local, with
 /// an alert then, or `YYYY-MM-DD` for a day with no time and no alert.
-/// `notes` goes in the reminder's notes.
+/// `notes` goes in the reminder's notes. It goes in the list called `list`
+/// (in any capitals), which has to be there, or the default list.
 pub async fn add_reminder(
     text: &str,
     due: Option<&str>,
     notes: Option<&str>,
+    list: Option<&str>,
 ) -> Result<Added, AddError> {
-    let fields = [text, due.unwrap_or(""), notes.unwrap_or("")]
-        .map(|f| f.replace('\n', " "))
-        .join("\n");
+    let fields = [
+        text,
+        due.unwrap_or(""),
+        notes.unwrap_or(""),
+        list.unwrap_or(""),
+    ]
+    .map(|f| f.replace('\n', " "))
+    .join("\n");
     add(&fields, true).await
 }
 

@@ -106,8 +106,9 @@ pub enum PutIn {
     Clipboard,
     /// A web address (`to`), as a webhook gets it, with the result.
     Web,
-    /// The user's Reminders: a reminder for each to-do line in the result.
-    /// On a Mac only, where reminders are added.
+    /// The user's Reminders: a reminder for each to-do line in the result,
+    /// in the list `to` names, or the default list. On a Mac only, where
+    /// reminders are added.
     Reminders,
     /// A draft in the user's mail app, never sent. `to` may hold the
     /// addresses it's to, as typed in Settings; without, it's to no one.
@@ -440,6 +441,12 @@ impl Hook {
                                 .into(),
                         );
                     }
+                    PutIn::Reminders if to.contains(['\n', '\r']) || to.chars().count() > 100 => {
+                        return Some(
+                            "Name one list in Reminders, such as Work, or leave it empty for your default list."
+                                .into(),
+                        );
+                    }
                     PutIn::EmailDraft if PutIn::addresses(to).is_none() => {
                         return Some(
                             "Give the addresses the draft is to, separated by commas (dana@example.com, sam@example.com), or leave it empty."
@@ -695,6 +702,10 @@ mod tests {
         let reminders = ask(HookEvent::Meeting, PutIn::Reminders, None);
         if cfg!(target_os = "macos") {
             assert_eq!(reminders.problem(), None);
+            // In a list the user names, or their default one.
+            let listed = |to| ask(HookEvent::Meeting, PutIn::Reminders, Some(to)).problem();
+            assert_eq!(listed("Work"), None);
+            assert!(listed("Work\nHome").is_some());
             // From a note said on the phone too, or on a schedule.
             assert_eq!(
                 ask(HookEvent::PhoneNote, PutIn::Reminders, None).problem(),

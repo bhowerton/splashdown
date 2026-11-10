@@ -426,7 +426,7 @@ function hookSummary(h) {
       file: `puts what it writes in ${h.to}`,
       clipboard: "puts what it writes on the clipboard",
       web: `puts what it writes to ${h.to}`,
-      reminders: "adds a reminder for each to-do it writes",
+      reminders: `adds a reminder for each to-do it writes${h.to ? `, to ${h.to}` : ""}`,
       "email-draft": `opens what it writes as an email draft${h.to ? ` to ${h.to}` : ""}`,
     }[h.put];
     return `Asks ${hookAi && !hookAi[1] ? hookAi[0] : "the AI"} and ${does}`;
@@ -448,7 +448,7 @@ function hookDoes(h) {
     const asks = a.confirm_events
       ? "Splashdown asks before adding them, as “Ask before adding events and reminders” is on."
       : `They're added without asking${a.enabled ? "; “Ask before adding events and reminders”, under Choices, changes that" : ""}.`;
-    return `Each to-do line it writes (“- [ ] …”, or each list line when it writes none of those) becomes a reminder in your default list, with where it came from in its notes. One is due only if its line has a date written like 2026-11-12; a day in words (“by Wednesday”) stays in the reminder's text. Other lines are left out. ${asks} The AI can only write: adding these reminders is all Splashdown does with its text. macOS asks you to allow Reminders the first time.`;
+    return `Each to-do line it writes (“- [ ] …”, or each list line when it writes none of those) becomes a reminder in ${h.to ? `your list ${h.to}` : "your default list"}, with where it came from in its notes. One is due only if its line has a date written like 2026-11-12; a day in words (“by Wednesday”) stays in the reminder's text. Other lines are left out. ${asks} The AI can only write: adding these reminders is all Splashdown does with its text. macOS asks you to allow Reminders the first time.`;
   }
   const to = h.to ? `to ${h.to}` : "to no one";
   return `What it writes opens as a draft in your mail app, ${to}, with this name and the title as its subject, for you to check and send. Splashdown never sends it, and takes no address from what was said or written. One too long for a draft goes on the clipboard instead, to paste into the draft. The AI can only write: opening this draft is all Splashdown does with its text.`;
@@ -839,6 +839,7 @@ function editHook(index) {
       file: ["File", mac ? "/Users/you/Documents/meeting-log.md" : "C:\\Users\\you\\Documents\\meeting-log.md", "Its full path."],
       web: ["Web address", "https://hooks.zapier.com/hooks/catch/…", "What it writes is sent as JSON."],
       "email-draft": ["To", "dana@example.com, sam@example.com", "Optional. Only addresses you type here: none are taken from the meeting."],
+      reminders: ["List", "Work", "Optional. A list you have in Reminders. Empty is your default list."],
     }[put.value] ?? [];
     toPart.hidden = !label;
     if (!label) return;

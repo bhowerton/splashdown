@@ -741,9 +741,12 @@ fn describe(hook: &Hook) -> String {
                 PutIn::File => format!("adds what it writes to {to}"),
                 PutIn::Clipboard => "copies what it writes".to_string(),
                 PutIn::Web => format!("sends what it writes to {to}"),
-                PutIn::Reminders => {
-                    "adds a reminder to your Reminders for each to-do it writes".to_string()
-                }
+                PutIn::Reminders => match to.trim() {
+                    "" => "adds a reminder to your Reminders for each to-do it writes".to_string(),
+                    list => format!(
+                        "adds a reminder to your Reminders list {list} for each to-do it writes"
+                    ),
+                },
                 // The addresses as the hook has them: what the draft is to.
                 PutIn::EmailDraft => match PutIn::addresses(to) {
                     Some(to) if !to.is_empty() => format!(

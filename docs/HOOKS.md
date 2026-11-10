@@ -80,15 +80,16 @@ Where what it writes can go:
 | **At the end of a file** | The same, in any file you give the full path of |
 | **On the clipboard** | Replaces what's on the clipboard, ready to paste |
 | **To a web address** | Sent as a web address hook is (below), with `text` holding what the AI wrote instead of the note, and `ask` holding the hook's name |
-| **In Reminders** (Mac) | A reminder for each to-do it wrote, in your default list. See below |
+| **In Reminders** (Mac) | A reminder for each to-do it wrote, in a list you name or your default list. See below |
 | **In an email draft** | Opens as a new email in your mail app, for you to check and send. It is never sent for you. See below |
 
 If the AI finds nothing to do (no to-dos in a note), nothing is put anywhere, and What ran says so. **Test** asks about a short sample meeting and shows what it would write, without putting it anywhere. For Reminders it also lists the reminders it would add, and for an email draft who it would be to and its subject; it adds and opens nothing.
 
 ### Reminders
 
-Each to-do line in what the AI wrote (`- [ ] …`) becomes one reminder in your default list. If it wrote no to-do lines at all, each plain list line (`- …`, `1. …`) does. Everything else is left out: headings, sentences, and to-dos already ticked off (`- [x]`). With nothing to add, What ran says so.
+Each to-do line in what the AI wrote (`- [ ] …`) becomes one reminder. If it wrote no to-do lines at all, each plain list line (`- …`, `1. …`) does. Everything else is left out: headings, sentences, and to-dos already ticked off (`- [x]`). With nothing to add, What ran says so.
 
+- **Which list:** the one you name under **List** (in any capitals), or your default list in Reminders when you leave it empty. A list you name has to be there already: Splashdown doesn't make one, so a typing slip fails with a message rather than starting a new list. In `config.toml` it's `to = "Work"`.
 - **Where it came from** is in the reminder's notes: the meeting's or note's title and the day, and the hook's name.
 - **Due dates:** a reminder is due only if its line has one date written as `2026-11-12`, today or later. With a time on the 24-hour clock right after it (`2026-11-12 15:00`) it's due then, with an alert; without, that day, with no alert. A day in words ("by Wednesday", "tomorrow") stays in the reminder's text and sets no date: working out which day was meant could get it wrong. The ready-made hooks keep days as they were said, so their reminders have none.
 - **Asking first:** if **Ask before adding events and reminders** is on (Settings → Actions → Choices, shown when voice actions are on), Splashdown shows the to-dos and asks before adding them, as it does for a spoken "remind me to…". Otherwise they're added at once. To take one back, delete it in Reminders.
