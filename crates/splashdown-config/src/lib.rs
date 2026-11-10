@@ -18,7 +18,7 @@ pub use settings::{
     ActionSettings, AiChoice, AiProvider, AiSettings, Budget, CaptureTo, DEFAULT_SOUND_VOLUME,
     Destination, GeneralSettings, Hook, HookEvent, HookTarget, HotkeySettings, LOCAL_FAST_MS,
     LOCAL_SLOW_MS, LoadError, MOST_TRANSLATE_TARGETS, MeetingSummary, MyAction, MyActionKind,
-    NotesSettings, OtherAudio, Replacement, ResolveError, SearchEngine, Settings, Situation,
+    NotesSettings, OtherAudio, PutIn, Replacement, ResolveError, SearchEngine, Settings, Situation,
     SpeechChoice, SpeechProvider, SpeechSettings, TEXT_SLOT, WatchedFolder, defaults, is_local_url,
     replacement_problem,
 };

@@ -15,6 +15,7 @@ pub mod fallback;
 pub mod files;
 pub mod gesture;
 pub mod guard;
+pub mod instruct;
 pub mod language;
 pub mod local_llm;
 pub mod meeting;

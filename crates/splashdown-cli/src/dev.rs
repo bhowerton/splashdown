@@ -104,6 +104,24 @@ pub(crate) enum DevCommand {
         #[command(flatten)]
         providers: ProviderOpts,
     },
+    /// Run an instruction on a whole text file (a meeting's note, a
+    /// transcript), as a hook that asks the AI does, and print what it
+    /// writes. A text too long for the model is read in parts.
+    Instruct {
+        /// What the AI should do, e.g. "List what I said I'd do."
+        instruction: String,
+        /// The text: a Markdown or plain-text file.
+        #[arg(long)]
+        file: PathBuf,
+        /// What the text is, for the prompt.
+        #[arg(
+            long,
+            default_value = "the note of a meeting they were in, with its transcript"
+        )]
+        what: String,
+        #[command(flatten)]
+        providers: ProviderOpts,
+    },
     /// Run only the AI pass on text, as if it had been dictated.
     Clean {
         text: String,
@@ -381,6 +399,47 @@ pub(crate) fn run(command: DevCommand) -> Result<()> {
                 print!("{}", completion.text);
             }
             println!();
+        }
+        DevCommand::Instruct {
+            instruction,
+            file,
+            what,
+            providers,
+        } => {
+            let setup = Setup::new_text_only(&providers)?;
+            let model = setup
+                .pipeline
+                .answer_model()
+                .context("an instruction needs an AI model (--ai)")?;
+            let text = std::fs::read_to_string(&file)
+                .with_context(|| format!("couldn't read {}", file.display()))?;
+            let about = splashdown_core::instruct::About {
+                what,
+                title: None,
+                user_name: setup.settings.general.user_name.clone(),
+                today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
+            };
+            let started = std::time::Instant::now();
+            let done = rt
+                .block_on(splashdown_core::instruct::run(
+                    model.as_ref(),
+                    &instruction,
+                    &text,
+                    &about,
+                ))
+                .map_err(|failed| anyhow::anyhow!(failed.error))?;
+            eprintln!(
+                "── {} · about {} tokens of text, read in {} part(s) · {:.1}s",
+                model.name(),
+                splashdown_core::prompt::estimated_tokens(&text),
+                done.parts,
+                started.elapsed().as_secs_f32()
+            );
+            if done.text.is_empty() {
+                println!("(nothing to do)");
+            } else {
+                println!("{}", done.text);
+            }
         }
         DevCommand::Clean {
             text,

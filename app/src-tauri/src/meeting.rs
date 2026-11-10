@@ -44,6 +44,7 @@ use crate::state::AppState;
 pub(crate) use self::again::*;
 use self::record::*;
 pub use self::recover::*;
+pub(crate) use self::summary::summary_ai;
 use self::summary::*;
 use self::transcript::*;
 

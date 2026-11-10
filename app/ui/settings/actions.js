@@ -32,6 +32,14 @@ function renderActions() {
   renderTrusted(a.trusted_shortcuts ?? [], mac);
   renderMine(a.mine ?? [], !!a.enabled);
   renderHooks(state.settings.hooks ?? []);
+  loadHookRuns();
+  // Which AI a hook's instruction goes to, for the list and the editor.
+  invoke("hooks_ai")
+    .then((ai) => {
+      hookAi = ai;
+      renderHooks(state.settings.hooks ?? []);
+    })
+    .catch(() => {});
 }
 
 // ---------------------------------------------------------------- your actions
@@ -221,6 +229,79 @@ const HOOK_EVENTS = [
   ["phone-note", "When a note comes from your iPhone"],
 ];
 
+/** Where what the AI wrote goes. A dictation or a note from the phone has no note of its own. */
+const HOOK_PUTS = [
+  ["note", "In the note, as a section of its own"],
+  ["other-note", "At the end of another note"],
+  ["file", "At the end of a file"],
+  ["clipboard", "On the clipboard"],
+  ["web", "To a web address"],
+];
+
+/** Things to ask the AI that are ready to use, or to start from. */
+const HOOK_STARTERS = [
+  {
+    label: "Follow-up email, after a meeting",
+    when: "meeting",
+    name: "Follow-up email",
+    put: "note",
+    instruction:
+      "Draft a short follow-up email from me to the other people in this meeting. Start with one line of thanks, then what was decided, then each action item with who will do it and by when (only where the meeting said so). Plain and friendly, ready to send. No subject line.",
+  },
+  {
+    label: "What I said I'd do, after a meeting",
+    when: "meeting",
+    name: "My commitments",
+    put: "other-note",
+    to: "Commitments",
+    instruction:
+      "List everything I (\"You\" in the transcript) said I would do, one per line as a to-do (\"- [ ] \"), with who it's for, and by when if I said so. Only what I took on myself, not what others said they'd do.",
+  },
+  {
+    label: "Decisions, after a meeting",
+    when: "meeting",
+    name: "Decisions",
+    put: "other-note",
+    to: "Decisions",
+    instruction:
+      "List what was decided in this meeting, one line each, with who decided or agreed where the transcript says. Only decisions: no discussion and no action items.",
+  },
+  {
+    label: "Key points, of a transcript",
+    when: "transcript",
+    name: "Key points",
+    put: "note",
+    instruction:
+      "Write the five to ten most important points of this recording as a list, in the order they come up, each with the time it starts.",
+  },
+  {
+    label: "Study cards, from a transcript",
+    when: "transcript",
+    name: "Study cards",
+    put: "note",
+    instruction:
+      "Write question-and-answer cards for studying this: one for each fact or idea worth remembering, as a \"Q:\" line and an \"A:\" line, using only what the recording says.",
+  },
+  {
+    label: "To-dos, from a note said on my iPhone",
+    when: "phone-note",
+    name: "To-dos from my phone",
+    put: "other-note",
+    to: "To-dos",
+    instruction:
+      "If this note has things I need to do, list each as a to-do (\"- [ ] \"), keeping names, dates and times as I said them. If it has none, there is nothing to do.",
+  },
+];
+
+/** The AI a hook's instruction goes to, as `[name, onThisComputer]`, once known. */
+let hookAi = null;
+
+/** Where the text goes when a hook asks the AI, to finish a sentence. */
+function hookAiName() {
+  if (!hookAi) return "the AI you chose for instructions";
+  return hookAi[1] ? "the AI on this computer" : `${hookAi[0]}, in the cloud`;
+}
+
 /** A preset's name, from its id. */
 function presetName(id) {
   return (state.presets ?? []).find((p) => p.id === id)?.name ?? id;
@@ -228,16 +309,44 @@ function presetName(id) {
 
 /** What a hook runs, in a few words. */
 function hookSummary(h) {
+  if (h.kind === "ask") {
+    const where = {
+      note: "in the note",
+      "other-note": `in the note ${h.to}`,
+      file: `in ${h.to}`,
+      clipboard: "on the clipboard",
+      web: `to ${h.to}`,
+    }[h.put];
+    return `Asks ${hookAi && !hookAi[1] ? hookAi[0] : "the AI"} and puts what it writes ${where}`;
+  }
   if (h.kind === "web") return `Sends to ${h.url}`;
   return `Runs ${h.path}${h.args?.length ? ` ${h.args.join(" ")}` : ""}`;
 }
 
 /** What a hook does, in a sentence, for the editor. */
 function hookSentence(h) {
+  const preset = h.preset ? ` with the ${presetName(h.preset)} preset` : "";
+  if (h.kind === "ask") {
+    const text = {
+      dictation: `each dictation${preset}`,
+      meeting: "each meeting's note, with its transcript,",
+      transcript: "each finished transcript",
+      "phone-note": "each note from your iPhone",
+    }[h.when] ?? "the text";
+    const only = h.title_has ? ` (only when its title has “${h.title_has}”)` : "";
+    const put = {
+      note: "goes in that note, in a section with this name",
+      "other-note": `is added to the end of the note ${h.to || "you name"}, which is made if it isn't there`,
+      file: `is added to the end of ${h.to || "the file"}`,
+      clipboard: "replaces what's on the clipboard",
+      web: `is sent to ${h.to || "the web address"}, signed with your webhook secret`,
+    }[h.put];
+    const long = hookAi?.[1] ? " A long meeting is read a part at a time there, which can take a few minutes." : "";
+    return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. What it writes ${put}. It can only write: it can't send, open or change anything else.${long}`;
+  }
   const what = h.kind === "web"
     ? `Splashdown sends the text and its details to ${h.url || "the web address"}, signed with your webhook secret.`
     : `Splashdown runs ${h.path || "the program"} with the text as its input, never through a shell.`;
-  const preset = h.preset ? ` with the ${presetName(h.preset)} preset` : "";
   const when = {
     dictation: ` After every dictation${preset} that goes into a text field.`,
     "before-insert": ` Before each dictation${preset} goes in: what it writes back is inserted instead. If it takes over 2 seconds or fails, the dictation goes in as said.`,
@@ -245,12 +354,13 @@ function hookSentence(h) {
     transcript: " When a transcript of a file, a link, an app's audio or the microphone is finished.",
     "phone-note": " For each note from your iPhone.",
   }[h.when];
-  return what + when;
+  const only = h.title_has ? ` Only when the title has “${h.title_has}”.` : "";
+  return what + when + only;
 }
 
 /** The hooks, each with Turn off or on, Edit and Delete. */
 function renderHooks(hooks) {
-  $("hk-secret-row").hidden = !hooks.some((h) => h.kind === "web");
+  $("hk-secret-row").hidden = !hooks.some((h) => h.kind === "web" || (h.kind === "ask" && h.put === "web"));
   $("hk-list").replaceChildren(
     ...hooks.map((h, i) => {
       const on = h.on !== false;
@@ -260,7 +370,8 @@ function renderHooks(hooks) {
       const lbl = document.createElement("span");
       lbl.className = "lbl";
       const when = HOOK_EVENTS.find(([v]) => v === h.when)?.[1] ?? h.when;
-      lbl.textContent = h.preset ? `${when} · ${presetName(h.preset)}` : when;
+      const only = h.preset ? ` · ${presetName(h.preset)}` : h.title_has ? ` · “${h.title_has}”` : "";
+      lbl.textContent = (h.kind === "ask" ? `${h.name} · ${when.toLowerCase()}` : when) + only;
       const small = document.createElement("small");
       small.textContent = hookSummary(h) + (on ? "" : " · off");
       lbl.append(small);
@@ -278,6 +389,39 @@ function renderHooks(hooks) {
     }),
   );
 }
+
+/** What the hooks did lately, newest first; the last few until Show all. */
+const HOOK_RUNS_SHOWN = 5;
+let hookRunsAll = false;
+
+async function loadHookRuns() {
+  const runs = (await invoke("hooks_runs").catch(() => [])) ?? [];
+  $("hk-runs-row").hidden = !runs.length;
+  const shown = hookRunsAll ? runs : runs.slice(0, HOOK_RUNS_SHOWN);
+  $("hk-runs").replaceChildren(
+    ...shown.map((r) => {
+      const line = document.createElement("div");
+      line.className = "hk-run";
+      line.classList.toggle("warn-text", !r.ok);
+      const at = new Date(r.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
+      const took = r.took >= 10 ? ` (${Math.round(r.took)} s)` : "";
+      line.textContent = `${at} · ${r.hook}${r.about ? ` · ${r.about}` : ""}: ${r.said}${took}`;
+      return line;
+    }),
+  );
+  $("hk-runs-all").hidden = hookRunsAll || runs.length <= HOOK_RUNS_SHOWN;
+}
+
+listen("hooks-ran", () => loadHookRuns());
+$("hk-runs-all").addEventListener("click", () => {
+  hookRunsAll = true;
+  loadHookRuns();
+});
+$("hk-runs-clear").addEventListener("click", async () => {
+  await invoke("hooks_runs_clear").catch((e) => toast(String(e), true));
+  hookRunsAll = false;
+  loadHookRuns();
+});
 
 /** Changes the list of hooks and saves. */
 function updateHooks(change) {
@@ -314,7 +458,7 @@ $("hk-secret-new").addEventListener("click", async () => {
 /** The editor for a new hook (`index` null) or an existing one. */
 function editHook(index) {
   const hooks = state.settings.hooks ?? [];
-  const h = index === null ? { when: "meeting", kind: "web", url: "" } : hooks[index];
+  const h = index === null ? { when: "meeting", kind: "ask", name: "", instruction: "", put: "note" } : hooks[index];
   const mac = state.platform === "macos";
   const dialog = document.createElement("dialog");
   dialog.className = "confirm my-action";
@@ -349,8 +493,33 @@ function editHook(index) {
   const preset = document.createElement("select");
   const presetPart = field("Preset", preset);
   const kind = document.createElement("select");
-  kind.append(new Option("Run a script or program", "program"), new Option("Send to a web address", "web"));
+  kind.append(
+    new Option("Run a script or program", "program"),
+    new Option("Send to a web address", "web"),
+    new Option("Ask the AI to do something with it", "ask"),
+  );
   kind.value = h.kind;
+  const titleHas = text(h.title_has, "1:1");
+  const titlePart = field("Only when the title has", titleHas, "Leave empty for all of them.");
+  // Asking the AI.
+  const starter = document.createElement("select");
+  starter.append(new Option("Your own", ""), ...HOOK_STARTERS.map((st, i) => new Option(st.label, String(i))));
+  const askName = text(h.name, "Follow-up email");
+  const instruction = document.createElement("textarea");
+  instruction.className = "ma-instruction";
+  instruction.value = h.instruction ?? "";
+  instruction.placeholder = "Draft a short follow-up email to the people in this meeting…";
+  const put = document.createElement("select");
+  const to = text(h.kind === "ask" ? h.to : "", "");
+  const toPart = field("", to);
+  const askPart = document.createElement("div");
+  askPart.append(
+    field("Start from", starter),
+    field("Name", askName, "The heading what it writes goes under."),
+    field("What the AI should do", instruction, "In your own words."),
+    field("Put what it writes", put),
+    toPart,
+  );
   const url = text(h.url, "https://hooks.zapier.com/hooks/catch/…");
   const path = text(h.path, mac ? "/Users/you/bin/to-slack.sh" : "C:\\Scripts\\to-slack.ps1");
   const pick = button("Choose…", async () => {
@@ -377,7 +546,7 @@ function editHook(index) {
   const sentence = document.createElement("p");
   sentence.className = "ma-note";
   const result = document.createElement("p");
-  result.className = "ma-note";
+  result.className = "ma-note ma-result";
   result.hidden = true;
   const error = document.createElement("p");
   error.className = "ma-error";
@@ -386,8 +555,14 @@ function editHook(index) {
   const current = () => {
     const hook = { when: when.value, kind: kind.value, on: h.on !== false };
     if (preset.value) hook.preset = preset.value;
+    if (!titlePart.hidden && titleHas.value.trim()) hook.title_has = titleHas.value.trim();
     if (kind.value === "web") hook.url = url.value.trim();
-    else {
+    else if (kind.value === "ask") {
+      hook.name = askName.value.trim();
+      hook.instruction = instruction.value.trim();
+      hook.put = put.value;
+      if (!toPart.hidden) hook.to = to.value.trim();
+    } else {
       hook.path = path.value.trim();
       hook.args = args.value.split("\n").map((a) => a.trim()).filter(Boolean);
     }
@@ -413,20 +588,60 @@ function editHook(index) {
     // Changing the text: only a program, which can answer in time.
     const changes = when.value === "before-insert";
     kind.options[1].disabled = changes;
+    kind.options[2].disabled = changes;
     if (changes) kind.value = "program";
     webPart.hidden = kind.value !== "web";
     programPart.hidden = kind.value !== "program";
+    askPart.hidden = kind.value !== "ask";
+    titlePart.hidden = when.value !== "meeting" && when.value !== "transcript";
+  };
+  // Where the result can go for this event, and what that place needs.
+  const showPut = () => {
+    const hasNote = when.value === "meeting" || when.value === "transcript";
+    const kept = put.value || (h.kind === "ask" ? h.put : "") || "";
+    put.replaceChildren(...HOOK_PUTS.filter(([v]) => hasNote || v !== "note").map(([v, label]) => new Option(label, v)));
+    put.value = [...put.options].some((o) => o.value === kept) ? kept : put.options[0].value;
+    showTo();
+  };
+  const showTo = () => {
+    const [label, placeholder, note] = {
+      "other-note": ["Note", "Commitments", "A note in your notes folder, made if it isn't there."],
+      file: ["File", mac ? "/Users/you/Documents/meeting-log.md" : "C:\\Users\\you\\Documents\\meeting-log.md", "Its full path."],
+      web: ["Web address", "https://hooks.zapier.com/hooks/catch/…", "What it writes is sent as JSON."],
+    }[put.value] ?? [];
+    toPart.hidden = !label;
+    if (!label) return;
+    toPart.querySelector("label").replaceChildren(label, Object.assign(document.createElement("small"), { textContent: ` ${note}` }));
+    to.placeholder = placeholder;
   };
   const refresh = () => {
     showPresets();
     showKind();
+    showPut();
     describe();
     result.hidden = true;
   };
   when.addEventListener("change", refresh);
   kind.addEventListener("change", refresh);
   preset.addEventListener("change", describe);
-  for (const input of [url, path, args]) input.addEventListener("input", describe);
+  put.addEventListener("change", () => {
+    to.value = "";
+    showTo();
+    describe();
+  });
+  starter.addEventListener("change", () => {
+    const st = HOOK_STARTERS[Number(starter.value)];
+    if (!starter.value || !st) return;
+    when.value = st.when;
+    askName.value = st.name;
+    instruction.value = st.instruction;
+    refresh();
+    put.value = st.put;
+    to.value = st.to ?? "";
+    showTo();
+    describe();
+  });
+  for (const input of [url, path, args, titleHas, askName, instruction, to]) input.addEventListener("input", describe);
   refresh();
   const check = async (hook) => {
     const problem = await invoke("hooks_problem", { hook }).catch((err) => String(err));
@@ -442,7 +657,7 @@ function editHook(index) {
     test.disabled = true;
     result.hidden = false;
     result.classList.remove("warn-text");
-    result.textContent = "Testing…";
+    result.textContent = hook.kind === "ask" ? `Asking ${hookAiName()} about a sample…` : "Testing…";
     try {
       result.textContent = await invoke("hooks_test", { hook });
     } catch (e) {
@@ -463,9 +678,11 @@ function editHook(index) {
     title,
     field("When", when),
     presetPart,
+    titlePart,
     field("What it does", kind),
     webPart,
     programPart,
+    askPart,
     sentence,
     result,
     error,

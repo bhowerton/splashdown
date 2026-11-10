@@ -1,7 +1,7 @@
 //! `[[hooks]]` (Settings → Actions → When something happens): a script or
-//! program to run, or a web address to send to, when something happens in
-//! Splashdown. The app runs them (`app/src-tauri/src/hooks.rs`); what each
-//! one gets is in docs/HOOKS.md.
+//! program to run, a web address to send to, or something to ask the AI,
+//! when something happens in Splashdown. The app runs them
+//! (`app/src-tauri/src/hooks.rs`); what each one gets is in docs/HOOKS.md.
 
 use super::*;
 
@@ -39,6 +39,11 @@ impl HookEvent {
     pub fn has_preset(self) -> bool {
         matches!(self, HookEvent::Dictation | HookEvent::BeforeInsert)
     }
+
+    /// It's about a note with a title of its own.
+    pub fn has_note(self) -> bool {
+        matches!(self, HookEvent::Meeting | HookEvent::Transcript)
+    }
 }
 
 /// What a hook runs.
@@ -55,6 +60,44 @@ pub enum HookTarget {
     },
     /// A web address the details are posted to as JSON, signed.
     Web { url: String },
+    /// Something the AI is asked to do with the text, in the user's own
+    /// words ("draft a follow-up email"). What it writes is put somewhere;
+    /// it can't do anything else.
+    Ask {
+        /// What it's called: in the list, in what ran, and as the heading
+        /// its result goes under in a note.
+        name: String,
+        instruction: String,
+        /// Where the result goes.
+        put: PutIn,
+        /// The note, file or web address for `put`, when it takes one.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        to: Option<String>,
+    },
+}
+
+/// Where what the AI wrote goes.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PutIn {
+    /// A section of the meeting's or transcript's own note, under the
+    /// hook's name.
+    Note,
+    /// The end of another note in the notes folder (`to`, made if it isn't
+    /// there), under a heading with the date.
+    OtherNote,
+    /// The end of a file anywhere (`to`, a full path).
+    File,
+    Clipboard,
+    /// A web address (`to`), as a webhook gets it, with the result.
+    Web,
+}
+
+impl PutIn {
+    /// It needs `to`.
+    pub fn takes_a_place(self) -> bool {
+        matches!(self, PutIn::OtherNote | PutIn::File | PutIn::Web)
+    }
 }
 
 /// One hook.
@@ -66,6 +109,10 @@ pub struct Hook {
     /// Only dictations with this preset (its id); `None` is every preset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preset: Option<String>,
+    /// Only meetings and transcripts whose title has this in it, in any
+    /// capitals ("1:1", "Acme"); `None` is all of them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title_has: Option<String>,
     /// Off keeps it without running it.
     #[serde(default = "on", skip_serializing_if = "is_on")]
     pub on: bool,
@@ -95,6 +142,20 @@ impl Hook {
             }
     }
 
+    /// `applies`, and the note's title (when the event has one) has what
+    /// the hook asks for.
+    pub fn applies_to(&self, event: HookEvent, preset: Option<&str>, title: Option<&str>) -> bool {
+        if !self.applies(event, preset) {
+            return false;
+        }
+        match self.title_has.as_deref().map(str::trim) {
+            Some(wanted) if !wanted.is_empty() && event.has_note() => {
+                title.is_some_and(|t| t.to_lowercase().contains(&wanted.to_lowercase()))
+            }
+            _ => true,
+        }
+    }
+
     /// What's wrong with it before it's saved, if anything.
     pub fn problem(&self) -> Option<String> {
         match &self.run {
@@ -108,17 +169,78 @@ impl Hook {
                 }
             }
             HookTarget::Web { url } => {
-                let url = url.trim();
-                let rest = url
-                    .strip_prefix("https://")
-                    .or_else(|| url.strip_prefix("http://"));
-                if !rest.is_some_and(|r| !r.is_empty() && !r.starts_with('/')) {
-                    return Some("Give a web address starting with https://.".into());
-                }
-                if url.chars().any(char::is_whitespace) {
-                    return Some("A web address can't have spaces.".into());
+                if let Some(problem) = web_problem(url.trim()) {
+                    return Some(problem);
                 }
             }
+            HookTarget::Ask {
+                name,
+                instruction,
+                put,
+                to,
+            } => {
+                if self.when == HookEvent::BeforeInsert {
+                    return Some(
+                        "Changing the text needs a script or program: the AI would make every dictation wait. A preset's own instructions change its dictations."
+                            .into(),
+                    );
+                }
+                let name = name.trim();
+                if name.is_empty() {
+                    return Some("Give it a name.".into());
+                }
+                if name.contains(['\n', '\r']) || name.starts_with('#') {
+                    return Some("The name is one line, without a # at the start.".into());
+                }
+                if instruction.trim().is_empty() {
+                    return Some("Say what the AI should do with the text.".into());
+                }
+                let to = to.as_deref().map(str::trim).unwrap_or_default();
+                match put {
+                    PutIn::Note if !self.when.has_note() => {
+                        return Some(
+                            "Only a meeting or a transcript has a note of its own: choose another place for the result."
+                                .into(),
+                        );
+                    }
+                    PutIn::OtherNote => {
+                        if to.is_empty() {
+                            return Some("Name the note the result is added to.".into());
+                        }
+                        if Path::new(to).is_absolute()
+                            || to.starts_with(['/', '\\'])
+                            || to.split(['/', '\\']).any(|part| part == "..")
+                        {
+                            return Some(
+                                "Name a note inside your notes folder, such as Commitments or Work/Decisions."
+                                    .into(),
+                            );
+                        }
+                    }
+                    PutIn::File => {
+                        if to.is_empty() {
+                            return Some("Choose the file the result is added to.".into());
+                        }
+                        if !Path::new(to).is_absolute() {
+                            return Some("Give the full path to the file.".into());
+                        }
+                    }
+                    PutIn::Web => {
+                        if let Some(problem) = web_problem(to) {
+                            return Some(problem);
+                        }
+                    }
+                    PutIn::Note | PutIn::Clipboard => {}
+                }
+            }
+        }
+        if self
+            .title_has
+            .as_deref()
+            .is_some_and(|t| !t.trim().is_empty())
+            && !self.when.has_note()
+        {
+            return Some("Only meetings and transcripts have a title to go by.".into());
         }
         if self.when == HookEvent::BeforeInsert {
             if !matches!(self.run, HookTarget::Program { .. }) {
@@ -140,6 +262,20 @@ impl Hook {
     }
 }
 
+/// What's wrong with a web address to send to, if anything.
+fn web_problem(url: &str) -> Option<String> {
+    let rest = url
+        .strip_prefix("https://")
+        .or_else(|| url.strip_prefix("http://"));
+    if !rest.is_some_and(|r| !r.is_empty() && !r.starts_with('/')) {
+        return Some("Give a web address starting with https://.".into());
+    }
+    if url.chars().any(char::is_whitespace) {
+        return Some("A web address can't have spaces.".into());
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,8 +294,21 @@ mod tests {
                 args: vec![],
             },
             preset: preset.map(str::to_string),
+            title_has: None,
             on: true,
             trusted: false,
+        }
+    }
+
+    fn ask(when: HookEvent, put: PutIn, to: Option<&str>) -> Hook {
+        Hook {
+            run: HookTarget::Ask {
+                name: "Follow-up email".into(),
+                instruction: "Draft a follow-up email to the people in this meeting.".into(),
+                put,
+                to: to.map(str::to_string),
+            },
+            ..program(when, None)
         }
     }
 
@@ -216,6 +365,111 @@ mod tests {
     }
 
     #[test]
+    fn a_hook_can_go_by_the_note_s_title() {
+        let one_on_ones = Hook {
+            title_has: Some("1:1".into()),
+            ..ask(HookEvent::Meeting, PutIn::Note, None)
+        };
+        assert!(one_on_ones.applies_to(HookEvent::Meeting, None, Some("Dana 1:1")));
+        assert!(!one_on_ones.applies_to(HookEvent::Meeting, None, Some("Weekly sync")));
+        assert!(!one_on_ones.applies_to(HookEvent::Meeting, None, None));
+        assert!(!one_on_ones.applies_to(HookEvent::Transcript, None, Some("Dana 1:1")));
+        let acme = Hook {
+            title_has: Some(" acme ".into()),
+            ..ask(HookEvent::Meeting, PutIn::Note, None)
+        };
+        assert!(acme.applies_to(HookEvent::Meeting, None, Some("ACME kickoff")));
+        let all = ask(HookEvent::Meeting, PutIn::Note, None);
+        assert!(all.applies_to(HookEvent::Meeting, None, None));
+        // Nothing else has a title to go by.
+        let dictation = Hook {
+            title_has: Some("1:1".into()),
+            ..program(HookEvent::Dictation, None)
+        };
+        assert!(dictation.problem().is_some());
+    }
+
+    #[test]
+    fn asking_the_ai_is_checked_before_saving() {
+        assert_eq!(ask(HookEvent::Meeting, PutIn::Note, None).problem(), None);
+        assert_eq!(
+            ask(HookEvent::Transcript, PutIn::Clipboard, None).problem(),
+            None
+        );
+        // Only a meeting or transcript has a note of its own.
+        assert!(
+            ask(HookEvent::PhoneNote, PutIn::Note, None)
+                .problem()
+                .is_some()
+        );
+        assert_eq!(
+            ask(HookEvent::PhoneNote, PutIn::OtherNote, Some("To-dos")).problem(),
+            None
+        );
+        assert_eq!(
+            ask(
+                HookEvent::Meeting,
+                PutIn::OtherNote,
+                Some("Work/Decisions.md")
+            )
+            .problem(),
+            None
+        );
+        for outside in ["", "../Elsewhere", "/etc/passwd", "Work/../../x"] {
+            assert!(
+                ask(HookEvent::Meeting, PutIn::OtherNote, Some(outside))
+                    .problem()
+                    .is_some(),
+                "{outside}"
+            );
+        }
+        assert!(
+            ask(HookEvent::Meeting, PutIn::File, Some("log.md"))
+                .problem()
+                .is_some()
+        );
+        let file = if cfg!(windows) {
+            r"C:\Notes\log.md"
+        } else {
+            "/Users/me/log.md"
+        };
+        assert_eq!(
+            ask(HookEvent::Meeting, PutIn::File, Some(file)).problem(),
+            None
+        );
+        assert!(
+            ask(HookEvent::Meeting, PutIn::Web, Some("example.com"))
+                .problem()
+                .is_some()
+        );
+        assert_eq!(
+            ask(
+                HookEvent::Meeting,
+                PutIn::Web,
+                Some("https://example.com/x")
+            )
+            .problem(),
+            None
+        );
+        // A dictation doesn't wait for the AI.
+        let before = Hook {
+            preset: Some("code".into()),
+            ..ask(HookEvent::BeforeInsert, PutIn::Clipboard, None)
+        };
+        assert!(before.problem().is_some());
+        let unnamed = Hook {
+            run: HookTarget::Ask {
+                name: " ".into(),
+                instruction: "Summarize.".into(),
+                put: PutIn::Clipboard,
+                to: None,
+            },
+            ..program(HookEvent::Meeting, None)
+        };
+        assert!(unnamed.problem().is_some());
+    }
+
+    #[test]
     fn hooks_read_and_write_as_toml() {
         let text = r#"
 [[hooks]]
@@ -230,9 +484,29 @@ path = "/Users/me/bin/fix-names"
 args = ["--strict"]
 preset = "code"
 trusted = true
+
+[[hooks]]
+when = "meeting"
+kind = "ask"
+name = "My commitments"
+instruction = "List everything I said I'd do."
+put = "other-note"
+to = "Commitments"
+title_has = "1:1"
 "#;
         let settings = Settings::from_toml(text).unwrap();
-        assert_eq!(settings.hooks.len(), 2);
+        assert_eq!(settings.hooks.len(), 3);
+        assert_eq!(
+            settings.hooks[2].run,
+            HookTarget::Ask {
+                name: "My commitments".into(),
+                instruction: "List everything I said I'd do.".into(),
+                put: PutIn::OtherNote,
+                to: Some("Commitments".into()),
+            }
+        );
+        assert_eq!(settings.hooks[2].title_has.as_deref(), Some("1:1"));
+        assert_eq!(settings.hooks[2].problem(), None);
         assert_eq!(settings.hooks[0].when, HookEvent::Meeting);
         assert!(settings.hooks[0].on);
         assert!(!settings.hooks[0].trusted);

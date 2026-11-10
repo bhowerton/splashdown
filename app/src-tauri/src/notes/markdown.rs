@@ -319,6 +319,50 @@ pub fn with_section(body: &str, heading: &str, text: &str) -> String {
     }
 }
 
+/// `body` with `text` under `## {heading}`, for what a hook's AI wrote: a
+/// section of its own above the note's known parts, replacing what an
+/// earlier run put under the same heading (up to the next `## ` heading of
+/// any kind). `text` is made safe to sit there first: see `as_result`.
+pub fn with_result(body: &str, heading: &str, text: &str) -> String {
+    let lines: Vec<&str> = body.split_inclusive('\n').collect();
+    let is_heading = |l: &str| {
+        l.trim_end()
+            .strip_prefix("## ")
+            .is_some_and(|h| h.trim().eq_ignore_ascii_case(heading))
+    };
+    let text = as_result(text);
+    let Some(start) = lines.iter().position(|l| is_heading(l)) else {
+        return with_section(body, heading, &text);
+    };
+    let end = lines[start + 1..]
+        .iter()
+        .position(|l| l.starts_with("## ") || starts_part(l))
+        .map_or(lines.len(), |i| start + 1 + i);
+    let without = format!("{}{}", lines[..start].concat(), lines[end..].concat());
+    with_section(&without, heading, &text)
+}
+
+/// What an AI wrote, made safe to sit in a note as one section: its own
+/// `#` and `##` headings become `###` (they'd end the section, or name
+/// one of the note's parts), and a line written like a transcript turn is
+/// quoted, so the transcript still starts where it does.
+pub fn as_result(text: &str) -> String {
+    text.trim()
+        .lines()
+        .map(|line| {
+            let marks = line.chars().take_while(|c| *c == '#').count();
+            if (1..=2).contains(&marks) && line[marks..].starts_with(' ') {
+                format!("###{}", &line[marks..])
+            } else if Turn::parse(line).is_some() {
+                format!("> {line}")
+            } else {
+                line.to_string()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
 pub(super) fn front_matter_id(text: &str) -> Option<String> {
     let (front, _) = split_front_matter(text);
     front.lines().find_map(|line| {

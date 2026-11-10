@@ -429,18 +429,48 @@ pub(crate) fn escape(text: &str, tag: &str) -> String {
 /// alphabets, and more in scripts written without spaces (Chinese,
 /// Japanese, Thai) and Korean. Counting every character as a quarter of a
 /// token cut long dictations in those short.
-fn estimated_tokens(text: &str) -> usize {
-    let (mut plain, mut other, mut dense) = (0usize, 0usize, 0usize);
-    for c in text.chars() {
-        if c.is_ascii() {
-            plain += 1;
-        } else if crate::spoken::unspaced(c) || matches!(c as u32, 0xAC00..=0xD7AF) {
-            dense += 1;
-        } else {
-            other += 1;
+pub fn estimated_tokens(text: &str) -> usize {
+    TokenCount::of(text).tokens()
+}
+
+/// The estimate behind `estimated_tokens`, a character at a time, for
+/// cutting a text where it reaches a size.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct TokenCount {
+    plain: usize,
+    other: usize,
+    dense: usize,
+}
+
+impl TokenCount {
+    pub(crate) fn of(text: &str) -> Self {
+        let mut count = TokenCount::default();
+        text.chars().for_each(|c| count.add(c));
+        count
+    }
+
+    /// The two together.
+    pub(crate) fn plus(self, other: TokenCount) -> Self {
+        TokenCount {
+            plain: self.plain + other.plain,
+            other: self.other + other.other,
+            dense: self.dense + other.dense,
         }
     }
-    plain / 4 + other + dense * 3 / 2
+
+    pub(crate) fn add(&mut self, c: char) {
+        if c.is_ascii() {
+            self.plain += 1;
+        } else if crate::spoken::unspaced(c) || matches!(c as u32, 0xAC00..=0xD7AF) {
+            self.dense += 1;
+        } else {
+            self.other += 1;
+        }
+    }
+
+    pub(crate) fn tokens(self) -> usize {
+        self.plain / 4 + self.other + self.dense * 3 / 2
+    }
 }
 
 fn max_tokens_for(mode: Mode, input_tokens: usize) -> u32 {

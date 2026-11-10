@@ -1,8 +1,9 @@
 //! Hooks (Settings → Actions → When something happens): when a dictation
 //! goes into a field, a meeting or transcript is finished, or a note comes
-//! from the iPhone, run the user's script or program with the text, or send
-//! it to a web address as signed JSON. One kind runs before a dictation is
-//! inserted and changes its text. What each gets is in docs/HOOKS.md.
+//! from the iPhone, run the user's script or program with the text, send
+//! it to a web address as signed JSON, or ask the AI to do something with
+//! it (`ask`). One kind runs before a dictation is inserted and changes
+//! its text. What each gets is in docs/HOOKS.md.
 //!
 //! Hooks are only ever added in Settings, where saving one says exactly
 //! what it will run; one found in `config.toml` without that (written by
@@ -11,14 +12,17 @@
 //! input. Hooks after the fact run one at a time on a thread of their own,
 //! so nothing waits for them.
 
+mod ask;
+pub mod runs;
+
 use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};
 use std::sync::{Mutex, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use chrono::{DateTime, Local};
 use serde::Serialize;
-use splashdown_config::{Hook, HookEvent, HookTarget, Settings};
+use splashdown_config::{Hook, HookEvent, HookTarget, PutIn, Settings};
 use splashdown_platform::{OverlayState, Tone};
 use tauri::{AppHandle, Manager};
 
@@ -36,6 +40,8 @@ pub const BEFORE_LIMIT: Duration = Duration::from_secs(2);
 const WEB_LIMIT: Duration = Duration::from_secs(15);
 /// How long a hook's failure shows.
 const WARNING_FOR: Duration = Duration::from_secs(4);
+/// How much of what the AI is asked shows in a question or a list.
+const ASKS_SHOWN: usize = 120;
 /// What each hook gets, and examples.
 const DOCS: &str = "https://github.com/bhowerton/splashdown/blob/main/docs/HOOKS.md";
 /// The file in the settings folder that holds the webhook secret.
@@ -81,6 +87,9 @@ pub struct NoteRef {
     pub path: PathBuf,
     /// Its summary, when it has one.
     pub summary: Option<String>,
+    /// Where it is in the notes folder.
+    #[serde(skip)]
+    rel: String,
 }
 
 impl Happened {
@@ -128,6 +137,7 @@ impl Happened {
                 title: crate::notes::markdown::title_of(&note.body),
                 path: store.root().join(rel),
                 summary,
+                rel: rel.to_string(),
             }),
             ..Happened::new(event, note.body, Local::now())
         })
@@ -166,10 +176,11 @@ pub fn fire(app: &AppHandle, happened: Happened) {
     let Some(event) = event_named(happened.event) else {
         return;
     };
+    let title = happened.note.as_ref().map(|n| n.title.as_str());
     let hooks: Vec<Hook> = settings
         .hooks
         .iter()
-        .filter(|h| h.applies(event, happened.preset_id.as_deref()))
+        .filter(|h| h.applies_to(event, happened.preset_id.as_deref(), title))
         .cloned()
         .collect();
     if hooks.is_empty() {
@@ -182,7 +193,33 @@ pub fn fire(app: &AppHandle, happened: Happened) {
             .name("hooks".into())
             .spawn(move || {
                 for (hook, happened) in receive {
-                    if let Err(e) = run_after(&app, &hook, &happened) {
+                    let started = Instant::now();
+                    let result = run_after(&app, &hook, &happened);
+                    // Not allowed to run: nothing happened.
+                    if let Ok(None) = result {
+                        continue;
+                    }
+                    let (ok, said) = match &result {
+                        Ok(said) => (true, said.clone().unwrap_or_default()),
+                        Err(e) => (false, e.clone()),
+                    };
+                    runs::record(
+                        &app,
+                        runs::Run {
+                            at: Local::now().to_rfc3339(),
+                            event: happened.event.to_string(),
+                            hook: name(&hook),
+                            about: happened
+                                .note
+                                .as_ref()
+                                .map(|n| n.title.clone())
+                                .or_else(|| happened.app.clone()),
+                            ok,
+                            said,
+                            took: started.elapsed().as_secs_f32(),
+                        },
+                    );
+                    if let Err(e) = result {
                         tracing::warn!("hook {} ({}): {e}", name(&hook), happened.event);
                         warn(&format!("{}: {e}", name(&hook)));
                     }
@@ -213,20 +250,30 @@ pub fn note_finished(app: &AppHandle, event: HookEvent, rel: &str) {
     }
 }
 
-fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<(), String> {
+/// Runs a hook for what happened: what it did, in a few words, or `None`
+/// when the user didn't allow it.
+fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<Option<String>, String> {
     if !hook.trusted && !allowed(app, hook) {
-        return Ok(());
+        return Ok(None);
     }
     match &hook.run {
         HookTarget::Program { path, args } => {
             match crate::programs::run(path, args, &happened.text, &happened.env(), AFTER_LIMIT)? {
-                Ended::Finished { ok: true, .. } => Ok(()),
+                Ended::Finished { ok: true, .. } => Ok(Some("Ran without errors".into())),
                 Ended::Finished { error, .. } if !error.is_empty() => Err(error),
                 Ended::Finished { .. } => Err("stopped with an error".into()),
                 Ended::TooLong => Err(format!("stopped after {} seconds", AFTER_LIMIT.as_secs())),
             }
         }
-        HookTarget::Web { url } => send(url, happened),
+        HookTarget::Web { url } => {
+            let body = serde_json::to_string(happened).map_err(|e| e.to_string())?;
+            send(url, happened.event, body)?;
+            Ok(Some(format!("Sent to {}", host(url))))
+        }
+        HookTarget::Ask { .. } => {
+            let asked = ask::Asked::of(hook).ok_or("not something to ask")?;
+            ask::run(app, &asked, happened).map(Some)
+        }
     }
 }
 
@@ -307,6 +354,7 @@ pub fn change(
 }
 
 fn changed(hook: &Hook, happened: &Happened) -> Result<String, String> {
+    // Only a program answers in time to change a dictation.
     let HookTarget::Program { path, args } = &hook.run else {
         return Ok(happened.text.clone());
     };
@@ -335,10 +383,9 @@ fn changed(hook: &Hook, happened: &Happened) -> Result<String, String> {
 
 // ---------------------------------------------------------------- web addresses
 
-/// Posts what happened to `url` as JSON, signed with the secret, trying
-/// once more if the server or network failed.
-fn send(url: &str, happened: &Happened) -> Result<(), String> {
-    let body = serde_json::to_string(happened).map_err(|e| e.to_string())?;
+/// Posts `body` (what happened, as JSON) to `url`, signed with the secret,
+/// trying once more if the server or network failed.
+fn send(url: &str, event: &str, body: String) -> Result<(), String> {
     let secret = secret()?;
     let client = reqwest::Client::builder()
         .timeout(WEB_LIMIT)
@@ -354,7 +401,7 @@ fn send(url: &str, happened: &Happened) -> Result<(), String> {
         let request = client
             .post(url)
             .header(reqwest::header::CONTENT_TYPE, "application/json")
-            .header("X-Splashdown-Event", happened.event)
+            .header("X-Splashdown-Event", event)
             .header("X-Splashdown-Timestamp", &at)
             .header("X-Splashdown-Signature", signature(&secret, &at, &body))
             .body(body.clone())
@@ -442,20 +489,25 @@ fn event_named(name: &str) -> Option<HookEvent> {
     .find(|e| e.name() == name)
 }
 
-/// What a hook is called: its program's file name, or its web address's
-/// host.
+/// What a hook is called: its program's file name, its web address's
+/// host, or the name the user gave what the AI is asked.
 fn name(hook: &Hook) -> String {
     match &hook.run {
         HookTarget::Program { path, .. } => std::path::Path::new(path)
             .file_name()
             .map_or_else(|| path.clone(), |n| n.to_string_lossy().into_owned()),
-        HookTarget::Web { url } => url
-            .split("://")
-            .nth(1)
-            .and_then(|rest| rest.split(['/', '?', '#']).next())
-            .unwrap_or(url)
-            .to_string(),
+        HookTarget::Web { url } => host(url),
+        HookTarget::Ask { name, .. } => name.trim().to_string(),
     }
+}
+
+/// A web address's host.
+fn host(url: &str) -> String {
+    url.split("://")
+        .nth(1)
+        .and_then(|rest| rest.split(['/', '?', '#']).next())
+        .unwrap_or(url)
+        .to_string()
 }
 
 /// When a hook runs, to end a sentence.
@@ -491,6 +543,28 @@ fn describe(hook: &Hook) -> String {
             line
         }
         HookTarget::Web { url } => format!("Sends the text to {url}"),
+        HookTarget::Ask {
+            instruction,
+            put,
+            to,
+            ..
+        } => {
+            let to = to.as_deref().unwrap_or_default();
+            let puts = match put {
+                PutIn::Note => "puts what it writes in the note".to_string(),
+                PutIn::OtherNote => format!("adds what it writes to the note {to}"),
+                PutIn::File => format!("adds what it writes to {to}"),
+                PutIn::Clipboard => "copies what it writes".to_string(),
+                PutIn::Web => format!("sends what it writes to {to}"),
+            };
+            let asks: String = instruction.trim().chars().take(ASKS_SHOWN).collect();
+            let more = if instruction.trim().chars().count() > ASKS_SHOWN {
+                "…"
+            } else {
+                ""
+            };
+            format!("Gives the text to the AI with “{asks}{more}” and {puts}")
+        }
     }
 }
 
@@ -503,17 +577,33 @@ pub fn hooks_problem(hook: Hook) -> Option<String> {
 }
 
 /// Test: runs the hook now with sample text for its event; what happened.
+/// What the AI writes is shown, not put anywhere.
 #[tauri::command]
-pub async fn hooks_test(hook: Hook) -> Result<String, String> {
+pub async fn hooks_test(hook: Hook, app: AppHandle) -> Result<String, String> {
     if let Some(problem) = hook.problem() {
         return Err(problem);
     }
-    tauri::async_runtime::spawn_blocking(move || test(&hook))
+    tauri::async_runtime::spawn_blocking(move || test(&app, &hook))
         .await
         .map_err(|e| e.to_string())?
 }
 
-fn test(hook: &Hook) -> Result<String, String> {
+/// The AI that a hook's instruction goes to, and whether it's on this
+/// computer; `None` without one.
+#[tauri::command]
+pub fn hooks_ai(app: AppHandle) -> Option<(String, bool)> {
+    let settings = app.try_state::<AppState>()?.settings();
+    crate::meeting::summary_ai(&settings)
+}
+
+fn test(app: &AppHandle, hook: &Hook) -> Result<String, String> {
+    if let Some(asked) = ask::Asked::of(hook) {
+        let happened = ask::sample(hook.when);
+        return Ok(match ask::write(app, asked.instruction, &happened)? {
+            Some(text) => format!("From a sample, it wrote:\n\n{text}"),
+            None => "It found nothing to do in the sample.".into(),
+        });
+    }
     let happened = sample(hook.when);
     match (&hook.run, hook.when) {
         (HookTarget::Program { .. }, HookEvent::BeforeInsert) => {
@@ -532,8 +622,10 @@ fn test(hook: &Hook) -> Result<String, String> {
             }
         }
         (HookTarget::Web { url }, _) => {
-            send(url, &happened).map(|()| "Sent, and the server took it.".into())
+            let body = serde_json::to_string(&happened).map_err(|e| e.to_string())?;
+            send(url, happened.event, body).map(|()| "Sent, and the server took it.".into())
         }
+        (HookTarget::Ask { .. }, _) => Err("That isn't something to test.".into()),
     }
 }
 
@@ -558,6 +650,7 @@ fn sample(event: HookEvent) -> Happened {
                     title: title.into(),
                     path: PathBuf::new(),
                     summary: Some("A test from Splashdown.".into()),
+                    rel: String::new(),
                 }),
                 ..Happened::new(
                     event,
@@ -634,9 +727,21 @@ mod tests {
             when: HookEvent::Meeting,
             run,
             preset: None,
+            title_has: None,
             on: true,
             trusted: false,
         };
+        let asks = hook(HookTarget::Ask {
+            name: " Follow-up email ".into(),
+            instruction: "Draft a follow-up email to the people in this meeting.".into(),
+            put: PutIn::OtherNote,
+            to: Some("Drafts".into()),
+        });
+        assert_eq!(name(&asks), "Follow-up email");
+        assert_eq!(
+            summary(&asks),
+            "Gives the text to the AI with “Draft a follow-up email to the people in this meeting.” and adds what it writes to the note Drafts after each meeting"
+        );
         assert_eq!(
             name(&hook(HookTarget::Program {
                 path: "/Users/me/bin/to-slack.sh".into(),
@@ -678,6 +783,7 @@ mod tests {
                     args: vec![],
                 },
                 preset: Some("code".into()),
+                title_has: None,
                 on: true,
                 trusted: true,
             }

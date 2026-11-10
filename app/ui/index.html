@@ -221,8 +221,10 @@
       <div class="group" id="hk">
         <div class="gh">When something happens</div>
         <div id="hk-list"></div>
-        <div class="row"><span class="lbl">Add a hook<small>Run your own script or program, or send to a web address (Zapier, Make, n8n, Slack), after a dictation, a meeting, a transcript or a note from your iPhone. Or have a script change a preset's dictations before they go in. <button type="button" class="link" id="hk-docs">What each one gets</button></small></span>
+        <div class="row"><span class="lbl">Add a hook<small>After a meeting, a transcript, a dictation or a note from your iPhone: ask the AI to do something with it in your own words (draft the follow-up email, list what you said you'd do), run your own script or program, or send to a web address (Zapier, Make, n8n, Slack). Or have a script change a preset's dictations before they go in. <button type="button" class="link" id="hk-docs">What each one gets</button></small></span>
           <button type="button" class="btn" id="hk-add">Add a hook…</button></div>
+        <div class="row" id="hk-runs-row" hidden><span class="lbl">What ran<small id="hk-runs"></small></span>
+          <span class="ma-buttons"><button type="button" class="link" id="hk-runs-all">Show all</button><button type="button" class="btn" id="hk-runs-clear">Clear</button></span></div>
         <div class="row" id="hk-secret-row"><span class="lbl">Webhook secret<small>Each web address gets a signature made with it, so what receives it can check it came from you. Keep it private.</small></span>
           <span class="ma-buttons"><button type="button" class="btn" id="hk-secret-copy">Copy</button><button type="button" class="btn" id="hk-secret-new">New secret</button></span></div>
       </div>

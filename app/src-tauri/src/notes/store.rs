@@ -945,6 +945,56 @@ impl Store {
         self.write(&path, &format!("{front}{body}"))
     }
 
+    /// Puts what a hook's AI wrote under `## {heading}` in note `rel`,
+    /// above the note's own parts, in place of what an earlier run put
+    /// there.
+    pub fn set_result(&self, rel: &str, heading: &str, text: &str) -> io::Result<()> {
+        let _appending = self.appending.locked();
+        let path = self.resolve(rel)?;
+        let file = std::fs::read_to_string(&path)?;
+        let (front, body) = split_front_matter(&file);
+        let body = with_result(&body.replace("\r\n", "\n"), heading, text);
+        self.write(&path, &format!("{front}{body}"))
+    }
+
+    /// Adds `text` to the end of note `rel`, under `## {heading}` when
+    /// there is one, making the note (titled `title`) if it isn't there.
+    pub fn add_under(
+        &self,
+        rel: &str,
+        title: &str,
+        heading: Option<&str>,
+        text: &str,
+    ) -> io::Result<()> {
+        let _appending = self.appending.locked();
+        self.ensure()?;
+        let path = self.resolve(rel)?;
+        let existing = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(e) if e.kind() == io::ErrorKind::NotFound => String::new(),
+            // Never write over a note that can't be read.
+            Err(e) => return Err(e),
+        };
+        let existing = if existing.trim().is_empty() {
+            format!("# {title}\n")
+        } else {
+            existing
+        };
+        let separator = if existing.ends_with("\n\n") {
+            ""
+        } else if existing.ends_with('\n') {
+            "\n"
+        } else {
+            "\n\n"
+        };
+        let text = as_result(text);
+        let block = match heading {
+            Some(heading) => format!("## {heading}\n\n{text}\n"),
+            None => format!("{text}\n"),
+        };
+        self.write(&path, &format!("{existing}{separator}{block}"))
+    }
+
     /// Saves a recording in `Attachments/` and returns its path in the
     /// folder, for a link.
     pub fn save_attachment(&self, stem: &str, extension: &str, bytes: &[u8]) -> io::Result<String> {
@@ -1253,6 +1303,76 @@ mod tests {
         assert_eq!(
             store.read(&meeting.path).unwrap().body,
             "# Zoom meeting\n\nRecorded on this computer.\n\n## Summary\n\n### Overview\nA hello.\n\n## Transcript\n\n**[0:00] Them:** Hi.\n\n*Ended at 0:05.*\n"
+        );
+        let _ = std::fs::remove_dir_all(store.root());
+    }
+
+    #[test]
+    fn what_a_hook_s_ai_wrote_gets_a_section_of_its_own() {
+        let body = "# Weekly sync\n\nWith Dana Lee.\n\n## My notes\n\nBudget!\n\n## Summary\n\nShort.\n\n## Transcript\n\n**[0:01] You:** hello\n";
+        let email = "Hi Dana,\n\n## Decisions\n- Ship Friday\n\n**[0:01] You:** hello";
+        let with = with_result(body, "Follow-up email", email);
+        // Above the note's own parts; its headings and a turn-like line
+        // can't end the section or start the transcript early.
+        assert_eq!(
+            with,
+            "# Weekly sync\n\nWith Dana Lee.\n\n## Follow-up email\n\nHi Dana,\n\n### Decisions\n- Ship Friday\n\n> **[0:01] You:** hello\n\n## My notes\n\nBudget!\n\n## Summary\n\nShort.\n\n## Transcript\n\n**[0:01] You:** hello\n"
+        );
+        assert_eq!(section(&with, "Summary").as_deref(), Some("Short."));
+        assert_eq!(section(&with, "My notes").as_deref(), Some("Budget!"));
+        // The transcript still starts at its own first turn, not the quoted one.
+        assert_eq!(
+            transcript_start(&with),
+            with.rfind("**[0:01] You:** hello\n")
+        );
+        assert!(with.find("> **[0:01]").unwrap() < transcript_start(&with).unwrap());
+        // A second one sits beside it, and running the first again
+        // replaces only its own.
+        let two = with_result(&with, "My commitments", "- [ ] Send the deck");
+        let again = with_result(&two, "follow-up email", "Hi all,");
+        assert!(again.contains("## My commitments\n\n- [ ] Send the deck\n\n"));
+        assert!(again.contains("## follow-up email\n\nHi all,\n\n"));
+        assert!(!again.contains("Hi Dana"));
+        assert!(!again.contains("### Decisions"));
+        assert_eq!(again.matches("## My notes").count(), 1);
+        assert_eq!(section(&again, "Summary").as_deref(), Some("Short."));
+    }
+
+    #[test]
+    fn a_hook_s_result_is_added_to_a_note_made_if_needed() {
+        let store = temp_store("results");
+        store
+            .add_under(
+                "Work/Commitments.md",
+                "Commitments",
+                Some("Dana 1:1 · 2026-11-10"),
+                "- [ ] Send the deck",
+            )
+            .unwrap();
+        store
+            .add_under("Work/Commitments.md", "Commitments", None, "# Loose line")
+            .unwrap();
+        assert_eq!(
+            store.read("Work/Commitments.md").unwrap().body,
+            "# Commitments\n\n## Dana 1:1 · 2026-11-10\n\n- [ ] Send the deck\n\n### Loose line\n"
+        );
+        // Only ever a note in the folder.
+        assert!(store.add_under("../out.md", "x", None, "y").is_err());
+        assert!(store.add_under("notes.txt", "x", None, "y").is_err());
+        let meeting = store
+            .create_in(
+                "Meetings",
+                "# Zoom meeting\n\n**[0:00] Them:** Hi.\n",
+                at("2026-10-31T09:15:00-05:00"),
+                &Origin::default(),
+            )
+            .unwrap();
+        store
+            .set_result(&meeting.path, "Follow-up email", "Hi,")
+            .unwrap();
+        assert_eq!(
+            store.read(&meeting.path).unwrap().body,
+            "# Zoom meeting\n\n## Follow-up email\n\nHi,\n\n**[0:00] Them:** Hi.\n"
         );
         let _ = std::fs::remove_dir_all(store.root());
     }

@@ -230,7 +230,17 @@ async function mockInvoke(cmd, args) {
     case "hooks_docs_page":
       return null;
     case "hooks_test":
+      if (args.hook.kind === "ask") return "From a sample, it wrote:\n\nHi Dana,\n\nThanks for today. We agreed the pricing page goes live on Friday.\n\n- I'll send you the final numbers by Wednesday.\n- I'll write to support tomorrow.";
       return args.hook.when === "before-insert" ? "It gave back: “This is a test from Splashdown.”" : "Sent, and the server took it.";
+    case "hooks_ai":
+      return ["the AI on this computer", true];
+    case "hooks_runs":
+      return [
+        { at: "2026-11-09T15:04:00-05:00", event: "meeting", hook: "Follow-up email", about: "Pricing review", ok: true, said: "Added to the note", took: 41.2 },
+        { at: "2026-11-09T15:03:00-05:00", event: "meeting", hook: "hooks.zapier.com", about: "Pricing review", ok: false, said: "the server said 410 Gone", took: 0.4 },
+      ];
+    case "hooks_runs_clear":
+      return null;
     case "hooks_secret":
     case "hooks_new_secret":
       return "sds_0123456789abcdef";

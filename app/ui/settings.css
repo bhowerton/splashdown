@@ -273,6 +273,9 @@ dialog.confirm.my-action { width: min(480px, 90vw); }
 .ma-error { margin: 10px 0 0; color: var(--err); font-size: 12.5px; }
 .ma-note { margin: 10px 0 0; color: var(--muted); font-size: 12.5px; line-height: 1.45; }
 .ma-buttons { display: flex; gap: 6px; flex-shrink: 0; }
+.ma-form textarea.ma-instruction { min-height: 96px; }
+.ma-result { white-space: pre-wrap; max-height: 180px; overflow-y: auto; overflow-wrap: anywhere; }
+.hk-run { display: block; margin-top: 4px; overflow-wrap: anywhere; }
 
 /* Privacy → Coding agents → Set up an agent: a button or two per agent. */
 .row-acts { display: flex; gap: 10px; align-items: center; margin-left: auto; flex-shrink: 0; }
