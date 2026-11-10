@@ -36,6 +36,11 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
   - Stopping a reading with Esc no longer does its work inside the key listener, which Windows can drop for being slow, leaving the dictation key dead until a restart.
   - A built-in model that hangs is given up on after 5 minutes instead of holding dictation up for good, and a very long reply is no longer cut off by the model's own idle timer.
   - A damaged video file that reports no sample rate no longer stalls the transcription queue.
+  - Long dictations in Chinese, Japanese, Korean, Thai and other scripts that aren't Latin are no longer cut short by the AI pass.
+  - Snippets: a trigger said at the start of a sentence works in any alphabet ("Мой адрес"), and a trigger in Chinese, Japanese or Thai is found inside a sentence.
+  - A model download that finished but couldn't be put in place isn't downloaded again, and one carried on later is never joined to a file that was replaced in the meantime.
+  - Settings: what you're typing in a preset, an API key, a writing style or a watched folder is no longer wiped when a save finishes a moment later.
+  - Notes: Move to the Trash deletes the note it asked about, not one that opened behind the question.
 
 ## 0.11.0 — 2026-11-08
 

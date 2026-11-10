@@ -89,14 +89,22 @@ async function finishRename(e) {
 
 async function deleteNote() {
   if (!current.path || locked()) return;
+  // The note the question is about. Another can open behind the question
+  // (a meeting starting, the next transcript, a shortcut); that one isn't
+  // the one to delete.
+  const path = current.path;
   const ok = await askConfirm(`Move this note to the ${TRASH}?`, {
     action: `Move to ${TRASH}`,
     detail: isMac ? "You can get it back from the Trash in Finder." : "You can get it back from the Recycle Bin.",
   });
   if (!ok) return;
+  if (current.path !== path) {
+    toast("Another note opened meanwhile, so nothing was deleted.", true);
+    return;
+  }
   await saveNow();
   try {
-    await invoke("notes_delete", { path: current.path });
+    await invoke("notes_delete", { path });
     toast(isMac ? "Moved to the Trash" : "Moved to the Recycle Bin");
     await refresh();
     const next = notes[0];

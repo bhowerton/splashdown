@@ -96,6 +96,8 @@ function fillList(id, items = []) {
 function renderKeys() {
   $("keys-where").textContent = state.platform === "macos" ? "stored in your Keychain" : "stored in Windows Credential Manager";
   const host = $("keys");
+  // Not while a key is being typed or pasted in.
+  if (typingTextIn(host)) return;
   host.replaceChildren(
     ...state.keys.map((k) => {
       const info = KEY_INFO[k.name];
@@ -144,6 +146,9 @@ async function saveKey(name, input, btn) {
   try {
     const r = await invoke("save_key", { name, value });
     state = r.state;
+    // Saved with Return, the field still has the keyboard, and the keys
+    // aren't redrawn while one is being typed in: it's done with now.
+    input.blur();
     render();
     toast(r.engine_error ? `Key saved — but dictation isn't ready: ${r.engine_error}` : "Key verified and saved");
   } catch (e) {

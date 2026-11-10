@@ -296,3 +296,15 @@ function typingIn(host) {
   const el = document.activeElement;
   return !!el && host.contains(el) && el.matches("input, textarea, select, [contenteditable]");
 }
+
+/** Whether the keyboard is in a field of `host` that takes text. For parts
+ *  that also hold tick boxes and menus, which must be redrawn after one of
+ *  those changes but not while words are being typed. */
+function typingTextIn(host) {
+  const el = document.activeElement;
+  return (
+    !!el &&
+    host.contains(el) &&
+    el.matches('textarea, input:not([type]), input[type="text"], input[type="password"], input[type="search"], input[type="url"], [contenteditable]')
+  );
+}

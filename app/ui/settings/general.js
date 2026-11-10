@@ -579,6 +579,8 @@ $("gen-volume").addEventListener("change", (e) => {
 async function loadStyles() {
   const host = $("style-kinds");
   const kinds = await invoke("style_profiles").catch(() => []);
+  // Not while a description is being edited.
+  if (typingTextIn(host)) return;
   const shown = kinds.filter((k) => k.profile || k.edits);
   if (!shown.length) {
     const none = document.createElement("div");
@@ -656,6 +658,8 @@ function showLearned(words) {
 /** A row per watched folder: where its notes go, subtitles beside the
  *  files, and the files that were there before it was added. */
 function renderWatched(folders) {
+  // Not while a folder's "notes go in" is being typed.
+  if (typingTextIn($("nt-watched"))) return;
   const rows = folders.map((f) => {
     const row = document.createElement("div");
     row.className = "watch-row";

@@ -63,7 +63,54 @@ pub(super) async fn download_with(
         }
     }
     rename(&part, dest).await?;
+    let _ = std::fs::remove_file(tag_file(&part));
     Ok(dest.to_path_buf())
+}
+
+/// Beside a `.part`: what the server said of the file it is part of.
+fn tag_file(part: &Path) -> PathBuf {
+    let mut name = part.as_os_str().to_owned();
+    name.push(".etag");
+    PathBuf::from(name)
+}
+
+/// What the server said of a file when its download started: its tag for
+/// that version of the file (a strong `ETag`, if it gave one) and its
+/// length. With these the rest is only ever added to the same version,
+/// and a part that already has all of it is known to.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct Started {
+    tag: Option<String>,
+    total: Option<u64>,
+}
+
+impl Started {
+    /// A line each: the tag (or nothing), then the length (or nothing).
+    fn read(file: &Path) -> Self {
+        let text = std::fs::read_to_string(file).unwrap_or_default();
+        let mut lines = text.lines().map(str::trim);
+        Started {
+            tag: lines.next().filter(|t| !t.is_empty()).map(str::to_string),
+            total: lines.next().and_then(|n| n.parse().ok()),
+        }
+    }
+
+    fn write(&self, file: &Path) {
+        let total = self.total.map(|n| n.to_string()).unwrap_or_default();
+        let text = format!("{}\n{total}\n", self.tag.as_deref().unwrap_or_default());
+        let _ = std::fs::write(file, text);
+    }
+}
+
+/// The server's strong tag for what it's sending, if it gave one (a weak
+/// one, `W/"…"`, doesn't promise the same bytes).
+fn strong_tag(resp: &reqwest::Response) -> Option<String> {
+    resp.headers()
+        .get(reqwest::header::ETAG)
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|t| !t.is_empty() && !t.starts_with("W/"))
+        .map(str::to_string)
 }
 
 /// Why one try at a download failed.
@@ -84,9 +131,23 @@ pub(super) async fn fetch(
 ) -> Result<(), Failed> {
     let again = |e: String| Failed::Again(ProviderError::Network(e));
     let have = std::fs::metadata(part).map_or(0, |m| m.len());
+    let tag_file = tag_file(part);
+    let started = Started::read(&tag_file);
+    // The part has all of it: an earlier run finished downloading and
+    // couldn't put the file in place. Nothing to fetch.
+    if have > 0 && started.total == Some(have) {
+        progress(have, Some(have));
+        return Ok(());
+    }
     let mut request = client.get(url);
     if have > 0 {
         request = request.header(reqwest::header::RANGE, format!("bytes={have}-"));
+        // Only the rest of the file this part is of: a server that goes
+        // by this sends the new file whole if it has been replaced since.
+        // (Not all do, so the tag is compared below as well.)
+        if let Some(tag) = &started.tag {
+            request = request.header(reqwest::header::IF_RANGE, tag);
+        }
     }
     let mut resp = tokio::time::timeout(stall, request.send())
         .await
@@ -94,8 +155,22 @@ pub(super) async fn fetch(
         .map_err(|e| again(e.to_string()))?;
     let status = resp.status();
     if status == reqwest::StatusCode::RANGE_NOT_SATISFIABLE {
-        // The partial file is no use (the file changed?): start over.
+        // Nothing comes after what the part has. If that's because it has
+        // all of it (an earlier run finished downloading and couldn't put
+        // the file in place), it's done; it isn't fetched again.
+        let whole = resp
+            .headers()
+            .get(reqwest::header::CONTENT_RANGE)
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.trim().strip_prefix("bytes */"))
+            .and_then(|n| n.trim().parse::<u64>().ok());
+        if have > 0 && whole == Some(have) {
+            progress(have, Some(have));
+            return Ok(());
+        }
+        // Otherwise the partial file is no use (the file changed): start over.
         let _ = std::fs::remove_file(part);
+        let _ = std::fs::remove_file(&tag_file);
         return Err(again("the partial download didn't match".into()));
     }
     if status.is_server_error() || status == reqwest::StatusCode::TOO_MANY_REQUESTS {
@@ -113,8 +188,23 @@ pub(super) async fn fetch(
             .get(reqwest::header::CONTENT_RANGE)
             .and_then(|v| v.to_str().ok())
             .is_some_and(|v| v.starts_with(&format!("bytes {have}-")));
+    let tag = strong_tag(&resp);
+    if resumed
+        && let (Some(was), Some(now)) = (&started.tag, &tag)
+        && was != now
+    {
+        // The file was replaced since the part was begun: its end
+        // doesn't belong to this beginning. From the start, next try.
+        let _ = std::fs::remove_file(part);
+        let _ = std::fs::remove_file(&tag_file);
+        return Err(again("the file changed since the download began".into()));
+    }
     let start = if resumed { have } else { 0 };
     let total = resp.content_length().map(|n| n + start);
+    if !resumed {
+        // A fresh start: note which version of the file this is.
+        Started { tag, total }.write(&tag_file);
+    }
     let file = std::fs::OpenOptions::new()
         .create(true)
         .write(true)
@@ -198,6 +288,9 @@ mod tests {
     enum Serve {
         /// The file, or the rest of it from a `Range`.
         Rest,
+        /// The rest from a `Range`, whichever version of the file the
+        /// request says its part is of (as some hosts do).
+        RestOfAnything,
         /// The whole file whatever was asked for.
         Whole,
         /// Promises the file but sends this many bytes and hangs up.
@@ -206,6 +299,9 @@ mod tests {
         StallAfter(usize),
         NotFound,
     }
+
+    /// The tag the server gives its file.
+    const TAG: &str = "\"v1\"";
 
     /// A one-file HTTP server on localhost; returns the file's address.
     fn server(body: Vec<u8>, script: Vec<Serve>) -> String {
@@ -219,12 +315,30 @@ mod tests {
                 let mut reader = BufReader::new(conn.try_clone().unwrap());
                 let mut line = String::new();
                 while reader.read_line(&mut line).is_ok_and(|n| n > 2) {
-                    if let Some(v) = line.to_ascii_lowercase().strip_prefix("range: bytes=") {
+                    let header = line.to_ascii_lowercase();
+                    if let Some(v) = header.strip_prefix("range: bytes=") {
                         from = v.trim().trim_end_matches('-').parse().unwrap();
+                    }
+                    // The rest of another version of the file: all of
+                    // this one instead.
+                    if let Some(v) = header.strip_prefix("if-range:")
+                        && v.trim() != TAG
+                        && !matches!(script[i.min(script.len() - 1)], Serve::RestOfAnything)
+                    {
+                        from = 0;
                     }
                     line.clear();
                 }
                 let len = body.len();
+                if from >= len && matches!(script[i.min(script.len() - 1)], Serve::Rest) {
+                    let _ = conn.write_all(
+                        format!(
+                            "HTTP/1.1 416 Range Not Satisfiable\r\nContent-Range: bytes */{len}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+                        )
+                        .as_bytes(),
+                    );
+                    continue;
+                }
                 let head = |status: &str, from: usize| {
                     let range = if from > 0 {
                         format!("Content-Range: bytes {from}-{}/{len}\r\n", len - 1)
@@ -232,7 +346,7 @@ mod tests {
                         String::new()
                     };
                     format!(
-                        "HTTP/1.1 {status}\r\nContent-Length: {}\r\n{range}Connection: close\r\n\r\n",
+                        "HTTP/1.1 {status}\r\nContent-Length: {}\r\nETag: {TAG}\r\n{range}Connection: close\r\n\r\n",
                         len - from
                     )
                 };
@@ -244,7 +358,7 @@ mod tests {
                     }
                 };
                 let _ = match script[i.min(script.len() - 1)] {
-                    Serve::Rest => conn
+                    Serve::Rest | Serve::RestOfAnything => conn
                         .write_all(head(ok(from), from).as_bytes())
                         .and_then(|()| conn.write_all(&body[from..])),
                     Serve::Whole => conn
@@ -292,6 +406,7 @@ mod tests {
         get(&url, &dest).await.unwrap();
         assert_eq!(std::fs::read(&dest).unwrap(), file());
         assert!(!dir.join("model.gguf.part").exists());
+        assert!(!dir.join("model.gguf.part.etag").exists());
     }
 
     #[tokio::test]
@@ -317,6 +432,68 @@ mod tests {
         .unwrap();
         assert_eq!(first, Some(120_000), "carried on from the part");
         assert_eq!(std::fs::read(&dest).unwrap(), file());
+    }
+
+    #[tokio::test]
+    async fn a_finished_part_is_put_in_place_not_fetched_again() {
+        // An earlier run downloaded all of it and couldn't move it.
+        let dir = scratch("finished");
+        let dest = dir.join("model.gguf");
+        std::fs::write(dir.join("model.gguf.part"), file()).unwrap();
+        let url = server(file(), vec![Serve::Rest]);
+        let mut seen = Vec::new();
+        download_with(&url, &dest, STALL, Duration::ZERO, |done, total| {
+            seen.push((done, total));
+        })
+        .await
+        .unwrap();
+        assert_eq!(seen, [(200_000, Some(200_000))], "nothing was fetched");
+        assert_eq!(std::fs::read(&dest).unwrap(), file());
+        assert!(!dir.join("model.gguf.part").exists());
+    }
+
+    #[tokio::test]
+    async fn a_part_of_a_file_since_replaced_isn_t_added_to() {
+        let dir = scratch("replaced");
+        let dest = dir.join("model.gguf");
+        // 120,000 bytes of the file as it was last week.
+        // A server that sends the new file whole when told which version
+        // the part is of, and one that sends the rest regardless.
+        for (name, script) in [
+            ("goes-by-it", vec![Serve::Rest]),
+            ("doesn-t", vec![Serve::RestOfAnything, Serve::Rest]),
+        ] {
+            let dir = scratch(name);
+            let dest = dir.join("model.gguf");
+            std::fs::write(dir.join("model.gguf.part"), vec![9u8; 120_000]).unwrap();
+            std::fs::write(dir.join("model.gguf.part.etag"), "\"last-week\"\n150000\n").unwrap();
+            let url = server(file(), script);
+            get(&url, &dest).await.unwrap();
+            assert_eq!(
+                std::fs::read(&dest).unwrap(),
+                file(),
+                "{name}: not old and new joined"
+            );
+            assert!(!dir.join("model.gguf.part.etag").exists());
+        }
+        let _ = (dir, dest);
+    }
+
+    #[tokio::test]
+    async fn a_part_known_to_be_whole_needs_no_server() {
+        // What the server said when the download began is kept beside the
+        // part: with all of it there, nothing is asked for again.
+        let dir = scratch("whole");
+        let dest = dir.join("model.gguf");
+        std::fs::write(dir.join("model.gguf.part"), file()).unwrap();
+        std::fs::write(dir.join("model.gguf.part.etag"), "\"v1\"\n200000\n").unwrap();
+        let url = server(file(), vec![Serve::NotFound]);
+        get(&url, &dest).await.unwrap();
+        assert_eq!(std::fs::read(&dest).unwrap(), file());
+        assert_eq!(
+            Started::read(Path::new("/nowhere/at/all")),
+            Started::default()
+        );
     }
 
     #[tokio::test]

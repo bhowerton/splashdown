@@ -150,7 +150,10 @@ function renderPresetsView() {
   if (!presets.some((p) => p.id === selectedPreset)) selectedPreset = presets[0]?.id;
   $("preset-list").replaceChildren(...presets.map(presetListItem), button("+ New preset", chooseTemplate, "preset-item preset-add"));
   const p = presets.find((x) => x.id === selectedPreset);
-  $("preset-edit").replaceChildren(...(p ? presetEditor(p) : []));
+  // Not while the user is typing in it: a save's answer arriving a moment
+  // later would replace the field and what was typed since.
+  const editor = $("preset-edit");
+  if (!typingTextIn(editor)) editor.replaceChildren(...(p ? presetEditor(p) : []));
 }
 
 /** One line in the list: number, name, where it's used. Draggable. */

@@ -32,13 +32,31 @@ pub fn mark_snippets(text: &str, snippets: &[Snippet]) -> (String, Vec<usize>) {
                 .collect()
         })
         .collect();
+    // A trigger in a script written without spaces (Chinese, Japanese,
+    // Thai) sits inside a sentence with nothing around it to split on:
+    // those are found wherever they are, longest first.
+    let mut text = text.to_string();
+    let mut used = Vec::new();
+    let mut spaceless: Vec<(usize, &str)> = snippets
+        .iter()
+        .enumerate()
+        .map(|(i, s)| (i, s.trigger.trim()))
+        .filter(|(_, t)| t.chars().any(unspaced))
+        .collect();
+    spaceless.sort_by_key(|(_, t)| std::cmp::Reverse(t.chars().count()));
+    for (i, trigger) in spaceless {
+        if text.contains(trigger) {
+            text = text.replace(trigger, &placeholder(i));
+            used.push(i);
+        }
+    }
+
     let tokens: Vec<&str> = text.split_whitespace().collect();
     if triggers.iter().all(Vec::is_empty) || tokens.is_empty() {
-        return (text.to_string(), Vec::new());
+        return (text.clone(), used);
     }
 
     let mut out: Vec<String> = Vec::with_capacity(tokens.len());
-    let mut used = Vec::new();
     let mut i = 0;
     while i < tokens.len() {
         // Longest trigger first, so "my work email" beats "my work".
@@ -49,7 +67,9 @@ pub fn mark_snippets(text: &str, snippets: &[Snippet]) -> (String, Vec<usize>) {
             .filter(|(_, t)| {
                 t.iter()
                     .zip(&tokens[i..])
-                    .all(|(w, tok)| bare(tok).eq_ignore_ascii_case(w))
+                    // Any alphabet's capitals: a trigger said at the
+                    // start of a sentence comes capitalized.
+                    .all(|(w, tok)| bare(tok).to_lowercase() == *w)
             })
             .max_by_key(|(_, t)| t.len());
         match hit {
@@ -139,7 +159,7 @@ pub fn needs_space(before: Option<char>, first: Option<char>) -> bool {
 
 /// Characters of scripts written without spaces between words, and
 /// full-width punctuation.
-fn unspaced(c: char) -> bool {
+pub(crate) fn unspaced(c: char) -> bool {
     matches!(c as u32,
         0x0E00..=0x0EFF   // Thai, Lao
         | 0x1000..=0x109F // Myanmar
@@ -193,6 +213,42 @@ mod tests {
             None,
             "dropped placeholder"
         );
+    }
+
+    #[test]
+    fn triggers_work_in_other_alphabets_and_scripts() {
+        let s = vec![
+            Snippet {
+                trigger: "мой адрес".into(),
+                text: "Москва".into(),
+            },
+            Snippet {
+                trigger: "Über mich".into(),
+                text: "Ich bin Ben.".into(),
+            },
+            Snippet {
+                trigger: "我的地址".into(),
+                text: "北京市".into(),
+            },
+            Snippet {
+                trigger: "我的地址簿".into(),
+                text: "通讯录".into(),
+            },
+        ];
+        // Capitalized at the start of a sentence, as speech-to-text writes it.
+        assert_eq!(mark_snippets("Мой адрес.", &s), ("[[s1]].".into(), vec![0]));
+        assert_eq!(
+            mark_snippets("das steht in über mich", &s).0,
+            "das steht in [[s2]]"
+        );
+        // Inside a sentence written without spaces; the longer trigger first.
+        assert_eq!(
+            mark_snippets("请寄到我的地址。", &s),
+            ("请寄到[[s3]]。".into(), vec![2])
+        );
+        assert_eq!(mark_snippets("打开我的地址簿", &s).0, "打开[[s4]]");
+        let (marked, used) = mark_snippets("请寄到我的地址。", &s);
+        assert_eq!(fill_snippets(&marked, &used, &s).unwrap(), "请寄到北京市。");
     }
 
     #[test]

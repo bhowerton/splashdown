@@ -230,9 +230,9 @@ pub fn build(task: PromptTask<'_>, ctx: &PromptContext) -> Prompt {
     // The output budget follows what the user said or selected, not the
     // field text. An instruction may work on the clipboard ("summarize
     // what I copied"), so for those it counts too.
-    let mut input_chars: usize = blocks.iter().map(|(_, t)| t.chars().count()).sum();
+    let mut input_tokens: usize = blocks.iter().map(|(_, t)| estimated_tokens(t)).sum();
     if task.mode() != Mode::Dictate {
-        input_chars += ctx.clipboard.as_deref().map_or(0, |t| t.chars().count());
+        input_tokens += ctx.clipboard.as_deref().map_or(0, estimated_tokens);
     }
     let field = ctx.field_text.as_deref().filter(|t| !t.trim().is_empty());
     let clipboard = ctx.clipboard.as_deref().filter(|t| !t.trim().is_empty());
@@ -252,7 +252,7 @@ pub fn build(task: PromptTask<'_>, ctx: &PromptContext) -> Prompt {
     Prompt {
         system,
         user,
-        max_tokens: max_tokens_for(task.mode(), input_chars),
+        max_tokens: max_tokens_for(task.mode(), input_tokens),
     }
 }
 
@@ -424,13 +424,32 @@ pub(crate) fn escape(text: &str, tag: &str) -> String {
     out
 }
 
-fn max_tokens_for(mode: Mode, input_chars: usize) -> u32 {
-    // ~4 chars per token. Cleanup output is about input-sized; instructions
-    // and transforms can expand (an email from a one-liner).
-    let input_tokens = (input_chars / 4) as u32;
+/// Roughly how many tokens `text` is: about four characters to a token in
+/// English and other plain Latin text, about one a character in other
+/// alphabets, and more in scripts written without spaces (Chinese,
+/// Japanese, Thai) and Korean. Counting every character as a quarter of a
+/// token cut long dictations in those short.
+fn estimated_tokens(text: &str) -> usize {
+    let (mut plain, mut other, mut dense) = (0usize, 0usize, 0usize);
+    for c in text.chars() {
+        if c.is_ascii() {
+            plain += 1;
+        } else if crate::spoken::unspaced(c) || matches!(c as u32, 0xAC00..=0xD7AF) {
+            dense += 1;
+        } else {
+            other += 1;
+        }
+    }
+    plain / 4 + other + dense * 3 / 2
+}
+
+fn max_tokens_for(mode: Mode, input_tokens: usize) -> u32 {
+    // Cleanup output is about input-sized; instructions and transforms can
+    // expand (an email from a one-liner).
+    let input_tokens = u32::try_from(input_tokens).unwrap_or(u32::MAX);
     let budget = match mode {
-        Mode::Dictate => input_tokens * 2 + 128,
-        _ => input_tokens * 3 + 512,
+        Mode::Dictate => input_tokens.saturating_mul(2).saturating_add(128),
+        _ => input_tokens.saturating_mul(3).saturating_add(512),
     };
     budget.clamp(256, 4096)
 }
@@ -700,5 +719,14 @@ mod tests {
     fn token_budget_is_clamped() {
         assert_eq!(max_tokens_for(Mode::Dictate, 10), 256);
         assert_eq!(max_tokens_for(Mode::Transform, 1_000_000), 4096);
+        assert_eq!(max_tokens_for(Mode::Transform, usize::MAX), 4096);
+        // English as before: four characters to a token.
+        assert_eq!(estimated_tokens(&"word ".repeat(200)), 250);
+        // 600 Chinese characters need room for about as many tokens again,
+        // not a quarter of that.
+        let chinese = "我们明天下午三点开会".repeat(60);
+        assert_eq!(chinese.chars().count(), 600);
+        assert!(max_tokens_for(Mode::Dictate, estimated_tokens(&chinese)) >= 1200);
+        assert!(estimated_tokens(&"привет ".repeat(100)) >= 600);
     }
 }
