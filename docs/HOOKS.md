@@ -130,7 +130,7 @@ What to expect from the AI on this computer (a small model):
 
 - **A brief before a meeting needs exact wording too:** with the ready-made one it lists the decisions and to-dos of the last meetings and says which meeting each is from. From notes with summaries it finds nearly all of them. From a transcript alone it can call something decided that was only asked about, or mix up who something is for. It lists everything the notes say is to do, including what you have done since without saying so in a meeting.
 
-A cloud model reads the whole meeting at once and does both well. Either way, check what it wrote before you send it on.
+A cloud model reads the whole meeting at once and answers in about a second. A small one, like the default, is about as accurate as the AI on this computer, with different slips; a larger one does noticeably better. The scores are in [eval/README.md](../eval/README.md). Either way, check what it wrote before you send it on.
 
 ### What it can't do
 

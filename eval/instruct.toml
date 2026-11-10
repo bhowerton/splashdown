@@ -24,7 +24,9 @@
 #   what       what the text is, in words, when `kind` doesn't say it
 #   notes      true: check the notes taken from each part of a long text,
 #              not a result written from them. A long meeting's summary is
-#              written from those notes by the summary's own prompt
+#              written from those notes by the summary's own prompt. Left
+#              out for a model that reads the whole text at once: the
+#              app takes no notes then
 #   days       for a schedule: the days its notes are from
 #   headings   headings the result must have, each on a line of its own
 #   want       lines the result must have: `has` are words one line must

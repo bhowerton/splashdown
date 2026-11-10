@@ -321,19 +321,25 @@ pub(super) async fn instruct(
     .await;
     eprintln!("\nInstruct eval · {name}\n");
     let mut latencies = Vec::new();
-    let (mut passed, mut errors) = (0, 0);
+    let (mut passed, mut errors, mut ran) = (0, 0, 0);
     let (mut found, mut wanted) = (0, 0);
     let mut cost = splashdown_core::Usage::default();
     for case in cases {
         let source = text(case, dir)?;
         let instruction = instruction(file, case)?;
+        // As a long meeting's summary takes its notes
+        // (app/src-tauri/src/meeting/summary.rs): short enough to leave the
+        // summary's prompt its room, and none at all for a model that reads
+        // the whole meeting, so the case isn't one for that model.
+        let fits = model.context_window().saturating_sub(2000) * 3 / 4;
+        if case.notes && splashdown_core::prompt::estimated_tokens(&source) <= fits {
+            println!("– {:<26} it reads this whole: no notes to check", case.id);
+            continue;
+        }
+        ran += 1;
         let started = Instant::now();
         let about = about(case, &source);
         let result = if case.notes {
-            // As a long meeting's summary takes them
-            // (app/src-tauri/src/meeting/summary.rs): the model's own notes,
-            // short enough to leave the summary's prompt its room.
-            let fits = model.context_window().saturating_sub(2000) * 3 / 4;
             instruct::condense(model.as_ref(), &instruction, &source, &about, fits).await
         } else {
             instruct::run(model.as_ref(), &instruction, &source, &about).await
@@ -380,7 +386,7 @@ pub(super) async fn instruct(
             }
         }
     }
-    summary(&name, passed, cases.len(), errors, &mut latencies);
+    summary(&name, passed, ran, errors, &mut latencies);
     println!(
         "{name}: {found} of {wanted} wanted lines found ({:.0}%) · cost ${:.4}",
         found as f64 * 100.0 / wanted.max(1) as f64,
