@@ -97,7 +97,12 @@ impl Controller {
             content: String::new(),
             instruction: Some(transform.instruction.clone()),
             selection: Some(text.to_string()),
-            context: engine.context.clone(),
+            context: splashdown_core::PromptContext {
+                // A transform by name, with nothing said on top, is its own
+                // saved instruction: not a spoken command to interpret.
+                saved_instruction: !id.is_empty() && extra.is_none(),
+                ..engine.context.clone()
+            },
         }))
         .map_err(|e| errors::instruction(&e, pipeline))?;
         crate::spend::record_outcome(&outcome);

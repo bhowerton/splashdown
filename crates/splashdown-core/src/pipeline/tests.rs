@@ -449,6 +449,33 @@ fn an_instruction_for_a_selection_can_ask_to_hear_it() {
 }
 
 #[test]
+fn a_saved_transform_s_instruction_is_never_a_command() {
+    // The meeting summary, run by name on notes that talk of sending and
+    // booking: nothing was said, so there's no command to find in it. Its
+    // result used to be thrown away when the interpreter found one.
+    let job = |saved| TextJob {
+        mode: Mode::Transform,
+        content: String::new(),
+        instruction: Some("Summarize this meeting transcript.".into()),
+        selection: Some("[3:09] You: \"I'll send Dana the numbers.\"".into()),
+        context: PromptContext {
+            saved_instruction: saved,
+            ..PromptContext::default()
+        },
+    };
+    let reply = r#"{"action": "read", "text": "Summarize this"}"#;
+    let (p, _) = pipeline(&[], Some(Ok(reply)));
+    let out = block_on(p.with_actions(true).process_text(job(true))).unwrap();
+    assert_eq!((out.read, out.action), (None, None));
+    assert_eq!(out.text, reply);
+    // Said by the user, the same words are still listened to.
+    let (p, _) = pipeline(&[], Some(Ok(reply)));
+    let out = block_on(p.with_actions(true).process_text(job(false))).unwrap();
+    assert_eq!(out.read.as_deref(), Some("Summarize this"));
+    assert_eq!(out.text, "");
+}
+
+#[test]
 fn guarded_transform_keeps_selection() {
     let (p, _) = pipeline(&["make it shorter"], Some(Ok("  ")));
     let mut job = audio_job(Mode::Transform, false);

@@ -93,6 +93,7 @@ impl Pipeline {
         // to Sam") rather than to change it. That's checked alongside the
         // transform, so it takes no longer.
         let check = job.mode == Mode::Transform
+            && !job.context.saved_instruction
             && !selection.trim().is_empty()
             && !instruction.trim().is_empty();
         let started = Instant::now();

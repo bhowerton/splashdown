@@ -126,12 +126,22 @@ fn readable(
         user_name: setup.user_name,
         today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
     };
+    // A meeting's summary is made of who took what on and what was
+    // decided, so that's what is noted, as who said it; the summary's own
+    // instruction is for writing it from those notes. A recording's (a
+    // talk, a video) is of its main points, noted as the model finds them.
+    let (noting, notes) = if transform == "meeting-summary" {
+        (instruct::SUMMARY_NOTES, instruct::Notes::Quotes)
+    } else {
+        (instruction.as_str(), instruct::Notes::Free)
+    };
     let result = tauri::async_runtime::block_on(instruct::condense(
         model.as_ref(),
-        &instruction,
+        noting,
         &input,
         &about,
         fits,
+        notes,
     ));
     let usage = match &result {
         Ok(done) => done.usage,
@@ -145,10 +155,7 @@ fn readable(
                 "a long meeting was read in {} parts for its summary",
                 done.parts
             );
-            Ok(format!(
-                "The meeting was too long to read at once, so these are notes taken from each part of it, in order:\n\n{}",
-                done.text
-            ))
+            Ok(instruct::summary_input(&done.text))
         }
         Err(failed) => Err(crate::errors::pipeline(
             &splashdown_core::PipelineError::Llm(failed.error),

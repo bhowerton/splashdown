@@ -35,6 +35,12 @@ pub struct PromptContext {
     /// (the word, then what was heard), from the user's corrections: a
     /// hint, used only when the sentence means that word.
     pub misheard: Vec<(String, String)>,
+    /// A transform's instruction is a saved one (the meeting summary, a
+    /// transform picked from the menu), not something the user just said:
+    /// it's followed as it is, never read as a command to do something,
+    /// read aloud or write a draft. Read as one, its result is thrown
+    /// away, and a meeting was left with no summary.
+    pub saved_instruction: bool,
 }
 
 /// How much the cleanup pass changes plain dictation. Instructions and

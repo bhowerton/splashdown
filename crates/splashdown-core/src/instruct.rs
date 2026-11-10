@@ -205,13 +205,15 @@ fn part_request(
     (number, of): (usize, usize),
     about: &About,
     window: usize,
-    quoting: bool,
+    notes: Notes,
 ) -> TextRequest {
     let system = filled(PART_SYSTEM, about)
         .replace("{PART}", &number.to_string())
         .replace("{PARTS}", &of.to_string());
     let mut user = blocks(instruction, part, about);
-    if quoting && is_transcript(part) {
+    // The job once more, after the task: only for a transcript, whose
+    // lines say who spoke.
+    if notes == Notes::Quotes && is_transcript(part) {
         user.push_str(PART_LAST);
     }
     TextRequest {
@@ -307,7 +309,7 @@ pub async fn run(
     let (material, parts) = if estimated_tokens(text) <= fits {
         (text.to_string(), 1)
     } else {
-        let notes = condensed(model, instruction, text, about, fits, true).await?;
+        let notes = condense(model, instruction, text, about, fits, Notes::Quotes).await?;
         usage += notes.usage;
         (notes.text, notes.parts)
     };
@@ -363,39 +365,43 @@ pub async fn notes(
     if estimated_tokens(text) <= fits {
         return Ok(None);
     }
-    condensed(model, instruction, text, about, fits, true)
+    condense(model, instruction, text, about, fits, Notes::Quotes)
         .await
         .map(Some)
 }
 
+/// How the notes on each part of a transcript are asked for. A small
+/// model left to itself does the task on each part, drops who spoke and
+/// reads tasks into remarks; what it's told last, after the task, is what
+/// it does (eval/README.md, 2026-11-10).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Notes {
+    /// Whatever the model makes of the part for the task.
+    Free,
+    /// Who said what, word for word, for a result that goes by who said
+    /// it: `run` takes its notes this way, and so does a meeting's summary,
+    /// with `SUMMARY_NOTES` as what to note.
+    Quotes,
+}
+
+/// What to note from each part of a meeting too long to read at once, for
+/// its summary. The summary's own instruction is long and full of
+/// headings, and a small model given that writes a summary of each part
+/// whatever it's told after: remarks become action items, and a task goes
+/// to whoever was named last. A short ask like a hook's is quoted from
+/// faithfully; the summary is then written from the quotes.
+pub const SUMMARY_NOTES: &str = "For a summary of this meeting, list everything someone said they will do or agreed to do, everything someone said was decided or agreed, and any question nobody answered. Then say in a line what was talked about.";
+
 /// Notes on `text` for `instruction`, short enough to be read in `target`
 /// tokens: taken a part at a time, and from the notes again while they're
 /// still too long. `Done::text` is empty when no part had anything.
-///
-/// The notes are whatever the model makes of each part for the task. A
-/// long meeting's summary is written from these: asked to quote there, the
-/// built-in model notes far less of what a summary wants (eval/README.md,
-/// 2026-11-10), so quoting is `run`'s own.
 pub async fn condense(
     model: &dyn TextModel,
     instruction: &str,
     text: &str,
     about: &About,
     target: usize,
-) -> Result<Done, Failed> {
-    condensed(model, instruction, text, about, target, false).await
-}
-
-/// `condense`; with `quoting`, the notes on a transcript are asked for as
-/// who said what, word for word, so that nobody's words become someone
-/// else's on the way to the result.
-async fn condensed(
-    model: &dyn TextModel,
-    instruction: &str,
-    text: &str,
-    about: &About,
-    target: usize,
-    quoting: bool,
+    notes: Notes,
 ) -> Result<Done, Failed> {
     let window = model.context_window();
     let fits = room(
@@ -417,7 +423,7 @@ async fn condensed(
         if round == 0 {
             read = pieces.len();
         }
-        let mut notes = Vec::new();
+        let mut taken = Vec::new();
         for (i, piece) in pieces.iter().enumerate() {
             let noted = note(
                 model,
@@ -426,15 +432,16 @@ async fn condensed(
                 (i + 1, pieces.len()),
                 about,
                 &mut usage,
-                quoting,
+                // Notes on notes aren't a transcript: left as they come.
+                notes,
             )
             .await;
             match noted {
-                Ok(text) => notes.extend(text),
+                Ok(text) => taken.extend(text),
                 Err(error) => return Err(failed(error, usage)),
             }
         }
-        material = notes.join("\n\n");
+        material = taken.join("\n\n");
         let now = estimated_tokens(&material);
         if now <= target {
             return Ok(Done {
@@ -451,6 +458,16 @@ async fn condensed(
     Err(failed(ProviderError::TooLong, usage))
 }
 
+/// What a long meeting's summary is written from, in place of its
+/// transcript: the notes taken with `SUMMARY_NOTES`, and what they are.
+/// Each note names its speaker, which the summary must carry over: a list
+/// of tasks with no names reads as all the user's own.
+pub fn summary_input(notes: &str) -> String {
+    format!(
+        "The meeting was too long to read at once, so these are notes taken from each part of it, in order. Each is the time, who said it, and their words: what someone said they will do is theirs, so name them in its action item (\"You\" is the user).\n\n{notes}"
+    )
+}
+
 /// The notes on one part, which is cut in two (and those again) if the
 /// model finds it too long after all. None when it has nothing.
 async fn note(
@@ -460,13 +477,13 @@ async fn note(
     position: (usize, usize),
     about: &About,
     usage: &mut Usage,
-    quoting: bool,
+    kind: Notes,
 ) -> Result<Vec<String>, ProviderError> {
     let window = model.context_window();
     let mut waiting = vec![(piece.to_string(), 0usize)];
     let mut notes = Vec::new();
     while let Some((piece, halved)) = waiting.pop() {
-        let request = part_request(instruction, &piece, position, about, window, quoting);
+        let request = part_request(instruction, &piece, position, about, window, kind);
         match model.complete(&request).await {
             Ok(completion) => {
                 *usage += completion.usage;
@@ -936,18 +953,36 @@ mod tests {
         // A week of notes isn't one, with a short transcript among them.
         assert!(!is_transcript(week));
         assert!(!is_transcript("**[0:01] You:** One turn.\n"));
-        let ends = |part: &str, quoting| {
+        let asks = |part: &str, notes| {
             part_request(
                 "List what I said I'd do.",
                 part,
                 (1, 2),
                 &about,
                 4096,
-                quoting,
+                notes,
             )
             .user
-            .ends_with(PART_LAST)
         };
+        let ends = |part: &str, quoting: bool| {
+            let notes = if quoting { Notes::Quotes } else { Notes::Free };
+            asks(part, notes).ends_with(PART_LAST)
+        };
+        // A meeting's summary takes its notes the same way, with a short
+        // ask of its own in place of the summary's long instruction.
+        let request = part_request(
+            SUMMARY_NOTES,
+            &transcript,
+            (1, 2),
+            &about,
+            4096,
+            Notes::Quotes,
+        );
+        assert!(request.user.contains(SUMMARY_NOTES) && request.user.ends_with(PART_LAST));
+        assert!(
+            asks(week, Notes::Free).ends_with("</instruction>\n")
+                || !asks(week, Notes::Free).ends_with(PART_LAST)
+        );
         // For a hook's result: who said what, word for word.
         assert!(ends(&transcript, true));
         // Not for notes, and not when the notes are for a summary.
@@ -960,7 +995,7 @@ mod tests {
             (1, 2),
             &about,
             4096,
-            true,
+            Notes::Quotes,
         );
         let task = request.user.find("List what I said I'd do.").unwrap();
         assert!(task < request.user.find("Don't do that task").unwrap());

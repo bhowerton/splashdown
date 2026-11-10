@@ -74,6 +74,9 @@ impl CleanupCase {
             instruction,
             selection: self.selection.clone(),
             context: PromptContext {
+                // A built-in transform runs by name in the app: its
+                // instruction is a saved one, not something said.
+                saved_instruction: self.transform.is_some(),
                 preset_instructions: self.preset.clone(),
                 app_name: self.app.clone(),
                 field_text: self.context.clone(),

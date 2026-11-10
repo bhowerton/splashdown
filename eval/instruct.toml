@@ -39,6 +39,12 @@
 #              model likes to work out "by Wednesday" into a date, wrongly)
 #   nothing    true: there's nothing to do, so the result must be empty
 #   max_lines  the most lines with text it may have
+#   max_under  the most lines a heading may have under it, as
+#              { "Action items" = 9 }: a summary that makes tasks up has
+#              more than the meeting had
+#   summary    true: write the meeting's summary as the app does (with
+#              `transform`, from notes when the meeting is too long to
+#              read at once) and check that
 #
 # A case passes when nothing is wrong with it. The summary also says how
 # many wanted lines were found over all cases, which moves before the
@@ -148,9 +154,9 @@ never = ["the user", "Subject:"]
 no_dates = true
 max_lines = 24
 
-# The built-in meeting summary, as a long meeting's summary uses this
-# step (app/src-tauri/src/meeting/summary.rs): the notes it's written from
-# must hold what was decided and who took what on.
+# The notes a long meeting's summary is written from, taken as the app
+# takes them (app/src-tauri/src/meeting/summary.rs): they must hold what
+# was decided and who took what on. `transform` only says which summary.
 [[case]]
 id = "summary-notes-hour"
 kind = "meeting"
@@ -172,6 +178,63 @@ want = [
 ]
 never = ["the user"]
 max_lines = 45
+
+# ---------------------------------------------------------------- a meeting's summary
+
+# Six minutes: read at once.
+[[case]]
+id = "summary"
+kind = "meeting"
+file = "meeting-short.md"
+transform = "meeting-summary"
+summary = true
+headings = ["Action items"]
+want = [
+  { has = ["pricing numbers", "Wednesday"], under = "Action items" },
+  { has = ["pricing page", "Friday"], under = "Action items" },
+]
+# Two things were taken on; the rest of the talk is how things are going.
+max_under = { "Action items" = 4 }
+never = ["the user"]
+
+# An hour: from notes, for a model that reads less than that at once.
+[[case]]
+id = "summary-hour"
+kind = "meeting"
+file = "meeting-hour.md"
+transform = "meeting-summary"
+summary = true
+headings = ["Decisions", "Action items"]
+want = [
+  { has = ["launch", "18th"], under = "Decisions" },
+  { has = ["contractor"], under = "Decisions" },
+  { has = ["pricing numbers", "Wednesday"], under = "Action items" },
+  { has = ["support", "tomorrow"], under = "Action items" },
+  { has = ["onboarding draft"], under = "Action items" },
+  { has = ["room", "20th"], under = "Action items" },
+  { has = ["legal", "Acme"], under = "Action items" },
+  { has = ["database migration"], under = "Action items" },
+  { has = ["waitlist email"], under = "Action items" },
+  { has = ["pricing page", "Friday"], under = "Action items" },
+  # Whose they are: a list with no names reads as all the user's own.
+  { has = ["Dana", "pricing page"], under = "Action items" },
+  { has = ["Marcus", "database migration"], under = "Action items" },
+  { has = ["Priya", "waitlist"], under = "Action items" },
+]
+# Eight things were taken on. "We should keep it simple and not add
+# options" is an opinion that comes up all through, not a task, and the
+# waitlist email is Priya's.
+not = [
+  { has = ["add", "options"], under = "Action items" },
+  { has = ["Dana", "waitlist"] },
+  { has = ["Marcus", "waitlist"] },
+  # The room is the user's to book.
+  { has = ["Dana", "room"] },
+  { has = ["Priya", "room"] },
+  { has = ["Marcus", "room"] },
+]
+max_under = { "Action items" = 9, "Decisions" = 3 }
+never = ["the user"]
 
 # ---------------------------------------------------------------- a note from the phone
 

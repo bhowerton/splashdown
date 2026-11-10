@@ -52,6 +52,15 @@ pub(super) struct InstructCase {
     #[serde(default)]
     pub(super) nothing: bool,
     pub(super) max_lines: Option<usize>,
+    /// The most lines a heading may have under it: a summary that makes
+    /// tasks up has more action items than the meeting had.
+    #[serde(default)]
+    pub(super) max_under: BTreeMap<String, usize>,
+    /// Write the meeting's summary as the app does (`transform` on the
+    /// transcript, from notes when it's too long to read at once) and
+    /// check that.
+    #[serde(default)]
+    pub(super) summary: bool,
 }
 
 /// A line of the result: one that has all these words, in any capitals,
@@ -244,7 +253,124 @@ pub(super) fn check(case: &InstructCase, source: &str, result: &str) -> Checked 
             .faults
             .push(format!("{} lines, at most {most}", lines.len()));
     }
+    for (heading, most) in &case.max_under {
+        let under = lines
+            .iter()
+            .filter(|(under, _)| {
+                under
+                    .as_ref()
+                    .is_some_and(|h| h.contains(&heading.to_lowercase()))
+            })
+            .count();
+        if under > *most {
+            checked
+                .faults
+                .push(format!("{under} lines under {heading:?}, at most {most}"));
+        }
+    }
     checked
+}
+
+/// A meeting note's transcript, without its title and who was there: what
+/// the app gives the summary.
+fn transcript(source: &str) -> &str {
+    source
+        .lines()
+        .position(|l| splashdown_core::meeting::Turn::parse(l).is_some())
+        .map_or(source, |first| {
+            let skipped: usize = source.lines().take(first).map(|l| l.len() + 1).sum();
+            &source[skipped.min(source.len())..]
+        })
+        .trim()
+}
+
+/// The notes a long meeting's summary is written from, taken as the app
+/// takes them (app/src-tauri/src/meeting/summary.rs).
+async fn summary_notes(
+    model: &dyn splashdown_core::TextModel,
+    turns: &str,
+    fits: usize,
+) -> Result<splashdown_core::instruct::Done, splashdown_core::instruct::Failed> {
+    use splashdown_core::instruct::{self, About};
+    let about = About {
+        what: "the transcript of a meeting they were in".into(),
+        title: None,
+        user_name: None,
+        today: "Friday, 13 November 2026".into(),
+    };
+    instruct::condense(
+        model,
+        instruct::SUMMARY_NOTES,
+        turns,
+        &about,
+        fits,
+        instruct::Notes::Quotes,
+    )
+    .await
+}
+
+/// A meeting's summary, written as the app writes it
+/// (app/src-tauri/src/meeting/summary.rs and `run_transform`): the
+/// transform's instruction on the transcript; or, when that's longer than
+/// the model reads at once, on notes taken from each part of it. What
+/// comes back is tidied as the app tidies it.
+async fn summarize(
+    pipeline: &Pipeline,
+    model: &dyn splashdown_core::TextModel,
+    transform: &str,
+    instruction: &str,
+    source: &str,
+    fits: usize,
+) -> Result<splashdown_core::instruct::Done, splashdown_core::instruct::Failed> {
+    use splashdown_core::instruct::{self, Done, Failed};
+    let turns = transcript(source);
+    let mut usage = splashdown_core::Usage::default();
+    let (input, parts) = if splashdown_core::prompt::estimated_tokens(turns) <= fits {
+        (turns.to_string(), 1)
+    } else {
+        let notes = summary_notes(model, turns, fits).await?;
+        usage += notes.usage;
+        (instruct::summary_input(&notes.text), notes.parts)
+    };
+    let outcome = pipeline
+        .process_text(TextJob {
+            mode: Mode::Transform,
+            content: String::new(),
+            instruction: Some(instruction.to_string()),
+            selection: Some(input),
+            // As the app runs a transform by name.
+            context: PromptContext {
+                saved_instruction: true,
+                ..PromptContext::default()
+            },
+        })
+        .await
+        .map_err(|e| Failed {
+            error: splashdown_core::ProviderError::Api(e.to_string()),
+            usage,
+        })?;
+    usage += outcome.usage;
+    // A guard that put the text back, or a model that failed, wrote no
+    // summary: the app then leaves the note without one.
+    let text = match &outcome.fallback {
+        Some(Fallback::Guard(reason)) => {
+            return Err(Failed {
+                error: splashdown_core::ProviderError::Api(format!(
+                    "no summary: the guard threw it away ({})",
+                    reason.describe()
+                )),
+                usage,
+            });
+        }
+        Some(Fallback::ModelError(e)) => {
+            return Err(Failed {
+                error: splashdown_core::ProviderError::Api(format!("no summary: {e}")),
+                usage,
+            });
+        }
+        None => splashdown_config::tidy_answer(transform, &outcome.text),
+    };
+    Ok(Done { text, usage, parts })
 }
 
 /// The instruction a case runs: one of the file's, its own, or a built-in
@@ -339,8 +465,19 @@ pub(super) async fn instruct(
         ran += 1;
         let started = Instant::now();
         let about = about(case, &source);
-        let result = if case.notes {
-            instruct::condense(model.as_ref(), &instruction, &source, &about, fits).await
+        let result = if case.summary {
+            let transform = case.transform.as_deref().unwrap_or("meeting-summary");
+            summarize(
+                &pipeline,
+                model.as_ref(),
+                transform,
+                &instruction,
+                &source,
+                fits,
+            )
+            .await
+        } else if case.notes {
+            summary_notes(model.as_ref(), transcript(&source), fits).await
         } else {
             instruct::run(model.as_ref(), &instruction, &source, &about).await
         };
