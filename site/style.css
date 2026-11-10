@@ -51,7 +51,7 @@ code {
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); font-weight: 700; font-size: 19px; }
 .brand:hover { text-decoration: none; }
 .top nav { display: flex; gap: 22px; font-size: 15px; }
-.top nav a { color: var(--muted); }
+.top nav a { color: var(--muted); white-space: nowrap; }
 .top nav a:hover { color: var(--ink); text-decoration: none; }
 
 main > section { max-width: 1120px; margin: 0 auto; padding: 72px 24px; }
@@ -162,9 +162,13 @@ footer nav a { color: var(--ink); }
 footer p { margin: 4px 0; }
 footer .nocookies { opacity: 0.7; }
 
+/* The links fit on one line, a little closer on a narrower window; when
+   they no longer fit, only GitHub stays. */
+@media (max-width: 1060px) { .top nav { gap: 14px; font-size: 14px; } }
+@media (max-width: 940px) { .top nav a:not(.gh) { display: none; } }
+
 @media (max-width: 640px) {
   body { font-size: 16px; }
-  .top nav a:not(.gh) { display: none; }
   main > section { padding: 52px 16px; }
   .lede { font-size: 18px; }
   .grid { gap: 32px; }

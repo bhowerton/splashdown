@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="480" viewBox="0 0 960 480" role="img" aria-labelledby="t d">
+<title id="t">Around a meeting: a brief, a card to join and record, reminders, a draft and a weekly review</title>
+<desc id="d">Thursday, 9:50: ten minutes before Design review on the calendar, a panel shows a brief from the last notes about it: what was decided, what you said you'd do and what someone owes you. At 9:58 a card says the meeting starts in 2 minutes and offers to join it on Zoom and record it; Join opens the call, and Record starts a note named from the calendar. At 10:45 the meeting ends: the AI turns its to-dos into reminders and writes a follow-up email that waits as a draft for you to send. On Friday at 4:00 PM, the week's notes become a weekly review: what was decided, what you said you'd do, and what is still open.</desc>
+<style>@keyframes s0{0%,0.50%{opacity:0} 1.00%,24.00%{opacity:1} 24.50%,100%{opacity:0}}
+.s0{animation:s0 26s linear infinite}
+@keyframes t0{0%,0.50%{opacity:0} 1.00%,24.00%{opacity:1} 24.50%,100%{opacity:0}}
+.t0{animation:t0 26s linear infinite}
+@keyframes say0{0%,0.50%{opacity:0} 1.00%,24.00%{opacity:1} 24.50%,100%{opacity:0}}
+.say0{animation:say0 26s linear infinite}
+@keyframes s1{0%,25.50%{opacity:0} 26.00%,49.00%{opacity:1} 49.50%,100%{opacity:0}}
+.s1{animation:s1 26s linear infinite}
+@keyframes t1{0%,25.50%{opacity:0} 26.00%,49.00%{opacity:1} 49.50%,100%{opacity:0}}
+.t1{animation:t1 26s linear infinite}
+@keyframes say1{0%,25.50%{opacity:0} 26.00%,49.00%{opacity:1} 49.50%,100%{opacity:0}}
+.say1{animation:say1 26s linear infinite}
+@keyframes s2{0%,50.50%{opacity:0} 51.00%,74.00%{opacity:1} 74.50%,100%{opacity:0}}
+.s2{animation:s2 26s linear infinite}
+@keyframes t2{0%,50.50%{opacity:0} 51.00%,74.00%{opacity:1} 74.50%,100%{opacity:0}}
+.t2{animation:t2 26s linear infinite}
+@keyframes say2{0%,50.50%{opacity:0} 51.00%,74.00%{opacity:1} 74.50%,100%{opacity:0}}
+.say2{animation:say2 26s linear infinite}
+@keyframes s3{0%,75.50%{opacity:0} 76.00%,99.00%{opacity:1} 99.50%,100%{opacity:0}}
+.s3{animation:s3 26s linear infinite}
+@keyframes t3{0%,75.50%{opacity:0} 76.00%,99.00%{opacity:1} 99.50%,100%{opacity:0}}
+.t3{animation:t3 26s linear infinite}
+@keyframes say3{0%,75.50%{opacity:0} 76.00%,99.00%{opacity:1} 99.50%,100%{opacity:0}}
+.say3{animation:say3 26s linear infinite}
+@keyframes b0{0%,6.50%{opacity:0;transform:translateY(6px)} 7.00%,24.00%{opacity:1;transform:none} 24.50%,100%{opacity:0;transform:translateY(6px)}}
+.b0{animation:b0 26s linear infinite}
+@keyframes b1{0%,10.00%{opacity:0;transform:translateY(6px)} 10.50%,24.00%{opacity:1;transform:none} 24.50%,100%{opacity:0;transform:translateY(6px)}}
+.b1{animation:b1 26s linear infinite}
+@keyframes b2{0%,13.50%{opacity:0;transform:translateY(6px)} 14.00%,24.00%{opacity:1;transform:none} 24.50%,100%{opacity:0;transform:translateY(6px)}}
+.b2{animation:b2 26s linear infinite}
+@keyframes brief{0%,4.50%{opacity:0;transform:translateY(6px)} 5.00%,24.00%{opacity:1;transform:none} 24.50%,100%{opacity:0;transform:translateY(6px)}}
+.brief{animation:brief 26s linear infinite}
+@keyframes offer{0%,25.50%{opacity:0} 26.00%,37.50%{opacity:1} 38.00%,100%{opacity:0}}
+.offer{animation:offer 26s linear infinite}
+@keyframes join-first{0%,25.50%{opacity:0} 26.00%,32.00%{opacity:1} 32.50%,100%{opacity:0}}
+.join-first{animation:join-first 26s linear infinite}
+@keyframes press-join{0%,29.50%{opacity:0} 30.00%,32.00%{opacity:1} 32.50%,100%{opacity:0}}
+.press-join{animation:press-join 26s linear infinite}
+@keyframes record-next{0%,32.50%{opacity:0} 33.00%,37.50%{opacity:1} 38.00%,100%{opacity:0}}
+.record-next{animation:record-next 26s linear infinite}
+@keyframes press{0%,35.00%{opacity:0} 35.50%,37.50%{opacity:1} 38.00%,100%{opacity:0}}
+.press{animation:press 26s linear infinite}
+@keyframes recording{0%,38.00%{opacity:0;transform:translateY(6px)} 38.50%,49.00%{opacity:1;transform:none} 49.50%,100%{opacity:0;transform:translateY(6px)}}
+.recording{animation:recording 26s linear infinite}
+@keyframes named{0%,39.50%{opacity:0;transform:translateY(6px)} 40.00%,49.00%{opacity:1;transform:none} 49.50%,100%{opacity:0;transform:translateY(6px)}}
+.named{animation:named 26s linear infinite}
+@keyframes turn{0%,42.50%{opacity:0;transform:translateY(6px)} 43.00%,49.00%{opacity:1;transform:none} 49.50%,100%{opacity:0;transform:translateY(6px)}}
+.turn{animation:turn 26s linear infinite}
+@keyframes asking2{0%,54.50%{opacity:0} 55.00%,66.00%{opacity:1} 66.50%,100%{opacity:0}}
+.asking2{animation:asking2 26s linear infinite}
+@keyframes todo0{0%,57.50%{opacity:0;transform:translateY(6px)} 58.00%,74.00%{opacity:1;transform:none} 74.50%,100%{opacity:0;transform:translateY(6px)}}
+.todo0{animation:todo0 26s linear infinite}
+@keyframes todo1{0%,60.00%{opacity:0;transform:translateY(6px)} 60.50%,74.00%{opacity:1;transform:none} 74.50%,100%{opacity:0;transform:translateY(6px)}}
+.todo1{animation:todo1 26s linear infinite}
+@keyframes draft{0%,63.50%{opacity:0;transform:translateY(6px)} 64.00%,74.00%{opacity:1;transform:none} 74.50%,100%{opacity:0;transform:translateY(6px)}}
+.draft{animation:draft 26s linear infinite}
+@keyframes asking3{0%,78.50%{opacity:0} 79.00%,90.00%{opacity:1} 90.50%,100%{opacity:0}}
+.asking3{animation:asking3 26s linear infinite}
+@keyframes w0{0%,81.50%{opacity:0;transform:translateY(6px)} 82.00%,99.00%{opacity:1;transform:none} 99.50%,100%{opacity:0;transform:translateY(6px)}}
+.w0{animation:w0 26s linear infinite}
+@keyframes w1{0%,83.10%{opacity:0;transform:translateY(6px)} 83.60%,99.00%{opacity:1;transform:none} 99.50%,100%{opacity:0;transform:translateY(6px)}}
+.w1{animation:w1 26s linear infinite}
+@keyframes w2{0%,84.70%{opacity:0;transform:translateY(6px)} 85.20%,99.00%{opacity:1;transform:none} 99.50%,100%{opacity:0;transform:translateY(6px)}}
+.w2{animation:w2 26s linear infinite}
+@keyframes w3{0%,86.30%{opacity:0;transform:translateY(6px)} 86.80%,99.00%{opacity:1;transform:none} 99.50%,100%{opacity:0;transform:translateY(6px)}}
+.w3{animation:w3 26s linear infinite}
+@keyframes w4{0%,87.90%{opacity:0;transform:translateY(6px)} 88.40%,99.00%{opacity:1;transform:none} 99.50%,100%{opacity:0;transform:translateY(6px)}}
+.w4{animation:w4 26s linear infinite}
+@keyframes w5{0%,89.50%{opacity:0;transform:translateY(6px)} 90.00%,99.00%{opacity:1;transform:none} 99.50%,100%{opacity:0;transform:translateY(6px)}}
+.w5{animation:w5 26s linear infinite}
+@keyframes w6{0%,91.10%{opacity:0;transform:translateY(6px)} 91.60%,99.00%{opacity:1;transform:none} 99.50%,100%{opacity:0;transform:translateY(6px)}}
+.w6{animation:w6 26s linear infinite}
+
+@keyframes flow{to{stroke-dashoffset:-28}}
+.flow{animation:flow .6s linear infinite}
+@keyframes bar{0%{transform:scaleY(.25)}100%{transform:scaleY(1)}}
+.bar{transform-box:fill-box;transform-origin:center;animation:bar .45s ease-in-out infinite alternate}
+.bar:nth-of-type(2n){animation-delay:-.15s}.bar:nth-of-type(3n){animation-delay:-.3s}
+@keyframes twinkle{0%,100%{opacity:.9}50%{opacity:.35}}
+.star{animation:twinkle 3s ease-in-out infinite}
+.star:nth-of-type(2n){animation-delay:-1.4s}.star:nth-of-type(3n){animation-delay:-2.1s}
+
+/* Without motion: when the meeting ends, the reminders and the draft. */
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important}
+  .s0,.s1,.s3,.t0,.t1,.t3,.say0,.say1,.say3,.asking2{opacity:0}
+  .s2,.t2,.say2,.todo0,.todo1,.draft{opacity:1;transform:none}
+}
+</style>
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0A1440"/><stop offset=".65" stop-color="#16337A"/><stop offset="1" stop-color="#2F64B8"/>
+  </linearGradient>
+  <linearGradient id="sea" x1="0" y1="440" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0F6FA8"/><stop offset="1" stop-color="#06305C"/>
+  </linearGradient>
+  <linearGradient id="go" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#FF9A3D"/><stop offset="1" stop-color="#F2551F"/>
+  </linearGradient>
+  <filter id="shadow" x="-20%" y="-30%" width="140%" height="180%">
+    <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".35"/>
+  </filter>
+  <clipPath id="card"><rect width="960" height="480" rx="28"/></clipPath>
+</defs>
+<g clip-path="url(#card)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="960" height="480" fill="url(#sky)"/>
+  <circle class="star" cx="40" cy="60" r="2" fill="#fff"/><circle class="star" cx="930" cy="30" r="1.8" fill="#fff"/><circle class="star" cx="480" cy="76" r="1.6" fill="#fff"/><circle class="star" cx="20" cy="400" r="1.8" fill="#fff"/><circle class="star" cx="940" cy="410" r="2" fill="#fff"/>
+  <path d="M0 458 C160 446 320 470 480 458 S800 446 960 458 V480 H0 Z" fill="url(#sea)"/>
+
+  <!-- When each thing happens. -->
+  <path d="M150 52 H810" stroke="#fff" stroke-opacity=".22" stroke-width="2"/><circle cx="150" cy="52" r="5" fill="#8FA3D9"/><text x="150" y="36" text-anchor="middle" font-size="13" fill="#B9C4E8">Thu 9:50</text><g class="t0"><circle cx="150" cy="52" r="8" fill="#F2551F" stroke="#fff" stroke-width="2"/><text x="150" y="36" text-anchor="middle" font-size="13" fill="#fff">Thu 9:50</text></g><circle cx="370" cy="52" r="5" fill="#8FA3D9"/><text x="370" y="36" text-anchor="middle" font-size="13" fill="#B9C4E8">9:58</text><g class="t1"><circle cx="370" cy="52" r="8" fill="#F2551F" stroke="#fff" stroke-width="2"/><text x="370" y="36" text-anchor="middle" font-size="13" fill="#fff">9:58</text></g><circle cx="590" cy="52" r="5" fill="#8FA3D9"/><text x="590" y="36" text-anchor="middle" font-size="13" fill="#B9C4E8">10:45</text><g class="t2"><circle cx="590" cy="52" r="8" fill="#F2551F" stroke="#fff" stroke-width="2"/><text x="590" y="36" text-anchor="middle" font-size="13" fill="#fff">10:45</text></g><circle cx="810" cy="52" r="5" fill="#8FA3D9"/><text x="810" y="36" text-anchor="middle" font-size="13" fill="#B9C4E8">Fri 4:00 PM</text><g class="t3"><circle cx="810" cy="52" r="8" fill="#F2551F" stroke="#fff" stroke-width="2"/><text x="810" y="36" text-anchor="middle" font-size="13" fill="#fff">Fri 4:00 PM</text></g>
+
+  <!-- Before the meeting: a brief. -->
+  <g class="s0"><g filter="url(#shadow)"><rect x="60" y="96" width="300" height="236" rx="14" fill="#fff"/></g><rect x="60" y="96" width="300" height="34" rx="14" fill="#EEF1F6"/><rect x="60" y="116" width="300" height="14" fill="#EEF1F6"/><circle cx="80" cy="113" r="5.5" fill="#FF5F57"/><circle cx="98" cy="113" r="5.5" fill="#FEBC2E"/><circle cx="116" cy="113" r="5.5" fill="#28C840"/><text x="230.0" y="118" text-anchor="middle" font-size="13" fill="#6B7280">Calendar</text><text x="80" y="158" font-size="11.5" font-weight="700" fill="#6B7280" letter-spacing=".05em">THURSDAY</text><text x="80" y="192" font-size="13" fill="#6B7280">9:00</text><text x="134" y="192" font-size="14" fill="#6B7280">Standup</text><rect x="72" y="212" width="276" height="34" rx="8" fill="#EEF4FF"/><rect x="72" y="212" width="4" height="34" rx="2" fill="#2563EB"/><text x="84" y="234" font-size="13" fill="#2563EB" font-weight="700">10:00</text><text x="134" y="234" font-size="14" fill="#111827" font-weight="700">Design review</text><rect x="264" y="219" width="76" height="20" rx="10" fill="#FFEDD5"/><text x="302" y="233" text-anchor="middle" font-size="11.5" font-weight="600" fill="#C2410C">in 10 min</text><text x="80" y="276" font-size="13" fill="#6B7280">13:00</text><text x="134" y="276" font-size="14" fill="#6B7280">Lunch with Sam</text><text x="80" y="310" font-size="13" fill="#6B7280">15:30</text><text x="134" y="310" font-size="14" fill="#6B7280">1:1 with Priya</text><path class="flow" d="M360 228 C410 228 420 164 470 164" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><g class="brief"><g filter="url(#shadow)"><rect x="470" y="104" width="430" height="220" rx="18" fill="#17171C" fill-opacity=".96"/></g><circle cx="494" cy="128" r="5" fill="#F2551F"/><text x="506" y="132.5" font-size="12.5" font-weight="600" fill="#A1A1AA">Splashdown</text><text x="492" y="168" font-size="18" fill="#fff" font-weight="700">Brief: Design review</text><g class="b0"><text x="492" y="202" font-size="14" fill="#D4D4D8">Last time, you decided to ship the beta on the 17th.</text></g><g class="b1"><text x="492" y="230" font-size="14" fill="#D4D4D8">You said you&#x27;d send Dana the numbers.</text></g><g class="b2"><text x="492" y="258" font-size="14" fill="#D4D4D8">Dana owes you the new mockups.</text></g><rect x="802" y="278" width="76" height="30" rx="15" fill="url(#go)"/><text x="840.0" y="298" text-anchor="middle" font-size="13.5" font-weight="600" fill="#fff">Open</text></g></g>
+
+  <!-- As it starts: join and record. -->
+  <g class="s1"><g class="offer"><g filter="url(#shadow)"><rect x="240" y="96" width="480" height="212" rx="18" fill="#17171C" fill-opacity=".96"/></g><circle cx="264" cy="120" r="5" fill="#F2551F"/><text x="276" y="124.5" font-size="12.5" font-weight="600" fill="#A1A1AA">Splashdown</text><text x="262" y="162" font-size="19" fill="#fff" font-weight="700">Your meeting starts in 2 minutes</text><text x="262" y="188" font-size="14" fill="#D4D4D8">Design review · with Priya Shah, Dana Ortiz</text><text x="262" y="216" font-size="14" fill="#D4D4D8">It&#x27;s on Zoom. Record it into your notes?</text><text x="262" y="240" font-size="12.5" fill="#A1A1AA">Let people know you&#x27;re recording.</text><rect x="444" y="262" width="86" height="30" rx="15" fill="#fff" fill-opacity=".1"/><text x="487.0" y="282" text-anchor="middle" font-size="13.5" font-weight="600" fill="#fff">Not now</text><g class="join-first"><rect x="538" y="262" width="64" height="30" rx="15" fill="url(#go)"/><text x="570.0" y="282" text-anchor="middle" font-size="13.5" font-weight="600" fill="#fff">Join</text><rect x="610" y="262" width="88" height="30" rx="15" fill="#fff" fill-opacity=".1"/><text x="654.0" y="282" text-anchor="middle" font-size="13.5" font-weight="600" fill="#fff">Record</text></g><rect class="press-join" x="534" y="258" width="72" height="38" rx="19" fill="none" stroke="#fff" stroke-width="2"/><g class="record-next"><rect x="538" y="262" width="64" height="30" rx="15" fill="#fff" fill-opacity=".1"/><text x="570.0" y="282" text-anchor="middle" font-size="13.5" font-weight="600" fill="#fff">Join</text><rect x="610" y="262" width="88" height="30" rx="15" fill="url(#go)"/><text x="654.0" y="282" text-anchor="middle" font-size="13.5" font-weight="600" fill="#fff">Record</text></g><rect class="press" x="606" y="258" width="96" height="38" rx="19" fill="none" stroke="#fff" stroke-width="2"/></g><g class="recording"><g filter="url(#shadow)"><rect x="377" y="104" width="206" height="48" rx="24" fill="#17171C" fill-opacity=".94"/></g><circle cx="401" cy="128" r="6" fill="#F2551F"/><text x="415" y="134" font-size="16" font-weight="600" fill="#F4F4F5">Recording</text><g><rect class="bar" x="525" y="119" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="533" y="119" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="541" y="119" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="549" y="119" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="557" y="119" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="565" y="119" width="4" height="18" rx="2" fill="#FF9A3D"/></g></g><g class="named"><g filter="url(#shadow)"><rect x="300" y="176" width="360" height="170" rx="14" fill="#fff"/></g><rect x="300" y="176" width="360" height="34" rx="14" fill="#EEF1F6"/><rect x="300" y="196" width="360" height="14" fill="#EEF1F6"/><circle cx="320" cy="193" r="5.5" fill="#FF5F57"/><circle cx="338" cy="193" r="5.5" fill="#FEBC2E"/><circle cx="356" cy="193" r="5.5" fill="#28C840"/><text x="500.0" y="198" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text><text x="320" y="244" font-size="18" fill="#111827" font-weight="700">Design review</text><text x="320" y="266" font-size="12.5" fill="#6B7280">With Priya Shah, Dana Ortiz</text><g class="turn"><text x="320" y="302" font-size="14" fill="#111827"><tspan font-weight="700" fill="#2563EB">0:02 You  </tspan>Morning, everyone.</text></g></g></g>
+
+  <!-- When it ends: reminders and a draft. -->
+  <g class="s2"><g filter="url(#shadow)"><rect x="40" y="96" width="290" height="290" rx="14" fill="#fff"/></g><rect x="40" y="96" width="290" height="34" rx="14" fill="#EEF1F6"/><rect x="40" y="116" width="290" height="14" fill="#EEF1F6"/><circle cx="60" cy="113" r="5.5" fill="#FF5F57"/><circle cx="78" cy="113" r="5.5" fill="#FEBC2E"/><circle cx="96" cy="113" r="5.5" fill="#28C840"/><text x="205.0" y="118" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text><text x="60" y="164" font-size="18" fill="#111827" font-weight="700">Design review</text><text x="60" y="186" font-size="12.5" fill="#6B7280">Thursday 10:00 · 45 min</text><text x="60" y="220" font-size="11.5" font-weight="700" fill="#6B7280" letter-spacing=".05em">SUMMARY</text><text x="60" y="248" font-size="14" fill="#111827">• Beta ships on the 17th.</text><text x="60" y="276" font-size="14" fill="#111827">• Dana sends the new mockups.</text><text x="60" y="304" font-size="14" fill="#111827">• You send Dana the numbers.</text><text x="60" y="332" font-size="14" fill="#111827">• Book the usability room.</text><g class="asking2"><g filter="url(#shadow)"><rect x="356" y="217" width="196" height="48" rx="24" fill="#17171C" fill-opacity=".94"/></g><circle cx="380" cy="241" r="6" fill="#F2551F"/><text x="394" y="247" font-size="16" font-weight="600" fill="#F4F4F5">Asking the AI</text><g><rect class="bar" x="494" y="232" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="502" y="232" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="510" y="232" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="518" y="232" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="526" y="232" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="534" y="232" width="4" height="18" rx="2" fill="#FF9A3D"/></g><path class="flow" d="M330 241 H356" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><path class="flow" d="M552 241 C572 241 560 166 580 166" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><path class="flow" d="M552 241 C572 241 560 314 580 314" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/></g><g filter="url(#shadow)"><rect x="580" y="96" width="340" height="132" rx="14" fill="#fff"/></g><rect x="580" y="96" width="340" height="34" rx="14" fill="#EEF1F6"/><rect x="580" y="116" width="340" height="14" fill="#EEF1F6"/><circle cx="600" cy="113" r="5.5" fill="#FF5F57"/><circle cx="618" cy="113" r="5.5" fill="#FEBC2E"/><circle cx="636" cy="113" r="5.5" fill="#28C840"/><text x="770.0" y="118" text-anchor="middle" font-size="13" fill="#6B7280">Reminders</text><g class="todo0"><rect x="600" y="152" width="14" height="14" rx="4" fill="none" stroke="#9CA3AF" stroke-width="1.5"/><text x="622" y="164" font-size="14" fill="#111827">Send Dana the numbers</text></g><g class="todo1"><rect x="600" y="184" width="14" height="14" rx="4" fill="none" stroke="#9CA3AF" stroke-width="1.5"/><text x="622" y="196" font-size="14" fill="#111827">Book the usability room</text></g><g filter="url(#shadow)"><rect x="580" y="244" width="340" height="142" rx="14" fill="#fff"/></g><rect x="580" y="244" width="340" height="34" rx="14" fill="#EEF1F6"/><rect x="580" y="264" width="340" height="14" fill="#EEF1F6"/><circle cx="600" cy="261" r="5.5" fill="#FF5F57"/><circle cx="618" cy="261" r="5.5" fill="#FEBC2E"/><circle cx="636" cy="261" r="5.5" fill="#28C840"/><text x="770.0" y="266" text-anchor="middle" font-size="13" fill="#6B7280">New message</text><g class="draft"><text x="600" y="308" font-size="14.5" fill="#111827" font-weight="700">Design review: what we agreed</text><text x="600" y="334" font-size="13.5" fill="#6B7280">Hi Dana and Priya, thanks for today. The beta</text><text x="600" y="354" font-size="13.5" fill="#6B7280">ships on the 17th, and…</text><rect x="770" y="344" width="132" height="24" rx="12" fill="#FFEDD5"/><text x="836" y="360.5" text-anchor="middle" font-size="12" font-weight="600" fill="#C2410C">Draft · you send it</text></g></g>
+
+  <!-- On Friday: a weekly review. -->
+  <g class="s3"><g filter="url(#shadow)"><rect x="60" y="96" width="280" height="250" rx="14" fill="#fff"/></g><rect x="60" y="96" width="280" height="34" rx="14" fill="#EEF1F6"/><rect x="60" y="116" width="280" height="14" fill="#EEF1F6"/><circle cx="80" cy="113" r="5.5" fill="#FF5F57"/><circle cx="98" cy="113" r="5.5" fill="#FEBC2E"/><circle cx="116" cy="113" r="5.5" fill="#28C840"/><text x="220.0" y="118" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text><text x="80" y="158" font-size="11.5" font-weight="700" fill="#6B7280" letter-spacing=".05em">THIS WEEK</text><rect x="80" y="176" width="16" height="20" rx="3" fill="#94A3B8"/><text x="106" y="191" font-size="14" fill="#111827">Standup</text><text x="320" y="191" text-anchor="end" font-size="12.5" fill="#6B7280">Mon</text><rect x="80" y="216" width="16" height="20" rx="3" fill="#94A3B8"/><text x="106" y="231" font-size="14" fill="#111827">1:1 with Priya</text><text x="320" y="231" text-anchor="end" font-size="12.5" fill="#6B7280">Tue</text><rect x="80" y="256" width="16" height="20" rx="3" fill="#94A3B8"/><text x="106" y="271" font-size="14" fill="#111827">Design review</text><text x="320" y="271" text-anchor="end" font-size="12.5" fill="#6B7280">Thu</text><rect x="80" y="296" width="16" height="20" rx="3" fill="#FF9A3D"/><text x="106" y="311" font-size="14" fill="#111827">Inbox, 6 lines</text><text x="320" y="311" text-anchor="end" font-size="12.5" fill="#6B7280">All week</text><g class="asking3"><g filter="url(#shadow)"><rect x="372" y="197" width="196" height="48" rx="24" fill="#17171C" fill-opacity=".94"/></g><circle cx="396" cy="221" r="6" fill="#F2551F"/><text x="410" y="227" font-size="16" font-weight="600" fill="#F4F4F5">Asking the AI</text><g><rect class="bar" x="510" y="212" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="518" y="212" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="526" y="212" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="534" y="212" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="542" y="212" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="550" y="212" width="4" height="18" rx="2" fill="#FF9A3D"/></g><path class="flow" d="M340 221 H372" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/><path class="flow" d="M568 221 H600" fill="none" stroke="#FF9A3D" stroke-width="3" stroke-linecap="round" stroke-dasharray="2 12"/></g><g filter="url(#shadow)"><rect x="600" y="96" width="320" height="300" rx="14" fill="#fff"/></g><rect x="600" y="96" width="320" height="34" rx="14" fill="#EEF1F6"/><rect x="600" y="116" width="320" height="14" fill="#EEF1F6"/><circle cx="620" cy="113" r="5.5" fill="#FF5F57"/><circle cx="638" cy="113" r="5.5" fill="#FEBC2E"/><circle cx="656" cy="113" r="5.5" fill="#28C840"/><text x="780.0" y="118" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text><text x="620" y="164" font-size="18" fill="#111827" font-weight="700">Weekly review</text><text x="620" y="186" font-size="12.5" fill="#6B7280">Friday 4:00 PM · from 4 notes</text><g class="w0"><text x="620" y="216" font-size="11.5" font-weight="700" fill="#6B7280" letter-spacing=".05em">DECIDED</text></g><g class="w1"><text x="620" y="238" font-size="14" fill="#111827">• Beta ships on the 17th.</text></g><g class="w2"><text x="620" y="269" font-size="11.5" font-weight="700" fill="#6B7280" letter-spacing=".05em">YOU SAID YOU&#x27;D</text></g><g class="w3"><rect x="620" y="279" width="14" height="14" rx="4" fill="none" stroke="#9CA3AF" stroke-width="1.5"/><text x="642" y="291" font-size="14" fill="#111827">Send Dana the numbers</text></g><g class="w4"><rect x="620" y="304" width="14" height="14" rx="4" fill="none" stroke="#9CA3AF" stroke-width="1.5"/><text x="642" y="316" font-size="14" fill="#111827">Reply to Priya about hiring</text></g><g class="w5"><text x="620" y="347" font-size="11.5" font-weight="700" fill="#6B7280" letter-spacing=".05em">STILL OPEN</text></g><g class="w6"><text x="620" y="369" font-size="14" fill="#111827">• Pricing for teams</text></g></g>
+
+  <text class="say0" x="480.0" y="440" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">Ten minutes before a meeting, a brief from your last notes about it…</text><text class="say1" x="480.0" y="440" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">…as it starts, a card to join the call and record it…</text><text class="say2" x="480.0" y="440" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">…when it ends, your to-dos are reminders and the follow-up is a draft…</text><text class="say3" x="480.0" y="440" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">…and on Friday, the week&#x27;s notes become a review.</text>
+</g>
+</svg>

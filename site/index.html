@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Splashdown — Your voice, for everything. Free for Mac and Windows</title>
-<meta name="description" content="Your voice, for everything: type in any app, tell your computer what to do, hear text read back, and turn anything you hear into notes. Free and open source for Mac and Windows. Hold a key, speak, and clean text appears in any app. It also writes down your meetings, videos and voice memos, tells who said what, and answers questions from your notes. No subscription, no account, and it can run entirely on your computer.">
+<meta name="description" content="Your voice, for everything: type in any app, tell your computer what to do, hear text read back, and turn anything you hear into notes. Free and open source for Mac and Windows. Hold a key, speak, and clean text appears in any app. It also writes down your meetings, videos and voice memos, tells who said what, follows up after a meeting, and answers questions from your notes. No subscription, no account, and it can run entirely on your computer.">
 <link rel="canonical" href="https://splashdown.app/">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon-180.png">
@@ -27,6 +27,7 @@
     <a href="#translate">Translate</a>
     <a href="#read">Read aloud</a>
     <a href="#notes">Notes &amp; meetings</a>
+    <a href="#hooks">Follow-ups</a>
     <a href="#privacy">Privacy</a>
     <a href="#faq">FAQ</a>
     <a class="gh" href="https://github.com/bhowerton/splashdown">GitHub</a>
@@ -191,7 +192,7 @@
       </article>
       <article>
         <h3>Meeting notes without a bot</h3>
-        <p>Record your microphone and what the call plays, turn by turn, with your own notes beside the live transcript. Each voice on the call is told apart, and on a Mac the title comes from your calendar. A summary of decisions and action items follows, and Splashdown offers to record when a call starts, saying what it will do and reminding you to let people know.</p>
+        <p>Record your microphone and what the call plays, turn by turn, with your own notes beside the live transcript. Each voice on the call is told apart, and on a Mac the title comes from your calendar. A summary of decisions and action items follows, even for an hour-long meeting with the AI on your computer. Splashdown offers to record when a call starts, saying what it will do and reminding you to let people know, and a meeting that stopped too soon carries on in the same note.</p>
       </article>
       <article>
         <h3>Ask your notes</h3>
@@ -228,6 +229,38 @@
       <article>
         <h3>Voices stay on your computer</h3>
         <p>It's off until you turn it on. A voiceprint is kept only for people you name, never in your notes and never sent anywhere, and Settings lists them, each with Forget.</p>
+      </article>
+    </div>
+  </section>
+
+  <section class="features" id="hooks">
+    <h2>It follows up, so you don't have to.</h2>
+    <p class="section-lede">Before a meeting, as it starts, when it ends, at the end of the week: say what you want once, in your own words, and it happens each time.</p>
+    <img class="demo" src="assets/hooks.svg" width="960" height="480" loading="lazy" alt="Animation: one meeting from start to finish. Ten minutes before Design review on the calendar, a panel shows a brief from the last notes about it. Two minutes before it starts, a card offers to join it on Zoom and record it. When it ends, its to-dos become reminders and a follow-up email waits as a draft. On Friday at 4, the week's notes become a weekly review.">
+    <div class="grid">
+      <article>
+        <h3>A brief before each meeting</h3>
+        <p>A few minutes before a meeting on your calendar, on a Mac, the AI reads your notes from the last times you met and says what was decided, what you said you'd do and what others said they'd do.</p>
+      </article>
+      <article>
+        <h3>Join and record in a click</h3>
+        <p>Turn it on, and two minutes before a meeting on your calendar starts, on a Mac, a small card shows it with Join and Record. Join opens its Zoom, Meet, Teams or Webex link, and Record starts the note, named from the event. Each meeting is offered once.</p>
+      </article>
+      <article>
+        <h3>Reminders and a draft after</h3>
+        <p>What you said you'd do becomes reminders in the list you name, and the follow-up email opens as a draft for you to check and send. Or have decisions, key points or study cards put in the note.</p>
+      </article>
+      <article>
+        <h3>A weekly review on Friday</h3>
+        <p>At a time you set, the notes of the week or the day become a review: what was decided, what's still open, what's waiting on others. A panel says when it's ready, or say "run my weekly review".</p>
+      </article>
+      <article>
+        <h3>Your words, or your script</h3>
+        <p>"Draft the follow-up email." "List what I said I'd do." Hooks need no script, and the common ones are ready to start from. Or run a program with the text, or send it to Zapier, Make, n8n or a Slack webhook.</p>
+      </article>
+      <article>
+        <h3>Nothing behind your back</h3>
+        <p>A hook's AI can only write: an email is a draft, never sent, and nothing said in a meeting can add a recipient. It asks once before using a cloud AI, and What ran lists everything your hooks did.</p>
       </article>
     </div>
   </section>
@@ -301,11 +334,19 @@
     </details>
     <details>
       <summary>Does it record meetings? Does a bot join the call?</summary>
-      <p>No bot joins. Splashdown records your microphone and what your computer plays, on your computer, and writes the conversation into a note as it goes, each turn marked You or Them. Tell people they're being recorded. With speech-to-text on your computer, nothing leaves it; with a cloud AI, it asks before sending the transcript for a summary.</p>
+      <p>No bot joins. Splashdown records your microphone and what your computer plays, on your computer, and writes the conversation into a note as it goes, each turn marked You or Them. It offers to record when a call starts, and on a Mac it can offer a meeting on your calendar two minutes before it starts, with Join and Record. Tell people they're being recorded. With speech-to-text on your computer, nothing leaves it; with a cloud AI, it asks before sending the transcript for a summary.</p>
     </details>
     <details>
       <summary>Can it tell who said what, and remember them?</summary>
       <p>Yes. At the end of a meeting the other people are told apart (Speaker 1, 2…, or Them on a one-on-one call), and you name them from the invite or by typing. Turn on Recognize people you've named (Mac) and they're named by voice in later meetings when it's a clear match. Their voiceprints stay on your computer, and some places regulate keeping them, so ask people first if you're unsure.</p>
+    </details>
+    <details>
+      <summary>Can it do things by itself, like follow up after a meeting?</summary>
+      <p>Yes, with hooks, in Settings → Actions → When something happens. When a meeting ends, the AI can draft the follow-up email, turn what you said you'd do into reminders, or list the decisions. A hook can also run on a schedule (a weekly review of your notes) or, on a Mac, a few minutes before a meeting on your calendar, with a brief from your last notes about it. Emails open as drafts and are never sent for you, and you can run your own script or send to a web address instead of asking the AI.</p>
+    </details>
+    <details>
+      <summary>A meeting stopped too soon. Do I need a second note?</summary>
+      <p>No. Choose Carry on recording from the meeting note's menu, and more is recorded into the same note: the new turns are timed from where it stopped, the summary is written again from all of it, and a kept recording stays one recording.</p>
     </details>
     <details>
       <summary>Can it make subtitles?</summary>
@@ -317,7 +358,7 @@
     </details>
     <details>
       <summary>Does it work with coding agents?</summary>
-      <p>Yes. File names you say become <code>@file</code> mentions for Claude Code or Cursor, and the <code>splashdown-mcp</code> server lets an agent ask you a question by voice and, if you allow it, search, read and add to your notes, and go through your meetings by date.</p>
+      <p>Yes. File names you say become <code>@file</code> mentions for Claude Code or Cursor, and the <code>splashdown-mcp</code> server lets an agent ask you a question by voice and, if you allow it, search, read and add to your notes, and go through your meetings by date. Searching what you dictated has a switch of its own, off until you turn it on.</p>
     </details>
     <details>
       <summary>Something isn't working.</summary>

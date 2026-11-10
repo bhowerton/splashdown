@@ -47,7 +47,7 @@ What it gets, as one text, each part under its title and a line saying what it i
 - **Your notes of the last meetings about it,** newest first, three at most: meeting notes with the same title (a repeating meeting, whatever the capitals and punctuation), or with mostly the same people (at least half of those invited to either are in both, so a 1:1 finds your last 1:1 with that person and not every large meeting they were at). A note's people are the ones on its "With …" line and the ones named in its transcript. A note that has a summary comes with its summary and your own notes, without its transcript; one that has none comes whole.
 - **Left out:** notes hidden from coding agents (`agents: false`), notes that aren't meetings, and this meeting's own note if you started recording early.
 
-Meeting notes are found by title most easily when they're named from the calendar: turn on **Name meetings from my calendar** in Settings → Notes → Meetings, which also writes the "With …" line.
+Meeting notes are found by title most easily when they're named from the calendar: turn on **Name meetings from my calendar** in Settings → General → Meetings, which also writes the "With …" line.
 
 Each event runs a hook once. All-day events and ones you declined (or that were called off) are skipped. If the computer was asleep, the hook still runs up to 5 minutes after the meeting starts, and not after that. An event moved to later the same day isn't briefed again. A hook you just added, changed or turned back on starts with the meetings still ahead. With no earlier notes about a meeting, nothing runs, and What ran says so.
 

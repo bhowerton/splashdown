@@ -45,6 +45,7 @@
 - **Speaks their language.** Hold the key and tap T to write in Spanish, French or any language you pick, or let it reply in the language of the email or chat on screen.
 - **Reads to you, too.** Select text and say "read this to me", or "read me a summary of this", and it's read aloud in a natural voice that runs on your computer.
 - **Turns anything you hear into notes.** Pick any app (a webinar in your browser, a podcast, a video, a call you're only listening to) and what it says is written into a note as it plays. Record meetings without a bot joining (and have the people you've named recognized next time), transcribe voice memos, YouTube links and whole folders, save subtitles, and ask your notes questions. Notes are plain Markdown files.
+- **Follows up for you.** A brief before each meeting from your last notes about it, your to-dos as reminders and the follow-up email as a draft when it ends, a weekly review on Friday: hooks you set up once, in your own words.
 - **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
 <p align="center">
@@ -68,7 +69,7 @@
 - **No waiting for the AI:** with a cloud AI, its text is typed as it's written, starting a moment after you let go.
 - **Live text while you speak** with speech-to-text on your computer: Nemotron writes as you speak, and your text is ready the moment you let go.
 - **Hands-free** for long dictations: hold the key and press **H**, then let go. Stops on its own after 3 minutes of silence.
-- **Straight into a note:** hold the key and press **N**, and what you say is added to your Inbox (or today's daily note) instead of typed. ⌃⌥Z takes it back.
+- **Straight into a note:** hold the key and press **N**, and what you say is added to your Inbox (or today's daily note) instead of typed, each day's lines under a heading for the day. ⌃⌥Z takes it back.
 - **Music steps aside.** Other sounds are turned down while you speak, as with Siri, or muted or paused if you prefer. On audio interfaces whose volume can't be changed, the music is paused instead.
 - **Whisper mode** for speaking quietly, **mixed languages** in one sentence, and **background noise removed** (fans, traffic, café chatter) on your computer before your speech is transcribed, if you turn it on.
 
@@ -82,7 +83,7 @@
 - **Spoken commands, in any language.** Hold Right Option and tap Right Shift *before* speaking: "delete that last sentence", "make that more formal", "envíalo". The AI works out what you meant; nothing depends on exact phrases. Editing commands need an app that lets Splashdown read and select its text; when one doesn't, it says so rather than guess.
 - **Voice actions.** Turn them on in Settings → Actions, and the same commands can do things: "open Spotify", "remind me at 3 to call Sam", "add dentist to my calendar on Thursday at 4", "search YouTube for paella recipes", "pause the music", "start recording the meeting", or, with text selected, "email this to Sam". "Undo that" takes back an event, reminder or to-do. Nothing is sent, deleted or bought for you: an email opens as a draft, and a Shortcut asks before it runs.
 - **Your own actions.** Give a link, a script or program, or keys to press a name, and say it: "deploy staging", "next slide", "open issue ENG-42" (whatever you say after the name can go into the link or the script). Splashdown shows exactly what will run and asks first, until you choose Always allow.
-- **Hooks.** After a meeting, a transcript, a dictation or a note from your iPhone: ask the AI for something in your own words (the follow-up email, what you said you'd do) and have it put in the note, run your own script, or send to Zapier, Make, n8n or Slack. Or have a script fix a preset's dictations before they go in ([docs/HOOKS.md](docs/HOOKS.md)).
+- **Hooks** do something when something happens, without being asked each time: [see below](#hooks-when-something-happens).
 - **"What can I say?"** Say it (or "help") for a window with everything you can say or press, with your own keys and actions. Also in the menu bar under Help.
 - **Rewrite a selection.** Select text, hold the key, say what to change.
 - **Undo the AI.** **⌃⌥Z** right after it's typed swaps in exactly what you said; **⌃⌥V** pastes your last raw words.
@@ -133,7 +134,7 @@
 ### Notes
 
 - **⌃⌥N opens Notes**, for when there's no text field around. Every note is a plain Markdown file in a folder you choose, so Obsidian, iCloud Drive and Dropbox work, and nothing is locked in.
-- **On all your devices.** Settings → Notes → Keep them in moves your notes to iCloud Drive, Dropbox, Google Drive or OneDrive in one click, whichever this computer has. They stay on your computer unless you choose one.
+- **On all your devices.** Settings → General → Notes → Keep them in moves your notes to iCloud Drive, Dropbox, Google Drive or OneDrive in one click, whichever this computer has. They stay on your computer unless you choose one.
 - **Notes from your iPhone.** The [Splashdown Note shortcut](https://splashdown.app/iphone/) turns what you say on your phone (from the Action Button, the Lock Screen or Siri) into a note that's added to your Inbox or today's note, through your iCloud Drive, while Splashdown runs on your Mac or PC. No app to install.
 - **Folders and tags.** Nested folders (the real ones on disk) and Obsidian-style `#tags`, nested with `/`, in a column with counts. Drag a note onto a folder, or use Move to….
 - **Formatting as you write:** headings, bullets and checkboxes you can click, with the Markdown marks out of the way.
@@ -148,7 +149,7 @@
   <img src="docs/assets/sources.svg" width="800" alt="Animation: a video call, a podcast app, a video in the browser, the room and a file take turns; each one's sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags.">
 </p>
 
-- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named, and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down. A kept recording plays back from any turn, and can be transcribed again with another speech model. A meeting that stopped too soon, or went on after a break, can be carried on in the same note. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record, says what recording will do with your settings and reminds you to let people know; "Don't offer for Zoom" turns it off for that app only. On a Mac it can also offer a meeting on your calendar two minutes before it starts, with Join for its Zoom, Meet, Teams or Webex link beside Record (Settings → Notes → Meetings; off until you turn it on).
+- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named, and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down; the AI on your computer summarizes an hour-long meeting too, a part at a time. A kept recording plays back from any turn, and can be transcribed again with another speech model. A meeting that stopped too soon, or went on after a break, can be carried on in the same note. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record, says what recording will do with your settings and reminds you to let people know; "Don't offer for Zoom" turns it off for that app only. On a Mac it can also offer a meeting on your calendar two minutes before it starts, with Join for its Zoom, Meet, Teams or Webex link beside Record (Settings → General → Meetings; off until you turn it on).
 - **Remembers who's who (Mac).** Name a speaker once (Speaker 2 → Priya, from the people invited or typed, or Them on a one-on-one call), and turn on Settings → General → Meetings → Recognize people you've named: in later meetings she's named by her voice when it's a clear match, and anyone new stays Speaker 1, 2. Voiceprints stay on your computer, never in your notes, and Settings lists them with Forget.
 
 <p align="center">
@@ -164,6 +165,22 @@
 <p align="center">
   <img src="docs/assets/folder.svg" width="800" alt="Animation: standup.mp4 is copied into a folder Splashdown watches; once it's copied it becomes a transcript note, line by line, on this computer. Then standup.srt appears beside the video, and the video plays with those subtitles.">
 </p>
+
+### Hooks: when something happens
+
+<p align="center">
+  <img src="docs/assets/hooks.svg" width="800" alt="Animation: one meeting from start to finish. Ten minutes before Design review on the calendar, a panel shows a brief from the last notes about it. Two minutes before it starts, a card offers to join it on Zoom and record it. When it ends, its to-dos become reminders and a follow-up email waits as a draft. On Friday at 4, the week's notes become a weekly review.">
+</p>
+
+Settings → Actions → When something happens. A hook runs after a meeting, a transcript, a dictation or a note from your iPhone, at a time you set, or before a meeting on your calendar. Details and examples: [docs/HOOKS.md](docs/HOOKS.md).
+
+- **Ask the AI, in your own words.** "Draft the follow-up email." "List what I said I'd do." No script needed, and the common ones are ready to start from: the follow-up email, your commitments, decisions, key points, study cards, to-dos from a note said on your iPhone.
+- **Put the result where you'll use it:** in the meeting's note, at the end of another note or a file, on the clipboard, at a web address, as reminders in a list you name (Mac), or as an email draft that opens for you to check and send.
+- **On a schedule.** A weekly review on Friday afternoon or a daily wrap-up, from the notes you made in the last 7 days or the last day. A time that passes while the computer sleeps is caught up on.
+- **A brief before each meeting (Mac).** A few minutes before a meeting on your calendar, the AI reads your notes from the last times you met (the same title, or mostly the same people) and says what was decided, what you said you'd do and what others said they'd do.
+- **Told when it's done, run when you say.** A small panel shows what a hook wrote, with a button to open the note. Run now in Settings, or say "run my weekly review".
+- **Your own script, or a web address.** A program gets the text as its input, never through a shell; a web address (Zapier, Make, n8n, a Slack incoming webhook) gets signed JSON. A script can also fix a preset's dictations before they go in.
+- **Nothing happens behind your back.** A hook's AI can only write: an email is a draft, never sent, and nothing said in a meeting can add a recipient. Settings says exactly what each hook will run, and one that came from anywhere else (an imported settings file) asks before its first run. A hook asks once before its text goes to a cloud AI, Test tries one before you save it, and What ran lists what your hooks did.
 
 ### Everything else
 
@@ -195,6 +212,7 @@
 | Have a message written | While holding, tap **Right Shift**, then say what to write ("reply saying I'm in"); select it and say "shorter" to change it |
 | Hear text read aloud | Select it, hold **Right Option** and say "read this to me" (or "read me a summary of this"); **Esc** stops it. Or menu bar → Last dictation → **Read it to me** |
 | Record a meeting | **⌃⌥M** (again to stop) |
+| Run a hook now | While holding, tap **Right Shift** and say "run my weekly review", or Settings → Actions → **Run now** |
 | Dictate in another language | While holding, press **T**, then speak; **T** again for the next language ticked in the menu bar → **Translate into** |
 | Translate selected text | Select it, then while holding press **T** (or press **⌃⌥T**) |
 | Type exactly what you say, no tidying | While holding, press **2** (the Word for word preset) |
