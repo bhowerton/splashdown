@@ -277,6 +277,7 @@ fn main() {
             notes::watch_front_app(app.handle());
             notes::watch::watch_folders(app.handle());
             notes::phone::watch_phone(app.handle());
+            hooks::schedule::watch(app.handle());
             history.set_keep_days(settings.general.history_days());
             let onboarded = settings.general.onboarded;
             let built = engine::build(&settings);

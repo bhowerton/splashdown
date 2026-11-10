@@ -227,7 +227,54 @@ const HOOK_EVENTS = [
   ["meeting", "When a meeting ends"],
   ["transcript", "When a transcript is finished"],
   ["phone-note", "When a note comes from your iPhone"],
+  ["schedule", "On a schedule, with your notes since"],
 ];
+
+/** The days a scheduled hook can run on, as the settings name them. */
+const HOOK_DAYS = [
+  ["mon", "Monday"],
+  ["tue", "Tuesday"],
+  ["wed", "Wednesday"],
+  ["thu", "Thursday"],
+  ["fri", "Friday"],
+  ["sat", "Saturday"],
+  ["sun", "Sunday"],
+];
+const HOOK_WEEKDAYS = ["mon", "tue", "wed", "thu", "fri"];
+
+/** How far back a scheduled hook's notes go. */
+const HOOK_COVERS = [
+  ["day", "The last day"],
+  ["week", "The last 7 days"],
+];
+
+/** Days in words: "Fridays", "Mondays, Wednesdays and Fridays". */
+function daysWords(list) {
+  const names = HOOK_DAYS.filter(([d]) => list.includes(d)).map(([, name]) => `${name}s`);
+  const last = names.pop();
+  return names.length ? `${names.join(", ")} and ${last}` : last;
+}
+
+/** A schedule's time as this computer writes times: "4:00 PM", "16:00". */
+function timeWords(at) {
+  const [hour, minute] = (at ?? "").split(":").map(Number);
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return "a time you choose";
+  return new Date(2000, 0, 1, hour, minute).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+
+/** When a schedule runs, to end a sentence: "on Fridays at 4:00 PM". */
+function scheduleWords(sc) {
+  const at = timeWords(sc?.at);
+  const days = HOOK_DAYS.map(([d]) => d).filter((d) => (sc?.days ?? []).includes(d));
+  if (!days.length || days.length === 7) return `every day at ${at}`;
+  if (days.length === 5 && days.every((d) => HOOK_WEEKDAYS.includes(d))) return `on weekdays at ${at}`;
+  return `on ${daysWords(days)} at ${at}`;
+}
+
+/** The notes a schedule reads, in words: "the last 7 days". */
+function coversWords(sc) {
+  return sc?.covers === "week" ? "the last 7 days" : "the last day";
+}
 
 /** Where what the AI wrote goes. A dictation or a note from the phone has no note of its own. */
 const HOOK_PUTS = [
@@ -291,6 +338,26 @@ const HOOK_STARTERS = [
     instruction:
       "If this note has things I need to do, list each as a to-do (\"- [ ] \"), keeping names, dates and times as I said them. If it has none, there is nothing to do.",
   },
+  {
+    label: "Weekly review, on Fridays",
+    when: "schedule",
+    schedule: { at: "16:00", days: ["fri"], covers: "week" },
+    name: "Weekly review",
+    put: "other-note",
+    to: "Weekly reviews",
+    instruction:
+      "Write a review of my week from these notes, under three headings. \"Decided\": what the notes say was decided. \"For me to do\": only what the notes say I (\"You\") will do or said I would do, each as a to-do (\"- [ ] \") with who it's for and by when; things I dictated to myself count. \"Waiting on others\": what someone else said they would do, with their name. Take each note in turn and leave nothing of these out. End each line with the title of the note it comes from, in brackets. Keep days as the notes say them (\"by Wednesday\") and add no dates of your own. Leave out what is already done.",
+  },
+  {
+    label: "Daily wrap-up, on weekdays",
+    when: "schedule",
+    schedule: { at: "17:30", days: [...HOOK_WEEKDAYS], covers: "day" },
+    name: "Daily wrap-up",
+    put: "other-note",
+    to: "Daily wrap-ups",
+    instruction:
+      "From these notes of my day, write two lists, each under its heading. \"For me to do\": only what the notes say I (\"You\") will do or said I would do, each as a to-do (\"- [ ] \") with who it's for and by when; things I dictated to myself count. \"Decided\": what the notes say was decided, one line each. Take each note in turn. End each line with the title of the note it comes from, in brackets. Keep days as the notes say them (\"by Wednesday\") and add no dates of your own. Leave out what is already done.",
+  },
 ];
 
 /** The AI a hook's instruction goes to, as `[name, onThisComputer]`, once known. */
@@ -323,6 +390,9 @@ function hookSummary(h) {
   return `Runs ${h.path}${h.args?.length ? ` ${h.args.join(" ")}` : ""}`;
 }
 
+/** What happens to a scheduled hook whose time passes unseen. */
+const HOOK_LATE = " If the computer is asleep or Splashdown isn't running then, it runs when it next can, with the notes up to that time.";
+
 /** What a hook does, in a sentence, for the editor. */
 function hookSentence(h) {
   const preset = h.preset ? ` with the ${presetName(h.preset)} preset` : "";
@@ -332,6 +402,7 @@ function hookSentence(h) {
       meeting: "each meeting's note, with its transcript,",
       transcript: "each finished transcript",
       "phone-note": "each note from your iPhone",
+      schedule: `the notes from ${coversWords(h.schedule)} (meetings with their summaries, transcripts and your other notes), ${scheduleWords(h.schedule)},`,
     }[h.when] ?? "the text";
     const only = h.title_has ? ` (only when its title has “${h.title_has}”)` : "";
     const put = {
@@ -341,8 +412,11 @@ function hookSentence(h) {
       clipboard: "replaces what's on the clipboard",
       web: `is sent to ${h.to || "the web address"}, signed with your webhook secret`,
     }[h.put];
-    const long = hookAi?.[1] ? " A long meeting is read a part at a time there, which can take a few minutes." : "";
-    return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. What it writes ${put}. It can only write: it can't send, open or change anything else.${long}`;
+    const long = hookAi?.[1]
+      ? ` ${h.when === "schedule" ? "Many notes are" : "A long meeting is"} read a part at a time there, which can take a few minutes.`
+      : "";
+    const late = h.when === "schedule" ? HOOK_LATE : "";
+    return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. What it writes ${put}. It can only write: it can't send, open or change anything else.${long}${late}`;
   }
   const what = h.kind === "web"
     ? `Splashdown sends the text and its details to ${h.url || "the web address"}, signed with your webhook secret.`
@@ -353,6 +427,7 @@ function hookSentence(h) {
     meeting: " When a meeting's note is finished, with its summary.",
     transcript: " When a transcript of a file, a link, an app's audio or the microphone is finished.",
     "phone-note": " For each note from your iPhone.",
+    schedule: ` ${scheduleWords(h.schedule).replace(/^./, (c) => c.toUpperCase())}, with the notes from ${coversWords(h.schedule)} as the text.${HOOK_LATE}`,
   }[h.when];
   const only = h.title_has ? ` Only when the title has “${h.title_has}”.` : "";
   return what + when + only;
@@ -369,9 +444,10 @@ function renderHooks(hooks) {
       row.classList.toggle("dim", !on);
       const lbl = document.createElement("span");
       lbl.className = "lbl";
-      const when = HOOK_EVENTS.find(([v]) => v === h.when)?.[1] ?? h.when;
+      const when = h.when === "schedule" ? scheduleWords(h.schedule) : HOOK_EVENTS.find(([v]) => v === h.when)?.[1] ?? h.when;
       const only = h.preset ? ` · ${presetName(h.preset)}` : h.title_has ? ` · “${h.title_has}”` : "";
-      lbl.textContent = (h.kind === "ask" ? `${h.name} · ${when.toLowerCase()}` : when) + only;
+      const shown = h.when === "schedule" ? when : when.toLowerCase();
+      lbl.textContent = (h.kind === "ask" ? `${h.name} · ${shown}` : when.replace(/^./, (c) => c.toUpperCase())) + only;
       const small = document.createElement("small");
       small.textContent = hookSummary(h) + (on ? "" : " · off");
       lbl.append(small);
@@ -501,6 +577,43 @@ function editHook(index) {
   kind.value = h.kind;
   const titleHas = text(h.title_has, "1:1");
   const titlePart = field("Only when the title has", titleHas, "Leave empty for all of them.");
+  // On a schedule: the time, the days and how far back its notes go.
+  const at = document.createElement("input");
+  at.type = "time";
+  at.value = h.schedule?.at?.padStart(5, "0") ?? "16:00";
+  const days = document.createElement("select");
+  days.append(
+    new Option("Every day", "every"),
+    new Option("Weekdays", "weekdays"),
+    ...HOOK_DAYS.map(([d, name]) => new Option(`${name}s`, d)),
+  );
+  // Days set by hand in the settings file that the list can't say.
+  let otherDays = null;
+  const showDays = (list) => {
+    const set = HOOK_DAYS.map(([d]) => d).filter((d) => (list ?? []).includes(d));
+    days.querySelector('option[value="other"]')?.remove();
+    otherDays = null;
+    if (!set.length || set.length === 7) days.value = "every";
+    else if (set.length === 5 && set.every((d) => HOOK_WEEKDAYS.includes(d))) days.value = "weekdays";
+    else if (set.length === 1) days.value = set[0];
+    else {
+      otherDays = set;
+      days.append(new Option(daysWords(set), "other"));
+      days.value = "other";
+    }
+  };
+  const chosenDays = () =>
+    days.value === "every" ? [] : days.value === "weekdays" ? [...HOOK_WEEKDAYS] : days.value === "other" ? otherDays ?? [] : [days.value];
+  const covers = document.createElement("select");
+  for (const [value, label] of HOOK_COVERS) covers.append(new Option(label, value));
+  covers.value = h.schedule?.covers ?? "day";
+  showDays(h.schedule?.days);
+  const schedulePart = document.createElement("div");
+  schedulePart.append(
+    field("At", at, "This computer's time."),
+    field("On", days),
+    field("With the notes from", covers, "Meetings come with their summaries. Notes hidden from coding agents are left out."),
+  );
   // Asking the AI.
   const starter = document.createElement("select");
   starter.append(new Option("Your own", ""), ...HOOK_STARTERS.map((st, i) => new Option(st.label, String(i))));
@@ -554,6 +667,10 @@ function editHook(index) {
   // The hook as the form has it now.
   const current = () => {
     const hook = { when: when.value, kind: kind.value, on: h.on !== false };
+    if (when.value === "schedule") {
+      hook.schedule = { at: at.value, covers: covers.value };
+      if (chosenDays().length) hook.schedule.days = chosenDays();
+    }
     if (preset.value) hook.preset = preset.value;
     if (!titlePart.hidden && titleHas.value.trim()) hook.title_has = titleHas.value.trim();
     if (kind.value === "web") hook.url = url.value.trim();
@@ -594,6 +711,7 @@ function editHook(index) {
     programPart.hidden = kind.value !== "program";
     askPart.hidden = kind.value !== "ask";
     titlePart.hidden = when.value !== "meeting" && when.value !== "transcript";
+    schedulePart.hidden = when.value !== "schedule";
   };
   // Where the result can go for this event, and what that place needs.
   const showPut = () => {
@@ -633,6 +751,11 @@ function editHook(index) {
     const st = HOOK_STARTERS[Number(starter.value)];
     if (!starter.value || !st) return;
     when.value = st.when;
+    if (st.schedule) {
+      at.value = st.schedule.at;
+      covers.value = st.schedule.covers;
+      showDays(st.schedule.days);
+    }
     askName.value = st.name;
     instruction.value = st.instruction;
     refresh();
@@ -641,7 +764,8 @@ function editHook(index) {
     showTo();
     describe();
   });
-  for (const input of [url, path, args, titleHas, askName, instruction, to]) input.addEventListener("input", describe);
+  for (const input of [url, path, args, titleHas, askName, instruction, to, at]) input.addEventListener("input", describe);
+  for (const input of [days, covers]) input.addEventListener("change", describe);
   refresh();
   const check = async (hook) => {
     const problem = await invoke("hooks_problem", { hook }).catch((err) => String(err));
@@ -657,7 +781,8 @@ function editHook(index) {
     test.disabled = true;
     result.hidden = false;
     result.classList.remove("warn-text");
-    result.textContent = hook.kind === "ask" ? `Asking ${hookAiName()} about a sample…` : "Testing…";
+    const about = hook.when === "schedule" ? `your notes from ${coversWords(hook.schedule)}` : "a sample";
+    result.textContent = hook.kind === "ask" ? `Asking ${hookAiName()} about ${about}…` : "Testing…";
     try {
       result.textContent = await invoke("hooks_test", { hook });
     } catch (e) {
@@ -679,6 +804,7 @@ function editHook(index) {
     field("When", when),
     presetPart,
     titlePart,
+    schedulePart,
     field("What it does", kind),
     webPart,
     programPart,

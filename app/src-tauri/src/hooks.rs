@@ -1,6 +1,7 @@
 //! Hooks (Settings → Actions → When something happens): when a dictation
-//! goes into a field, a meeting or transcript is finished, or a note comes
-//! from the iPhone, run the user's script or program with the text, send
+//! goes into a field, a meeting or transcript is finished, a note comes
+//! from the iPhone, or a time of day comes round (`schedule`, with the
+//! notes made since), run the user's script or program with the text, send
 //! it to a web address as signed JSON, or ask the AI to do something with
 //! it (`ask`). One kind runs before a dictation is inserted and changes
 //! its text. What each gets is in docs/HOOKS.md.
@@ -14,6 +15,7 @@
 
 mod ask;
 pub mod runs;
+pub mod schedule;
 
 use std::path::PathBuf;
 use std::sync::mpsc::{Sender, channel};
@@ -71,6 +73,10 @@ pub struct Happened {
     /// The dictation's preset, by name.
     pub preset: Option<String>,
     pub note: Option<NoteRef>,
+    /// For a hook on a schedule: the notes in `text` were made from then
+    /// until `at`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub since: Option<String>,
     /// Sent by Test in Settings.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub test: bool,
@@ -101,9 +107,33 @@ impl Happened {
             app: None,
             preset: None,
             note: None,
+            since: None,
             test: false,
             preset_id: None,
         }
+    }
+
+    /// A time of day came round at `due`: the notes made from `since`
+    /// until then.
+    fn scheduled(notes: String, since: DateTime<Local>, due: DateTime<Local>) -> Self {
+        Happened {
+            since: Some(since.to_rfc3339()),
+            ..Happened::new(HookEvent::Schedule, notes, due)
+        }
+    }
+
+    /// The days a scheduled hook's notes are from, as a heading says it:
+    /// "2026-11-10" for a day, "2026-11-03 to 2026-11-10" for more.
+    fn period(&self) -> Option<String> {
+        let since = DateTime::parse_from_rfc3339(self.since.as_deref()?).ok()?;
+        let until = DateTime::parse_from_rfc3339(&self.at).ok()?;
+        let day = |t: DateTime<chrono::FixedOffset>| t.format("%Y-%m-%d").to_string();
+        // A day, give or take the hour a clock change adds.
+        Some(if until - since <= chrono::Duration::hours(25) {
+            day(until)
+        } else {
+            format!("{} to {}", day(since), day(until))
+        })
     }
 
     /// A dictation into `app` with the preset `(id, name)`.
@@ -155,6 +185,9 @@ impl Happened {
         if let Some(preset) = &self.preset {
             env.push(("SPLASHDOWN_PRESET", preset.clone()));
         }
+        if let Some(since) = &self.since {
+            env.push(("SPLASHDOWN_SINCE", since.clone()));
+        }
         if let Some(note) = &self.note {
             env.push(("SPLASHDOWN_TITLE", note.title.clone()));
             env.push(("SPLASHDOWN_NOTE", note.path.to_string_lossy().into_owned()));
@@ -186,6 +219,13 @@ pub fn fire(app: &AppHandle, happened: Happened) {
     if hooks.is_empty() {
         return;
     }
+    for hook in hooks {
+        run_later(app, hook, happened.clone());
+    }
+}
+
+/// Puts one hook in line to run for what happened, in the background.
+fn run_later(app: &AppHandle, hook: Hook, happened: Happened) {
     let queue = QUEUE.get_or_init(|| {
         let (send, receive) = channel::<(Hook, Happened)>();
         let app = app.clone();
@@ -215,7 +255,8 @@ pub fn fire(app: &AppHandle, happened: Happened) {
                                 .note
                                 .as_ref()
                                 .map(|n| n.title.clone())
-                                .or_else(|| happened.app.clone()),
+                                .or_else(|| happened.app.clone())
+                                .or_else(|| happened.period()),
                             ok,
                             said,
                             took: started.elapsed().as_secs_f32(),
@@ -232,10 +273,7 @@ pub fn fire(app: &AppHandle, happened: Happened) {
         }
         Mutex::new(send)
     });
-    let queue = queue.locked();
-    for hook in hooks {
-        let _ = queue.send((hook, happened.clone()));
-    }
+    let _ = queue.locked().send((hook, happened));
 }
 
 /// A meeting's or transcript's note at `rel` is finished.
@@ -279,7 +317,7 @@ fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<String
 /// Asks before running a hook that wasn't set up in Settings; allowing it
 /// means not asking again.
 fn allowed(app: &AppHandle, hook: &Hook) -> bool {
-    let event = when(hook.when);
+    let event = when(hook);
     let answer = crate::prompt::ask(
         app,
         &format!("Run “{}” {event}?", name(hook)),
@@ -483,6 +521,7 @@ fn event_named(name: &str) -> Option<HookEvent> {
         HookEvent::Meeting,
         HookEvent::Transcript,
         HookEvent::PhoneNote,
+        HookEvent::Schedule,
     ]
     .into_iter()
     .find(|e| e.name() == name)
@@ -510,20 +549,39 @@ fn host(url: &str) -> String {
 }
 
 /// When a hook runs, to end a sentence.
-fn when(event: HookEvent) -> &'static str {
-    match event {
+fn when(hook: &Hook) -> String {
+    match hook.when {
         HookEvent::Dictation => "after each dictation",
         HookEvent::BeforeInsert => "to change each dictation",
         HookEvent::Meeting => "after each meeting",
         HookEvent::Transcript => "after each transcript",
         HookEvent::PhoneNote => "for each note from your iPhone",
+        HookEvent::Schedule => {
+            return hook
+                .schedule
+                .as_ref()
+                .map_or_else(|| "on a schedule".into(), schedule::words);
+        }
+    }
+    .into()
+}
+
+/// What a hook is given, to go in a sentence: "the text", or the notes a
+/// scheduled one reads.
+fn given(hook: &Hook) -> String {
+    match (hook.when, &hook.schedule) {
+        (HookEvent::Schedule, Some(schedule)) => {
+            format!("your notes from {}", schedule.covers.words())
+        }
+        (HookEvent::Schedule, None) => "your notes".into(),
+        _ => "the text".into(),
     }
 }
 
 /// What a hook does and when, in a line: for the confirmation before a
 /// settings file that has it is imported.
 pub(crate) fn summary(hook: &Hook) -> String {
-    format!("{} {}", describe(hook), when(hook.when))
+    format!("{} {}", describe(hook), when(hook))
 }
 
 /// What a hook does, in a sentence.
@@ -541,7 +599,7 @@ fn describe(hook: &Hook) -> String {
             }
             line
         }
-        HookTarget::Web { url } => format!("Sends the text to {url}"),
+        HookTarget::Web { url } => format!("Sends {} to {url}", given(hook)),
         HookTarget::Ask {
             instruction,
             put,
@@ -562,7 +620,10 @@ fn describe(hook: &Hook) -> String {
             } else {
                 ""
             };
-            format!("Gives the text to the AI with “{asks}{more}” and {puts}")
+            format!(
+                "Gives {} to the AI with “{asks}{more}” and {puts}",
+                given(hook)
+            )
         }
     }
 }
@@ -597,10 +658,23 @@ pub fn hooks_ai(app: AppHandle) -> Option<(String, bool)> {
 
 fn test(app: &AppHandle, hook: &Hook) -> Result<String, String> {
     if let Some(asked) = ask::Asked::of(hook) {
-        let happened = ask::sample(hook.when);
+        // A scheduled hook is tried on the notes it would get now, when
+        // there are any: a sample week says little about the user's own.
+        let (happened, from, there) = match schedule::now(app, hook) {
+            Some((happened, notes)) => (
+                happened,
+                format!("your notes ({notes})"),
+                "your notes".to_string(),
+            ),
+            None => (
+                ask::sample(hook.when),
+                "a sample".to_string(),
+                "the sample".to_string(),
+            ),
+        };
         return Ok(match ask::write(app, asked.instruction, &happened)? {
-            Some(text) => format!("From a sample, it wrote:\n\n{text}"),
-            None => "It found nothing to do in the sample.".into(),
+            Some(text) => format!("From {from}, it wrote:\n\n{text}"),
+            None => format!("It found nothing to do in {there}."),
         });
     }
     let happened = sample(hook.when);
@@ -638,6 +712,14 @@ fn sample(event: HookEvent) -> Happened {
             ("default", "Default"),
         ),
         HookEvent::PhoneNote => Happened::phone("This is a test from Splashdown.", Local::now()),
+        HookEvent::Schedule => {
+            let now = Local::now();
+            Happened::scheduled(
+                schedule::SAMPLE.into(),
+                now - chrono::Duration::days(7),
+                now,
+            )
+        }
         HookEvent::Meeting | HookEvent::Transcript => {
             let title = if event == HookEvent::Meeting {
                 "Test meeting"
@@ -729,6 +811,7 @@ mod tests {
             title_has: None,
             on: true,
             trusted: false,
+            schedule: None,
         };
         let asks = hook(HookTarget::Ask {
             name: " Follow-up email ".into(),
@@ -760,9 +843,23 @@ mod tests {
             HookEvent::Meeting,
             HookEvent::Transcript,
             HookEvent::PhoneNote,
+            HookEvent::Schedule,
         ] {
             assert_eq!(event_named(event.name()), Some(event));
         }
+        let weekly = Hook {
+            when: HookEvent::Schedule,
+            schedule: Some(splashdown_config::Schedule {
+                at: "16:00".into(),
+                days: vec![splashdown_config::Day::Fri],
+                covers: splashdown_config::Covers::Week,
+            }),
+            ..asks.clone()
+        };
+        assert_eq!(
+            summary(&weekly),
+            "Gives your notes from the last 7 days to the AI with “Draft a follow-up email to the people in this meeting.” and adds what it writes to the note Drafts on Fridays at 16:00"
+        );
     }
 
     #[cfg(unix)]
@@ -785,6 +882,7 @@ mod tests {
                 title_has: None,
                 on: true,
                 trusted: true,
+                schedule: None,
             }
         };
         let happened =

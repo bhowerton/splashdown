@@ -21,6 +21,9 @@ pub enum HookEvent {
     Transcript,
     /// A note said on the iPhone was added.
     PhoneNote,
+    /// A time of day came round (the hook's `schedule`): it gets the notes
+    /// made since.
+    Schedule,
 }
 
 impl HookEvent {
@@ -32,6 +35,7 @@ impl HookEvent {
             HookEvent::Meeting => "meeting",
             HookEvent::Transcript => "transcript",
             HookEvent::PhoneNote => "phone-note",
+            HookEvent::Schedule => "schedule",
         }
     }
 
@@ -100,6 +104,102 @@ impl PutIn {
     }
 }
 
+/// When a scheduled hook runs, and how far back the notes it gets go.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Schedule {
+    /// The time of day on this computer's clock, as `16:00`.
+    pub at: String,
+    /// The days it runs on; none is every day.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub days: Vec<Day>,
+    #[serde(default, skip_serializing_if = "Covers::is_a_day")]
+    pub covers: Covers,
+}
+
+impl Schedule {
+    /// `at` as an hour and a minute, if it's a time of day.
+    pub fn time(&self) -> Option<(u32, u32)> {
+        let (hour, minute) = self.at.trim().split_once(':')?;
+        let digits =
+            |s: &str| !s.is_empty() && s.len() <= 2 && s.bytes().all(|b| b.is_ascii_digit());
+        if !digits(hour) || minute.len() != 2 || !digits(minute) {
+            return None;
+        }
+        let (hour, minute) = (hour.parse().ok()?, minute.parse().ok()?);
+        (hour < 24 && minute < 60).then_some((hour, minute))
+    }
+
+    /// Whether it runs on the day that's `from_monday` days after a Monday.
+    pub fn runs_on(&self, from_monday: u32) -> bool {
+        self.days.is_empty() || self.days.iter().any(|d| d.from_monday() == from_monday)
+    }
+}
+
+/// A day of the week.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Day {
+    Mon,
+    Tue,
+    Wed,
+    Thu,
+    Fri,
+    Sat,
+    Sun,
+}
+
+impl Day {
+    /// How many days after Monday it is.
+    pub fn from_monday(self) -> u32 {
+        self as u32
+    }
+
+    pub fn name(self) -> &'static str {
+        [
+            "Monday",
+            "Tuesday",
+            "Wednesday",
+            "Thursday",
+            "Friday",
+            "Saturday",
+            "Sunday",
+        ][self as usize]
+    }
+}
+
+/// How far back the notes a scheduled hook gets go, from the time it was
+/// due.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum Covers {
+    /// The 24 hours before.
+    #[default]
+    Day,
+    /// The 7 days before.
+    Week,
+}
+
+impl Covers {
+    pub fn days(self) -> u32 {
+        match self {
+            Covers::Day => 1,
+            Covers::Week => 7,
+        }
+    }
+
+    fn is_a_day(&self) -> bool {
+        *self == Covers::Day
+    }
+
+    /// "the last day", "the last 7 days".
+    pub fn words(self) -> &'static str {
+        match self {
+            Covers::Day => "the last day",
+            Covers::Week => "the last 7 days",
+        }
+    }
+}
+
 /// One hook.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hook {
@@ -119,6 +219,10 @@ pub struct Hook {
     /// Runs without asking first: the user allowed it, or ran its Test.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub trusted: bool,
+    /// When it runs and what it reads, for a hook on a schedule. Last, as
+    /// TOML wants a table after plain values.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub schedule: Option<Schedule>,
 }
 
 fn on() -> bool {
@@ -158,6 +262,11 @@ impl Hook {
 
     /// What's wrong with it before it's saved, if anything.
     pub fn problem(&self) -> Option<String> {
+        if self.when == HookEvent::Schedule
+            && self.schedule.as_ref().and_then(Schedule::time).is_none()
+        {
+            return Some("Choose the time it runs, such as 16:00.".into());
+        }
         match &self.run {
             HookTarget::Program { path, .. } => {
                 let path = path.trim();
@@ -297,6 +406,7 @@ mod tests {
             title_has: None,
             on: true,
             trusted: false,
+            schedule: None,
         }
     }
 
@@ -470,6 +580,44 @@ mod tests {
     }
 
     #[test]
+    fn a_scheduled_hook_needs_a_time() {
+        let at = |at: &str, days: &[Day]| Hook {
+            schedule: Some(Schedule {
+                at: at.into(),
+                days: days.to_vec(),
+                covers: Covers::Week,
+            }),
+            ..ask(
+                HookEvent::Schedule,
+                PutIn::OtherNote,
+                Some("Weekly reviews"),
+            )
+        };
+        assert_eq!(at("16:00", &[Day::Fri]).problem(), None);
+        assert_eq!(at(" 7:05 ", &[]).problem(), None);
+        for wrong in ["", "4pm", "24:00", "16:60", "16", "16:5", "-1:00", "1:2:3"] {
+            assert!(at(wrong, &[]).problem().is_some(), "{wrong}");
+        }
+        // Without a schedule at all.
+        assert!(
+            ask(HookEvent::Schedule, PutIn::Clipboard, None)
+                .problem()
+                .is_some()
+        );
+        // It has no note of its own to put the result in.
+        let in_note = Hook {
+            schedule: at("16:00", &[]).schedule,
+            ..ask(HookEvent::Schedule, PutIn::Note, None)
+        };
+        assert!(in_note.problem().is_some());
+        let fridays = at("16:00", &[Day::Fri]).schedule.unwrap();
+        assert!(fridays.runs_on(4) && !fridays.runs_on(0));
+        assert!(at("16:00", &[]).schedule.unwrap().runs_on(6));
+        assert_eq!((Day::Mon.from_monday(), Day::Sun.from_monday()), (0, 6));
+        assert_eq!(Day::Wed.name(), "Wednesday");
+    }
+
+    #[test]
     fn hooks_read_and_write_as_toml() {
         let text = r#"
 [[hooks]]
@@ -493,9 +641,36 @@ instruction = "List everything I said I'd do."
 put = "other-note"
 to = "Commitments"
 title_has = "1:1"
+
+[[hooks]]
+when = "schedule"
+kind = "ask"
+name = "Weekly review"
+instruction = "Write a review of my week."
+put = "other-note"
+to = "Weekly reviews"
+schedule = { at = "16:00", days = ["fri"], covers = "week" }
+
+[[hooks]]
+when = "schedule"
+kind = "program"
+path = "/Users/me/bin/daily-log"
+schedule = { at = "8:30" }
 "#;
         let settings = Settings::from_toml(text).unwrap();
-        assert_eq!(settings.hooks.len(), 3);
+        assert_eq!(settings.hooks.len(), 5);
+        assert_eq!(
+            settings.hooks[3].schedule,
+            Some(Schedule {
+                at: "16:00".into(),
+                days: vec![Day::Fri],
+                covers: Covers::Week,
+            })
+        );
+        assert_eq!(settings.hooks[3].problem(), None);
+        let daily = settings.hooks[4].schedule.clone().unwrap();
+        assert_eq!((daily.time(), daily.covers), (Some((8, 30)), Covers::Day));
+        assert!(daily.days.is_empty());
         assert_eq!(
             settings.hooks[2].run,
             HookTarget::Ask {

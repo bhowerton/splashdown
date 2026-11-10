@@ -272,7 +272,7 @@ pub fn agent_append(
 
 /// What a note is, for agents: `meeting`, `transcript` (an app's audio,
 /// the microphone, a file or a link), `capture` or `note`.
-fn kind_of(n: &Summary) -> &'static str {
+pub(crate) fn kind_of(n: &Summary) -> &'static str {
     match n.source.as_str() {
         "meeting" => "meeting",
         crate::meeting::APP_AUDIO | crate::meeting::RECORDING | "file" => "transcript",
@@ -316,7 +316,7 @@ fn reachable(settings: &NotesSettings, store: &Store, path: &str) -> Result<Summ
 }
 
 /// When a note was made: its front matter's `created`, or its last change.
-fn made(n: &Summary) -> i64 {
+pub(crate) fn made(n: &Summary) -> i64 {
     n.created
         .as_deref()
         .and_then(|c| DateTime::parse_from_rfc3339(c).ok())

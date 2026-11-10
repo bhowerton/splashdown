@@ -57,7 +57,7 @@ h1 { font-size: 20px; margin: 0 0 16px; font-weight: 650; }
 .group > .row:first-child, .gh + .row, .gh + div > .row:first-child, .gh + [hidden] + .row { border-top: 0; }
 .lbl { flex: 1; min-width: 0; }
 .lbl small { display: block; color: var(--muted); font-size: 12px; }
-select, input[type=text], input[type=password], input[type=number], textarea {
+select, input[type=text], input[type=password], input[type=number], input[type=time], textarea {
   background: var(--surface-2); border: 1px solid var(--border); border-radius: 7px; padding: 5px 9px; outline: none;
 }
 select { min-width: 200px; }

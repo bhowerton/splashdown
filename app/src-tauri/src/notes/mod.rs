@@ -19,7 +19,7 @@
 //! | `links.rs`, `link_helper.rs` | Transcribing a link, and the helper that downloads pages |
 //! | `phone.rs` | Notes said on an iPhone, through iCloud Drive |
 
-mod agents;
+pub(crate) mod agents;
 mod capture;
 pub mod files;
 mod folder;

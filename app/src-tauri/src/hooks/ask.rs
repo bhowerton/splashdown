@@ -71,7 +71,7 @@ pub(super) fn write(
         .answer_model()?
         .ok_or("Asking the AI needs an AI model: choose one in Settings → AI Models.")?;
     let about = About {
-        what: what(happened.event).to_string(),
+        what: what(happened),
         title: happened.note.as_ref().map(|n| n.title.clone()),
         user_name: setup.user_name,
         today: splashdown_core::prompt::today(Local::now().date_naive()),
@@ -106,15 +106,24 @@ pub(super) fn write(
 }
 
 /// What the text is, for the prompt.
-fn what(event: &str) -> &'static str {
-    match event {
+fn what(happened: &Happened) -> String {
+    match happened.event {
         "meeting" => {
             "the note of a meeting they were in, with its transcript (other people are named, or \"Them\")"
         }
         "transcript" => "the transcript of a recording",
         "phone-note" => "a note they said into their phone",
+        "schedule" => {
+            let days = happened
+                .period()
+                .map_or_else(String::new, |days| format!(" ({days})"));
+            return format!(
+                "the notes they made in a stretch of time{days}, oldest first. Each starts with its title after \"# \" and a line in brackets saying what it is and when it was made. A meeting has its summary, or its transcript when it has none, where \"You\" is the user"
+            );
+        }
         _ => "something they dictated",
     }
+    .to_string()
 }
 
 fn put(
@@ -173,7 +182,7 @@ fn notes(app: &AppHandle) -> Result<std::sync::Arc<crate::notes::store::Store>, 
 
 /// The note a result is added to, as the user named it ("Commitments",
 /// "Work/Decisions.md"): its path in the notes folder, and its title.
-fn other_note(to: &str) -> (String, String) {
+pub(super) fn other_note(to: &str) -> (String, String) {
     let named = to.trim().replace('\\', "/");
     let named = named.trim_matches('/');
     let stem = if named.to_ascii_lowercase().ends_with(".md") {
@@ -186,9 +195,13 @@ fn other_note(to: &str) -> (String, String) {
 }
 
 /// The heading a result goes under in a note or file that collects them:
-/// the meeting's or transcript's title and the day. None for a dictation
-/// or a note from the phone, whose results are added as they are.
+/// the meeting's or transcript's title and the day, or the days a
+/// scheduled hook's notes are from. None for a dictation or a note from
+/// the phone, whose results are added as they are.
 fn heading(happened: &Happened) -> Option<String> {
+    if let Some(days) = happened.period() {
+        return Some(days);
+    }
     let note = happened.note.as_ref()?;
     let day = happened.at.get(..10).unwrap_or(&happened.at);
     Some(format!("{} · {day}", note.title.trim()))
@@ -241,6 +254,7 @@ pub(super) fn sample(event: HookEvent) -> Happened {
                 .filter(|s| !s.is_empty());
             happened.text = SAMPLE_MEETING.into();
         }
+        None if event == HookEvent::Schedule => {}
         None => happened.text = SAMPLE_SAID.into(),
     }
     happened
