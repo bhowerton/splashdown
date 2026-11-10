@@ -159,6 +159,7 @@ function collect() {
   s.notes.stop_when_quiet = $("mt-stop-quiet").checked ? null : false;
   s.notes.offer_on_calls = $("mt-offer").checked ? null : false;
   s.notes.meeting_calendar = $("mt-calendar").checked;
+  s.notes.offer_on_calendar = $("mt-calendar-offer").checked;
   s.notes.meeting_speakers = $("mt-speakers").checked;
   s.notes.remember_speakers = $("mt-remember").checked;
   s.notes.ask_by_meaning = $("nt-meaning").checked;

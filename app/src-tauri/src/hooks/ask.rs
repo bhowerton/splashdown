@@ -757,6 +757,7 @@ mod tests {
             all_day: false,
             declined: false,
             title: " Pricing review ".into(),
+            link: None,
             people: vec!["Dana Lee".into()],
         };
         let brief = Happened::coming(String::new(), &coming, Local::now());

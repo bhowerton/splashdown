@@ -3,6 +3,15 @@
 //! when the app it was recording stops using it, the panel offers to stop.
 //! Nothing is recorded until the user clicks. Settings → Notes → Meetings
 //! turns the offer off.
+//!
+//! The same panel offers a meeting on the calendar that's about to start,
+//! with Join (`calls/calendar.rs`). The two share it, so one meeting gets
+//! one offer: while the calendar's is up, and for a while after it was
+//! answered, a call app that takes the microphone gets none of its own;
+//! and a call offered a short while ago is taken to be the meeting that's
+//! starting, which the calendar then leaves alone.
+
+pub mod calendar;
 
 use splashdown_core::sync::Locked;
 use std::collections::HashMap;
@@ -84,6 +93,9 @@ pub enum Offer {
     Record { app: &'static str },
     /// The recorded `app` stopped using it: stop?
     Stop { app: &'static str },
+    /// A calendar event with a link to a call on `service` is about to
+    /// start: join, record?
+    Join { service: &'static str },
 }
 
 /// What the panel shows: the offer, and what to know before answering.
@@ -91,8 +103,17 @@ pub enum Offer {
 pub struct Panel {
     offer: Offer,
     /// The calendar event on now (macOS, with calendar naming on), so the
-    /// user can tell it's the right call.
+    /// user can tell it's the right call; or the one that's about to start.
     event: Option<crate::meeting::Event>,
+    /// For the offer to join: when the event starts, in milliseconds since
+    /// 1970.
+    starts: Option<i64>,
+    /// For the offer to join: Join was clicked, and Record is what's left.
+    joined: bool,
+    /// For the offer to join: the link Join opens. Kept here; the page
+    /// never gets it, and can't have another opened.
+    #[serde(skip)]
+    link: Option<String>,
     /// What recording will do with the settings as they are:
     /// "Transcribed on this computer", "Speakers told apart"…
     summary: Vec<String>,
@@ -107,17 +128,21 @@ fn panel(app: &AppHandle, offer: Offer) -> Panel {
     let mut panel = Panel {
         offer,
         event: None,
+        starts: None,
+        joined: false,
+        link: None,
         summary: Vec::new(),
         recorded: None,
         seconds: SHOW_FOR.as_secs(),
     };
     match offer {
-        Offer::Record { .. } => {
+        Offer::Record { .. } | Offer::Join { .. } => {
             let Some(state) = app.try_state::<AppState>() else {
                 return panel;
             };
             let notes = state.settings().notes;
-            if notes.meeting_calendar {
+            // (The offer to join comes with its own event.)
+            if notes.meeting_calendar && matches!(offer, Offer::Record { .. }) {
                 panel.event = crate::meeting::calendar_event();
             }
             // Where the speech goes, as the meeting would send it.
@@ -153,6 +178,10 @@ fn shown() -> MutexGuard<'static, Option<(Panel, Instant)>> {
     SHOWN.get_or_init(Mutex::default).locked()
 }
 
+/// When a call app on the microphone was last offered to be recorded: for
+/// the calendar, which leaves a meeting that was just offered alone.
+static CALL_OFFERED: Mutex<Option<Instant>> = Mutex::new(None);
+
 /// Call apps on the microphone, and since when.
 #[derive(Default)]
 struct Watcher {
@@ -171,12 +200,15 @@ impl Watcher {
     /// make, if any.
     /// `skip`: apps the user said not to offer to record for (still
     /// followed, to offer to stop a meeting they started themselves).
+    /// `held`: the calendar's offer has the meeting that's starting, so
+    /// the call apps on the microphone count as offered already.
     fn poll(
         &mut self,
         now: Instant,
         using: &[&'static str],
         meeting: bool,
         skip: &[String],
+        held: bool,
     ) -> Option<Offer> {
         self.using.retain(|app, _| using.contains(app));
         self.offered.retain(|app| using.contains(app));
@@ -186,6 +218,16 @@ impl Watcher {
         if !meeting {
             self.recording = None;
             self.offered_stop = false;
+            if held {
+                // One offer for one meeting: no second one for as long as
+                // they keep the microphone.
+                for app in using {
+                    if !self.offered.contains(app) {
+                        self.offered.push(*app);
+                    }
+                }
+                return None;
+            }
             let (app, _) = self
                 .using
                 .iter()
@@ -233,6 +275,11 @@ pub fn watch(app: &AppHandle) {
             loop {
                 std::thread::sleep(POLL);
                 expire(&app);
+                // Recording started some other way while the offer to
+                // join was up: there's nothing left to offer.
+                if crate::meeting::is_running() && calendar::offered_now() {
+                    hide(&app);
+                }
                 // (Settings are in place a moment after launch.)
                 let Some(notes) = app.try_state::<AppState>().map(|s| s.settings().notes) else {
                     continue;
@@ -258,11 +305,15 @@ pub fn watch(app: &AppHandle) {
                     .collect();
                 using.sort_unstable();
                 using.dedup();
+                let held = calendar::has_the_call();
                 if let Some(offer) =
-                    watcher.poll(Instant::now(), &using, meeting, &notes.offer_skip)
+                    watcher.poll(Instant::now(), &using, meeting, &notes.offer_skip, held)
                 {
                     tracing::info!("call offer: {offer:?}");
-                    show(&app, offer);
+                    if matches!(offer, Offer::Record { .. }) {
+                        *CALL_OFFERED.locked() = Some(Instant::now());
+                    }
+                    show(&app, panel(&app, offer));
                 }
             }
         });
@@ -271,10 +322,9 @@ pub fn watch(app: &AppHandle) {
     }
 }
 
-/// Shows the panel in the top right corner, without taking focus from the
+/// Shows `panel` in the top right corner, without taking focus from the
 /// call.
-fn show(app: &AppHandle, offer: Offer) {
-    let panel = panel(app, offer);
+fn show(app: &AppHandle, panel: Panel) {
     *shown() = Some((panel.clone(), Instant::now()));
     let window = match app.get_webview_window(WINDOW) {
         Some(window) => window,
@@ -311,8 +361,8 @@ fn show(app: &AppHandle, offer: Offer) {
             }
         }
     };
-    let height = match offer {
-        Offer::Record { .. } => record_height(panel.event.is_some()),
+    let height = match panel.offer {
+        Offer::Record { .. } | Offer::Join { .. } => record_height(panel.event.is_some()),
         Offer::Stop { .. } => STOP_HEIGHT,
     };
     let _ = window.set_size(tauri::LogicalSize::new(WIDTH, height));
@@ -344,12 +394,12 @@ fn record_height(event: bool) -> f64 {
 /// covering it (the app's questions).
 pub const BELOW: f64 = TOP + 200.0 + 12.0;
 
-/// Hides the panel once it has been up long enough.
+/// Hides the panel once it has been up as long as it said it would.
 fn expire(app: &AppHandle) {
     let mut shown = shown();
     if shown
         .as_ref()
-        .is_some_and(|(_, at)| at.elapsed() >= SHOW_FOR)
+        .is_some_and(|(panel, at)| at.elapsed() >= Duration::from_secs(panel.seconds))
     {
         *shown = None;
         if let Some(window) = app.get_webview_window(WINDOW) {
@@ -374,15 +424,22 @@ pub fn call_offer_state() -> Option<Panel> {
 }
 
 /// The panel's buttons: "record", "stop", "never" (don't offer for this
-/// app again), "settings" (Change…, which leaves the panel up), or anything
-/// else to dismiss it.
+/// app again), "settings" (Change…, which leaves the panel up), "join" (a
+/// meeting on the calendar, which leaves it up too), or anything else to
+/// dismiss it.
 #[tauri::command]
 pub async fn call_offer_answer(answer: String, app: AppHandle) -> Result<(), String> {
     if answer == "settings" {
         crate::tray::open_settings(&app);
         return Ok(());
     }
-    let offered = shown().as_ref().map(|(panel, _)| panel.offer);
+    let panel = shown().as_ref().map(|(panel, _)| panel.clone());
+    let offered = panel.as_ref().map(|panel| panel.offer);
+    if let Some(panel) = panel
+        && matches!(offered, Some(Offer::Join { .. }))
+    {
+        return calendar::answer(&app, panel, &answer);
+    }
     hide(&app);
     match answer.as_str() {
         "record" => crate::meeting::start(&app).map(|_| ()),
@@ -424,31 +481,31 @@ mod tests {
         let t0 = Instant::now();
         let at = |s: u64| t0 + Duration::from_secs(s);
         // A quick microphone check isn't a call.
-        assert_eq!(w.poll(at(0), &["Zoom"], false, &[]), None);
-        assert_eq!(w.poll(at(2), &[], false, &[]), None);
+        assert_eq!(w.poll(at(0), &["Zoom"], false, &[], false), None);
+        assert_eq!(w.poll(at(2), &[], false, &[], false), None);
         // A call: offered once it has settled, and only once.
-        assert_eq!(w.poll(at(4), &["Zoom"], false, &[]), None);
+        assert_eq!(w.poll(at(4), &["Zoom"], false, &[], false), None);
         assert_eq!(
-            w.poll(at(8), &["Zoom"], false, &[]),
+            w.poll(at(8), &["Zoom"], false, &[], false),
             Some(Offer::Record { app: "Zoom" })
         );
-        assert_eq!(w.poll(at(10), &["Zoom"], false, &[]), None);
+        assert_eq!(w.poll(at(10), &["Zoom"], false, &[], false), None);
         // Recording; Zoom lets go of the microphone for a moment (no
         // offer), then for good.
-        assert_eq!(w.poll(at(12), &["Zoom"], true, &[]), None);
-        assert_eq!(w.poll(at(14), &[], true, &[]), None);
-        assert_eq!(w.poll(at(16), &["Zoom"], true, &[]), None);
-        assert_eq!(w.poll(at(18), &[], true, &[]), None);
+        assert_eq!(w.poll(at(12), &["Zoom"], true, &[], false), None);
+        assert_eq!(w.poll(at(14), &[], true, &[], false), None);
+        assert_eq!(w.poll(at(16), &["Zoom"], true, &[], false), None);
+        assert_eq!(w.poll(at(18), &[], true, &[], false), None);
         assert_eq!(
-            w.poll(at(40), &[], true, &[]),
+            w.poll(at(40), &[], true, &[], false),
             Some(Offer::Stop { app: "Zoom" })
         );
-        assert_eq!(w.poll(at(60), &[], true, &[]), None, "offered once");
+        assert_eq!(w.poll(at(60), &[], true, &[], false), None, "offered once");
         // The meeting stopped; the next call is offered again.
-        assert_eq!(w.poll(at(62), &[], false, &[]), None);
-        assert_eq!(w.poll(at(64), &["Teams"], false, &[]), None);
+        assert_eq!(w.poll(at(62), &[], false, &[], false), None);
+        assert_eq!(w.poll(at(64), &["Teams"], false, &[], false), None);
         assert_eq!(
-            w.poll(at(68), &["Teams"], false, &[]),
+            w.poll(at(68), &["Teams"], false, &[], false),
             Some(Offer::Record { app: "Teams" })
         );
     }
@@ -458,10 +515,10 @@ mod tests {
         let mut w = Watcher::default();
         let t0 = Instant::now();
         let at = |s: u64| t0 + Duration::from_secs(s);
-        assert_eq!(w.poll(at(0), &["Zoom"], true, &[]), None);
-        assert_eq!(w.poll(at(10), &["Zoom"], true, &[]), None);
+        assert_eq!(w.poll(at(0), &["Zoom"], true, &[], false), None);
+        assert_eq!(w.poll(at(10), &["Zoom"], true, &[], false), None);
         // Stopped by hand while the call goes on: no offer to record it.
-        assert_eq!(w.poll(at(12), &["Zoom"], false, &[]), None);
+        assert_eq!(w.poll(at(12), &["Zoom"], false, &[], false), None);
     }
 
     #[test]
@@ -470,14 +527,71 @@ mod tests {
         let t0 = Instant::now();
         let at = |s: u64| t0 + Duration::from_secs(s);
         let skip = ["Zoom".to_string()];
-        assert_eq!(w.poll(at(0), &["Zoom"], false, &skip), None);
-        assert_eq!(w.poll(at(8), &["Zoom"], false, &skip), None);
+        assert_eq!(w.poll(at(0), &["Zoom"], false, &skip, false), None);
+        assert_eq!(w.poll(at(8), &["Zoom"], false, &skip, false), None);
         // Recorded by hand anyway: when Zoom lets go, stopping is offered.
-        assert_eq!(w.poll(at(10), &["Zoom"], true, &skip), None);
-        assert_eq!(w.poll(at(12), &[], true, &skip), None);
+        assert_eq!(w.poll(at(10), &["Zoom"], true, &skip, false), None);
+        assert_eq!(w.poll(at(12), &[], true, &skip, false), None);
         assert_eq!(
-            w.poll(at(40), &[], true, &skip),
+            w.poll(at(40), &[], true, &skip, false),
             Some(Offer::Stop { app: "Zoom" })
         );
+    }
+
+    #[test]
+    fn a_meeting_the_calendar_offered_gets_no_second_offer() {
+        let mut w = Watcher::default();
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        // The calendar's offer is up, Join was clicked, and Zoom takes
+        // the microphone: that's the same meeting.
+        assert_eq!(w.poll(at(0), &[], false, &[], true), None);
+        assert_eq!(w.poll(at(2), &["Zoom"], false, &[], true), None);
+        assert_eq!(w.poll(at(10), &["Zoom"], false, &[], true), None);
+        // Not offered later in that call either, once the calendar's
+        // offer is long gone.
+        assert_eq!(w.poll(at(700), &["Zoom"], false, &[], false), None);
+        // Recorded by hand after all: its end is noticed as ever.
+        assert_eq!(w.poll(at(710), &["Zoom"], true, &[], false), None);
+        assert_eq!(w.poll(at(712), &[], true, &[], false), None);
+        assert_eq!(
+            w.poll(at(740), &[], true, &[], false),
+            Some(Offer::Stop { app: "Zoom" })
+        );
+        // The next call is offered again.
+        assert_eq!(w.poll(at(800), &[], false, &[], false), None);
+        assert_eq!(w.poll(at(802), &["Zoom"], false, &[], false), None);
+        assert_eq!(
+            w.poll(at(806), &["Zoom"], false, &[], false),
+            Some(Offer::Record { app: "Zoom" })
+        );
+        // A call that was on before the calendar's offer, and offered
+        // then, isn't offered again after it.
+        assert_eq!(w.poll(at(808), &["Zoom"], false, &[], true), None);
+        assert_eq!(w.poll(at(900), &["Zoom"], false, &[], false), None);
+    }
+
+    #[test]
+    fn the_page_gets_the_offer_to_join_without_its_link() {
+        let panel = Panel {
+            offer: Offer::Join { service: "Zoom" },
+            event: Some(crate::meeting::Event {
+                title: "Pricing review".into(),
+                people: vec!["Dana Lee".into()],
+            }),
+            starts: Some(1_794_322_800_000),
+            joined: false,
+            link: Some("https://zoom.us/j/5551234567".into()),
+            summary: Vec::new(),
+            recorded: None,
+            seconds: 180,
+        };
+        let json = serde_json::to_value(&panel).unwrap();
+        assert_eq!(json["offer"]["join"]["service"], "Zoom");
+        assert_eq!(json["event"]["title"], "Pricing review");
+        assert_eq!(json["starts"], 1_794_322_800_000_i64);
+        assert_eq!(json["joined"], false);
+        assert!(json.get("link").is_none(), "{json}");
+        assert!(!json.to_string().contains("zoom.us"), "{json}");
     }
 }

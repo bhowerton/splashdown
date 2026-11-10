@@ -1,9 +1,12 @@
 //! The calendar, through the Swift shim's EventKit calls: for naming a
 //! meeting (the event on now and who else is invited), only when the user
-//! turns it on; for a hook before a meeting, the events that start soon;
-//! and for voice actions and hooks, adding an event or a reminder.
+//! turns it on; for a hook before a meeting and the offer to join one,
+//! the events that start soon; and for voice actions and hooks, adding an
+//! event or a reminder.
 
 use std::ffi::CString;
+
+use splashdown_core::call_link::{self, CallLink};
 
 use crate::ffi;
 
@@ -55,6 +58,9 @@ pub struct Upcoming {
     /// The user said no to it, or it was called off.
     pub declined: bool,
     pub title: String,
+    /// The link to its video call, when its URL, location or notes have
+    /// one to a known service (`splashdown_core::call_link`).
+    pub link: Option<CallLink>,
     /// The other people invited, by name (or address when there's no name).
     pub people: Vec<String>,
 }
@@ -70,7 +76,8 @@ pub async fn calendar_upcoming(from: f64, to: f64) -> Option<Vec<Upcoming>> {
 }
 
 /// The events in the shim's reply: one on each line, its parts separated
-/// by tabs. A line that isn't one is left out.
+/// by tabs. A line that isn't one is left out. Of an event's URL, location
+/// and notes only the link to its video call is kept.
 fn upcoming(text: &str) -> Vec<Upcoming> {
     text.lines()
         .filter_map(|line| {
@@ -79,12 +86,14 @@ fn upcoming(text: &str) -> Vec<Upcoming> {
             let starts = parts.next()?.parse().ok()?;
             let said = parts.next()?;
             let title = parts.next()?.trim().to_string();
+            let link = call_link::find(parts.next()?);
             Some(Upcoming {
                 id,
                 starts,
                 all_day: said == "all-day",
                 declined: said == "declined",
                 title,
+                link,
                 people: parts
                     .map(str::trim)
                     .filter(|p| !p.is_empty())
@@ -207,7 +216,7 @@ mod tests {
     #[test]
     fn upcoming_events_are_read_from_the_shim_s_lines() {
         let events = upcoming(
-            "A1\t1794322800\t\tPricing review\tDana Lee\tsam@example.com\nB2\t1794326400\tdeclined\tAll hands\nC3\t1794268800\tall-day\tOffsite\nnot an event\nD4\tsoon\t\tNo time",
+            "A1\t1794322800\t\tPricing review\thttps://example.com/agenda Room 4 Join: https://us02web.zoom.us/j/5551234567?pwd=abc Bring the numbers.\tDana Lee\tsam@example.com\nB2\t1794326400\tdeclined\tAll hands\t\nC3\t1794268800\tall-day\tOffsite\tRoom 4, http://zoom.us/j/1 or https://zoom.us.example.com/j/1\tDana Lee\nnot an event\nD4\tsoon\t\tNo time\t\nE5\t1794326400\t\tNo place",
         );
         assert_eq!(events.len(), 3);
         assert_eq!(
@@ -218,11 +227,20 @@ mod tests {
                 all_day: false,
                 declined: false,
                 title: "Pricing review".into(),
+                // Of the place, only the link to the call is kept.
+                link: Some(CallLink {
+                    url: "https://us02web.zoom.us/j/5551234567?pwd=abc".into(),
+                    service: "Zoom",
+                }),
                 people: vec!["Dana Lee".into(), "sam@example.com".into()],
             }
         );
         assert!(events[1].declined && events[1].people.is_empty());
+        assert_eq!(events[1].link, None);
         assert!(events[2].all_day && !events[2].declined);
+        // No link that may be opened, and the place isn't a person.
+        assert_eq!(events[2].link, None);
+        assert_eq!(events[2].people, ["Dana Lee"]);
         assert!(upcoming("").is_empty());
     }
 }

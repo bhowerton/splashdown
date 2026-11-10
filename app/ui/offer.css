@@ -1,8 +1,9 @@
 /* The call offer (360 wide, no title bar): Splashdown's name, "Zoom is
    using the microphone", the calendar event, what recording will do, a
    reminder to tell people, and Record. During a meeting, "the call ended
-   — Stop?". A bar along the bottom shows how long it stays. Colors and
-   buttons come from base.css. */
+   — Stop?". For a meeting on the calendar, "Your meeting starts in 2
+   minutes", with Join beside Record. A bar along the bottom shows how
+   long it stays. Colors and buttons come from base.css. */
 .of-body { overflow: hidden; background: var(--surface); }
 .of { position: relative; height: 100vh; box-sizing: border-box; padding: 10px 14px 12px; display: flex; flex-direction: column; -webkit-user-select: none; user-select: none; }
 .of-brand { display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: .02em; margin-bottom: 6px; }

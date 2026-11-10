@@ -8,11 +8,15 @@
 //! whose time passed while the computer slept still gets its hook for a
 //! few minutes after it starts, and is let go after that. A hook that's
 //! new, changed or turned back on starts with the events still ahead.
+//!
+//! The offer to join a meeting (`calls/calendar.rs`) reads the events that
+//! start soon through here too.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::Deserialize;
+use splashdown_core::call_link::CallLink;
 use splashdown_core::meeting::Turn;
 
 use super::*;
@@ -41,7 +45,7 @@ pub(super) const SAMPLE: &str = "# Pricing review\n[The meeting about to start, 
 
 /// A calendar event that starts soon.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(super) struct Event {
+pub(crate) struct Event {
     /// The calendar's name for it: the same each time a repeating event
     /// comes round.
     pub id: String,
@@ -50,6 +54,8 @@ pub(super) struct Event {
     /// The user said no to it, or it was called off.
     pub declined: bool,
     pub title: String,
+    /// The link to its video call, when it has one to a known service.
+    pub link: Option<CallLink>,
     /// The other people invited.
     pub people: Vec<String>,
 }
@@ -167,7 +173,7 @@ const NO_ACCESS: &str = "Splashdown may not read your calendar. Allow it in Syst
 /// The events that start from `from` until `to`, in the order they start;
 /// `None` when the calendar may not be read. macOS asks the first time.
 #[cfg(target_os = "macos")]
-fn events(from: DateTime<Local>, to: DateTime<Local>) -> Option<Vec<Event>> {
+pub(crate) fn events(from: DateTime<Local>, to: DateTime<Local>) -> Option<Vec<Event>> {
     use chrono::TimeZone;
     let now = Local::now();
     let seconds = |t: DateTime<Local>| (t - now).num_seconds() as f64;
@@ -187,6 +193,7 @@ fn events(from: DateTime<Local>, to: DateTime<Local>) -> Option<Vec<Event>> {
                     all_day: e.all_day,
                     declined: e.declined,
                     title: e.title,
+                    link: e.link,
                     people: e.people,
                 })
             })
@@ -196,7 +203,7 @@ fn events(from: DateTime<Local>, to: DateTime<Local>) -> Option<Vec<Event>> {
 
 /// The calendar is read on a Mac only.
 #[cfg(not(target_os = "macos"))]
-fn events(_from: DateTime<Local>, _to: DateTime<Local>) -> Option<Vec<Event>> {
+pub(crate) fn events(_from: DateTime<Local>, _to: DateTime<Local>) -> Option<Vec<Event>> {
     None
 }
 
@@ -277,7 +284,7 @@ fn key(hook: &Hook) -> String {
 /// An event by the calendar's name for it and the day it's on, so one
 /// that's moved to later that day isn't a new one, and each time a
 /// repeating event comes round is. Not its title: this is kept in a file.
-fn code(event: &Event) -> String {
+pub(crate) fn code(event: &Event) -> String {
     use sha2::Digest;
     let day = event.starts.format("%Y-%m-%d");
     let what = if event.id.is_empty() {
@@ -531,6 +538,7 @@ mod tests {
             all_day: false,
             declined: false,
             title: title.into(),
+            link: None,
             people: people.iter().map(|p| p.to_string()).collect(),
         }
     }

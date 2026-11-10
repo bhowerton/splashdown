@@ -65,6 +65,10 @@ pub struct NotesSettings {
     /// Name a meeting (and list who's in it) from the calendar event on
     /// when it starts. macOS only.
     pub meeting_calendar: bool,
+    /// Offer to join and record a meeting when a calendar event with a
+    /// link to a video call is about to start. Off unless turned on: the
+    /// calendar is looked at every half minute while it's on. macOS only.
+    pub offer_on_calendar: bool,
     /// Tell the other people in a meeting apart (Speaker 1, Speaker 2…)
     /// with the downloaded diarization model.
     pub meeting_speakers: bool,

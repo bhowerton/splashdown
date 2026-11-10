@@ -7,6 +7,7 @@ pub mod action;
 pub mod aloud;
 pub mod ask;
 mod audio;
+pub mod call_link;
 pub mod command;
 pub mod compose;
 pub mod computer;

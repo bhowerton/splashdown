@@ -80,11 +80,13 @@ pub(super) fn call_app() -> (Option<String>, String) {
 }
 
 /// Records a meeting (or an app's audio) until it's stopped, then finishes
-/// its note. With `carry_on`, the note is one that was finished before:
-/// the recording adds to it, timed from where it stopped.
+/// its note. `named`: the calendar event a meeting is known to be. With
+/// `carry_on`, the note is one that was finished before: the recording
+/// adds to it, timed from where it stopped.
 pub(super) fn record(
     app: &AppHandle,
     source: &Source,
+    named: Option<Event>,
     stop: &AtomicBool,
     keep: &AtomicBool,
     carry_on: Option<&str>,
@@ -139,6 +141,8 @@ pub(super) fn record(
     let now = chrono::Local::now();
     // A meeting on the calendar names the note and says who's in it.
     let event = match source {
+        // The one the user chose to record, when it has a name.
+        Source::Meeting if named.as_ref().is_some_and(|e| !e.title.trim().is_empty()) => named,
         Source::Meeting if settings.notes.meeting_calendar => calendar_event(),
         _ => None,
     };

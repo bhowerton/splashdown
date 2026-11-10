@@ -934,6 +934,7 @@ fn sample(event: HookEvent) -> Happened {
                 all_day: false,
                 declined: false,
                 title: "Pricing review".into(),
+                link: None,
                 people: vec!["Dana Lee".into(), "Sam Reyes".into()],
             };
             Happened::coming(calendar::SAMPLE.into(), &event, now)

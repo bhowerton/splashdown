@@ -176,9 +176,16 @@ pub fn start(app: &AppHandle) -> Result<String, String> {
     start_recording(app, Source::Meeting)
 }
 
+/// Starts a meeting that's known to be `event` on the calendar (the offer
+/// to join it was answered with Record): its note is named from it and
+/// says who's invited, whether or not meetings are named from the calendar.
+pub(crate) fn start_for(app: &AppHandle, event: Event) -> Result<String, String> {
+    start_with(app, Source::Meeting, Some(event), None)
+}
+
 /// Starts recording `source`, as `start`.
 pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String> {
-    start_on(app, source, None)
+    start_with(app, source, None, None)
 }
 
 /// Carries on the finished meeting (or microphone recording) in note
@@ -193,11 +200,18 @@ pub fn carry_on(app: &AppHandle, rel: &str) -> Result<String, String> {
         RECORDING => Source::Microphone,
         _ => return Err("Only a meeting or a microphone recording can be carried on.".into()),
     };
-    start_on(app, source, Some(rel.to_string()))
+    start_with(app, source, None, Some(rel.to_string()))
 }
 
-/// Starts recording `source`: into a new note, or the one to carry on.
-fn start_on(app: &AppHandle, source: Source, carry_on: Option<String>) -> Result<String, String> {
+/// Starts recording `source`: into a new note (named from `event`, when
+/// the meeting is known to be that one on the calendar), or into the note
+/// to carry on.
+fn start_with(
+    app: &AppHandle,
+    source: Source,
+    event: Option<Event>,
+    carry_on: Option<String>,
+) -> Result<String, String> {
     // Held until the thread's handle is stored, so a thread that ends at
     // once (and clears the slot) can't leave its handle on a later meeting.
     let mut slot = running();
@@ -215,7 +229,7 @@ fn start_on(app: &AppHandle, source: Source, carry_on: Option<String>) -> Result
         .spawn(move || {
             // A panic mustn't leave a meeting marked as recording for good.
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                record(&handle, &source, &stop, &keep, carry_on.as_deref())
+                record(&handle, &source, event, &stop, &keep, carry_on.as_deref())
             }))
             .unwrap_or_else(|_| Err("the recording stopped unexpectedly".into()));
             if let Err(e) = result {
@@ -234,7 +248,8 @@ fn start_on(app: &AppHandle, source: Source, carry_on: Option<String>) -> Result
     Ok("Starting a meeting".into())
 }
 
-/// The calendar event on now: its title and who else is invited.
+/// The calendar event on now, or the one about to start: its title and
+/// who else is invited.
 #[derive(Debug, Clone, Serialize)]
 pub(crate) struct Event {
     pub(crate) title: String,

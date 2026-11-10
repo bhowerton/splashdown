@@ -1,7 +1,7 @@
 // The calendar, for naming a meeting: the event on now, its title and who
 // else is invited. Only used when the user turns it on (Settings → Notes →
 // Meetings); macOS asks them for access the first time. And for a hook
-// before a meeting: the events that start soon.
+// before a meeting, and the offer to join one: the events that start soon.
 
 import EventKit
 import Foundation
@@ -82,8 +82,9 @@ private func invited(_ event: EKEvent) -> [String] {
 /// separated by tabs: its identifier (the same each time a repeating event
 /// comes round), when it starts in seconds since 1970, "all-day",
 /// "declined" (the user said no, or it was called off) or nothing, its
-/// title, and then each other person invited. Replies NOT_ENABLED without
-/// access; it never asks for it.
+/// title, where a link to its video call may be (its URL, location and
+/// notes, in that order, with spaces between), and then each other person
+/// invited. Replies NOT_ENABLED without access; it never asks for it.
 @_cdecl("splashdown_calendar_upcoming")
 public func splashdown_calendar_upcoming(
     _ from: Double,
@@ -110,9 +111,12 @@ public func splashdown_calendar_upcoming(
         let me = (event.attendees ?? []).first { $0.isCurrentUser }
         let said = event.isAllDay
             ? "all-day" : (event.status == .canceled || me?.participantStatus == .declined) ? "declined" : ""
+        let place = [event.url?.absoluteString, event.location, event.notes].compactMap { $0 }.joined(separator: " ")
         let parts =
-            [event.eventIdentifier ?? "", String(Int(event.startDate.timeIntervalSince1970)), said, event.title ?? ""]
-            + invited(event)
+            [
+                event.eventIdentifier ?? "", String(Int(event.startDate.timeIntervalSince1970)), said,
+                event.title ?? "", place,
+            ] + invited(event)
         return parts.map(plain).joined(separator: "\t")
     }
     reply.send(OK, lines.joined(separator: "\n"))
