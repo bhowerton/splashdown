@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.12.0 — 2026-11-10
 
 - **Coding agents can search what you dictated, if you let them.** A new tool in `splashdown-mcp`, `search_history`, finds your dictations by words or date: "what did I dictate about the invoice last week?". It has a switch of its own, off by default, in Settings → Privacy → Coding agents; allowing notes doesn't allow it, because history holds everything you dictated anywhere. An agent gets when, the app, the preset and the text that was inserted, never what was heard before cleanup or the recording, and it needs history kept.
 - **Notes from your iPhone.** The new Splashdown Note shortcut (splashdown.app/iphone) turns what you say on your iPhone into text and saves it to your iCloud Drive; Splashdown on your Mac or PC adds it where dictations into a note go (Inbox or today's note), at the time you said it. Start it from the Action Button, Control Center, the Lock Screen or Siri. Windows needs iCloud for Windows.
