@@ -471,6 +471,7 @@ mod tests {
             title_has: None,
             on: true,
             trusted: true,
+            notify: false,
             schedule: Some(schedule),
             before: None,
         }

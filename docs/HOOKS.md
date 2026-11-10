@@ -81,6 +81,17 @@ Where what it writes can go:
 
 If the AI finds nothing to do (no to-dos in a note), nothing is put anywhere, and What ran says so. **Test** asks about a short sample meeting and shows what it would write, without putting it anywhere.
 
+### Being told, and running one now
+
+A hook that asks the AI works in the background and puts what it writes in a note, where you might not look. With **Tell me when it's done** on, a small panel at the top right says the hook has written something, shows how it starts, and has **Open** when it went into a note. The panel stays for five minutes unless you answer it, and makes way at once for a question Splashdown needs answered. The ready-made weekly review, daily wrap-up and brief have it on. In `config.toml` it's `notify = true`.
+
+A hook on a schedule or before a meeting needn't wait for its time:
+
+- **Run now**, next to it in Settings, runs it on the notes it would get at this moment: the last day or 7 days up to now, or your next meeting on the calendar that has earlier notes.
+- **By voice**, the way your own actions are run: hold the dictation key, tap the instruction key and say "run my weekly review". It goes by the hook's name, for hooks that ask the AI. One of your own actions with the same name wins.
+
+Either way the result goes where the hook says, and you're told when it's done.
+
 ### Which AI, and long meetings
 
 The text goes to the AI that follows your instructions (Settings → AI Models), and the editor says which one that is: the one on this computer, or a cloud provider. In local-only mode it's always the one on this computer.

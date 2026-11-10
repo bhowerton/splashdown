@@ -517,6 +517,7 @@ mod tests {
             title_has: None,
             on: true,
             trusted: true,
+            notify: false,
             schedule: None,
             before: minutes.map(|minutes| Before { minutes }),
         }

@@ -347,6 +347,7 @@ const HOOK_STARTERS = [
   },
   {
     label: "Weekly review, on Fridays",
+    notify: true,
     when: "schedule",
     schedule: { at: "16:00", days: ["fri"], covers: "week" },
     name: "Weekly review",
@@ -357,6 +358,7 @@ const HOOK_STARTERS = [
   },
   {
     label: "Daily wrap-up, on weekdays",
+    notify: true,
     when: "schedule",
     schedule: { at: "17:30", days: [...HOOK_WEEKDAYS], covers: "day" },
     name: "Daily wrap-up",
@@ -367,6 +369,7 @@ const HOOK_STARTERS = [
   },
   {
     label: "Brief, before a meeting",
+    notify: true,
     when: "before-meeting",
     before: { minutes: 10 },
     name: "Brief",
@@ -437,7 +440,8 @@ function hookSentence(h) {
       ? ` ${h.when === "schedule" || h.when === "before-meeting" ? "Many notes are" : "A long meeting is"} read a part at a time there, which can take a few minutes.`
       : "";
     const late = h.when === "schedule" ? HOOK_LATE : h.when === "before-meeting" ? HOOK_CALENDAR : "";
-    return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. What it writes ${put}. It can only write: it can't send, open or change anything else.${long}${late}`;
+    const told = h.notify ? " A small panel tells you when it's done." : "";
+    return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. What it writes ${put}.${told} It can only write: it can't send, open or change anything else.${long}${late}`;
   }
   const what = h.kind === "web"
     ? `Splashdown sends the text and its details to ${h.url || "the web address"}, signed with your webhook secret.`
@@ -476,6 +480,20 @@ function renderHooks(hooks) {
       lbl.append(small);
       const buttons = document.createElement("span");
       buttons.className = "ma-buttons";
+      // One with notes of its own to run on needn't wait for its time.
+      if (on && (h.when === "schedule" || h.when === "before-meeting")) {
+        const now = button("Run now", async () => {
+          now.disabled = true;
+          try {
+            toast(await invoke("hooks_run_now", { hook: h }));
+          } catch (e) {
+            toast(String(e), true);
+          } finally {
+            now.disabled = false;
+          }
+        }, "link");
+        buttons.append(now);
+      }
       buttons.append(
         button(on ? "Turn off" : "Turn on", () => updateHooks((list) => (list[i] = { ...list[i], on: !on })), "link"),
         button("Edit…", () => editHook(i), "btn"),
@@ -664,6 +682,13 @@ function editHook(index) {
   const put = document.createElement("select");
   const to = text(h.kind === "ask" ? h.to : "", "");
   const toPart = field("", to);
+  // Tell me when it's done: a panel with how it starts and a way to open it.
+  const notify = document.createElement("input");
+  notify.type = "checkbox";
+  notify.checked = !!h.notify;
+  const notifyPart = document.createElement("label");
+  notifyPart.className = "ma-check";
+  notifyPart.append(notify, "Tell me when it's done", Object.assign(document.createElement("small"), { textContent: " A small panel shows how it starts, with Open." }));
   const askPart = document.createElement("div");
   askPart.append(
     field("Start from", starter),
@@ -671,6 +696,7 @@ function editHook(index) {
     field("What the AI should do", instruction, "In your own words."),
     field("Put what it writes", put),
     toPart,
+    notifyPart,
   );
   const url = text(h.url, "https://hooks.zapier.com/hooks/catch/…");
   const path = text(h.path, mac ? "/Users/you/bin/to-slack.sh" : "C:\\Scripts\\to-slack.ps1");
@@ -719,6 +745,7 @@ function editHook(index) {
       hook.instruction = instruction.value.trim();
       hook.put = put.value;
       if (!toPart.hidden) hook.to = to.value.trim();
+      if (notify.checked) hook.notify = true;
     } else {
       hook.path = path.value.trim();
       hook.args = args.value.split("\n").map((a) => a.trim()).filter(Boolean);
@@ -800,6 +827,7 @@ function editHook(index) {
     if (st.before) minutes.value = String(st.before.minutes);
     askName.value = st.name;
     instruction.value = st.instruction;
+    notify.checked = !!st.notify;
     refresh();
     put.value = st.put;
     to.value = st.to ?? "";
@@ -807,7 +835,7 @@ function editHook(index) {
     describe();
   });
   for (const input of [url, path, args, titleHas, askName, instruction, to, at, minutes]) input.addEventListener("input", describe);
-  for (const input of [days, covers]) input.addEventListener("change", describe);
+  for (const input of [days, covers, notify]) input.addEventListener("change", describe);
   refresh();
   const check = async (hook) => {
     const problem = await invoke("hooks_problem", { hook }).catch((err) => String(err));

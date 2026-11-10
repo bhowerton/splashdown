@@ -44,16 +44,31 @@ impl<'a> Asked<'a> {
     }
 }
 
-/// Asks, and puts the answer where it goes: what was done, in a few words.
-pub(super) fn run(
-    app: &AppHandle,
-    asked: &Asked<'_>,
-    happened: &Happened,
-) -> Result<String, String> {
+/// Asks, and puts the answer where it goes: what was done, in a few words,
+/// with what was written.
+pub(super) fn run(app: &AppHandle, asked: &Asked<'_>, happened: &Happened) -> Result<Did, String> {
     let Some(text) = write(app, asked.instruction, happened)? else {
-        return Ok("Nothing to do".into());
+        return Ok(Did::only("Nothing to do"));
     };
-    put(app, asked, happened, &text)
+    let said = put(app, asked, happened, &text)?;
+    Ok(Did {
+        said,
+        wrote: Some(text),
+    })
+}
+
+/// The note what was written went into, by its place in the notes folder,
+/// when it went into one: to open it from the notice.
+pub(super) fn note_of(asked: &Asked<'_>, happened: &Happened) -> Option<String> {
+    match asked.put {
+        PutIn::Note => happened
+            .note
+            .as_ref()
+            .map(|n| n.rel.clone())
+            .filter(|rel| !rel.is_empty()),
+        PutIn::OtherNote => Some(other_note(asked.to.unwrap_or_default()).0),
+        _ => None,
+    }
 }
 
 /// What the AI wrote for `instruction` about what happened; `None` when it

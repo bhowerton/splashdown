@@ -41,7 +41,11 @@ pub fn run(
     text: Option<&str>,
 ) -> Result<Done, String> {
     let Some(action) = settings.mine.iter().find(|m| m.name == name) else {
-        return Err(format!("No action called “{name}”"));
+        // Not one of the user's actions: a hook they can run by name.
+        return match crate::hooks::run_named(app, name) {
+            Some(running) => running.map(|text| Done { text, undo: None }),
+            None => Err(format!("No action called “{name}”")),
+        };
     };
     let text = text.map(str::trim).filter(|t| !t.is_empty());
     if action.takes_text() && text.is_none() {

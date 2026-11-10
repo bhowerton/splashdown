@@ -17,6 +17,7 @@
 
 mod ask;
 pub mod calendar;
+mod notice;
 pub mod runs;
 pub mod schedule;
 
@@ -279,7 +280,7 @@ fn run_later(app: &AppHandle, hook: Hook, happened: Happened) {
                     let started = Instant::now();
                     let result = run_after(&app, &hook, &happened);
                     let (ok, said) = match &result {
-                        Ok(said) => (true, said.clone()),
+                        Ok(did) => (true, did.said.clone()),
                         Err(e) => (false, e.clone()),
                     };
                     runs::record(
@@ -288,21 +289,23 @@ fn run_later(app: &AppHandle, hook: Hook, happened: Happened) {
                             at: Local::now().to_rfc3339(),
                             event: happened.event.to_string(),
                             hook: name(&hook),
-                            about: happened
-                                .note
-                                .as_ref()
-                                .map(|n| n.title.clone())
-                                .or_else(|| happened.meeting.as_ref().map(|m| m.title.clone()))
-                                .or_else(|| happened.app.clone())
-                                .or_else(|| happened.period()),
+                            about: notice::about(&happened),
                             ok,
                             said,
                             took: started.elapsed().as_secs_f32(),
                         },
                     );
-                    if let Err(e) = result {
-                        tracing::warn!("hook {} ({}): {e}", name(&hook), happened.event);
-                        warn(&format!("{}: {e}", name(&hook)));
+                    match result {
+                        Err(e) => {
+                            tracing::warn!("hook {} ({}): {e}", name(&hook), happened.event);
+                            warn(&format!("{}: {e}", name(&hook)));
+                        }
+                        // The user asked to be told when it has written.
+                        Ok(Did {
+                            said,
+                            wrote: Some(wrote),
+                        }) if hook.notify => notice::tell(&app, &hook, &happened, &said, &wrote),
+                        Ok(_) => {}
                     }
                 }
             });
@@ -328,13 +331,29 @@ pub fn note_finished(app: &AppHandle, event: HookEvent, rel: &str) {
     }
 }
 
-/// Runs a hook for what happened, once it's allowed to: what it did, in a
-/// few words.
-fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<String, String> {
+/// What a hook did.
+struct Did {
+    /// In a few words, for what ran: "Added to Briefs".
+    said: String,
+    /// What the AI wrote, for a hook that asked it and got something.
+    wrote: Option<String>,
+}
+
+impl Did {
+    fn only(said: impl Into<String>) -> Self {
+        Did {
+            said: said.into(),
+            wrote: None,
+        }
+    }
+}
+
+/// Runs a hook for what happened, once it's allowed to: what it did.
+fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<Did, String> {
     match &hook.run {
         HookTarget::Program { path, args } => {
             match crate::programs::run(path, args, &happened.text, &happened.env(), AFTER_LIMIT)? {
-                Ended::Finished { ok: true, .. } => Ok("Ran without errors".into()),
+                Ended::Finished { ok: true, .. } => Ok(Did::only("Ran without errors")),
                 Ended::Finished { error, .. } if !error.is_empty() => Err(error),
                 Ended::Finished { .. } => Err("stopped with an error".into()),
                 Ended::TooLong => Err(format!("stopped after {} seconds", AFTER_LIMIT.as_secs())),
@@ -343,13 +362,81 @@ fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<String
         HookTarget::Web { url } => {
             let body = serde_json::to_string(happened).map_err(|e| e.to_string())?;
             send(url, happened.event, body)?;
-            Ok(format!("Sent to {}", host(url)))
+            Ok(Did::only(format!("Sent to {}", host(url))))
         }
         HookTarget::Ask { .. } => {
             let asked = ask::Asked::of(hook).ok_or("not something to ask")?;
             ask::run(app, &asked, happened)
         }
     }
+}
+
+// ---------------------------------------------------------------- now
+
+/// Runs a hook that's on a schedule or before a meeting now, as if its
+/// time had come, on the notes it would get: what it's running on, in a few
+/// words. Its result is put where the hook says, and shown, since it was
+/// asked for.
+pub fn run_now(app: &AppHandle, hook: &Hook) -> Result<String, String> {
+    let (happened, on) = match (hook.when, &hook.schedule) {
+        (HookEvent::Schedule, Some(schedule)) => {
+            let (happened, notes) = schedule::now(app, hook)
+                .ok_or_else(|| format!("You have no notes from {}.", schedule.covers.words()))?;
+            (happened, format!("your notes ({notes})"))
+        }
+        (HookEvent::BeforeMeeting, _) => calendar::next(app, hook).ok_or(
+            "No meeting on your calendar in the next week has earlier notes to write from.",
+        )?,
+        _ => {
+            return Err(
+                "This hook runs when something happens: there's nothing to run it on now.".into(),
+            );
+        }
+    };
+    let hook = Hook {
+        notify: true,
+        ..hook.clone()
+    };
+    let named = name(&hook);
+    tracing::info!("running the hook {named} now");
+    run_later(app, hook, happened);
+    Ok(format!("Running “{named}” on {on}"))
+}
+
+/// Whether a hook can be run now: it's on a schedule or before a meeting,
+/// so it has notes of its own to run on.
+fn runs_now(hook: &Hook) -> bool {
+    matches!(hook.when, HookEvent::Schedule | HookEvent::BeforeMeeting)
+}
+
+/// The hooks that can be run by saying their name ("run my weekly
+/// review"), as the planner of voice actions sees the user's own actions:
+/// ones that ask the AI, are on, and can be run now.
+pub fn for_planner(hooks: &[Hook]) -> Vec<splashdown_core::action::Mine> {
+    hooks
+        .iter()
+        .filter(|h| h.on && runs_now(h) && matches!(h.run, HookTarget::Ask { .. }))
+        .map(|h| splashdown_core::action::Mine {
+            name: name(h),
+            about: format!(
+                "writes it now from {}, without waiting for its time",
+                given(h)
+            ),
+            takes_text: false,
+        })
+        .collect()
+}
+
+/// Runs the hook called `name` now, for a voice action: what it's running
+/// on. `None` when no hook that can be run by name is called that.
+pub fn run_named(app: &AppHandle, called: &str) -> Option<Result<String, String>> {
+    let settings = app.try_state::<AppState>()?.settings();
+    let hook = settings.hooks.iter().find(|h| {
+        h.on && runs_now(h)
+            && matches!(h.run, HookTarget::Ask { .. })
+            && name(h).eq_ignore_ascii_case(called.trim())
+    })?;
+    Some(run_now(app, hook))
 }
 
 /// Asks before running a hook that wasn't set up in Settings; allowing it
@@ -689,6 +776,19 @@ pub async fn hooks_test(hook: Hook, app: AppHandle) -> Result<String, String> {
         .map_err(|e| e.to_string())?
 }
 
+/// Run now: runs a hook on a schedule or before a meeting as if its time
+/// had come; what it's running on. What it writes goes where the hook
+/// says, and is shown when it's done.
+#[tauri::command]
+pub async fn hooks_run_now(hook: Hook, app: AppHandle) -> Result<String, String> {
+    if let Some(problem) = hook.problem() {
+        return Err(problem);
+    }
+    tauri::async_runtime::spawn_blocking(move || run_now(&app, &hook))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// The AI that a hook's instruction goes to, and whether it's on this
 /// computer; `None` without one.
 #[tauri::command]
@@ -864,6 +964,7 @@ mod tests {
             title_has: None,
             on: true,
             trusted: false,
+            notify: false,
             schedule: None,
             before: None,
         };
@@ -960,6 +1061,7 @@ mod tests {
                 title_has: None,
                 on: true,
                 trusted: true,
+                notify: false,
                 schedule: None,
                 before: None,
             }

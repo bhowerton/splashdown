@@ -254,6 +254,10 @@ pub struct Hook {
     /// Runs without asking first: the user allowed it, or ran its Test.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub trusted: bool,
+    /// Tell the user when it has written something, in a small panel with
+    /// a way to open it. For a hook that asks the AI.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub notify: bool,
     /// When it runs and what it reads, for a hook on a schedule. Last, as
     /// TOML wants a table after plain values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -466,6 +470,7 @@ mod tests {
             title_has: None,
             on: true,
             trusted: false,
+            notify: false,
             schedule: None,
             before: None,
         }
@@ -749,6 +754,7 @@ name = "Weekly review"
 instruction = "Write a review of my week."
 put = "other-note"
 to = "Weekly reviews"
+notify = true
 schedule = { at = "16:00", days = ["fri"], covers = "week" }
 
 [[hooks]]
@@ -796,6 +802,8 @@ path = "/Users/me/bin/brief"
             })
         );
         assert_eq!(settings.hooks[3].problem(), None);
+        // Told when it's done; the others aren't.
+        assert!(settings.hooks[3].notify && !settings.hooks[2].notify);
         let daily = settings.hooks[4].schedule.clone().unwrap();
         assert_eq!((daily.time(), daily.covers), (Some((8, 30)), Covers::Day));
         assert!(daily.days.is_empty());

@@ -4,6 +4,29 @@
 use super::*;
 
 impl Controller {
+    /// What the user can run by saying its name: their own actions, then
+    /// the hooks that can be run now ("run my weekly review"), unless an
+    /// action already has the name.
+    fn said_by_name(
+        &self,
+        actions: &splashdown_config::ActionSettings,
+    ) -> Vec<splashdown_core::action::Mine> {
+        use tauri::Manager;
+        let mut mine = crate::my_actions::for_planner(actions);
+        let hooks = self
+            .ui
+            .app()
+            .try_state::<crate::state::AppState>()
+            .map(|state| state.settings().hooks)
+            .unwrap_or_default();
+        for hook in crate::hooks::for_planner(&hooks) {
+            if !mine.iter().any(|m| m.name.eq_ignore_ascii_case(&hook.name)) {
+                mine.push(hook);
+            }
+        }
+        mine
+    }
+
     /// A spoken command (the instruction key with nothing said before
     /// it): transcribe it, let the AI say what it means, and do that.
     pub(super) fn run_command(&mut self, active: &Active, clip: &AudioClip) {
@@ -228,7 +251,7 @@ impl Controller {
                 Vec::new()
             },
             presets: engine.presets.iter().map(|p| p.name.clone()).collect(),
-            mine: crate::my_actions::for_planner(&engine.actions),
+            mine: self.said_by_name(&engine.actions),
             ..splashdown_core::action::PlanContext::at(chrono::Local::now().naive_local())
         };
         let pipeline = engine.pipeline_for(&active.preset);

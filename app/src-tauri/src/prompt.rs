@@ -5,6 +5,7 @@
 //! alerts don't show for a menu-bar app on recent macOS.
 
 use splashdown_core::sync::Locked;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
@@ -44,6 +45,7 @@ fn pending() -> MutexGuard<'static, Pending> {
 /// clicked, or `None` if the panel was closed. One at a time; call it off
 /// the main thread.
 pub fn ask(app: &AppHandle, title: &str, text: &str, buttons: &[&str]) -> Option<usize> {
+    make_way();
     let _turn = one_at_a_time().locked();
     let prompt = Prompt {
         title: title.into(),
@@ -51,7 +53,43 @@ pub fn ask(app: &AppHandle, title: &str, text: &str, buttons: &[&str]) -> Option
         buttons: buttons.iter().map(|b| b.to_string()).collect(),
         choices: Vec::new(),
     };
-    put(app, prompt, None)
+    put(app, prompt, None, false)
+}
+
+/// Tells the user something that isn't a question (a hook has written a
+/// brief), with answers to pick from, for up to `timeout`: the index of
+/// the button clicked, or `None` if it was closed, ran out of time, or made
+/// way for a question. Taller than a question, to show a few lines. Call
+/// it off the main thread.
+pub fn tell(
+    app: &AppHandle,
+    title: &str,
+    text: &str,
+    buttons: &[&str],
+    timeout: Duration,
+) -> Option<usize> {
+    let _turn = one_at_a_time().locked();
+    let prompt = Prompt {
+        title: title.into(),
+        text: text.into(),
+        buttons: buttons.iter().map(|b| b.to_string()).collect(),
+        choices: Vec::new(),
+    };
+    TELLING.store(true, Ordering::Relaxed);
+    let answer = put(app, prompt, Some(timeout), true);
+    TELLING.store(false, Ordering::Relaxed);
+    answer
+}
+
+/// Whether what's on screen only tells the user something.
+static TELLING: AtomicBool = AtomicBool::new(false);
+
+/// Takes down something the user was only being told, so that a question
+/// doesn't wait behind it.
+fn make_way() {
+    if TELLING.swap(false, Ordering::Relaxed) {
+        answer(None);
+    }
 }
 
 /// Shows `choices` to pick one from, with `buttons` below, for up to
@@ -65,10 +103,23 @@ pub fn choose(
     buttons: &[&str],
     timeout: Duration,
 ) -> Result<Option<usize>, ()> {
-    let _turn = match one_at_a_time().try_lock() {
-        Ok(turn) => turn,
-        Err(std::sync::TryLockError::Poisoned(e)) => e.into_inner(),
-        Err(std::sync::TryLockError::WouldBlock) => return Err(()),
+    // Something the user was only being told makes way, which takes a
+    // moment.
+    let told = TELLING.load(Ordering::Relaxed);
+    make_way();
+    let mut tries = if told { 20 } else { 1 };
+    let _turn = loop {
+        match one_at_a_time().try_lock() {
+            Ok(turn) => break turn,
+            Err(std::sync::TryLockError::Poisoned(e)) => break e.into_inner(),
+            Err(std::sync::TryLockError::WouldBlock) => {
+                tries -= 1;
+                if tries == 0 {
+                    return Err(());
+                }
+                std::thread::sleep(Duration::from_millis(25));
+            }
+        }
     };
     let prompt = Prompt {
         title: title.into(),
@@ -76,7 +127,7 @@ pub fn choose(
         buttons: buttons.iter().map(|b| b.to_string()).collect(),
         choices: choices.iter().map(|c| c.to_string()).collect(),
     };
-    Ok(put(app, prompt, Some(timeout)))
+    Ok(put(app, prompt, Some(timeout), true))
 }
 
 fn one_at_a_time() -> &'static Mutex<()> {
@@ -84,10 +135,10 @@ fn one_at_a_time() -> &'static Mutex<()> {
     &ONE_AT_A_TIME
 }
 
-/// Shows `prompt` and waits for its answer (at most `timeout`).
-fn put(app: &AppHandle, prompt: Prompt, timeout: Option<Duration>) -> Option<usize> {
+/// Shows `prompt` and waits for its answer (at most `timeout`), in the
+/// taller panel when `tall`.
+fn put(app: &AppHandle, prompt: Prompt, timeout: Option<Duration>, tall: bool) -> Option<usize> {
     let (tx, rx) = mpsc::channel();
-    let tall = !prompt.choices.is_empty();
     *pending() = Some((prompt.clone(), tx));
     show(app, tall);
     let _ = app.emit_to(WINDOW, CHANGED, &prompt);

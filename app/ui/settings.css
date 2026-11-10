@@ -280,6 +280,8 @@ dialog.confirm.my-action .confirm-acts {
 .ma-buttons { display: flex; gap: 6px; flex-shrink: 0; }
 .ma-form textarea.ma-instruction { min-height: 96px; }
 .ma-form input[type=time] { width: auto; min-width: 110px; }
+.ma-form label.ma-check { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; font-weight: 400; }
+.ma-form label.ma-check input { width: auto; margin: 0; }
 .ma-result { white-space: pre-wrap; max-height: 180px; overflow-y: auto; overflow-wrap: anywhere; }
 .hk-run { display: block; margin-top: 4px; overflow-wrap: anywhere; }
 

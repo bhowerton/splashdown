@@ -234,6 +234,8 @@ async function mockInvoke(cmd, args) {
       if (args.hook.kind === "ask" && args.hook.when === "before-meeting") return "From your next meeting with earlier notes, Pricing review, and the last 2 notes about it, it wrote:\n\n**Decided**\n- The pricing page goes live on Friday (Pricing review, 10 November)\n\n**For me to do**\n- [ ] Send Dana the final numbers by Wednesday (Pricing review, 10 November)\n\n**Waiting on others**\n- Sam Reyes will check the EU prices with finance (Pricing review, 10 November)";
       if (args.hook.kind === "ask") return "From a sample, it wrote:\n\nHi Dana,\n\nThanks for today. We agreed the pricing page goes live on Friday.\n\n- I'll send you the final numbers by Wednesday.\n- I'll write to support tomorrow.";
       return args.hook.when === "before-insert" ? "It gave back: “This is a test from Splashdown.”" : "Sent, and the server took it.";
+    case "hooks_run_now":
+      return `Running “${args.hook.name ?? "the hook"}” on your notes (5 from the last 7 days)`;
     case "hooks_ai":
       return ["the AI on this computer", true];
     case "hooks_runs":

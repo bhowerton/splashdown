@@ -232,6 +232,7 @@ fn main() {
             hooks::hooks_problem,
             hooks::hooks_test,
             hooks::hooks_ai,
+            hooks::hooks_run_now,
             hooks::runs::hooks_runs,
             hooks::runs::hooks_runs_clear,
             hooks::hooks_secret,
