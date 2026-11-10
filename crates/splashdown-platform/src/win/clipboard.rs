@@ -1,7 +1,11 @@
 //! Clipboard snapshot/restore, paste and typing via `SendInput`, and the
 //! copy-based selection fallback.
 
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+use splashdown_core::sync::Locked;
 
 use windows::Win32::Foundation::{CloseHandle, E_ACCESSDENIED, GlobalFree, HANDLE, HGLOBAL, HWND};
 use windows::Win32::Security::{GetTokenInformation, TOKEN_ELEVATION, TOKEN_QUERY, TokenElevation};
@@ -31,10 +35,12 @@ use windows::core::w;
 use super::{INJECTED_TAG, from_wide};
 use crate::{PlatformError, Result};
 
-/// How long to wait after Ctrl+V before restoring the clipboard. Apps read
-/// the clipboard when they handle the key; too short and they paste the
-/// old contents.
+/// How long to wait after Ctrl+V before carrying on (pressing Enter, say).
 const PASTE_SETTLE: Duration = Duration::from_millis(250);
+/// When the user's clipboard is put back after a paste, in the background.
+/// Apps read the clipboard when they get round to the key (a busy app, a
+/// remote desktop); too soon and they paste the old contents.
+const RESTORE_AFTER: Duration = Duration::from_millis(1000);
 /// How long to wait for Ctrl+C to update the clipboard.
 const COPY_TIMEOUT: Duration = Duration::from_millis(150);
 
@@ -263,19 +269,40 @@ fn write_text(text: &str, transient: bool) -> bool {
 
 /// The text on the clipboard, if any (for a preset's clipboard context).
 pub(crate) fn clipboard_text() -> Option<String> {
+    // Right after a paste the clipboard still holds what we pasted: the
+    // user's clipboard is the one waiting to be put back.
+    {
+        let pending = PENDING_RESTORE.locked();
+        if let Some(p) = pending.as_ref().filter(|p| p.ours == sequence()) {
+            return snapshot_text(&p.saved);
+        }
+    }
     read_text()
+}
+
+/// The plain text in a snapshot, if it has any.
+fn snapshot_text(snap: &Snapshot) -> Option<String> {
+    snap.0
+        .as_ref()?
+        .iter()
+        .find(|(format, _)| *format == CF_UNICODETEXT)
+        .map(|(_, bytes)| text_of(bytes))
 }
 
 fn read_text() -> Option<String> {
     let open = Open::new()?;
-    let bytes = open.read(CF_UNICODETEXT)?;
+    open.read(CF_UNICODETEXT).map(|bytes| text_of(&bytes))
+}
+
+/// CF_UNICODETEXT's bytes (UTF-16, NUL-terminated) as text.
+fn text_of(bytes: &[u8]) -> String {
     let units: Vec<u16> = bytes
         .as_chunks::<2>()
         .0
         .iter()
         .map(|b| u16::from_ne_bytes(*b))
         .collect();
-    Some(from_wide(&units))
+    from_wide(&units)
 }
 
 fn sequence() -> u32 {
@@ -449,9 +476,33 @@ fn post_key(modifier: Option<VIRTUAL_KEY>, key: VIRTUAL_KEY) -> Result<()> {
     send(&inputs)
 }
 
+/// The user's clipboard, waiting to be put back after a paste.
+struct PendingRestore {
+    saved: Snapshot,
+    /// The clipboard's sequence number right after our text went on it.
+    ours: u32,
+    /// Which paste this is; only that paste's timer restores it.
+    paste: u64,
+}
+
+static PASTES: AtomicU64 = AtomicU64::new(0);
+static PENDING_RESTORE: Mutex<Option<PendingRestore>> = Mutex::new(None);
+
+/// The user's clipboard from before a paste of ours a moment ago, if it
+/// hasn't been put back yet and our text is still on the clipboard: that's
+/// what to save and restore, not our own text. Whoever takes it does the
+/// restoring; the paste's timer then leaves it alone.
+fn take_pending() -> Option<Snapshot> {
+    PENDING_RESTORE
+        .locked()
+        .take()
+        .filter(|p| p.ours == sequence())
+        .map(|p| p.saved)
+}
+
 pub(crate) fn paste_text(text: &str) -> Result<()> {
     check_not_blocked()?;
-    let saved = snapshot();
+    let saved = take_pending().unwrap_or_else(snapshot);
     if !write_text(text, true) {
         return Err(PlatformError::Failed(
             "couldn't write to the clipboard".into(),
@@ -465,14 +516,35 @@ pub(crate) fn paste_text(text: &str) -> Result<()> {
     } else {
         post_key(Some(VK_CONTROL), VK_V)
     };
-    if sent.is_ok() {
-        std::thread::sleep(PASTE_SETTLE);
+    if sent.is_err() {
+        // Nothing was pasted: the user's clipboard goes straight back.
+        if sequence() == ours {
+            restore(&saved);
+        }
+        return sent;
     }
-    // Only restore if nobody (the user, another app) changed it meanwhile.
-    if sequence() == ours {
-        restore(&saved);
-    }
-    sent
+    std::thread::sleep(PASTE_SETTLE);
+    // The app in front may read the clipboard well after Ctrl+V, so the
+    // user's clipboard goes back later, in the background, and only if
+    // nobody (the user, another app) changed it meanwhile.
+    let paste = PASTES.fetch_add(1, Ordering::Relaxed) + 1;
+    *PENDING_RESTORE.locked() = Some(PendingRestore { saved, ours, paste });
+    std::thread::spawn(move || {
+        std::thread::sleep(RESTORE_AFTER);
+        let mut slot = PENDING_RESTORE.locked();
+        // A later paste, or a copy, took over the restore.
+        if slot.as_ref().is_none_or(|p| p.paste != paste) {
+            return;
+        }
+        let Some(pending) = slot.take() else {
+            return;
+        };
+        drop(slot);
+        if sequence() == pending.ours {
+            restore(&pending.saved);
+        }
+    });
+    Ok(())
 }
 
 /// A key combination ("ctrl+shift+n", "right", "f5"); Command or Super is
@@ -630,7 +702,9 @@ pub(crate) fn copy_selection() -> Option<String> {
     if check_not_blocked().is_err() {
         return None;
     }
-    let saved = snapshot();
+    // As in `paste_text`: after a paste a moment ago, the user's clipboard
+    // is the one still waiting to go back, not our text on the clipboard.
+    let saved = take_pending().unwrap_or_else(snapshot);
     let sentinel = format!("splashdown-copy-probe-{}", std::process::id());
     write_text(&sentinel, true);
     let before = sequence();

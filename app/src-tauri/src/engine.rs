@@ -9,6 +9,7 @@ use splashdown_config::{
     Situation, SpeechProvider,
 };
 use splashdown_core::fallback::{FallbackModel, FallbackStt};
+use splashdown_core::sync::Locked;
 use splashdown_core::{Pipeline, PromptContext, SpeechToText, SttHints, TextModel};
 use splashdown_providers::SpeechModel;
 
@@ -126,12 +127,81 @@ pub fn load_settings() -> Settings {
     let Ok(paths) = paths() else {
         return Settings::default();
     };
-    let mut settings = Settings::load(&paths.config_file()).unwrap_or_else(|e| {
+    let file = paths.config_file();
+    let mut settings = Settings::load(&file).unwrap_or_else(|e| {
         tracing::warn!("ignoring config: {e}");
+        // The defaults used instead are saved over the file sooner or
+        // later (a learned word is enough): keep what the user had.
+        if matches!(e, splashdown_config::LoadError::Parse(_)) {
+            let kept = match Settings::keep_unreadable(&file) {
+                Ok(kept) => Some(kept),
+                Err(e) => {
+                    tracing::warn!("couldn't keep the unreadable settings file: {e}");
+                    None
+                }
+            };
+            *UNREADABLE.locked() = Some(Unreadable {
+                why: e.to_string(),
+                kept,
+            });
+        }
         Settings::default()
     });
     repair(&mut settings);
     settings
+}
+
+/// A settings file that couldn't be read, until the user has been told.
+struct Unreadable {
+    why: String,
+    /// Where the file was kept, if it could be.
+    kept: Option<std::path::PathBuf>,
+}
+
+static UNREADABLE: std::sync::Mutex<Option<Unreadable>> = std::sync::Mutex::new(None);
+
+/// Tells the user, once, that the settings file couldn't be read and the
+/// defaults are in use, and where their file was kept. Asks on a thread of
+/// its own; does nothing when the file was fine.
+pub fn tell_of_unreadable_settings(app: &tauri::AppHandle) {
+    let Some(unreadable) = UNREADABLE.locked().take() else {
+        return;
+    };
+    let app = app.clone();
+    let asked = std::thread::Builder::new()
+        .name("unreadable-settings".into())
+        .spawn(move || {
+            let text = match &unreadable.kept {
+                Some(kept) => format!(
+                    "Splashdown is using its default settings. Yours are kept in {}: fix the file and put it back as config.toml, or set things up again. ({})",
+                    kept.display(),
+                    unreadable.why
+                ),
+                None => format!(
+                    "Splashdown is using its default settings, and the next change will replace the file. ({})",
+                    unreadable.why
+                ),
+            };
+            let buttons: &[&str] = if unreadable.kept.is_some() {
+                &["Show the file", "OK"]
+            } else {
+                &["OK"]
+            };
+            let answer = crate::prompt::ask(
+                &app,
+                "Your settings file couldn't be read",
+                &text,
+                buttons,
+            );
+            if let (Some(0), Some(kept)) = (answer, &unreadable.kept)
+                && let Err(e) = splashdown_platform::reveal_in_file_manager(kept)
+            {
+                tracing::warn!("couldn't show the kept settings file: {e}");
+            }
+        });
+    if let Err(e) = asked {
+        tracing::warn!("couldn't tell of the unreadable settings: {e}");
+    }
 }
 
 /// Settings an earlier version saved wrong. 0.2 and 0.3 saved a built-in

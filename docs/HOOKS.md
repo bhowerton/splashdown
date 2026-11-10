@@ -129,7 +129,7 @@ Invoke-RestMethod -Method Post -Uri $SlackUrl -ContentType "application/json" -B
 
 ## Safety
 
-- Hooks are only added in Settings, which says exactly what each one will run. A hook found in `config.toml` that wasn't saved there (written by hand, or by another program) asks before its first run.
+- Hooks are only added in Settings, which says exactly what each one will run. A hook found in `config.toml` that wasn't saved there (written by hand, or by another program) asks before its first run. So does every hook in a settings file you import: the import lists what the file would run or send to before you agree, and nothing in it runs unasked.
 - Voice commands, coding agents and notes can't add or change hooks.
 - Programs never run through a shell, so nothing in what you said can become a command.
 - A hook gets what you dictated or recorded. A web address sends it off your computer, to whoever runs that address: see [PRIVACY.md](PRIVACY.md).

@@ -486,6 +486,10 @@ struct Controller {
     last_capture: Option<(crate::notes::Captured, Instant)>,
     /// A spoken command found while preparing a recording (see `prepare`).
     pending_command: Option<AudioClip>,
+    /// New settings that arrived while a recording was in progress, kept
+    /// until it's done: applying them at once would throw the recording
+    /// away and leave the key's release unanswered.
+    waiting_settings: Option<(Result<Engine, String>, Keys)>,
     history: Arc<History>,
     correction_check: Option<PendingCorrectionCheck>,
     paused_until: Arc<Mutex<Option<Instant>>>,
@@ -540,6 +544,7 @@ impl Controller {
             last_ai_edit: None,
             last_capture: None,
             pending_command: None,
+            waiting_settings: None,
             history,
             correction_check: None,
             paused_until: Arc::default(),
@@ -559,6 +564,7 @@ impl Controller {
         self.try_listen();
         self.refresh_tray();
         loop {
+            self.apply_waiting_settings();
             let now = Instant::now();
             let mut wake = now + LISTENER_RETRY;
             if let Some(d) = self.lock().deadline() {
@@ -576,7 +582,8 @@ impl Controller {
 
             match self.rx.recv_timeout(wake.saturating_duration_since(now)) {
                 Ok(Msg::Action(action)) => self.handle(action),
-                Ok(Msg::Reconfigure(engine, keys)) => self.reconfigure(*engine, keys),
+                // Applied at the top of the loop, once nothing is recording.
+                Ok(Msg::Reconfigure(engine, keys)) => self.waiting_settings = Some((*engine, keys)),
                 Ok(Msg::Partial(p)) => self.on_partial(p),
                 Ok(Msg::PinPreset(p)) => {
                     self.pinned_preset = p;
@@ -724,6 +731,18 @@ impl Controller {
         });
     }
 
+    /// Applies settings that were waiting, unless a recording is in
+    /// progress: on its way (the key is down and its `Start` hasn't been
+    /// handled yet) or started. They wait for it to end.
+    fn apply_waiting_settings(&mut self) {
+        if self.waiting_settings.is_none() || self.active.is_some() || self.lock().is_recording() {
+            return;
+        }
+        if let Some((engine, keys)) = self.waiting_settings.take() {
+            self.reconfigure(engine, keys);
+        }
+    }
+
     fn reconfigure(&mut self, engine: Result<Engine, String>, keys: Keys) {
         if self.active.take().is_some() {
             self.audio.stop();
@@ -824,6 +843,11 @@ impl Controller {
                 if let Some(active) = self.active.take() {
                     self.refresh_tray();
                     self.finish(active);
+                } else {
+                    // Nothing was recording (the start was refused), so
+                    // nothing will be inserted: Return is the user's again,
+                    // not a wish to send what's coming.
+                    let _ = self.lock().take_send();
                 }
             }
         }

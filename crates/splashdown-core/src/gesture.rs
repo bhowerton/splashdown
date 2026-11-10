@@ -1118,6 +1118,34 @@ mod tests {
     }
 
     #[test]
+    fn a_refused_recording_gives_return_back() {
+        // The session couldn't start recording (no microphone, a password
+        // field) and says so with `cancel`: Return is the user's at once,
+        // while the key is still down and after it's let go.
+        let mut c = Clock::new();
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        assert!(c.r.cancel().is_some());
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Return), c.now),
+            (false, None),
+            "held, but nothing is recording"
+        );
+        c.r.on_event(KeyEvent::up(Return), c.now);
+        assert_eq!(c.at(800).up(DICT), None, "no Finish for it");
+        let t = c.now + Duration::from_millis(200);
+        assert_eq!(c.r.on_event(KeyEvent::down(Return), t), (false, None));
+
+        // And a `Finish` that found nothing recording: `take_send` ends
+        // the wait for what would have been inserted.
+        let mut c = Clock::new();
+        c.at(0).down(DICT);
+        assert_eq!(c.at(800).up(DICT), Some(Action::Finish));
+        assert!(!c.r.take_send());
+        let t = c.now + Duration::from_millis(200);
+        assert_eq!(c.r.on_event(KeyEvent::down(Return), t), (false, None));
+    }
+
+    #[test]
     fn return_toggles_send_while_recording_and_processing() {
         let mut c = Clock::new();
         assert_eq!(

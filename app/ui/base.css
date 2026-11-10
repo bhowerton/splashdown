@@ -131,7 +131,7 @@ dialog.confirm {
 }
 dialog.confirm::backdrop { background: rgba(0,0,0,.3); }
 .confirm-title { margin: 0 0 6px; font-weight: 650; font-size: 14px; }
-.confirm-detail { margin: 0; color: var(--muted); font-size: 12.5px; }
+.confirm-detail { margin: 0; color: var(--muted); font-size: 12.5px; white-space: pre-line; overflow-wrap: anywhere; }
 .confirm-acts { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; }
 .btn.danger-solid { background: var(--err); border-color: var(--err); color: #fff; }
 .btn.danger-solid:hover:not(:disabled) { background: var(--err); filter: brightness(1.08); }

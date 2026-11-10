@@ -22,7 +22,7 @@ impl AnthropicModel {
     }
 
     pub(crate) fn body(&self, req: &TextRequest) -> Value {
-        json!({
+        let mut body = json!({
             "model": self.model,
             "max_tokens": req.max_tokens,
             // The instructions are the same from one dictation to the next:
@@ -33,11 +33,43 @@ impl AnthropicModel {
                 "cache_control": { "type": "ephemeral" },
             }],
             "messages": [{ "role": "user", "content": req.user }],
-            // A quick edit, not a problem to reason about: thinking would
-            // only add delay and cost. (No sampling settings: API version
-            // 2026-10-21 rejects them.)
-            "thinking": { "type": "disabled" },
-        })
+        });
+        // A quick edit, not a problem to reason about: thinking would only
+        // add delay and cost. How to say so differs by model, and the wrong
+        // way is refused outright. (No sampling settings: API version
+        // 2026-10-21 rejects them.)
+        match quick(&self.model) {
+            Quick::Disabled => body["thinking"] = json!({ "type": "disabled" }),
+            Quick::BetweenTools => body["thinking"] = json!({ "type": "between_tools" }),
+            Quick::LowEffort => body["output_config"] = json!({ "effort": "low" }),
+        }
+        body
+    }
+}
+
+/// How a model is asked not to think about a quick edit.
+#[derive(Debug, PartialEq, Eq)]
+enum Quick {
+    /// `thinking: disabled`.
+    Disabled,
+    /// `thinking: between_tools`: Claude Sonnet 5.5 refuses `disabled` and
+    /// takes this instead.
+    BetweenTools,
+    /// Thinking can't be turned off (Claude Opus 5.5, Fable, Mythos): leave
+    /// it out and ask for the least effort.
+    LowEffort,
+}
+
+fn quick(model: &str) -> Quick {
+    if model.starts_with("claude-sonnet-5-5") {
+        Quick::BetweenTools
+    } else if model.starts_with("claude-opus-5-5")
+        || model.starts_with("claude-fable-")
+        || model.starts_with("claude-mythos-")
+    {
+        Quick::LowEffort
+    } else {
+        Quick::Disabled
     }
 }
 
@@ -238,6 +270,31 @@ mod tests {
         assert_eq!(b["messages"][0]["content"], "usr");
         assert_eq!(b["thinking"]["type"], "disabled");
         assert!(b.get("temperature").is_none());
+    }
+
+    #[test]
+    fn each_model_is_told_not_to_think_its_own_way() {
+        let body = |model: &str| {
+            AnthropicModel::new(Endpoint::anthropic("k"), model).body(&TextRequest {
+                system: "sys".into(),
+                user: "usr".into(),
+                temperature: 0.2,
+                max_tokens: 300,
+                json_schema: None,
+            })
+        };
+        // Sonnet 5.5 refuses `disabled`.
+        let sonnet = body("claude-sonnet-5-5");
+        assert_eq!(sonnet["thinking"], json!({ "type": "between_tools" }));
+        assert!(sonnet.get("output_config").is_none());
+        // The Sonnet before it takes `disabled`, as Haiku does.
+        assert_eq!(body("claude-sonnet-5")["thinking"]["type"], "disabled");
+        // These can't turn thinking off at all.
+        for model in ["claude-opus-5-5", "claude-fable-5-2"] {
+            let b = body(model);
+            assert!(b.get("thinking").is_none(), "{model}");
+            assert_eq!(b["output_config"]["effort"], "low", "{model}");
+        }
     }
 
     #[test]

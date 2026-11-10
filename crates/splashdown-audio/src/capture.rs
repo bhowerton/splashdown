@@ -117,10 +117,11 @@ impl Recorder {
             ($t:ty) => {{
                 let buffer = buffer.clone();
                 let level = level.clone();
+                let mut mixer = Mixer::new(channels);
                 device.build_input_stream(
                     &config.clone().into(),
                     move |data: &[$t], _| {
-                        push_mono(data, channels, &buffer, &level, |s| {
+                        push_mono(data, &mut mixer, &buffer, &level, |s| {
                             <f32 as cpal::FromSample<$t>>::from_sample_(s)
                         })
                     },
@@ -185,26 +186,166 @@ impl Recorder {
     }
 }
 
+/// A channel counts as carrying sound while its power is at least this
+/// much of the loudest channel's (-20 dB).
+const LIVE_CHANNEL: f32 = 0.01;
+/// How much of each buffer's power goes into a channel's running power:
+/// about a tenth of a second to follow a change.
+const POWER_FOLLOWS: f32 = 0.1;
+
+/// What the audio callback keeps from one call to the next: which channels
+/// carry sound, and mono audio not yet handed to the recorder.
+struct Mixer {
+    channels: usize,
+    /// Each channel's running power, once a buffer has come.
+    power: Vec<f32>,
+    /// This buffer's power per channel (kept here so the callback doesn't
+    /// allocate).
+    now: Vec<f32>,
+    heard: bool,
+    /// Mixed audio the recorder hasn't taken yet: a reader held the buffer
+    /// when it came. It goes in, in order, with the next that gets through.
+    waiting: Vec<f32>,
+}
+
+impl Mixer {
+    fn new(channels: usize) -> Self {
+        let channels = channels.max(1);
+        Self {
+            channels,
+            power: vec![0.0; channels],
+            now: vec![0.0; channels],
+            heard: false,
+            waiting: Vec::new(),
+        }
+    }
+
+    /// Mixes interleaved frames down to mono onto `waiting`: the average
+    /// of the channels that carry sound, not of all of them. An audio
+    /// interface with a microphone on one input of eight would otherwise
+    /// record it at an eighth of its level. Returns the buffer's loudness
+    /// (RMS), if it held any frames.
+    fn mix<T: Copy>(&mut self, data: &[T], convert: impl Fn(T) -> f32) -> Option<f32> {
+        let n = self.channels;
+        let frames = data.len() / n;
+        if frames == 0 {
+            return None;
+        }
+        let mut sum_sq = 0.0f32;
+        if n == 1 {
+            for &x in data {
+                let s = convert(x);
+                self.waiting.push(s);
+                sum_sq += s * s;
+            }
+            return Some((sum_sq / frames as f32).sqrt());
+        }
+        self.now.fill(0.0);
+        for frame in data.chunks_exact(n) {
+            for (power, &x) in self.now.iter_mut().zip(frame) {
+                let s = convert(x);
+                *power += s * s;
+            }
+        }
+        for (power, now) in self.power.iter_mut().zip(&self.now) {
+            let now = now / frames as f32;
+            *power = if self.heard {
+                *power + POWER_FOLLOWS * (now - *power)
+            } else {
+                now
+            };
+        }
+        self.heard = true;
+        let loudest = self.power.iter().copied().fold(0.0f32, f32::max);
+        let floor = loudest * LIVE_CHANNEL;
+        // All of them in silence, when none stands out.
+        let live = self.power.iter().filter(|&&p| p >= floor).count().max(1);
+        for frame in data.chunks_exact(n) {
+            let sum: f32 = frame
+                .iter()
+                .zip(&self.power)
+                .filter(|&(_, &p)| p >= floor)
+                .map(|(&x, _)| convert(x))
+                .sum();
+            let s = sum / live as f32;
+            self.waiting.push(s);
+            sum_sq += s * s;
+        }
+        Some((sum_sq / frames as f32).sqrt())
+    }
+}
+
 fn push_mono<T: Copy>(
     data: &[T],
-    channels: usize,
+    mixer: &mut Mixer,
     buffer: &Mutex<Vec<f32>>,
     level: &Level,
     convert: impl Fn(T) -> f32,
 ) {
-    let mut sum_sq = 0.0f32;
-    let mut frames = 0usize;
-    // Never block the audio thread; a dropped buffer beats a glitch.
-    let Ok(mut buf) = buffer.try_lock() else {
-        return;
-    };
-    for frame in data.chunks(channels) {
-        let s = frame.iter().map(|&x| convert(x)).sum::<f32>() / channels as f32;
-        buf.push(s);
-        sum_sq += s * s;
-        frames += 1;
+    if let Some(rms) = mixer.mix(data, convert) {
+        level.set(rms);
     }
-    if frames > 0 {
-        level.set((sum_sq / frames as f32).sqrt());
+    // Never block the audio thread. While a reader holds the buffer (the
+    // live preview copying the recording so far), the audio waits in the
+    // mixer for the next call rather than being dropped.
+    if let Ok(mut buf) = buffer.try_lock() {
+        buf.append(&mut mixer.waiting);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn tone(frames: usize) -> Vec<f32> {
+        (0..frames).map(|i| (i as f32 * 0.3).sin() * 0.5).collect()
+    }
+
+    #[test]
+    fn nothing_is_dropped_while_a_reader_holds_the_buffer() {
+        let buffer = Mutex::new(Vec::new());
+        let level = Level::default();
+        let mut mixer = Mixer::new(1);
+        push_mono(&[0.1f32, 0.2], &mut mixer, &buffer, &level, |s| s);
+        {
+            // The live preview is copying the recording so far.
+            let _reader = buffer.lock().unwrap();
+            push_mono(&[0.3f32, 0.4], &mut mixer, &buffer, &level, |s| s);
+            push_mono(&[0.5f32], &mut mixer, &buffer, &level, |s| s);
+        }
+        push_mono(&[0.6f32], &mut mixer, &buffer, &level, |s| s);
+        assert_eq!(*buffer.lock().unwrap(), [0.1, 0.2, 0.3, 0.4, 0.5, 0.6]);
+        assert!(mixer.waiting.is_empty());
+    }
+
+    #[test]
+    fn a_microphone_on_one_input_of_eight_keeps_its_level() {
+        let voice = tone(480);
+        let mut data = Vec::new();
+        for &s in &voice {
+            data.push(s);
+            data.extend([0.0f32; 7]);
+        }
+        let mut mixer = Mixer::new(8);
+        let rms = mixer.mix(&data, |s| s).unwrap();
+        assert_eq!(mixer.waiting, voice);
+        assert!(rms > 0.3, "{rms}");
+    }
+
+    #[test]
+    fn channels_that_all_carry_sound_are_averaged() {
+        // A stereo microphone: the same voice on both, one a little quieter.
+        let voice = tone(480);
+        let data: Vec<f32> = voice.iter().flat_map(|&s| [s, s * 0.5]).collect();
+        let mut mixer = Mixer::new(2);
+        mixer.mix(&data, |s| s).unwrap();
+        for (mixed, s) in mixer.waiting.iter().zip(&voice) {
+            assert!((mixed - s * 0.75).abs() < 1e-6);
+        }
+        // And silence on every channel is silence, not a division by zero.
+        let mut mixer = Mixer::new(2);
+        assert_eq!(mixer.mix(&[0.0f32; 8], |s| s), Some(0.0));
+        assert_eq!(mixer.waiting, [0.0; 4]);
+        assert_eq!(mixer.mix(&[0.0f32; 1], |s| s), None, "not a whole frame");
     }
 }

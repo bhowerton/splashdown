@@ -37,9 +37,10 @@ fn text_prices(flavor: Flavor, model: &str) -> Option<TokenPrices> {
         (Flavor::OpenAi, "gpt-4.1-mini") => p(0.40, 0.10, 0.40, 1.60),
         (Flavor::OpenAi, "gpt-4.1-nano") => p(0.10, 0.025, 0.10, 0.40),
         (Flavor::OpenAi, "gpt-4.1") => p(2.00, 0.50, 2.00, 8.00),
-        // Cache reads at 0.1× and 5-minute cache writes at 1.25× input.
+        // Cache reads at 0.1× and 5-minute cache writes at 1.25× input;
+        // Sonnet 5.5's cache reads are listed lower, at $0.10.
         (Flavor::Anthropic, "claude-haiku-5-5") => p(0.10, 0.01, 0.125, 0.50),
-        (Flavor::Anthropic, "claude-sonnet-5-5") => p(2.00, 0.20, 2.50, 10.00),
+        (Flavor::Anthropic, "claude-sonnet-5-5") => p(2.00, 0.10, 2.50, 10.00),
         _ => return None,
     })
 }

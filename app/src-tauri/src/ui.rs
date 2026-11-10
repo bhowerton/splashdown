@@ -75,6 +75,7 @@ impl Ui {
             current.clone()
         };
         crate::state::reflect_settings(&self.app, &state, &settings);
+        crate::engine::tell_of_unreadable_settings(&self.app);
         let app = self.app.clone();
         tauri::async_runtime::spawn(async move {
             let state = app.state::<crate::state::AppState>();

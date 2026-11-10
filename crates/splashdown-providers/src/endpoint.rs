@@ -227,7 +227,8 @@ impl Endpoint {
             }
         };
         let err = ProviderError::Api(format!("{status}: {message}"));
-        if matches!(code, 429 | 500 | 502 | 503 | 504) {
+        // 529 is Anthropic's "overloaded".
+        if matches!(code, 429 | 500 | 502 | 503 | 504 | 529) {
             Err(Failure::Transient(err))
         } else {
             Err(Failure::Fatal(err))

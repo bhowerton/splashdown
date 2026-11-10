@@ -18,6 +18,26 @@ pub(super) struct Spool {
     /// The app whose audio this is, when it isn't a meeting.
     #[serde(default)]
     pub(super) app: Option<String>,
+    /// The note is finished; only keeping the recording with it failed
+    /// (a full disk, say), and is what's left to do.
+    #[serde(default)]
+    pub(super) audio_only: bool,
+}
+
+/// Marks the spool at `meta` as finished but for its recording, which
+/// stays in the spool for another try at the next launch.
+pub(super) fn leave_recording(meta: &Path) {
+    let marked = std::fs::read_to_string(meta)
+        .map_err(|e| e.to_string())
+        .and_then(|text| serde_json::from_str::<Spool>(&text).map_err(|e| e.to_string()))
+        .and_then(|mut spool| {
+            spool.audio_only = true;
+            serde_json::to_string(&spool).map_err(|e| e.to_string())
+        })
+        .and_then(|json| std::fs::write(meta, json).map_err(|e| e.to_string()));
+    if let Err(e) = marked {
+        tracing::warn!("couldn't mark a meeting's recording as left to keep: {e}");
+    }
 }
 
 pub(super) fn spool_dir() -> Result<PathBuf, String> {
@@ -178,6 +198,7 @@ pub(super) fn record(
         started: now.to_rfc3339(),
         written: 0.0,
         app: listening.clone(),
+        audio_only: false,
     };
     let meta_path = dir.join(format!("{id}.json"));
     std::fs::write(
@@ -201,10 +222,14 @@ pub(super) fn record(
     let started = Instant::now();
     let mut asked: Option<Instant> = None;
     let mut ended = None;
-    // Samples recorded on each side (in step), and when someone was last
-    // heard, in milliseconds of recording, from the transcriber.
+    // Samples recorded on each side (in step); and from the transcriber,
+    // in milliseconds of recording, when someone was last heard and how
+    // far it has listened. It can be minutes behind the recording (a slow
+    // model, a network that keeps failing), and what it hasn't listened to
+    // yet isn't silence.
     let mut recorded = 0usize;
     let heard = AtomicU64::new(0);
+    let listened = AtomicU64::new(0);
     let mut kept_at = Duration::ZERO;
     let mut output = splashdown_audio::devices::default_output();
     let mut output_checked = Instant::now();
@@ -215,7 +240,8 @@ pub(super) fn record(
     let one_sided = listening.is_some();
     let (echoes, lost_writes) = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<(Vec<f32>, Vec<f32>)>();
-        let (store, note_path, speech, heard) = (&store, &note.path, &speech, &heard);
+        let (store, note_path, speech, heard, listened) =
+            (&store, &note.path, &speech, &heard, &listened);
         let spool = (meta_path.clone(), spool);
         let transcriber = scope.spawn(move || {
             let mut job = Job::new(store, note_path, speech);
@@ -227,8 +253,10 @@ pub(super) fn record(
                 while let Ok((you, them)) = rx.try_recv() {
                     job.push(&you, &them);
                 }
+                let pushed = job.recorded();
                 job.transcribe(false);
                 heard.store(job.heard_at.as_millis() as u64, Ordering::Relaxed);
+                listened.store(pushed.as_millis() as u64, Ordering::Relaxed);
             }
             (job.finish(), job.lost_writes)
         });
@@ -278,7 +306,11 @@ pub(super) fn record(
             let heard_ms = heard.load(Ordering::Relaxed);
             status.heard = (heard_ms > 0).then(|| heard_ms as f64 / 1000.0);
             let heard_at = Duration::from_millis(heard_ms).max(kept_at);
-            let quiet = recorded_for.saturating_sub(heard_at);
+            // Quiet as far as the transcriber has listened, not as far as
+            // the recording has got: behind, it hasn't heard the talking
+            // yet, and that mustn't end a meeting in progress.
+            let listened_to = Duration::from_millis(listened.load(Ordering::Relaxed));
+            let quiet = listened_to.min(recorded_for).saturating_sub(heard_at);
             let too_long = started.elapsed() >= LONGEST - GRACE;
             // Someone spoke after "Still in a meeting?": it is one.
             if asked.is_some() && !too_long && quiet < QUIET {
@@ -365,7 +397,7 @@ pub(super) fn record(
         );
         return Ok(());
     }
-    finish(
+    let finished = finish(
         app,
         &store,
         &note.path,
@@ -373,6 +405,17 @@ pub(super) fn record(
         &settings,
         listening.is_some(),
     );
+    if let Err(e) = finished {
+        // The spool is the only copy of the recording: it stays.
+        tracing::warn!("couldn't keep the meeting recording: {e}");
+        leave_recording(&meta_path);
+        tell(
+            app,
+            "The recording couldn't be saved with the note. It's kept: Splashdown offers to save it when it next starts.".into(),
+            true,
+        );
+        return Ok(());
+    }
     let _ = std::fs::remove_file(&raw_path);
     let _ = std::fs::remove_file(&meta_path);
     tracing::info!("meeting ended after {:.0} s", recorded as f64 / RATE as f64);

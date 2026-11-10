@@ -73,6 +73,40 @@ pub struct ImportSummary {
     presets: Option<usize>,
     snippets: usize,
     vocabulary: usize,
+    /// What the file would run on this computer or send text to, a line
+    /// each: the part worth reading before importing someone else's file.
+    outside: Vec<String>,
+}
+
+/// What `settings` would run on this computer, or send what's said to.
+fn outside(settings: &Settings) -> Vec<String> {
+    use splashdown_config::MyActionKind;
+    let mut lines: Vec<String> = settings.hooks.iter().map(crate::hooks::summary).collect();
+    for action in &settings.actions.mine {
+        match &action.does {
+            MyActionKind::Program { path, args } => lines.push(format!(
+                "Runs {} when you say “{}”",
+                std::iter::once(path.as_str())
+                    .chain(args.iter().map(String::as_str))
+                    .collect::<Vec<_>>()
+                    .join(" "),
+                action.name
+            )),
+            MyActionKind::Keys { keys } => {
+                lines.push(format!("Presses {keys} when you say “{}”", action.name))
+            }
+            MyActionKind::Link { .. } => {}
+        }
+    }
+    if settings.ai.provider == splashdown_config::AiProvider::Custom
+        && let Some(url) = settings.ai.base_url.as_deref()
+        && !splashdown_config::is_local_url(url)
+    {
+        lines.push(format!(
+            "Sends what you dictate, and your custom server's key if you saved one, to {url}"
+        ));
+    }
+    lines
 }
 
 fn parse(text: &str) -> Result<Settings, String> {
@@ -87,6 +121,7 @@ pub fn check_settings_file(text: String) -> Result<ImportSummary, String> {
         presets: settings.presets.as_ref().map(Vec::len),
         snippets: settings.snippets.len(),
         vocabulary: settings.general.vocabulary.len(),
+        outside: outside(&settings),
     })
 }
 
@@ -147,7 +182,9 @@ pub fn import_words(text: String, mut settings: Settings) -> Result<WordsImport,
 
 /// Replaces the settings with an exported file's and applies them, the same
 /// way as saving in Settings. Whether this computer's setup guide was
-/// finished stays as it is: permissions are per computer.
+/// finished stays as it is: permissions are per computer. Nothing in the
+/// file runs without asking: a file can come from anyone, so its hooks,
+/// actions and Shortcuts each ask before their first run here.
 #[tauri::command]
 pub async fn import_settings(
     text: String,
@@ -156,5 +193,72 @@ pub async fn import_settings(
 ) -> Result<Saved, String> {
     let mut settings = parse(&text)?;
     settings.general.onboarded = state.settings().general.onboarded;
+    settings.forget_trust();
     crate::commands::save_settings(settings, state, app).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SHARED: &str = r#"
+[ai]
+provider = "custom"
+base_url = "https://example.com/v1"
+
+[actions]
+trusted_shortcuts = ["Log water"]
+
+[[actions.mine]]
+name = "Deploy"
+kind = "program"
+path = "/bin/sh"
+args = ["-c", "true"]
+trusted = true
+
+[[hooks]]
+when = "dictation"
+kind = "program"
+path = "/bin/sh"
+args = ["-c", "true"]
+trusted = true
+
+[[hooks]]
+when = "meeting"
+kind = "web"
+url = "https://example.com/hook"
+trusted = true
+"#;
+
+    #[test]
+    fn an_imported_file_says_what_it_runs_and_nothing_in_it_is_trusted() {
+        let mut settings = parse(SHARED).unwrap();
+        let lines = outside(&settings);
+        assert!(
+            lines.contains(&"Runs /bin/sh -c true after each dictation".to_string()),
+            "{lines:?}"
+        );
+        assert!(
+            lines.contains(
+                &"Sends the text to https://example.com/hook after each meeting".to_string()
+            ),
+            "{lines:?}"
+        );
+        assert!(lines.iter().any(|l| l.contains("when you say “Deploy”")));
+        assert!(
+            lines
+                .iter()
+                .any(|l| l.ends_with("to https://example.com/v1"))
+        );
+
+        settings.forget_trust();
+        assert!(settings.hooks.iter().all(|h| !h.trusted));
+        assert!(settings.actions.mine.iter().all(|a| !a.trusted));
+        assert!(settings.actions.trusted_shortcuts.is_empty());
+        // A local server is the user's own computer: nothing to warn of.
+        let local =
+            parse("[ai]\nprovider = \"custom\"\nbase_url = \"http://localhost:11434/v1\"\n")
+                .unwrap();
+        assert!(outside(&local).is_empty());
+    }
 }

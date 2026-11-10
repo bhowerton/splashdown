@@ -42,6 +42,9 @@ pub(super) fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
                 .to_string()
         })
         .unwrap_or_default();
+    if spool.audio_only {
+        return keep_left_recording(app, meta, &spool, &raw, &when);
+    }
     let answer = crate::prompt::ask(
         app,
         "Finish transcribing it?",
@@ -111,8 +114,48 @@ pub(super) fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
             timestamp(job.recorded())
         ),
     );
-    finish(app, &store, note, &raw, &settings, spool.app.is_some());
+    if let Err(e) = finish(app, &store, note, &raw, &settings, spool.app.is_some()) {
+        leave_recording(meta);
+        return Err(format!(
+            "the recording couldn't be kept with its note ({e}); it stays"
+        ));
+    }
     let _ = std::fs::remove_file(&raw);
+    let _ = std::fs::remove_file(meta);
+    Ok(())
+}
+
+/// A meeting whose note is finished, but whose recording couldn't be kept
+/// with it then: offers to save it now.
+fn keep_left_recording(
+    app: &AppHandle,
+    meta: &Path,
+    spool: &Spool,
+    raw: &Path,
+    when: &str,
+) -> Result<(), String> {
+    let answer = crate::prompt::ask(
+        app,
+        "Save the recording?",
+        &format!(
+            "The recording of the {} from {when} couldn't be saved with its note. It's still here.",
+            if spool.app.is_some() {
+                "audio"
+            } else {
+                "meeting"
+            }
+        ),
+        &["Save it", "Delete it", "Later"],
+    );
+    match answer {
+        Some(0) => {
+            let (store, _) = crate::notes::store_for(Some(spool.folder.clone()))?;
+            add_recording(&store, &spool.note, raw)?;
+        }
+        Some(1) => {}
+        _ => return Ok(()),
+    }
+    let _ = std::fs::remove_file(raw);
     let _ = std::fs::remove_file(meta);
     Ok(())
 }

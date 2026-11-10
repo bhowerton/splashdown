@@ -102,6 +102,15 @@ impl Controller {
         }
     }
 
+    /// A recording that couldn't start: says why, and tells the recognizer
+    /// nothing is recording. Left believing otherwise, it would go on
+    /// taking Return (auto-send) and the letter keys while the key is held
+    /// and for a while after it's let go.
+    fn refuse(&mut self, why: &str) {
+        let _ = self.lock().cancel();
+        self.notice(Tone::Warning, why);
+    }
+
     pub(super) fn start(&mut self) {
         self.mic_lost = false;
         // The user has moved on: look at the previous insertion now.
@@ -119,16 +128,14 @@ impl Controller {
 
         if let Err(e) = &self.engine {
             let msg = format!("Not set up: {e}");
-            self.notice(Tone::Warning, &msg);
-            return;
+            return self.refuse(&msg);
         }
         // A new day or month may have lifted the spending limit.
         if self.engine.as_ref().is_ok_and(|e| e.over_budget) {
             self.check_budget();
         }
         if splashdown_platform::secure_input_active() {
-            self.notice(Tone::Warning, "Can't dictate into password fields");
-            return;
+            return self.refuse("Can't dictate into password fields");
         }
 
         // Start the mic first so the first word isn't lost while we look
@@ -140,10 +147,7 @@ impl Controller {
             .unwrap_or_default();
         let level = match self.audio.start(microphones) {
             Ok(level) => level,
-            Err(e) => {
-                self.notice(Tone::Warning, &format!("Microphone unavailable: {e}"));
-                return;
-            }
+            Err(e) => return self.refuse(&format!("Microphone unavailable: {e}")),
         };
 
         if let Ok(e) = &self.engine
@@ -155,8 +159,7 @@ impl Controller {
         let focus = Focus::capture();
         if focus.as_ref().is_some_and(Focus::is_secure_field) {
             self.audio.stop();
-            self.notice(Tone::Warning, "Can't dictate into password fields");
-            return;
+            return self.refuse("Can't dictate into password fields");
         }
         let selection = focus.as_ref().map_or(Selection::Unknown, Focus::selection);
         let near_cursor = self.engine.as_ref().is_ok_and(|e| e.overlay_near_cursor);

@@ -461,9 +461,20 @@ function renderWait() {
 
 $("wait-retry").onclick = () => $("gr-retry").onclick();
 
+/** The settings as they are now (setup may have changed them since the
+ *  last poll), to change and save. */
+async function freshSettings() {
+  try {
+    state = await invoke("get_state");
+  } catch {
+    /* keep what we have */
+  }
+  return structuredClone(state.settings);
+}
+
 /** Saves a change to the settings; true if it worked. */
 async function changeSettings(change) {
-  const settings = structuredClone(state.settings);
+  const settings = await freshSettings();
   change(settings);
   try {
     state = (await invoke("save_settings", { settings })).state;
@@ -728,7 +739,7 @@ function actionsOn() {
 async function answerActions(yes) {
   actionsAnswer = yes ? "yes" : "no";
   if (yes) {
-    const settings = structuredClone(state.settings);
+    const settings = await freshSettings();
     settings.actions = { ...(settings.actions ?? {}), enabled: true };
     try {
       state = (await invoke("save_settings", { settings })).state;
@@ -800,8 +811,10 @@ async function finish() {
 
 async function poll() {
   try {
-    const fresh = await invoke("get_state");
-    state.permissions = fresh.permissions;
+    // All of it, not only the permissions: setup in the background saves
+    // the providers it chose, and a later save from here mustn't put the
+    // old ones back.
+    state = await invoke("get_state");
     renderPermissions();
     if (step === 4 && !voiceHere) {
       voiceHere = (await invoke("reading_natural")).downloaded;

@@ -46,6 +46,29 @@ pub enum Command {
     Unclear,
 }
 
+impl Command {
+    /// Which command it is, for the log: never the text it carries, which
+    /// is what the user said or the AI wrote.
+    pub fn label(&self) -> &'static str {
+        match self {
+            Command::ReplaceLast(_) => "replace_last",
+            Command::DeleteLastWord => "delete_last_word",
+            Command::DeleteLastSentence => "delete_last_sentence",
+            Command::SelectLast => "select_last",
+            Command::BoldLast => "bold_last",
+            Command::ItalicLast => "italic_last",
+            Command::PressEnter => "press_enter",
+            Command::UndoLast => "undo_last",
+            Command::Write(_) => "write",
+            Command::Compose(_) => "compose",
+            Command::Ask(_) => "ask",
+            Command::Read(_) => "read",
+            Command::Do(_) => "do",
+            Command::Unclear => "unclear",
+        }
+    }
+}
+
 const ACTIONS: &[&str] = &[
     "replace_last",
     "delete_last_word",

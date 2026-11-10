@@ -194,7 +194,11 @@ pub(super) fn transcribe(
         tracing::warn!("a meeting turn failed, trying again: {e}");
         attempt()
     }) {
-        Ok(t) => t.text.trim().to_string(),
+        Ok(t) => {
+            // A cloud model's turns cost money, like any dictation's.
+            crate::spend::shared().record(&[(stt.name(), t.usage)], chrono::Local::now());
+            t.text.trim().to_string()
+        }
         Err(e) => {
             tracing::warn!("a meeting turn couldn't be transcribed: {e}");
             "*(couldn't be transcribed)*".into()
@@ -203,7 +207,8 @@ pub(super) fn transcribe(
 }
 
 /// After the transcript: the summary (as the settings say, asking first
-/// for a cloud AI) and the recording, if it's kept.
+/// for a cloud AI) and the recording, if it's kept. `Err` when it was to be
+/// kept and couldn't be: the caller then leaves the spool, the only copy.
 pub(super) fn finish(
     app: &AppHandle,
     store: &Store,
@@ -211,7 +216,7 @@ pub(super) fn finish(
     raw: &Path,
     settings: &Settings,
     one_sided: bool,
-) {
+) -> Result<(), String> {
     // Speakers first, so the summary can say who said what. Recognizing
     // people needs them told apart first.
     if settings.notes.tells_speakers_apart() {
@@ -224,21 +229,25 @@ pub(super) fn finish(
         );
     }
     summarize(app, store, note, settings, one_sided);
-    if settings.notes.keep_meeting_audio {
-        match keep_recording(store, note, raw) {
-            Ok(link) => {
-                let _ = store
-                    .add_paragraph(note, &format!("[Recording]({})", link.replace(' ', "%20")));
-            }
-            Err(e) => tracing::warn!("couldn't keep the meeting recording: {e}"),
-        }
-    }
+    let kept = if settings.notes.keep_meeting_audio {
+        add_recording(store, note, raw)
+    } else {
+        Ok(())
+    };
     let event = if one_sided {
         splashdown_config::HookEvent::Transcript
     } else {
         splashdown_config::HookEvent::Meeting
     };
     crate::hooks::note_finished(app, event, note);
+    kept
+}
+
+/// Keeps the recording with the note, and links it from there.
+pub(super) fn add_recording(store: &Store, note: &str, raw: &Path) -> Result<(), String> {
+    let link = keep_recording(store, note, raw)?;
+    let _ = store.add_paragraph(note, &format!("[Recording]({})", link.replace(' ', "%20")));
+    Ok(())
 }
 
 /// Tells the other people apart (a meeting's Them side, or everyone in a
@@ -409,20 +418,27 @@ pub(super) fn keep_recording(store: &Store, note: &str, raw: &Path) -> Result<St
     let (path, rel) = store
         .new_attachment(&stem, "wav")
         .map_err(|e| e.to_string())?;
-    let spec = hound::WavSpec {
-        channels: 2,
-        sample_rate: RATE as u32,
-        bits_per_sample: 16,
-        sample_format: hound::SampleFormat::Int,
-    };
-    let mut writer = hound::WavWriter::create(&path, spec).map_err(|e| e.to_string())?;
-    let bytes = std::fs::read(raw).map_err(|e| e.to_string())?;
-    for pair in bytes.as_chunks::<2>().0 {
-        writer
-            .write_sample(i16::from_le_bytes(*pair))
-            .map_err(|e| e.to_string())?;
+    let written = (|| {
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: RATE as u32,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        let mut writer = hound::WavWriter::create(&path, spec).map_err(|e| e.to_string())?;
+        let bytes = std::fs::read(raw).map_err(|e| e.to_string())?;
+        for pair in bytes.as_chunks::<2>().0 {
+            writer
+                .write_sample(i16::from_le_bytes(*pair))
+                .map_err(|e| e.to_string())?;
+        }
+        writer.finalize().map_err(|e| e.to_string())
+    })();
+    if let Err(e) = written {
+        // Half a recording (the disk filled up) isn't one to leave behind.
+        let _ = std::fs::remove_file(&path);
+        return Err(e);
     }
-    writer.finalize().map_err(|e| e.to_string())?;
     Ok(rel)
 }
 

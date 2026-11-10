@@ -175,7 +175,7 @@ async function mockInvoke(cmd, args) {
     case "export_settings":
       return "~/Downloads/Splashdown export.txt";
     case "check_settings_file":
-      return { presets: null, snippets: 2, vocabulary: 4 };
+      return { presets: null, snippets: 2, vocabulary: 4, outside: [] };
     case "check_for_updates":
       return mockInvoke.state.update.available;
     case "install_update":

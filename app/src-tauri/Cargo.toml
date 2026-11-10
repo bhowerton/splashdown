@@ -46,5 +46,9 @@ trash = "5"
 [dev-dependencies]
 async-trait.workspace = true
 
+[target.'cfg(unix)'.dependencies]
+# Stopping a hook's or action's script along with whatever it started.
+libc = "0.2"
+
 [target.'cfg(target_os = "macos")'.dependencies]
 splashdown-apple-shim.workspace = true

@@ -287,6 +287,9 @@ fn main() {
             hooks::init(ui.clone());
             let session = session::spawn(ui, built, engine::keys(&settings), history.clone());
             let only_copy = triggers::serve(session.clone());
+            if only_copy {
+                engine::tell_of_unreadable_settings(app.handle());
+            }
             // The session asks for a rebuild when spending crosses a limit.
             let handle = app.handle().clone();
             app.listen_any(ui::REBUILD_ENGINE, move |_| {

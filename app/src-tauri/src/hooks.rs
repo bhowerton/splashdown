@@ -233,13 +233,7 @@ fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<(), St
 /// Asks before running a hook that wasn't set up in Settings; allowing it
 /// means not asking again.
 fn allowed(app: &AppHandle, hook: &Hook) -> bool {
-    let event = match hook.when {
-        HookEvent::Dictation => "after each dictation",
-        HookEvent::BeforeInsert => "to change each dictation",
-        HookEvent::Meeting => "after each meeting",
-        HookEvent::Transcript => "after each transcript",
-        HookEvent::PhoneNote => "for each note from your iPhone",
-    };
+    let event = when(hook.when);
     let answer = crate::prompt::ask(
         app,
         &format!("Run “{}” {event}?", name(hook)),
@@ -462,6 +456,23 @@ fn name(hook: &Hook) -> String {
             .unwrap_or(url)
             .to_string(),
     }
+}
+
+/// When a hook runs, to end a sentence.
+fn when(event: HookEvent) -> &'static str {
+    match event {
+        HookEvent::Dictation => "after each dictation",
+        HookEvent::BeforeInsert => "to change each dictation",
+        HookEvent::Meeting => "after each meeting",
+        HookEvent::Transcript => "after each transcript",
+        HookEvent::PhoneNote => "for each note from your iPhone",
+    }
+}
+
+/// What a hook does and when, in a line: for the confirmation before a
+/// settings file that has it is imported.
+pub(crate) fn summary(hook: &Hook) -> String {
+    format!("{} {}", describe(hook), when(hook.when))
 }
 
 /// What a hook does, in a sentence.

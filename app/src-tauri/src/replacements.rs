@@ -6,9 +6,11 @@ use regex::Regex;
 use splashdown_config::Replacement;
 use splashdown_core::spoken::Snippet;
 
-/// Replacement rules, compiled once per engine.
+/// Replacement rules, compiled once per engine: the pattern, what replaces
+/// it, and whether that's a regex template (`$1` is the first group) or
+/// plain text.
 #[derive(Default, Clone)]
-pub struct Replacements(Vec<(Regex, String)>);
+pub struct Replacements(Vec<(Regex, String, bool)>);
 
 impl Replacements {
     /// Compiles the rules. Invalid ones are skipped (Settings refuses to
@@ -18,7 +20,7 @@ impl Replacements {
             rules
                 .iter()
                 .filter_map(|r| match r.compile() {
-                    Ok(re) => Some((re, r.replace.clone())),
+                    Ok(re) => Some((re, r.replace.clone(), r.regex)),
                     Err(e) => {
                         tracing::warn!("skipping replacement {:?}: {e}", r.find);
                         None
@@ -31,8 +33,14 @@ impl Replacements {
     /// Applies every rule in order.
     pub fn apply(&self, text: &str) -> String {
         let mut out = text.to_string();
-        for (re, replace) in &self.0 {
-            out = re.replace_all(&out, replace.as_str()).into_owned();
+        for (re, replace, template) in &self.0 {
+            out = if *template {
+                re.replace_all(&out, replace.as_str()).into_owned()
+            } else {
+                // A plain rule's text goes in as written: "$5" is a price,
+                // not the fifth group.
+                re.replace_all(&out, regex::NoExpand(replace)).into_owned()
+            };
         }
         out
     }
@@ -98,6 +106,18 @@ mod tests {
         assert_eq!(r.apply("Teh cat ate teh fish"), "the cat ate the fish");
         assert_eq!(r.apply("tehran"), "tehran", "only whole words");
         assert_eq!(r.apply("fruit, e.g. apples"), "fruit, for example apples");
+    }
+
+    #[test]
+    fn a_plain_rule_keeps_its_dollar_signs() {
+        let r = Replacements::new(&[
+            rule("five bucks", "$5", false),
+            rule("my rate", "$150/hour", false),
+            rule("home folder", "$HOME", false),
+        ]);
+        assert_eq!(r.apply("it costs five bucks"), "it costs $5");
+        assert_eq!(r.apply("my rate"), "$150/hour");
+        assert_eq!(r.apply("the home folder"), "the $HOME");
     }
 
     #[test]

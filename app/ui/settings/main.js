@@ -347,9 +347,14 @@ $("cfg-import-file").addEventListener("change", async () => {
     const text = await file.text();
     const found = await invoke("check_settings_file", { text });
     const presets = found.presets == null ? "the built-in presets" : plural(found.presets, "preset");
+    // What the file would run or send text to, spelled out: a settings
+    // file can come from anyone.
+    const outside = found.outside?.length
+      ? `\n\nThis file also sets up the following. Each will ask before its first run; import only if you expect them:\n${found.outside.map((line) => `• ${line}`).join("\n")}`
+      : "";
     const sure = await askConfirm(`Replace your settings with “${file.name}”?`, {
       action: "Import",
-      detail: `Every setting here is replaced: ${presets}, ${plural(found.snippets, "snippet")}, ${plural(found.vocabulary, "vocabulary word")}. Your API keys and history stay as they are.`,
+      detail: `Every setting here is replaced: ${presets}, ${plural(found.snippets, "snippet")}, ${plural(found.vocabulary, "vocabulary word")}. Your API keys and history stay as they are.${outside}`,
     });
     if (!sure) return;
     const r = await invoke("import_settings", { text });

@@ -52,7 +52,11 @@ impl Controller {
                 return self.notice(Tone::Warning, &short(&message));
             }
         };
-        tracing::info!("command → {:?} ({:?})", outcome.command, outcome.llm_time);
+        tracing::info!(
+            "command → {} ({:?})",
+            outcome.command.label(),
+            outcome.llm_time
+        );
         crate::spend::shared().record(
             &[
                 (pipeline.stt_name(), stt_usage),
@@ -263,8 +267,10 @@ impl Controller {
                     &format!("{} · say “what can I say?”", short(&reason)),
                 );
             }
-            splashdown_core::action::Plan::Invalid(why) => {
-                tracing::info!("action refused: {why}");
+            splashdown_core::action::Plan::Invalid(_) => {
+                // The reason can quote the AI's reply or a name that was
+                // said, which the log never holds.
+                tracing::info!("action refused");
                 return self.notice(Tone::Warning, "Didn't do that: it wasn't clear what to do");
             }
         };
@@ -312,8 +318,12 @@ impl Controller {
                 true
             }
             "hands_free" => {
-                self.handle(Action::Start);
-                self.handle(Action::HandsFree);
+                // Through the recognizer, as `splashdown-cli start` does:
+                // otherwise it doesn't know a recording is on, and neither
+                // the dictation key, Esc nor the time limits end it.
+                if let Err(e) = self.start_external() {
+                    tracing::info!("couldn't start hands-free: {e}");
+                }
                 true
             }
             "show_commands" => {

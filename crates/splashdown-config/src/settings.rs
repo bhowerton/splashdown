@@ -130,6 +130,19 @@ impl Settings {
         }
     }
 
+    /// Forgets every "runs without asking": a hook's, an action's, a
+    /// Shortcut's. For settings that came from a file rather than from what
+    /// this user chose on this computer, so each asks before its first run.
+    pub fn forget_trust(&mut self) {
+        for hook in &mut self.hooks {
+            hook.trusted = false;
+        }
+        for action in &mut self.actions.mine {
+            action.trusted = false;
+        }
+        self.actions.trusted_shortcuts.clear();
+    }
+
     /// Loads settings from `path`; a missing file means all defaults.
     pub fn load(path: &Path) -> Result<Self, LoadError> {
         match std::fs::read_to_string(path) {
@@ -198,14 +211,48 @@ impl Settings {
         }
     }
 
-    /// Writes settings to `path`, creating its folder if needed.
+    /// Writes settings to `path`, creating its folder if needed. They go
+    /// to a file beside it that then takes its place, so a crash or a full
+    /// disk part way leaves the old settings, never half of the new ones.
     pub fn save(&self, path: &Path) -> Result<(), String> {
+        use std::io::Write;
         let text = toml::to_string_pretty(self).map_err(|e| e.to_string())?;
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
-        std::fs::write(path, text).map_err(|e| e.to_string())
+        let beside = beside(path, "tmp");
+        let written = std::fs::File::create(&beside).and_then(|mut file| {
+            file.write_all(text.as_bytes())?;
+            file.sync_all()
+        });
+        match written.and_then(|()| std::fs::rename(&beside, path)) {
+            Ok(()) => Ok(()),
+            Err(_) => {
+                let _ = std::fs::remove_file(&beside);
+                // Something holds the file for a moment (a virus scanner,
+                // on Windows): written in place instead.
+                std::fs::write(path, text).map_err(|e| e.to_string())
+            }
+        }
     }
+
+    /// Keeps a settings file that couldn't be read as `config.toml.bad`
+    /// beside it, so the settings saved next don't destroy what the user
+    /// had (a typo in a file edited by hand is fixed in a minute; presets
+    /// and vocabulary aren't rebuilt in one). Where it was kept.
+    pub fn keep_unreadable(path: &Path) -> std::io::Result<std::path::PathBuf> {
+        let kept = beside(path, "bad");
+        std::fs::copy(path, &kept)?;
+        Ok(kept)
+    }
+}
+
+/// `path` with `.suffix` added to its name: `config.toml.tmp`.
+fn beside(path: &Path, suffix: &str) -> std::path::PathBuf {
+    let mut name = path.file_name().unwrap_or_default().to_os_string();
+    name.push(".");
+    name.push(suffix);
+    path.with_file_name(name)
 }
 
 #[cfg(test)]
@@ -595,6 +642,25 @@ mod tests {
         ] {
             assert!(!is_local_url(u), "{u}");
         }
+    }
+
+    #[test]
+    fn an_unreadable_file_is_kept_and_a_save_leaves_nothing_behind() {
+        let dir = std::env::temp_dir().join(format!("splashdown-bad-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        let typo = "[general]\nvocabulary = [\"Splashdown\"\n";
+        std::fs::write(&path, typo).unwrap();
+        assert!(matches!(Settings::load(&path), Err(LoadError::Parse(_))));
+        let kept = Settings::keep_unreadable(&path).unwrap();
+        assert_eq!(kept, dir.join("config.toml.bad"));
+        // Defaults saved over it: what the user had is still there.
+        Settings::default().save(&path).unwrap();
+        assert_eq!(std::fs::read_to_string(&kept).unwrap(), typo);
+        assert!(Settings::load(&path).is_ok());
+        assert!(!dir.join("config.toml.tmp").exists());
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

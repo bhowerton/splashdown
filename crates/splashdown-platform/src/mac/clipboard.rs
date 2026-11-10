@@ -196,7 +196,39 @@ fn write_text(pb: &NSPasteboard, text: &str, transient: bool) -> bool {
 
 /// The text on the clipboard, if any (for a preset's clipboard context).
 pub(crate) fn clipboard_text() -> Option<String> {
-    read_text(&general())
+    let pb = general();
+    // Right after a paste the pasteboard still holds what we pasted: the
+    // user's clipboard is the one waiting to be put back.
+    {
+        let pending = PENDING_RESTORE.locked();
+        if let Some(p) = pending.as_ref().filter(|p| p.ours == pb.changeCount()) {
+            return snapshot_text(&p.saved);
+        }
+    }
+    read_text(&pb)
+}
+
+/// The plain text in a snapshot, if it has any.
+fn snapshot_text(snap: &Snapshot) -> Option<String> {
+    // SAFETY: reads an immutable constant exported by AppKit.
+    let plain = unsafe { NSPasteboardTypeString }.to_string();
+    snap.0
+        .iter()
+        .flatten()
+        .find(|(ty, _)| ty.to_string() == plain)
+        .and_then(|(_, data)| String::from_utf8(data.to_vec()).ok())
+}
+
+/// The user's clipboard from before a paste of ours a moment ago, if it
+/// hasn't been put back yet and our text is still on the pasteboard:
+/// that's what to save and restore, not our own text. Whoever takes it
+/// does the restoring; the paste's timer then leaves it alone.
+fn take_pending(pb: &NSPasteboard) -> Option<Snapshot> {
+    PENDING_RESTORE
+        .locked()
+        .take()
+        .filter(|p| p.ours == pb.changeCount())
+        .map(|p| p.saved)
 }
 
 fn read_text(pb: &NSPasteboard) -> Option<String> {
@@ -304,11 +336,7 @@ pub(crate) fn paste_text(text: &str) -> Result<()> {
     let pb = general();
     // A paste moments ago may not have put the user's clipboard back yet:
     // that's the one to restore, not our earlier text.
-    let pending = PENDING_RESTORE
-        .locked()
-        .take()
-        .filter(|p| p.ours == pb.changeCount());
-    let saved = pending.map_or_else(|| snapshot(&pb), |p| p.saved);
+    let saved = take_pending(&pb).unwrap_or_else(|| snapshot(&pb));
     if !write_text(&pb, text, true) {
         return Err(PlatformError::Failed(
             "couldn't write to the clipboard".into(),
@@ -418,16 +446,23 @@ pub(crate) fn copy_to_clipboard(text: &str) -> Result<()> {
 
 pub(crate) fn copy_selection() -> Option<String> {
     let pb = general();
-    let saved = snapshot(&pb);
+    // As in `paste_text`: after a paste a moment ago, the user's clipboard
+    // is the one still waiting to go back, not our text on the pasteboard.
+    let saved = take_pending(&pb).unwrap_or_else(|| snapshot(&pb));
     let sentinel = format!("splashdown-copy-probe-{}", std::process::id());
     write_text(&pb, &sentinel, true);
     let before = pb.changeCount();
 
-    post_key(
+    if post_key(
         KEY_C.load(Ordering::Relaxed),
         CGEventFlags::CGEventFlagCommand,
     )
-    .ok()?;
+    .is_err()
+    {
+        // Not the probe left as the user's clipboard.
+        restore(&pb, &saved);
+        return None;
+    }
     let started = Instant::now();
     let mut copied = None;
     while started.elapsed() < COPY_TIMEOUT {
@@ -452,6 +487,18 @@ mod tests {
         assert_eq!(chunks.iter().map(Vec::len).collect::<Vec<_>>(), [19, 3]);
         assert_eq!(String::from_utf16(&chunks.concat()).unwrap(), text);
         assert!(utf16_chunks("", 20).is_empty());
+    }
+
+    #[test]
+    fn a_snapshot_gives_its_text() {
+        let pb = NSPasteboard::pasteboardWithUniqueName();
+        write_text(&pb, "the user's own", false);
+        assert_eq!(
+            snapshot_text(&snapshot(&pb)).as_deref(),
+            Some("the user's own")
+        );
+        pb.clearContents();
+        assert_eq!(snapshot_text(&snapshot(&pb)), None);
     }
 
     /// Uses a private pasteboard so the user's clipboard is never touched.
