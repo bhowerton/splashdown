@@ -24,9 +24,10 @@ const EVERY: Duration = Duration::from_secs(30);
 /// When each scheduled hook was last seen to: `hook-schedule.json` in the
 /// settings folder.
 const FILE: &str = "hook-schedule.json";
-/// How much of a note with no date of its own is given: its end, where
-/// what's new is. The Inbox and notes that collect hooks' results grow for
-/// months, and only say when they last changed.
+/// How much of a note with no dates in it is given: its end, where what's
+/// new is. Notes that collect hooks' results grow for months, and only say
+/// when they last changed; so does an Inbox from before its lines came
+/// under their days.
 const UNDATED_SHOWN: usize = 4000;
 
 /// Notes to try a scheduled hook on, for Test, when there are none.
@@ -262,8 +263,9 @@ pub(super) fn now(app: &AppHandle, hook: &Hook) -> Option<(Happened, String)> {
 /// and when. A meeting or transcript that has a summary comes without its
 /// transcript. A note that doesn't say when it was made (the Inbox, a
 /// daily note, one that collects hooks' results) counts when it changed
-/// in that time, and only its end is given when it's long. Notes hidden
-/// from agents, and the note at `skip`, are left out.
+/// in that time: the lines added then when it says which those are (the
+/// Inbox's day headings), or else all of it, or its end when it's long.
+/// Notes hidden from agents, and the note at `skip`, are left out.
 fn notes_between(
     notes: &[Summary],
     since: DateTime<Local>,
@@ -287,10 +289,18 @@ fn notes_between(
     for n in picked {
         let dated = n.created.is_some();
         let text = shown(&n.text);
-        let (text, cut) = if dated {
-            (text, false)
+        // How much of it is given: all of a note made in that time; of
+        // one that only changed in it, the lines added then when it says
+        // which those are, or else its end.
+        let (text, part) = if dated {
+            (text.to_string(), Part::Whole)
+        } else if let Some(lines) = lines_between(text, since, until) {
+            (lines, Part::Lines)
         } else {
-            end_of(text, UNDATED_SHOWN)
+            match end_of(text, UNDATED_SHOWN) {
+                (end, true) => (end.to_string(), Part::End),
+                (all, false) => (all.to_string(), Part::Whole),
+            }
         };
         if text.is_empty() {
             continue;
@@ -310,15 +320,89 @@ fn notes_between(
             splashdown_core::prompt::today(at.date_naive()),
             at.format("%H:%M")
         );
-        let label = match (dated, cut) {
+        let label = match (dated, part) {
             (true, _) => format!("{what}, {when}"),
-            (false, false) => format!("{what}, last changed {when}"),
-            (false, true) => format!("{what}, last changed {when}; only its end is here"),
+            (false, Part::Whole) => format!("{what}, last changed {when}"),
+            (false, Part::Lines) => format!("{what}: the lines added in this time"),
+            (false, Part::End) => format!("{what}, last changed {when}; only its end is here"),
         };
         out.push_str(&format!("# {}\n[{label}]\n\n{text}\n\n", n.title.trim()));
         count += 1;
     }
     (format!("{}\n", out.trim_end()), count)
+}
+
+/// How much of a note a scheduled hook is given.
+#[derive(Clone, Copy)]
+enum Part {
+    Whole,
+    /// The lines added in the time it covers.
+    Lines,
+    /// Its last paragraphs.
+    End,
+}
+
+/// The paragraphs of a note that were added from `since` until `until`,
+/// under their days, for a note that says which day each was added on:
+/// the Inbox, with a heading above each day's lines (`## 2026-11-10`) and
+/// each line starting with its time (`**09:15** …`). A paragraph with no
+/// time goes by its day. What comes before the first day's heading has no
+/// day, so is left out. `None` when the note has no such headings.
+fn lines_between(text: &str, since: DateTime<Local>, until: DateTime<Local>) -> Option<String> {
+    let mut day = None;
+    let mut kept: Vec<(chrono::NaiveDate, String)> = Vec::new();
+    let mut headings = false;
+    // Whether the paragraph being read is kept, and whether a new one starts.
+    let mut keep = false;
+    let mut starts = true;
+    for line in text.lines() {
+        if line.trim().is_empty() {
+            starts = true;
+            continue;
+        }
+        if let Some(named) = markdown::day_heading(line) {
+            day = Some(named);
+            headings = true;
+            starts = true;
+            continue;
+        }
+        let Some(on) = day else {
+            continue;
+        };
+        if starts {
+            keep = match markdown::timed(line) {
+                Some((time, _)) => Local
+                    .from_local_datetime(&on.and_time(time))
+                    .earliest()
+                    .is_some_and(|at| at > since && at <= until),
+                None => on >= since.date_naive() && on <= until.date_naive(),
+            };
+            if keep {
+                kept.push((on, String::new()));
+            }
+            starts = false;
+        }
+        if keep && let Some((_, paragraph)) = kept.last_mut() {
+            if !paragraph.is_empty() {
+                paragraph.push('\n');
+            }
+            paragraph.push_str(line.trim_end());
+        }
+    }
+    if !headings {
+        return None;
+    }
+    let mut out = String::new();
+    let mut under = None;
+    for (on, paragraph) in kept {
+        if under != Some(on) {
+            out.push_str(&format!("## {}\n\n", on.format("%Y-%m-%d")));
+            under = Some(on);
+        }
+        out.push_str(&paragraph);
+        out.push_str("\n\n");
+    }
+    Some(out.trim_end().to_string())
 }
 
 /// A note's text as a scheduled hook gets it: without its title line
@@ -595,6 +679,29 @@ mod tests {
             notes_between(&notes, at("2026-10-01 00:00"), at("2026-10-02 00:00"), None).1,
             0
         );
+
+        // An Inbox that says which day each line is from: only the lines
+        // from that time, to the minute.
+        let dated = "# Inbox\n\n**08:00** From before the days were kept\n\n## 2026-11-05\n\n**10:00** Too old\n\n## 2026-11-06\n\n**15:59** Just before\n\n**16:01** Just after\nwith a second line\n\n## 2026-11-12\n\nTyped by hand, no time\n\n**11:38** Call the dentist\n\n## 2026-11-13\n\n**16:00** On the dot\n\n**16:30** After it ran\n";
+        let inbox = vec![note("Inbox.md", "", None, "2026-11-13 16:30", dated)];
+        let (text, count) =
+            notes_between(&inbox, at("2026-11-06 16:00"), at("2026-11-13 16:30"), None);
+        assert_eq!(count, 1);
+        assert_eq!(
+            text,
+            "# Inbox\n[A note: the lines added in this time]\n\n## 2026-11-06\n\n**16:01** Just after\nwith a second line\n\n## 2026-11-12\n\nTyped by hand, no time\n\n**11:38** Call the dentist\n\n## 2026-11-13\n\n**16:00** On the dot\n\n**16:30** After it ran\n"
+        );
+        let week = |until: &str| lines_between(dated, at("2026-11-06 16:00"), at(until)).unwrap();
+        assert!(week("2026-11-13 16:00").ends_with("**16:00** On the dot"));
+        // The next run starts where this one ended: no line twice.
+        let next = lines_between(dated, at("2026-11-13 16:00"), at("2026-11-20 16:00")).unwrap();
+        assert_eq!(next, "## 2026-11-13\n\n**16:30** After it ran");
+        // Changed, but nothing added in that time: left out.
+        let none = lines_between(dated, at("2026-11-13 16:30"), at("2026-11-13 16:40")).unwrap();
+        assert_eq!(none, "");
+        // No day headings: it can't say.
+        let plain = "# Inbox\n\n**10:00** A line";
+        assert!(lines_between(plain, at("2026-11-06 16:00"), at("2026-11-13 16:00")).is_none());
         assert_eq!(shown("# Only a title"), "");
         assert_eq!(shown("No title\n\nJust text"), "No title\n\nJust text");
         assert_eq!(end_of("short", 100), ("short", false));

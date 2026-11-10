@@ -372,6 +372,25 @@ pub(super) fn front_matter_id(text: &str) -> Option<String> {
     })
 }
 
+/// The day a `## 2026-11-10` heading names: what the Inbox puts above
+/// each day's lines, so that they can be told apart later.
+pub fn day_heading(line: &str) -> Option<chrono::NaiveDate> {
+    let day = line.trim_end().strip_prefix("## ")?.trim();
+    chrono::NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()
+}
+
+/// The last day a note has a day heading for.
+pub fn last_day(text: &str) -> Option<chrono::NaiveDate> {
+    text.lines().rev().find_map(day_heading)
+}
+
+/// The time a dictated line starts with (`**09:15** …`), and the rest.
+pub fn timed(line: &str) -> Option<(chrono::NaiveTime, &str)> {
+    let (time, rest) = line.strip_prefix("**")?.split_once("**")?;
+    let time = chrono::NaiveTime::parse_from_str(time, "%H:%M").ok()?;
+    Some((time, rest.trim_start()))
+}
+
 /// The first line with text, without Markdown heading marks.
 pub fn title_of(body: &str) -> String {
     body.lines()

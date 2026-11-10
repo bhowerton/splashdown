@@ -24,6 +24,8 @@ const KEEP_VERSIONS: usize = 50;
 /// Guards against walking a huge folder (a whole drive picked by mistake).
 const MAX_NOTES: usize = 5000;
 const MAX_DEPTH: usize = 6;
+/// Where dictations into a note go unless a daily note is chosen.
+const INBOX: &str = "Inbox.md";
 
 /// A note in the list.
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -787,7 +789,7 @@ impl Store {
     /// The note a capture goes to.
     pub fn target_path(&self, target: &Target, now: DateTime<Local>) -> String {
         match target {
-            Target::Inbox => "Inbox.md".to_string(),
+            Target::Inbox => INBOX.to_string(),
             Target::Daily { folder, format } => {
                 // A format with "/" (Obsidian's "YYYY/MM/YYYY-MM-DD") puts
                 // the note in folders by date.
@@ -815,13 +817,11 @@ impl Store {
                 .last()
                 .map(|(p, _)| p)
                 .filter(|p| self.resolve(p).is_ok_and(|f| f.exists()))
-                .unwrap_or_else(|| "Inbox.md".to_string()),
+                .unwrap_or_else(|| INBOX.to_string()),
             Target::Note(path) => path.clone(),
         }
     }
 
-    /// Adds `text` at the end of the target note as its own paragraph,
-    /// starting with the time (`**09:15** …`), creating the note if needed.
     /// Today's daily note (`target`, a `Target::Daily`), made with its date
     /// as a heading if it isn't there yet, the way a capture would make it.
     pub fn daily(&self, target: &Target, now: DateTime<Local>) -> io::Result<Note> {
@@ -836,6 +836,11 @@ impl Store {
         self.open(&rel)
     }
 
+    /// Adds `text` at the end of the target note as its own paragraph,
+    /// starting with the time (`**09:15** …`), creating the note if needed.
+    /// In the Inbox, which goes on for weeks, a day's first line comes
+    /// under a heading for the day (`## 2026-11-10`), so that it can be
+    /// told later which lines are from when.
     pub fn append(
         &self,
         target: &Target,
@@ -868,7 +873,16 @@ impl Store {
         } else {
             "\n\n"
         };
-        let added = format!("{separator}**{}** {}\n", now.format("%H:%M"), text.trim());
+        let day = if rel == INBOX && last_day(&existing) != Some(now.date_naive()) {
+            format!("## {}\n\n", now.format("%Y-%m-%d"))
+        } else {
+            String::new()
+        };
+        let added = format!(
+            "{separator}{day}**{}** {}\n",
+            now.format("%H:%M"),
+            text.trim()
+        );
         self.write(&path, &format!("{existing}{added}"))?;
         Ok(Appended {
             modified: mtime_ms(&std::fs::metadata(&path)?),
@@ -1749,16 +1763,30 @@ mod tests {
         assert_eq!(first.path, "Inbox.md");
         let time = now.format("%H:%M").to_string();
         let inbox = || std::fs::read_to_string(store.root().join("Inbox.md")).unwrap();
-        assert_eq!(inbox(), format!("# Inbox\n\n**{time}** Buy milk\n"));
+        // The day's first line comes under the day.
+        let day = now.format("%Y-%m-%d").to_string();
+        let one = format!("# Inbox\n\n## {day}\n\n**{time}** Buy milk\n");
+        assert_eq!(inbox(), one);
         let second = store.append(&Target::Inbox, "Call Sam", now).unwrap();
-        assert_eq!(
-            inbox(),
-            format!("# Inbox\n\n**{time}** Buy milk\n\n**{time}** Call Sam\n")
-        );
+        assert_eq!(inbox(), format!("{one}\n**{time}** Call Sam\n"));
         assert!(store.undo_append(&second).unwrap());
-        assert_eq!(inbox(), format!("# Inbox\n\n**{time}** Buy milk\n"));
+        assert_eq!(inbox(), one);
         // Undoing again finds nothing to take back.
         assert!(!store.undo_append(&second).unwrap());
+        // The next day gets a heading of its own, taken back with its line.
+        let next = now + chrono::Duration::days(1);
+        let third = store.append(&Target::Inbox, "Pay rent", next).unwrap();
+        assert_eq!(
+            inbox(),
+            format!(
+                "{one}\n## {}\n\n**{}** Pay rent\n",
+                next.format("%Y-%m-%d"),
+                // The clocks may change overnight.
+                next.format("%H:%M")
+            )
+        );
+        assert!(store.undo_append(&third).unwrap());
+        assert_eq!(inbox(), one);
 
         let daily = Target::Daily {
             folder: "Journal/Daily".into(),
@@ -1769,6 +1797,8 @@ mod tests {
             d.path,
             format!("Journal/Daily/{} ddd.md", now.format("%Y-%m-%d"))
         );
+        // A daily note is its day: no heading for it inside.
+        assert_eq!(d.added, format!("\n**{time}** Ran 5k\n"));
         // Folders by date, as Obsidian can make them.
         let nested = Target::Daily {
             folder: "Journal".into(),

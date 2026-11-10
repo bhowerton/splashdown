@@ -26,7 +26,8 @@ A hook on a schedule runs at a time of day (this computer's clock), every day, o
 What it gets, oldest first, each note under its title and a line saying what it is and when:
 
 - **Meetings and transcripts** made in that time. One that has a summary comes with its summary and your own notes, without its transcript; one that has none comes whole.
-- **Other notes that changed in that time**, such as the Inbox, a daily note, or a note that collects another hook's results. These don't record when each line was added, so a long one comes as its last few paragraphs, which can include older lines.
+- **The Inbox:** the lines added in that time, to the minute. Each day's lines sit under a heading for the day (`## 2026-11-10`), which Splashdown adds with the day's first line. Lines from before it did that have no day, so they're left out once the Inbox has any heading; an Inbox with none comes as its last few paragraphs.
+- **Other notes that changed in that time**, such as a daily note or a note that collects another hook's results. These don't record when each line was added, so a long one comes as its last few paragraphs, which can include older lines.
 - **Left out:** notes hidden from coding agents (`agents: false`), and the note the hook's own results go into.
 
 If the computer is asleep or Splashdown isn't running at the time, the hook runs when it next can, once, with the notes up to the time it was due. A hook you just added, changed or turned back on waits for its next time. With no notes in that time, nothing runs, and What ran says so.

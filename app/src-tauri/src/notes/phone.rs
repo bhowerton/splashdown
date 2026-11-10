@@ -321,7 +321,7 @@ mod tests {
         let inbox_note = std::fs::read_to_string(notes.join("Inbox.md")).unwrap();
         assert_eq!(
             inbox_note,
-            "# Inbox\n\n**08:05** First.\n\n**09:15** Second.\n"
+            "# Inbox\n\n## 2026-11-08\n\n**08:05** First.\n\n**09:15** Second.\n"
         );
         let left: Vec<_> = std::fs::read_dir(&inbox)
             .unwrap()
