@@ -1,4 +1,6 @@
-# Dependency policy, checked in CI with `cargo deny check licenses`.
+# Dependency policy, checked in CI with `cargo deny check licenses` (every
+# push) and `cargo deny check advisories` (weekly and when dependencies
+# change; .github/workflows/advisories.yml).
 # Binaries we ship are MIT OR Apache-2.0; every dependency's license must
 # allow redistribution under those terms.
 
@@ -31,4 +33,23 @@ allow = [
 exceptions = [
     { allow = ["CDLA-Permissive-2.0"], crate = "webpki-roots" },
     { allow = ["bzip2-1.0.6"], crate = "libbz2-rs-sys" },
+]
+
+# Known security advisories against what's in Cargo.lock. The ones below
+# say a crate is no longer maintained, not that it has a flaw, and each
+# comes in through a dependency rather than being used here; one is taken
+# off this list when the dependency that brings it moves on.
+[advisories]
+ignore = [
+    # Through the computer-use spike's driver, which only the developer
+    # build of the CLI has (`--features full`); the app doesn't ship it.
+    { id = "RUSTSEC-2023-0089", reason = "atomic-polyfill, unmaintained: via the computer-use spike's driver, not shipped" },
+    { id = "RUSTSEC-2024-0449", reason = "unsafe-libyaml, unmaintained: via the computer-use spike's driver, not shipped" },
+    { id = "RUSTSEC-2026-0192", reason = "ttf-parser, unmaintained: via the computer-use spike's driver, not shipped" },
+    { id = "RUSTSEC-2026-0370", reason = "zvariant, unmaintained: via the computer-use spike's driver (Linux only), not shipped" },
+    { id = "RUSTSEC-2026-0371", reason = "zbus_names, unmaintained: via the computer-use spike's driver (Linux only), not shipped" },
+    { id = "RUSTSEC-2026-0372", reason = "zvariant_derive, unmaintained: via the computer-use spike's driver (Linux only), not shipped" },
+    # Build-time macros.
+    { id = "RUSTSEC-2024-0370", reason = "proc-macro-error, unmaintained: a build-time macro crate under the app framework" },
+    { id = "RUSTSEC-2024-0436", reason = "paste, unmaintained: a build-time macro crate under the natural voice's math library" },
 ]

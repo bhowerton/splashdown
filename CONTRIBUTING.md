@@ -62,6 +62,8 @@ cargo deny check licenses     # once: cargo install cargo-deny --locked
 
 The last one checks that every dependency's license allows MIT/Apache-2.0 distribution (the rules are in `deny.toml`). A new dependency under a license it doesn't list fails CI.
 
+`cargo deny check advisories` checks the dependencies against the RustSec advisory database. It runs on its own (`.github/workflows/advisories.yml`: weekly, and when `Cargo.lock` changes), so a new advisory doesn't fail an unrelated change. The advisories accepted, each with why, are listed in `deny.toml`.
+
 From a Mac you can also check that the shared crates still build for Windows (transcribe.cpp can't be cross-compiled, hence the flags):
 
 ```sh
@@ -95,6 +97,8 @@ Releases are built by GitHub Actions (`.github/workflows/release.yml`), so they 
 Running the workflow by hand (Actions → Release → Run workflow) makes the same builds as downloadable artifacts, without a release. For an unsigned Windows test installer, run CI by hand (Actions → CI → Run workflow) with "Also build an unsigned Windows test installer" ticked.
 
 **What runs when.** A push to `main` only checks formatting and licenses (seconds). Pull requests, and CI run by hand, get the full build: clippy and the tests on macOS and Windows. Releases run the same checks inside their own builds. `release-cache.yml` keeps the release builds' caches warm when dependencies change, and weekly; it skips a release's version bump, since the cache from before it still holds every dependency. Locally, `NOTARIZE=1 scripts/package-mac.sh` and `scripts\package-win.ps1` make the same files in `…/bundle/release/`.
+
+**Actions and tools are pinned.** Every action in `.github/workflows/` is used by its commit, with the version in a comment (`actions/checkout@fbc6f39… # v5.1.0`), and the tools the release installs (the Tauri CLI, the signing tool, Microsoft's signing client with its SHA-512) by exact version: a tag can be moved to other code, and these jobs hold the signing keys. To update one, look up the new version's commit (`gh api repos/OWNER/REPO/commits/TAG --jq .sha`), change it in every workflow that uses it, and run CI and the release workflow by hand before the next tag. Each workflow's token is read-only except the job that drafts the release.
 
 **One-time setup.** The repository has an environment named `release` (Settings → Environments) that needs a maintainer's approval for every run and only runs for tags matching `v*` and for `main` (manual runs). Its secrets are never repository secrets, so pull requests and other workflows can't read them. To fill them in, export your Developer ID certificate (Keychain Access → My Certificates → right-click "Developer ID Application: …" → Export, as a `.p12` with a password; that certificate only), then run:
 

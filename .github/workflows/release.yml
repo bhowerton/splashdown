@@ -21,6 +21,11 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Read-only unless a job says otherwise: no step here needs to write to
+# the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: release-${{ github.ref }}
 
@@ -34,7 +39,7 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v') && vars.CI_RELEASES == 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Tag matches the version
         run: |
           cargo_version=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
@@ -50,17 +55,18 @@ jobs:
     runs-on: macos-26
     environment: release
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Select Xcode 26
         run: |
           xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
           xcodebuild -version
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           targets: aarch64-apple-darwin,x86_64-apple-darwin
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Saved on main by release-cache.yml: a tag can only use caches
           # from main, so this is what spares a release compiling every
@@ -74,7 +80,7 @@ jobs:
         run: |
           [ -d target ] || exit 0
           find target -type d \( -name sherpa-onnx-prebuilt -o -name 'sherpa-onnx-sys-*' \) -prune -exec rm -rf {} +
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-binstall
       - name: Install the Tauri CLI
@@ -87,7 +93,7 @@ jobs:
           # token that's rate limited, and it waits, then compiles instead.
           GITHUB_TOKEN: ${{ github.token }}
         # Usually already there, from the cache.
-        run: command -v cargo-tauri >/dev/null || cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
+        run: command -v cargo-tauri >/dev/null || cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked --pkg-fmt zip
       - name: Clippy
         # Release profile and the release's Apple Silicon target, so the
         # build below reuses what this and the tests compile.
@@ -124,7 +130,7 @@ jobs:
           printf '%s' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY_PATH"
           scripts/package-mac.sh
           rm "$APPLE_API_KEY_PATH"
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: mac
           path: target/universal-apple-darwin/release/bundle/release/
@@ -139,11 +145,12 @@ jobs:
     runs-on: windows-latest
     environment: release
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Saved on main by release-cache.yml, which builds the same way
           # (a tag can only use caches from main). It also holds the Tauri
@@ -153,7 +160,7 @@ jobs:
           # path; see scripts/package-win.ps1).
           cache-directories: ${{ runner.temp }}\llm
           save-if: false
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-binstall
       - name: Install the Tauri CLI
@@ -166,7 +173,7 @@ jobs:
         # Usually already there, from the cache.
         run: |
           if (-not (Get-Command cargo-tauri -ErrorAction SilentlyContinue)) {
-            cargo binstall tauri-cli --version "^2" --no-confirm --locked
+            cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked
           }
       - name: Clippy
         # Release profile, so the build below reuses what this and the
@@ -184,7 +191,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: |
           if (-not (Get-Command artifact-signing-cli -ErrorAction SilentlyContinue)) {
-            cargo binstall artifact-signing-cli --no-confirm --locked
+            cargo binstall artifact-signing-cli --version "0.12.0" --no-confirm --locked
           }
       - name: Fetch Microsoft's signing client
         # artifact-signing-cli downloads this itself with no retry or check,
@@ -196,10 +203,16 @@ jobs:
           $lib = Join-Path $dir "lib"
           $zip = Join-Path $dir "client.zip"
           $dll = Join-Path $lib "bin\x64\Azure.CodeSigning.Dlib.dll"
+          $sha512 = "FC6D211BF543212EA9B16DB76F9B7557F3912209F43D500EB468FDC3E8643E602E238A5E9A97F0956E741361AD1EC727CFDFB9433DE16C2E2671BEDE8F6627D4"
           New-Item -ItemType Directory -Force $dir | Out-Null
           foreach ($try in 1..5) {
             try {
               Invoke-WebRequest "https://www.nuget.org/api/v2/package/Microsoft.ArtifactSigning.Client/1.0.146" -OutFile $zip
+              # This DLL signs the release: only the package NuGet lists
+              # for this version (its SHA-512) is unpacked.
+              if ((Get-FileHash $zip -Algorithm SHA512).Hash -ne $sha512) {
+                throw "the download doesn't match the package's published hash"
+              }
               Expand-Archive $zip $lib -Force
               if (Test-Path $dll) { break }
             } catch {
@@ -208,7 +221,7 @@ jobs:
             Start-Sleep -Seconds (10 * $try)
           }
           if (-not (Test-Path $dll)) { throw "couldn't fetch the signing client" }
-      - uses: jakoch/install-vulkan-sdk-action@v1
+      - uses: jakoch/install-vulkan-sdk-action@7fe84289ddbf750f7eff9f8e4588e600e1dd06c8 # v1.8.1
         with:
           # For llama.cpp's Vulkan backend in the local-model helper; pinned
           # so the action's cache stays valid.
@@ -226,7 +239,7 @@ jobs:
           AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
           AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         run: scripts/package-win.ps1
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows
           path: target/release/bundle/release/
@@ -239,7 +252,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@v8
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: dist
       - name: One latest.json for both platforms

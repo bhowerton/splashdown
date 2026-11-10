@@ -1,0 +1,29 @@
+name: Advisories
+
+# Checks Cargo.lock against the RustSec advisory database (deny.toml lists
+# the advisories accepted, with why). Apart from the other checks, so a
+# new advisory against a dependency shows up here without failing a push
+# that has nothing to do with it: weekly, and when dependencies change.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "Cargo.lock"
+      - "deny.toml"
+      - ".github/workflows/advisories.yml"
+  schedule:
+    - cron: "43 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  advisories:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
+        with:
+          command: check advisories

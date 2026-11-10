@@ -22,6 +22,11 @@ on:
     - cron: "17 6 * * 1"
   workflow_dispatch:
 
+# Read-only unless a job says otherwise: no step here needs to write to
+# the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: release-cache
   cancel-in-progress: true
@@ -35,17 +40,18 @@ jobs:
     if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release ')
     runs-on: macos-26
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Select Xcode 26
         run: |
           xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
           xcodebuild -version
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           targets: aarch64-apple-darwin,x86_64-apple-darwin
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: mac-release
       - name: Fetch sherpa-onnx's libraries again
@@ -55,7 +61,7 @@ jobs:
         run: |
           [ -d target ] || exit 0
           find target -type d \( -name sherpa-onnx-prebuilt -o -name 'sherpa-onnx-sys-*' \) -prune -exec rm -rf {} +
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-binstall
       - name: Install the Tauri CLI
@@ -65,7 +71,7 @@ jobs:
           # binstall asks GitHub's API for the prebuilt binary; without a
           # token that's rate limited, and it waits, then compiles instead.
           GITHUB_TOKEN: ${{ github.token }}
-        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked --pkg-fmt zip
+        run: cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked --pkg-fmt zip
       - name: Clippy and tests, as the release runs them
         run: |
           cargo clippy --release --workspace --all-targets --locked --target aarch64-apple-darwin -- -D warnings
@@ -82,17 +88,18 @@ jobs:
     if: github.event_name != 'push' || !startsWith(github.event.head_commit.message, 'Release ')
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           shared-key: windows-release
           # The fast local-model helper builds outside target\ (a short
           # path; see scripts/package-win.ps1).
           cache-directories: ${{ runner.temp }}\llm
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-binstall
       # Installed after the cache step, so they're saved with it.
@@ -103,11 +110,11 @@ jobs:
           # token that's rate limited, and it waits, then compiles instead.
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          cargo binstall tauri-cli --version "^2" --no-confirm --locked
+          cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked
           if (-not (Get-Command artifact-signing-cli -ErrorAction SilentlyContinue)) {
-            cargo binstall artifact-signing-cli --no-confirm --locked
+            cargo binstall artifact-signing-cli --version "0.12.0" --no-confirm --locked
           }
-      - uses: jakoch/install-vulkan-sdk-action@v1
+      - uses: jakoch/install-vulkan-sdk-action@7fe84289ddbf750f7eff9f8e4588e600e1dd06c8 # v1.8.1
         with:
           # Pinned so the action's cache stays valid (as in release.yml).
           vulkan_version: 1.4.363.1

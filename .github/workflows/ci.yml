@@ -17,6 +17,11 @@ on:
         type: boolean
         default: false
 
+# Read-only unless a job says otherwise: no step here needs to write to
+# the repository.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -28,9 +33,10 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           components: rustfmt
       - run: cargo fmt --all --check
 
@@ -39,8 +45,8 @@ jobs:
     # distribution (deny.toml).
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         with:
           command: check licenses
 
@@ -55,7 +61,7 @@ jobs:
         os: [macos-26, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
       - name: Select Xcode 26
         if: runner.os == 'macOS'
         run: |
@@ -63,10 +69,11 @@ jobs:
           if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
           xcodebuild -version
           xcrun --show-sdk-version
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
+          toolchain: stable
           components: clippy
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Fetch sherpa-onnx's libraries again
         if: runner.os == 'macOS'
         # sherpa-onnx-sys's build script downloads its libraries into
@@ -93,9 +100,11 @@ jobs:
     needs: build
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # The release cache (release-cache.yml), which builds the same
           # way. Only read: that job keeps it up to date.
@@ -104,7 +113,7 @@ jobs:
           # The fast local-model helper builds outside target\ (a short
           # path; see scripts/package-win.ps1).
           cache-directories: ${{ runner.temp }}\llm
-      - uses: taiki-e/install-action@v2
+      - uses: taiki-e/install-action@cfdb7ed4ccc7c7dce37759eae89dc5674b469b39 # v2.90.3
         with:
           tool: cargo-binstall
       - name: Install the Tauri CLI
@@ -114,8 +123,8 @@ jobs:
           # binstall asks GitHub's API for the prebuilt binary; without a
           # token that's rate limited, and it waits, then compiles instead.
           GITHUB_TOKEN: ${{ github.token }}
-        run: cargo binstall tauri-cli --version "^2" --no-confirm --locked
-      - uses: jakoch/install-vulkan-sdk-action@v1
+        run: cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked
+      - uses: jakoch/install-vulkan-sdk-action@7fe84289ddbf750f7eff9f8e4588e600e1dd06c8 # v1.8.1
         with:
           # For llama.cpp's Vulkan backend in the local-model helper; pinned
           # so the action's cache stays valid.
@@ -128,7 +137,7 @@ jobs:
         env:
           SPLASHDOWN_LLM_TARGET: ${{ runner.temp }}\llm
         run: scripts/package-win.ps1
-      - uses: actions/upload-artifact@v7
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: windows-installer
           path: target/release/bundle/release/Splashdown-windows-x64-setup.exe
