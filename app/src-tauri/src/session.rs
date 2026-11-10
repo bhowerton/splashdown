@@ -74,10 +74,17 @@ use self::spoken::*;
 const LEVEL_TICK: Duration = Duration::from_millis(50);
 /// How often to retry the key listener while permission is missing.
 const LISTENER_RETRY: Duration = Duration::from_secs(2);
-/// Hands-free recordings stop on their own after this long.
+/// Recordings stop on their own after this long: a hands-free one left
+/// running, or one whose key release never arrived.
 const HANDS_FREE_MAX: Duration = Duration::from_secs(10 * 60);
 /// …or after this long without speech.
 const HANDS_FREE_SILENCE: Duration = Duration::from_secs(3 * 60);
+/// How long the system must say the dictation key is up, while the
+/// recognizer still waits for its release, before the release is taken as
+/// lost and made up. Longer than a key-up takes to arrive on its own.
+const MISSED_RELEASE: Duration = Duration::from_millis(500);
+/// How often that's looked at while the key is taken to be down.
+const RELEASE_CHECK: Duration = Duration::from_millis(100);
 /// Microphone level (RMS) above which we count it as speech, for the
 /// silence auto-stop. Quiet rooms sit well below this.
 const SPEECH_LEVEL: f32 = 0.01;
@@ -458,6 +465,17 @@ struct Active {
     answer_to: Option<String>,
 }
 
+/// What the system has said of the dictation key since it went down.
+#[derive(Default)]
+struct Hold {
+    /// It has reported the key down during this hold. Until it has, "up"
+    /// isn't believed: with some remapping tools the system never sees the
+    /// key the listener does.
+    seen_down: bool,
+    /// Since when it has reported the key up.
+    up_since: Option<Instant>,
+}
+
 struct Controller {
     ui: Ui,
     engine: Result<Engine, String>,
@@ -503,6 +521,9 @@ struct Controller {
     last_notice: Option<String>,
     /// The microphone went away mid-recording; the result says so.
     mic_lost: bool,
+    /// The dictation key as the system reports it during a hold, to
+    /// notice a release the key listener never got.
+    hold: Hold,
     /// Why the last pipeline run failed (not "no speech").
     pipeline_error: Option<String>,
     /// What the last voice action added, and when, for "undo that".
@@ -553,6 +574,7 @@ impl Controller {
             pending_audio: None,
             last_notice: None,
             mic_lost: false,
+            hold: Hold::default(),
             slow_local: 0,
             suggested_cloud: false,
             pipeline_error: None,
@@ -575,6 +597,9 @@ impl Controller {
             }
             if self.active.is_some() {
                 wake = wake.min(now + LEVEL_TICK);
+            }
+            if self.lock().expects_release() {
+                wake = wake.min(now + RELEASE_CHECK);
             }
             if let Some(check) = &self.correction_check {
                 wake = wake.min(check.due);

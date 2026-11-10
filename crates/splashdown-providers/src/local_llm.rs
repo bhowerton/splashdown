@@ -13,8 +13,10 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 use splashdown_core::sync::Locked;
 use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use async_trait::async_trait;
 use splashdown_core::local_llm::{LocalLlmReply, LocalLlmRequest};
@@ -72,10 +74,18 @@ pub fn stop_all_helpers() {
     }
 }
 
+/// How long the helper has to answer one request. Far longer than the
+/// slowest computer takes to load the model and write a reply: past it the
+/// helper is hung (a graphics driver, usually), and waiting on would hold
+/// dictation up for good.
+const ANSWER_LIMIT: Duration = Duration::from_secs(5 * 60);
+
 struct Process {
     child: Child,
     stdin: ChildStdin,
-    stdout: BufReader<ChildStdout>,
+    /// The helper's replies, a line each, read on a thread of their own
+    /// so waiting for one can give up.
+    replies: Receiver<std::io::Result<String>>,
 }
 
 impl LocalLlm {
@@ -234,13 +244,13 @@ impl Helper {
         let mut attempt = 0;
         loop {
             let result = match self.process.as_mut() {
-                Some(process) => process.round_trip(&line).map_err(|e| e.to_string()),
+                Some(process) => process.round_trip(&line, ANSWER_LIMIT),
                 None => match self.spawn() {
                     Ok(process) => {
                         let process = self.process.insert(process);
-                        process.round_trip(&line).map_err(|e| e.to_string())
+                        process.round_trip(&line, ANSWER_LIMIT)
                     }
-                    Err(e) => Err(e.to_string()),
+                    Err(e) => Err(std::io::Error::other(e.to_string())),
                 },
             };
             match result {
@@ -250,6 +260,15 @@ impl Helper {
                 }
                 Err(e) => {
                     self.stop();
+                    // A helper that hung once would hang again: it isn't
+                    // asked a second time (a build that has never answered
+                    // still gives way to the next one, below).
+                    let hung = e.kind() == std::io::ErrorKind::TimedOut;
+                    if hung && (self.worked || self.paths.len() <= 1) {
+                        return Err(ProviderError::Unavailable(format!(
+                            "local model stopped: {e}"
+                        )));
+                    }
                     if !self.worked && self.paths.len() > 1 {
                         let failed = self.paths.remove(0);
                         tracing::warn!(
@@ -287,12 +306,38 @@ impl Helper {
                 ProviderError::Unavailable(format!("couldn't start the local model: {e}"))
             })?;
         let stdin = child.stdin.take().expect("piped");
-        let stdout = BufReader::new(child.stdout.take().expect("piped"));
+        let mut stdout = BufReader::new(child.stdout.take().expect("piped"));
+        let (send, replies) = channel();
+        // Ends when the helper does (its output closes), or when nobody
+        // waits for replies any more.
+        let reading = std::thread::Builder::new()
+            .name("splashdown-llm-replies".into())
+            .spawn(move || {
+                loop {
+                    let mut line = String::new();
+                    let read = match stdout.read_line(&mut line) {
+                        Ok(0) => return,
+                        Ok(_) => Ok(line),
+                        Err(e) => Err(e),
+                    };
+                    let failed = read.is_err();
+                    if send.send(read).is_err() || failed {
+                        return;
+                    }
+                }
+            });
+        if let Err(e) = reading {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(ProviderError::Unavailable(format!(
+                "couldn't start the local model: {e}"
+            )));
+        }
         RUNNING.locked().push(child.id());
         Ok(Process {
             child,
             stdin,
-            stdout,
+            replies,
         })
     }
 
@@ -307,16 +352,24 @@ impl Helper {
 }
 
 impl Process {
-    fn round_trip(&mut self, line: &str) -> std::io::Result<LocalLlmReply> {
+    fn round_trip(&mut self, line: &str, limit: Duration) -> std::io::Result<LocalLlmReply> {
         writeln!(self.stdin, "{line}")?;
         self.stdin.flush()?;
-        let mut reply = String::new();
-        if self.stdout.read_line(&mut reply)? == 0 {
-            return Err(std::io::Error::new(
-                std::io::ErrorKind::UnexpectedEof,
-                "the helper exited",
-            ));
-        }
+        let reply = match self.replies.recv_timeout(limit) {
+            Ok(reply) => reply?,
+            Err(RecvTimeoutError::Timeout) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::TimedOut,
+                    format!("no answer in {} s", limit.as_secs()),
+                ));
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::UnexpectedEof,
+                    "the helper exited",
+                ));
+            }
+        };
         serde_json::from_str(&reply)
             .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))
     }
@@ -388,5 +441,61 @@ fn helper_path() -> ProviderResult<PathBuf> {
             "the local model helper is missing ({}); build it with `cargo build -p splashdown-llm`",
             path.display()
         )))
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    /// A stand-in for the helper: a shell script.
+    fn helper(name: &str, body: &str) -> Helper {
+        use std::os::unix::fs::PermissionsExt;
+        let dir = std::env::temp_dir().join(format!("sd-llm-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join(name);
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+        Helper {
+            paths: vec![path],
+            worked: false,
+            process: None,
+        }
+    }
+
+    #[test]
+    fn a_helper_that_answers_is_heard_and_one_that_hangs_isn_t_waited_for() {
+        // One reply per request, as the real helper gives.
+        let mut answers = helper(
+            "answers.sh",
+            r#"while read line; do echo '{"status":"ok","text":"hi"}'; done"#,
+        );
+        let process = answers.spawn().unwrap();
+        let process = answers.process.insert(process);
+        for _ in 0..2 {
+            let reply = process.round_trip("{}", Duration::from_secs(5)).unwrap();
+            assert_eq!(reply, LocalLlmReply::Ok { text: "hi".into() });
+        }
+
+        // Takes the request and never answers.
+        let mut hangs = helper("hangs.sh", "read line; sleep 30");
+        let process = hangs.spawn().unwrap();
+        let process = hangs.process.insert(process);
+        let started = std::time::Instant::now();
+        let error = process
+            .round_trip("{}", Duration::from_millis(300))
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::TimedOut);
+        assert!(started.elapsed() < Duration::from_secs(5));
+        hangs.stop();
+
+        // Exits without a word.
+        let mut exits = helper("exits.sh", "read line");
+        let process = exits.spawn().unwrap();
+        let process = exits.process.insert(process);
+        let error = process
+            .round_trip("{}", Duration::from_secs(5))
+            .unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::UnexpectedEof);
     }
 }

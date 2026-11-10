@@ -327,6 +327,15 @@ impl Recognizer {
         self.processing_until.is_some_and(|t| now < t)
     }
 
+    /// Whether the dictation key is taken to be down, its release still
+    /// to come: it holds a recording open, or the recording ended with the
+    /// key still held. If that release is lost on the way (the screen
+    /// locked, a password prompt took the keyboard), whoever notices
+    /// passes the key-up on with `on_event`.
+    pub fn expects_release(&self) -> bool {
+        matches!(self.state, State::Pressed { .. } | State::AwaitRelease)
+    }
+
     /// Whether a recording session is in progress.
     pub fn is_recording(&self) -> bool {
         matches!(
@@ -1115,6 +1124,33 @@ mod tests {
         assert_eq!(c.at(1_000).up(DICT), Some(Action::Finish));
         // When idle, digits are just typing.
         assert_eq!(c.r.on_event(KeyEvent::down(Digit(2)), c.now), (false, None));
+    }
+
+    #[test]
+    fn a_release_that_was_missed_can_be_passed_on_later() {
+        // The key went down and its release never came: the recognizer
+        // waits for it, and takes it whenever it's passed on.
+        let mut c = Clock::new();
+        assert!(!c.r.expects_release());
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        assert!(c.r.expects_release());
+        assert_eq!(c.at(90_000).up(DICT), Some(Action::Finish));
+        assert!(!c.r.expects_release());
+        // The next press is a fresh one.
+        assert_eq!(c.at(91_000).down(DICT), Some(Action::Start));
+        // Canceled by another key while held: still waiting for the key
+        // to come up, and until it does a press is ignored.
+        assert_eq!(c.down(Other), Some(Action::Cancel { silent: true }));
+        assert!(c.r.expects_release());
+        assert_eq!(c.at(92_000).down(DICT), None);
+        assert_eq!(c.up(DICT), None);
+        assert!(!c.r.expects_release());
+        assert_eq!(c.at(93_000).down(DICT), Some(Action::Start));
+        // A hands-free recording isn't waiting for a release.
+        assert_eq!(c.at(93_100).up(DICT), None);
+        assert_eq!(c.at(93_200).down(DICT), Some(Action::HandsFree));
+        assert_eq!(c.at(93_300).up(DICT), None);
+        assert!(!c.r.expects_release());
     }
 
     #[test]

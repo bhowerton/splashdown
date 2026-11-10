@@ -11,6 +11,7 @@ impl Controller {
         if let Some(a) = timed_out {
             self.handle(a);
         }
+        self.notice_missed_release();
         if self.hide_at.is_some_and(|h| now >= h) {
             self.hide_at = None;
             self.ui.hide();
@@ -79,8 +80,10 @@ impl Controller {
             if level > SPEECH_LEVEL {
                 active.last_voice = now;
             }
+            // Hands-free or held: nobody holds a key through three silent
+            // minutes, so a hold that long has lost its release.
             let quiet_too_long = now.duration_since(active.last_voice) > HANDS_FREE_SILENCE;
-            if active.hands_free && (active.started.elapsed() > HANDS_FREE_MAX || quiet_too_long) {
+            if active.started.elapsed() > HANDS_FREE_MAX || quiet_too_long {
                 let finished = self.lock().finish();
                 if let Some(a) = finished {
                     self.handle(a);
@@ -99,6 +102,40 @@ impl Controller {
         }
         if self.listener.is_none() {
             self.try_listen();
+        }
+    }
+
+    /// The dictation key's release sometimes never reaches the key
+    /// listener: the screen locked, a password prompt took the keyboard,
+    /// an administrator's window came to the front. The recognizer would
+    /// wait for it with the microphone open. When the system says the key
+    /// that was down is up, and has for a moment, the release is made up.
+    pub(super) fn notice_missed_release(&mut self) {
+        if !self.lock().expects_release() {
+            self.hold = Hold::default();
+            return;
+        }
+        match splashdown_platform::key_is_down(self.keys.dictation) {
+            Some(true) => {
+                self.hold.seen_down = true;
+                self.hold.up_since = None;
+            }
+            Some(false) if self.hold.seen_down => {
+                let since = *self.hold.up_since.get_or_insert_with(Instant::now);
+                if since.elapsed() < MISSED_RELEASE {
+                    return;
+                }
+                self.hold = Hold::default();
+                tracing::info!("the dictation key's release never arrived: taken as released");
+                let (_, action) = self.lock().on_event(
+                    splashdown_core::gesture::KeyEvent::up(self.keys.dictation),
+                    Instant::now(),
+                );
+                if let Some(action) = action {
+                    self.handle(action);
+                }
+            }
+            _ => {}
         }
     }
 

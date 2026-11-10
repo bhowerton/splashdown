@@ -117,12 +117,18 @@ impl AudioFile {
         let track = format
             .tracks()
             .iter()
+            // A rate of zero (a damaged file, or a container that doesn't
+            // say) is no rate: nothing could be counted off against it.
             .find(|t| {
-                t.codec_params.codec != CODEC_TYPE_NULL && t.codec_params.sample_rate.is_some()
+                t.codec_params.codec != CODEC_TYPE_NULL
+                    && t.codec_params.sample_rate.is_some_and(|rate| rate > 0)
             })
             .ok_or(FileError::NoAudio)?;
         let params = &track.codec_params;
-        let rate = params.sample_rate.unwrap_or(TARGET_SAMPLE_RATE);
+        let rate = params
+            .sample_rate
+            .filter(|&rate| rate > 0)
+            .unwrap_or(TARGET_SAMPLE_RATE);
         // The length is counted in the track's time base (milliseconds in
         // MKV, the media's own timescale in MP4), or else in samples.
         let duration = params.n_frames.and_then(|n| match params.time_base {

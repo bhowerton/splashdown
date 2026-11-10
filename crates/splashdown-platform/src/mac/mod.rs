@@ -24,7 +24,7 @@ pub(crate) use clipboard::{
     clipboard_text, copy_selection, copy_to_clipboard, paste_text, press, refresh_shortcut_keys,
     type_text,
 };
-pub(crate) use keys::KeyListener;
+pub(crate) use keys::{KeyListener, key_is_down};
 pub(crate) use media::{pause_players, press_media_key, resume_players};
 pub(crate) use mic::{audio_apps, microphone_users};
 pub(crate) use minibar::MiniBar;

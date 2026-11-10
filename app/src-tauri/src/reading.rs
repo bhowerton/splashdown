@@ -169,7 +169,10 @@ pub fn stop() {
 }
 
 /// Esc, before the dictation keys see it: stops a reading. Whether to
-/// swallow the key.
+/// swallow the key. Called inside the key listener, which must answer at
+/// once (Windows drops a keyboard hook that's slow, and the dictation key
+/// with it), so the stopping itself, which talks to the system's voice
+/// and the windows, happens on a thread of its own.
 pub fn on_escape(down: bool) -> bool {
     if !down {
         return SWALLOW_ESC_UP.swap(false, Ordering::SeqCst);
@@ -177,8 +180,13 @@ pub fn on_escape(down: bool) -> bool {
     if !is_reading() {
         return false;
     }
-    stop();
     SWALLOW_ESC_UP.store(true, Ordering::SeqCst);
+    let stopping = std::thread::Builder::new()
+        .name("splashdown-reading-stop".into())
+        .spawn(stop);
+    if stopping.is_err() {
+        stop();
+    }
     true
 }
 

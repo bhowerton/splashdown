@@ -9,8 +9,8 @@ use windows::Win32::Foundation::{HINSTANCE, LPARAM, LRESULT, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    VIRTUAL_KEY, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU, VK_LSHIFT, VK_LWIN, VK_MENU,
-    VK_RCONTROL, VK_RETURN, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT,
+    GetAsyncKeyState, VIRTUAL_KEY, VK_CONTROL, VK_ESCAPE, VK_LCONTROL, VK_LMENU, VK_LSHIFT,
+    VK_LWIN, VK_MENU, VK_RCONTROL, VK_RETURN, VK_RMENU, VK_RSHIFT, VK_RWIN, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, DispatchMessageW, GetMessageW, HC_ACTION, KBDLLHOOKSTRUCT, LLKHF_EXTENDED,
@@ -197,7 +197,15 @@ fn on_key(info: &KBDLLHOOKSTRUCT) -> bool {
         match modifier_slot(ev.key) {
             Some(slot) if ev.down => {
                 if let Some(swallowed) = state.held[slot] {
-                    return swallowed; // auto-repeat
+                    // Auto-repeat, unless Windows says the key was up
+                    // until now: then its release never reached this hook
+                    // (the lock screen, a UAC prompt, an administrator's
+                    // window in front), and this is a new press. A key we
+                    // swallowed was never down as far as Windows knows, so
+                    // that one can't be asked about.
+                    if swallowed || was_down(info.vkCode) {
+                        return swallowed;
+                    }
                 }
                 // Another key down: no modifier held is alone any more.
                 state.lone_since = [None; MODIFIERS];
@@ -228,6 +236,37 @@ fn on_key(info: &KBDLLHOOKSTRUCT) -> bool {
             }
         }
     })
+}
+
+/// Whether the key was down before the event the hook is being told of.
+/// Inside the hook, Windows hasn't yet counted that event in.
+fn was_down(vk: u32) -> bool {
+    let Ok(vk) = i32::try_from(vk) else {
+        return true;
+    };
+    // SAFETY: takes any virtual-key code and has no other preconditions.
+    let state = unsafe { GetAsyncKeyState(vk) };
+    state < 0
+}
+
+/// Whether `key` is down, for the keys that can be the dictation key (the
+/// modifiers). Windows knows the state of keys the hook let through,
+/// which the dictation key is.
+pub(crate) fn key_is_down(key: PhysicalKey) -> Option<bool> {
+    let vk = match key {
+        PhysicalKey::LeftShift => VK_LSHIFT,
+        PhysicalKey::RightShift => VK_RSHIFT,
+        PhysicalKey::LeftControl => VK_LCONTROL,
+        PhysicalKey::RightControl => VK_RCONTROL,
+        PhysicalKey::LeftAlt => VK_LMENU,
+        PhysicalKey::RightAlt => VK_RMENU,
+        PhysicalKey::LeftMeta => VK_LWIN,
+        PhysicalKey::RightMeta => VK_RWIN,
+        _ => return None,
+    };
+    // SAFETY: takes any virtual-key code and has no other preconditions.
+    let state = unsafe { GetAsyncKeyState(i32::from(vk.0)) };
+    Some(state < 0)
 }
 
 /// Alt and Win: released after a hold with no other key, Windows takes

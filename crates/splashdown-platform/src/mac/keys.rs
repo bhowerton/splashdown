@@ -219,6 +219,44 @@ fn digit(code: i64) -> Option<u8> {
 const MOUSE_BACK: i64 = 3;
 const MOUSE_FORWARD: i64 = 4;
 
+/// Whether `key` is down, for the keys that can be the dictation key:
+/// the modifiers and the mouse's side buttons. The session's combined
+/// state, so a key sent by a remapping tool counts as the tap saw it.
+pub(crate) fn key_is_down(key: PhysicalKey) -> Option<bool> {
+    const COMBINED_SESSION_STATE: i32 = 0;
+    let code = match key {
+        PhysicalKey::LeftShift => vk::LEFT_SHIFT,
+        PhysicalKey::RightShift => vk::RIGHT_SHIFT,
+        PhysicalKey::LeftControl => vk::LEFT_CONTROL,
+        PhysicalKey::RightControl => vk::RIGHT_CONTROL,
+        PhysicalKey::LeftAlt => vk::LEFT_OPTION,
+        PhysicalKey::RightAlt => vk::RIGHT_OPTION,
+        PhysicalKey::LeftMeta => vk::LEFT_COMMAND,
+        PhysicalKey::RightMeta => vk::RIGHT_COMMAND,
+        PhysicalKey::Fn => {
+            // SAFETY: takes a state id and has no other preconditions.
+            let flags = unsafe { ffi::CGEventSourceFlagsState(COMBINED_SESSION_STATE) };
+            return Some(flags & FLAG_FN != 0);
+        }
+        PhysicalKey::MouseBack | PhysicalKey::MouseForward => {
+            let button = if key == PhysicalKey::MouseBack {
+                MOUSE_BACK
+            } else {
+                MOUSE_FORWARD
+            };
+            // SAFETY: takes a state id and a button number, any of which
+            // it answers for; no other preconditions.
+            return Some(unsafe {
+                ffi::CGEventSourceButtonState(COMBINED_SESSION_STATE, button as u32)
+            });
+        }
+        _ => return None,
+    };
+    // SAFETY: takes a state id and a virtual key code, any of which it
+    // answers for; no other preconditions.
+    Some(unsafe { ffi::CGEventSourceKeyState(COMBINED_SESSION_STATE, code as u16) })
+}
+
 fn translate(event_type: CGEventType, event: &CGEvent) -> Option<KeyEvent> {
     // Our own synthetic keys (⌘V, Return…) aren't the user's.
     if event.get_integer_value_field(EventField::EVENT_SOURCE_USER_DATA)
@@ -277,5 +315,27 @@ fn translate(event_type: CGEventType, event: &CGEvent) -> Option<KeyEvent> {
             })
         }
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_keys_that_can_start_dictation_can_be_asked_about() {
+        // Nobody is holding these while the tests run; what matters is
+        // that each is a key the system answers for.
+        for key in [
+            PhysicalKey::RightAlt,
+            PhysicalKey::RightMeta,
+            PhysicalKey::LeftControl,
+            PhysicalKey::Fn,
+            PhysicalKey::MouseBack,
+        ] {
+            assert!(key_is_down(key).is_some(), "{key:?}");
+        }
+        assert_eq!(key_is_down(PhysicalKey::Letter('a')), None);
+        assert_eq!(key_is_down(PhysicalKey::Escape), None);
     }
 }

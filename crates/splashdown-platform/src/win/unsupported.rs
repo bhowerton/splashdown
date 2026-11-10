@@ -89,6 +89,10 @@ pub(crate) fn secure_input_active() -> bool {
     false
 }
 
+pub(crate) fn key_is_down(_key: crate::PhysicalKey) -> Option<bool> {
+    None
+}
+
 pub(crate) fn permissions() -> Permissions {
     // Nothing here can be granted, so don't send the user to look for it.
     Permissions {

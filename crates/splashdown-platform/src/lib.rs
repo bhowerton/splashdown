@@ -98,6 +98,14 @@ pub fn listen_keys(handler: KeyHandler) -> Result<KeyListener> {
     })
 }
 
+/// Whether `key` is physically down right now, where the system can say:
+/// `None` for a key it can't be asked about, or on a system without a way
+/// to ask. For noticing a release the key listener never got (the screen
+/// locked, a password prompt took the keyboard).
+pub fn key_is_down(key: PhysicalKey) -> Option<bool> {
+    imp::key_is_down(key)
+}
+
 // ---------------------------------------------------------------- focus
 
 // ---------------------------------------------------------------- text

@@ -8,6 +8,34 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 - **Keep your notes in a sync service with one click.** Settings → Notes shows the notes folder and a button for each of iCloud Drive, Dropbox, Google Drive, OneDrive and Box that this computer has; your notes move to a Splashdown Notes folder there. Once they're in one, a button brings them back to this computer. Notes stay on your computer unless you choose.
 - **Hooks.** Settings → Actions → When something happens runs your own script or program, or sends to a web address (Zapier, Make, n8n, a Slack incoming webhook), after a dictation, when a meeting or transcript is finished, or when a note comes from your iPhone. A program gets the text as its input and the details in `SPLASHDOWN_` variables, never through a shell; a web address gets JSON signed with your webhook secret. A hook can also change a preset's dictations before they go in: what your script writes back is inserted, or, if it takes over 2 seconds or fails, what you said. Test tries one before saving. Details and examples: docs/HOOKS.md.
 - **Folders in sync services are named as you know them**, "Google Drive › Splashdown Notes" rather than the path macOS keeps them at.
+- **Importing a settings file can't run anything unasked.** A settings file can carry hooks and your own actions, which run programs. Importing one now lists what it would run or send your words to (a custom AI server that isn't on this computer included) before you agree, and each of them asks before its first run here, as does any Shortcut the file had on "Always allow". Before, they ran without asking.
+- **Fixes from a review of the whole app.**
+  - The log no longer holds what a spoken command said or what the AI wrote for it: only which kind of command it was.
+  - A settings file that can't be read (a typo after editing it by hand) is kept as `config.toml.bad` and Splashdown tells you, instead of quietly starting over and then replacing your presets and vocabulary. Settings, spending and Splashdown's other files are saved whole, so a crash or a full disk can't leave half of one.
+  - Return works straight after a dictation that couldn't start ("Microphone unavailable", a password field). It was swallowed for up to 30 seconds.
+  - A dictation started just after you corrected a word is no longer thrown away. Learning the word applied new settings in the middle of the recording.
+  - "Start hands-free" said as a voice action can be finished with the dictation key and canceled with Esc. Nothing stopped it before.
+  - Find and replace keeps "$": replacing "five bucks" with "$5" inserted nothing.
+  - Long recordings no longer lose bits of audio while the live words show, and a microphone on one input of a many-input audio interface is recorded at its full level.
+  - A hook's script is stopped at its time limit even when it leaves something running, and what it started is stopped with it.
+  - A slow speech model can no longer end a meeting with "Nobody has spoken for 10 minutes" while people are talking.
+  - A cloud speech model's cost for a meeting is counted in your spending.
+  - If a meeting's recording can't be saved with its note (a full disk), it's kept, and Splashdown offers to save it when it next starts. It was deleted.
+  - Finishing a meeting after Splashdown closed on it no longer adds turns twice.
+  - "Transcribe again" keeps the transcript as it was in the note's versions.
+  - Watched folders: a file Splashdown closed on before transcribing it is picked up again at the next start.
+  - Mac: your clipboard comes back after two dictations in quick succession. The second could leave the first dictation there instead.
+  - Windows: an app that's slow to paste no longer gets what was on your clipboard instead of the dictation.
+  - Claude Sonnet 5.5 works for cleanup (every request failed), with its cost counted right, and a busy Anthropic server is tried again.
+  - The setup guide no longer undoes the models it just set up when you turn voice actions on.
+  - The reading Speed slider in Settings saves.
+  - Voice actions: text you have selected can't steer "open website" or a Shortcut by sharing a word with what you said, and selected or on-screen text can't pass itself off as your instruction.
+  - Local-only mode no longer takes a server address written to look like this computer.
+  - A dictation whose key release never arrived (the screen locked, or a password prompt or an administrator's window took the keyboard) ends once the key is up, instead of recording on. Any recording also stops after 3 minutes of silence or 10 minutes, held or hands-free.
+  - Windows: the first press of the dictation key after such a missed release is no longer ignored.
+  - Stopping a reading with Esc no longer does its work inside the key listener, which Windows can drop for being slow, leaving the dictation key dead until a restart.
+  - A built-in model that hangs is given up on after 5 minutes instead of holding dictation up for good, and a very long reply is no longer cut off by the model's own idle timer.
+  - A damaged video file that reports no sample rate no longer stalls the transcription queue.
 
 ## 0.11.0 — 2026-11-08
 

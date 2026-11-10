@@ -83,6 +83,9 @@ fn main() {
     });
     let mut out = std::io::stdout().lock();
     let mut send = |reply: LocalLlmReply| {
+        // Idle is counted from the last answer, not the last request: a
+        // long one mustn't be taken for idleness part way.
+        LAST_REQUEST.store(started.elapsed().as_secs(), Ordering::Relaxed);
         let line = serde_json::to_string(&reply).expect("replies serialize");
         // The app is gone if this fails; the next read ends the loop.
         let _ = writeln!(out, "{line}").and_then(|()| out.flush());

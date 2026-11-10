@@ -46,7 +46,7 @@ pub(crate) use clipboard::{
     refresh_shortcut_keys, type_text,
 };
 #[cfg(windows)]
-pub(crate) use keys::{KeyListener, altgr_types};
+pub(crate) use keys::{KeyListener, altgr_types, key_is_down};
 #[cfg(windows)]
 pub(crate) use media::{pause_players, press_media_key, resume_players};
 #[cfg(windows)]

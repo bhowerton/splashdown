@@ -74,6 +74,11 @@ unsafe extern "C" {
     /// Current modifier flags; `state_id` 1 = HID system state (the
     /// physical keyboard).
     pub fn CGEventSourceFlagsState(state_id: i32) -> u64;
+    /// Whether a key (a virtual key code) is down; `state_id` 0 = the
+    /// login session's combined state (the keyboard and what apps post).
+    pub fn CGEventSourceKeyState(state_id: i32, key: u16) -> bool;
+    /// The same for a mouse button, numbered as CGEvent counts them.
+    pub fn CGEventSourceButtonState(state_id: i32, button: u32) -> bool;
 }
 
 pub type TISInputSourceRef = *const c_void;
