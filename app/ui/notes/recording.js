@@ -86,6 +86,8 @@ async function showMeeting(next) {
       : meeting.them_problem
         ? `Your side only: ${meeting.them_problem}`
         : `Transcribed ${meeting.place}`;
+    // Cut short beside the time on a wide window: all of it on hover.
+    $("nt-live-place").title = $("nt-live-place").textContent;
     $("nt-live-them-wrap").hidden = !!meeting.them_problem || !!meeting.app;
     const side = meeting.app === "Microphone" ? "Mic" : meeting.app ? "Sound" : "You";
     $("nt-live-you-label").textContent = side;
