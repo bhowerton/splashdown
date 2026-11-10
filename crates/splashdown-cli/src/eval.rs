@@ -1,5 +1,5 @@
 //! Eval harness: scores the AI pass, spoken commands, voice actions,
-//! Compose and speech-to-text, so defaults and prompts are chosen from
+//! Compose, hooks' instructions and speech-to-text, so defaults and prompts are chosen from
 //! data, not guesses. The cases are in eval/*.toml (each file's header
 //! says its fields); results go in eval/README.md.
 //!
@@ -12,6 +12,7 @@ mod actions;
 mod cleanup;
 mod commands;
 mod compose;
+mod instruct;
 mod stt;
 mod style;
 mod window_language;
@@ -33,6 +34,7 @@ use self::actions::*;
 use self::cleanup::*;
 use self::commands::*;
 use self::compose::*;
+use self::instruct::*;
 use self::stt::*;
 use self::style::*;
 
@@ -79,6 +81,21 @@ pub enum EvalCommand {
         /// one of them.
         #[arg(long, default_value = "google/gemini-2.5-flash")]
         judge: String,
+        #[arg(long)]
+        filter: Option<String>,
+        #[arg(short, long)]
+        verbose: bool,
+        #[arg(long, value_delimiter = ',')]
+        models: Vec<String>,
+        #[command(flatten)]
+        providers: ProviderOpts,
+    },
+    /// Score instructions run on whole texts, as a hook that asks the AI
+    /// does, on eval/instruct.toml: the ready-made hooks on made-up
+    /// meetings, weeks of notes and briefs.
+    Instruct {
+        #[arg(long, default_value = "eval/instruct.toml")]
+        cases: PathBuf,
         #[arg(long)]
         filter: Option<String>,
         #[arg(short, long)]
@@ -198,6 +215,22 @@ pub async fn run(cmd: EvalCommand) -> Result<()> {
             let cases = filtered(&file.case, filter.as_deref(), |c| &c.id);
             for run in model_runs(&models, &providers) {
                 actions(&cases, verbose, &run).await?;
+            }
+            Ok(())
+        }
+        EvalCommand::Instruct {
+            cases,
+            filter,
+            verbose,
+            models,
+            providers,
+        } => {
+            let file: InstructFile = read_cases(&cases)?;
+            // The texts are beside the cases, in a folder with their name.
+            let dir = cases.with_extension("");
+            let picked = filtered(&file.case, filter.as_deref(), |c| &c.id);
+            for run in model_runs(&models, &providers) {
+                instruct(&file, &picked, &dir, verbose, &run).await?;
             }
             Ok(())
         }

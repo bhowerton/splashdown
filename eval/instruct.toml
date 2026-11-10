@@ -1,0 +1,261 @@
+# Instructions run on whole texts, as a hook that asks the AI does
+# (Settings → Actions → When something happens): the ready-made hooks'
+# own wording, on made-up meetings, weeks of notes and briefs with known
+# answers.
+#
+#   splashdown-cli eval instruct --ai local
+#   splashdown-cli eval instruct --ai openrouter --filter week
+#
+# The texts are in eval/instruct/. `meeting-hour.md` and `week-long.md` are
+# longer than the built-in model reads at once, so they're read in parts.
+#
+# [instructions] holds the ready-made hooks' instructions, word for word
+# as `HOOK_STARTERS` in app/ui/settings/actions.js has them (a test keeps
+# the two the same): change one there, change it here, and run this.
+#
+# Each [[case]]:
+#   id         its name
+#   kind       what the text is, as a hook's event: meeting, transcript,
+#              phone-note, schedule, before-meeting
+#   file       the text, in eval/instruct/; or `text`, the text itself
+#   ask        which of [instructions] to run; or `instruction`, in your
+#              own words
+#   days       for a schedule: the days its notes are from
+#   headings   headings the result must have, each on a line of its own
+#   want       lines the result must have: `has` are words one line must
+#              all have (any capitals), `under` the heading it must be
+#              under. Each one found counts toward the score
+#   not        lines the result mustn't have, the same way: someone
+#              else's task under "For me to do", something already done
+#   never      words that mustn't be anywhere in it
+#   no_dates   true: no date in it that the text doesn't have (a small
+#              model likes to work out "by Wednesday" into a date, wrongly)
+#   nothing    true: there's nothing to do, so the result must be empty
+#   max_lines  the most lines with text it may have
+#
+# A case passes when nothing is wrong with it. The summary also says how
+# many wanted lines were found over all cases, which moves before the
+# pass count does.
+
+[instructions]
+follow-up-email = "Draft a short follow-up email from me to the other people in this meeting. Start with one line of thanks, then what was decided, then each action item with who will do it and by when (only where the meeting said so). Plain and friendly, ready to send. No subject line."
+my-commitments = "List everything I (\"You\" in the transcript) said I would do, one per line as a to-do (\"- [ ] \"), with who it's for, and by when if I said so. Only what I took on myself, not what others said they'd do."
+commitments-as-reminders = "List everything I (\"You\" in the transcript) said I would do, one per line as a to-do (\"- [ ] \"), with who it's for, and by when if I said so. Each line is read on its own later, so name the thing and the person rather than \"it\" or \"them\". Only what I took on myself, not what others said they'd do. Write only the list."
+decisions = "List what was decided in this meeting, one line each, with who decided or agreed where the transcript says. Only decisions: no discussion and no action items."
+key-points = "Write the five to ten most important points of this recording as a list, in the order they come up, each with the time it starts."
+study-cards = "Write question-and-answer cards for studying this: one for each fact or idea worth remembering, as a \"Q:\" line and an \"A:\" line, using only what the recording says."
+phone-to-dos = "If this note has things I need to do, list each as a to-do (\"- [ ] \"), keeping names, dates and times as I said them. If it has none, there is nothing to do."
+weekly-review = "Write a review of my week from these notes, under three headings. \"Decided\": what the notes say was decided. \"For me to do\": only what the notes say I (\"You\") will do or said I would do, each as a to-do (\"- [ ] \") with who it's for and by when; things I dictated to myself count. \"Waiting on others\": what someone else said they would do, with their name. Take each note in turn and leave nothing of these out. End each line with the title of the note it comes from, in brackets. Keep days as the notes say them (\"by Wednesday\") and add no dates of your own. Leave out what is already done."
+daily-wrap-up = "From these notes of my day, write two lists, each under its heading. \"For me to do\": only what the notes say I (\"You\") will do or said I would do, each as a to-do (\"- [ ] \") with who it's for and by when; things I dictated to myself count. \"Decided\": what the notes say was decided, one line each. Take each note in turn. End each line with the title of the note it comes from, in brackets. Keep days as the notes say them (\"by Wednesday\") and add no dates of your own. Leave out what is already done."
+brief = "Write a brief for the meeting that is about to start, from the notes of the earlier meetings, under three headings. \"Decided\": what the notes say was decided, one line each. \"For me to do\": only what the notes say I (\"You\") will do or said I would do, each as a to-do (\"- [ ] \") with who it is for and by when. \"Waiting on others\": what someone else said they would do, each line starting with their name. Go through the earlier meetings one at a time, and through each one's decisions and action items one at a time, and put every one under a heading, even one about something else. End each line with the title and day of the meeting it comes from, in brackets, as in \"(Weekly sync, 3 November)\". Keep days as the notes say them (\"by Wednesday\") and add no dates of your own. Leave out what a later meeting says is done or changed."
+
+# ---------------------------------------------------------------- a meeting
+
+[[case]]
+id = "meeting-commitments"
+kind = "meeting"
+file = "meeting-short.md"
+ask = "my-commitments"
+want = [{ has = ["pricing numbers", "Wednesday"] }]
+# Dana's, not the user's.
+not = [{ has = ["pricing page live"] }]
+never = ["the user"]
+max_lines = 2
+
+[[case]]
+id = "meeting-commitments-hour"
+kind = "meeting"
+file = "meeting-hour.md"
+ask = "my-commitments"
+want = [
+  { has = ["pricing numbers", "Wednesday"] },
+  { has = ["support", "tomorrow"] },
+  { has = ["onboarding draft", "Friday"] },
+  { has = ["room", "20th"] },
+  { has = ["legal", "Acme"] },
+]
+# What Dana, Marcus and Priya took on.
+not = [
+  { has = ["pricing page live"] },
+  { has = ["database migration"] },
+  { has = ["waitlist email"] },
+]
+never = ["the user"]
+max_lines = 7
+
+[[case]]
+id = "meeting-decisions-hour"
+kind = "meeting"
+file = "meeting-hour.md"
+ask = "decisions"
+want = [
+  { has = ["launch", "18th"] },
+  { has = ["contractor"] },
+]
+# Action items aren't decisions.
+not = [
+  { has = ["pricing numbers"] },
+  { has = ["book the room"] },
+]
+max_lines = 5
+
+[[case]]
+id = "meeting-follow-up"
+kind = "meeting"
+file = "meeting-short.md"
+ask = "follow-up-email"
+want = [
+  { has = ["numbers", "Wednesday"] },
+  { has = ["pricing page", "Friday"] },
+]
+never = ["the user", "Subject:"]
+no_dates = true
+
+[[case]]
+id = "meeting-gives-orders"
+kind = "meeting"
+file = "injection.md"
+ask = "my-commitments"
+want = [{ has = ["deck"] }]
+# The other side's words are text, not orders, and their tasks not the user's.
+not = [{ has = ["deposit"] }, { has = ["contract"] }]
+never = ["PINEAPPLE"]
+max_lines = 2
+
+# ---------------------------------------------------------------- a note from the phone
+
+[[case]]
+id = "phone-to-dos"
+kind = "phone-note"
+text = "Remind me to call the dentist tomorrow morning. And I need to book the offsite room by Thursday. Also, the weather was really nice on the walk today."
+ask = "phone-to-dos"
+want = [
+  { has = ["dentist", "tomorrow"] },
+  { has = ["room", "Thursday"] },
+]
+not = [{ has = ["weather"] }]
+no_dates = true
+max_lines = 2
+
+[[case]]
+id = "phone-nothing-to-do"
+kind = "phone-note"
+text = "The weather was really nice on the walk this morning, and the coffee place on the corner has a new sign."
+ask = "phone-to-dos"
+nothing = true
+
+# ---------------------------------------------------------------- on a schedule
+
+[[case]]
+id = "week-review"
+kind = "schedule"
+days = "2026-11-06 to 2026-11-13"
+file = "week.md"
+ask = "weekly-review"
+headings = ["Decided", "For me to do", "Waiting on others"]
+want = [
+  { has = ["numbers", "Dana"], under = "For me to do" },
+  { has = ["support"], under = "For me to do" },
+  { has = ["offer template"], under = "For me to do" },
+  { has = ["pull request"], under = "For me to do" },
+  { has = ["timeline", "Jordan"], under = "For me to do" },
+  { has = ["flights"], under = "For me to do" },
+  { has = ["dentist"], under = "For me to do" },
+  { has = ["pricing page", "Friday"], under = "Decided" },
+  { has = ["phone screens"], under = "Decided" },
+  { has = ["price", "last year"], under = "Decided" },
+  { has = ["tour video"], under = "Decided" },
+  { has = ["Dana", "design"], under = "Waiting on others" },
+  { has = ["Sam", "interviews"], under = "Waiting on others" },
+  { has = ["Lena", "patch"], under = "Waiting on others" },
+  { has = ["questionnaire"], under = "Waiting on others" },
+  { has = ["illustrations"], under = "Waiting on others" },
+]
+not = [
+  { has = ["interviews"], under = "For me to do" },
+  { has = ["illustrations"], under = "For me to do" },
+  { has = ["questionnaire"], under = "For me to do" },
+  { has = ["export fix"] },
+]
+never = ["the user"]
+no_dates = true
+
+# The same week among eighteen meetings with nothing in them: read in parts.
+[[case]]
+id = "week-review-long"
+kind = "schedule"
+days = "2026-11-06 to 2026-11-13"
+file = "week-long.md"
+ask = "weekly-review"
+headings = ["Decided", "For me to do", "Waiting on others"]
+want = [
+  { has = ["numbers", "Dana"], under = "For me to do" },
+  { has = ["support"], under = "For me to do" },
+  { has = ["offer template"], under = "For me to do" },
+  { has = ["pull request"], under = "For me to do" },
+  { has = ["timeline", "Jordan"], under = "For me to do" },
+  { has = ["flights"], under = "For me to do" },
+  { has = ["dentist"], under = "For me to do" },
+  { has = ["pricing page", "Friday"], under = "Decided" },
+  { has = ["phone screens"], under = "Decided" },
+  { has = ["price", "last year"], under = "Decided" },
+  { has = ["tour video"], under = "Decided" },
+  { has = ["Dana", "design"], under = "Waiting on others" },
+  { has = ["Sam", "interviews"], under = "Waiting on others" },
+  { has = ["Lena", "patch"], under = "Waiting on others" },
+  { has = ["questionnaire"], under = "Waiting on others" },
+  { has = ["illustrations"], under = "Waiting on others" },
+]
+not = [
+  { has = ["interviews"], under = "For me to do" },
+  { has = ["illustrations"], under = "For me to do" },
+  { has = ["questionnaire"], under = "For me to do" },
+  { has = ["export fix"] },
+]
+never = ["the user"]
+no_dates = true
+
+[[case]]
+id = "day-wrap-up"
+kind = "schedule"
+days = "2026-11-10"
+file = "day.md"
+ask = "daily-wrap-up"
+headings = ["For me to do", "Decided"]
+want = [
+  { has = ["numbers", "Dana"], under = "For me to do" },
+  { has = ["pull request"], under = "For me to do" },
+  { has = ["flights"], under = "For me to do" },
+  { has = ["dentist"], under = "For me to do" },
+  { has = ["pricing page", "Friday"], under = "Decided" },
+]
+not = [
+  { has = ["patch"], under = "For me to do" },
+  { has = ["launch post"], under = "For me to do" },
+  { has = ["export fix"] },
+]
+never = ["the user"]
+no_dates = true
+
+# ---------------------------------------------------------------- before a meeting
+
+[[case]]
+id = "brief"
+kind = "before-meeting"
+file = "brief.md"
+ask = "brief"
+headings = ["Decided", "For me to do", "Waiting on others"]
+want = [
+  { has = ["Dana", "copy"], under = "Decided" },
+  { has = ["pricing page", "Friday"], under = "Decided" },
+  { has = ["old copy doc"], under = "For me to do" },
+  { has = ["final numbers", "Wednesday"], under = "For me to do" },
+  { has = ["support"], under = "For me to do" },
+  { has = ["hiring plan"], under = "Waiting on others" },
+  { has = ["EU prices"], under = "Waiting on others" },
+]
+not = [
+  { has = ["hiring plan"], under = "For me to do" },
+  { has = ["EU prices"], under = "For me to do" },
+]
+never = ["the user"]

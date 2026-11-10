@@ -141,6 +141,7 @@ Each prompt lives next to the code that uses it, in `crates/splashdown-core/src/
 | Translation: the translate key, ⌃⌥T and a preset's "Translate into"; and the length check that catches a reply that isn't a translation | `translate_instruction` in `crates/splashdown-config/src/presets.rs`, `guard.rs` | `eval cleanup` (the `translate-*` cases) |
 | Translating selected text that can't be edited, answered in the Ask panel | `show_translation` in `app/src-tauri/src/session/edits.rs` | none yet |
 | Ask: answers in the panel, and spoken summaries | `ask.rs` | none yet; try it by hand with `splashdown-cli ask "…"` |
+| Hooks that ask the AI, and a long meeting's summary read in parts: the instruction on the text, the notes taken from each part, and the ready-made hooks' wording | `instruct.rs` (`SYSTEM`, `PART_SYSTEM`, `what`), `HOOK_STARTERS` in `app/ui/settings/actions.js` | `eval instruct` (a ready-made hook's wording is in `eval/instruct.toml` too: change both); try one by hand with `splashdown-cli instruct "…" --file …` |
 
 Small wording changes can move results a lot, so any prompt or guard change needs an eval run, before and after, on the cloud default and the built-in local model:
 

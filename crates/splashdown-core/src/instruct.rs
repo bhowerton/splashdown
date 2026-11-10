@@ -426,6 +426,31 @@ fn failed(error: ProviderError, mut usage: Usage) -> Failed {
     Failed { error, usage }
 }
 
+/// What a text is, for the prompt, by the kind of thing that happened
+/// (a hook's event: `meeting`, `transcript`, `phone-note`, `schedule`,
+/// `before-meeting`; anything else is a dictation). `days` are the days a
+/// scheduled hook's notes are from, as "2026-11-06 to 2026-11-13".
+pub fn what(kind: &str, days: Option<&str>) -> String {
+    match kind {
+        "meeting" => {
+            "the note of a meeting they were in, with its transcript (other people are named, or \"Them\")"
+        }
+        "transcript" => "the transcript of a recording",
+        "phone-note" => "a note they said into their phone",
+        "schedule" => {
+            let days = days.map_or_else(String::new, |days| format!(" ({days})"));
+            return format!(
+                "the notes they made in a stretch of time{days}, oldest first. Each starts with its title after \"# \" and a line in brackets saying what it is and when it was made. A meeting has its summary, or its transcript when it has none, where \"You\" is the user"
+            );
+        }
+        "before-meeting" => {
+            "a meeting on their calendar that is about to start, and their notes of earlier meetings with the same title or the same people, newest first. Each starts with its title after \"# \" and a line in brackets saying what it is and when. The first is the meeting about to start, with who is invited. An earlier meeting has its summary, or its transcript when it has none, where \"You\" is the user"
+        }
+        _ => "something they dictated",
+    }
+    .to_string()
+}
+
 /// `text` in parts of at most about `tokens` tokens each, cut between
 /// lines (a transcript's turns, a note's paragraphs) where it can be, and
 /// between words in a line that's too long by itself. Where the text is
