@@ -255,6 +255,23 @@ pub async fn reminders_access() -> bool {
     false
 }
 
+/// Whether Reminders has a list called `name`, when a hook that adds to
+/// it is saved. True where it can't be told (no access is said by
+/// `reminders_access`), so that only a list known to be missing stops the
+/// save.
+#[tauri::command]
+pub async fn reminders_has_list(name: String) -> bool {
+    #[cfg(target_os = "macos")]
+    return splashdown_apple_shim::reminders_list_exists(name.trim())
+        .await
+        .unwrap_or(true);
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = name;
+        true
+    }
+}
+
 /// The sound of the app with `sources` (none: everything the computer
 /// plays but Splashdown).
 fn app_audio(sources: &[u32]) -> Result<LiveAudio, String> {

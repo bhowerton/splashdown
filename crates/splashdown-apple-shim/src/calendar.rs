@@ -133,6 +133,22 @@ pub async fn reminders_access() -> bool {
     status == ffi::OK
 }
 
+/// Whether Reminders has a list called `name`, in any capitals.
+pub async fn reminders_list_exists(name: &str) -> Result<bool, AddError> {
+    let name = CString::new(name).map_err(|e| AddError::Failed(e.to_string()))?;
+    // SAFETY: `name` outlives the call (the shim copies it at once), and
+    // the shim replies exactly once through the callback.
+    let (status, text) = ffi::call(|ctx, cb| unsafe {
+        ffi::splashdown_reminders_has_list(name.as_ptr(), ctx, cb);
+    })
+    .await;
+    match status {
+        ffi::OK => Ok(text == "1"),
+        ffi::REFUSED => Err(AddError::NoAccess),
+        _ => Err(AddError::Failed(text)),
+    }
+}
+
 /// Adds a reminder, due at `due` if given: `YYYY-MM-DDTHH:MM` local, with
 /// an alert then, or `YYYY-MM-DD` for a day with no time and no alert.
 /// `notes` goes in the reminder's notes. It goes in the list called `list`

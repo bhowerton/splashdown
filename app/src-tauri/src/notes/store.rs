@@ -973,12 +973,16 @@ impl Store {
 
     /// Adds `text` to the end of note `rel`, under `## {heading}` when
     /// there is one, making the note (titled `title`) if it isn't there.
+    /// With `again`, a section the note already has under that heading is
+    /// written over where it is: the same thing run a second time (a
+    /// weekly review, run by hand and then at its hour) says it once.
     pub fn add_under(
         &self,
         rel: &str,
         title: &str,
         heading: Option<&str>,
         text: &str,
+        again: bool,
     ) -> io::Result<()> {
         let _appending = self.appending.locked();
         self.ensure()?;
@@ -1002,6 +1006,12 @@ impl Store {
             "\n\n"
         };
         let text = as_result(text);
+        if again
+            && let Some(heading) = heading
+            && let Some(replaced) = with_section_again(&existing, heading, &text)
+        {
+            return self.write(&path, &replaced);
+        }
         let block = match heading {
             Some(heading) => format!("## {heading}\n\n{text}\n"),
             None => format!("{text}\n"),
@@ -1361,18 +1371,55 @@ mod tests {
                 "Commitments",
                 Some("Dana 1:1 · 2026-11-10"),
                 "- [ ] Send the deck",
+                false,
             )
             .unwrap();
         store
-            .add_under("Work/Commitments.md", "Commitments", None, "# Loose line")
+            .add_under(
+                "Work/Commitments.md",
+                "Commitments",
+                None,
+                "# Loose line",
+                false,
+            )
             .unwrap();
         assert_eq!(
             store.read("Work/Commitments.md").unwrap().body,
             "# Commitments\n\n## Dana 1:1 · 2026-11-10\n\n- [ ] Send the deck\n\n### Loose line\n"
         );
         // Only ever a note in the folder.
-        assert!(store.add_under("../out.md", "x", None, "y").is_err());
-        assert!(store.add_under("notes.txt", "x", None, "y").is_err());
+        assert!(store.add_under("../out.md", "x", None, "y", false).is_err());
+        assert!(store.add_under("notes.txt", "x", None, "y", false).is_err());
+
+        // A week's review run again for the same days is written over
+        // where it is; another week's is added; a meeting's is always
+        // added, as two meetings can share a title and a day.
+        let review = |days: &str, text: &str, again| {
+            store
+                .add_under(
+                    "Weekly reviews.md",
+                    "Weekly reviews",
+                    Some(days),
+                    text,
+                    again,
+                )
+                .unwrap();
+            store.read("Weekly reviews.md").unwrap().body
+        };
+        review("2026-11-06 to 2026-11-13", "First try", true);
+        review("2026-11-13 to 2026-11-20", "Next week", true);
+        assert_eq!(
+            review("2026-11-06 to 2026-11-13", "## Decided\nSecond try", true),
+            "# Weekly reviews\n\n## 2026-11-06 to 2026-11-13\n\n### Decided\nSecond try\n\n## 2026-11-13 to 2026-11-20\n\nNext week\n"
+        );
+        assert_eq!(
+            review("2026-11-13 to 2026-11-20", "Once more", true),
+            "# Weekly reviews\n\n## 2026-11-06 to 2026-11-13\n\n### Decided\nSecond try\n\n## 2026-11-13 to 2026-11-20\n\nOnce more\n"
+        );
+        assert!(
+            review("2026-11-13 to 2026-11-20", "And kept", false)
+                .ends_with("Once more\n\n## 2026-11-13 to 2026-11-20\n\nAnd kept\n")
+        );
         let meeting = store
             .create_in(
                 "Meetings",

@@ -57,6 +57,13 @@ pub(super) fn run(app: &AppHandle, asked: &Asked<'_>, happened: &Happened) -> Re
     if asked.put == PutIn::Reminders && !cfg!(target_os = "macos") {
         return Err(NO_REMINDERS.into());
     }
+    // The same for a list that isn't there: said now, not after the AI
+    // has spent its time writing.
+    if asked.put == PutIn::Reminders
+        && let Some(list) = asked.to.map(str::trim).filter(|l| !l.is_empty())
+    {
+        reminders_list(list)?;
+    }
     let Some(text) = write(app, asked.instruction, happened)? else {
         return Ok(Did::only("Nothing to do"));
     };
@@ -157,7 +164,17 @@ fn put(
         PutIn::OtherNote => {
             let (rel, title) = other_note(to);
             notes(app)?
-                .add_under(&rel, &title, heading(happened).as_deref(), text)
+                .add_under(
+                    &rel,
+                    &title,
+                    heading(happened).as_deref(),
+                    text,
+                    // A schedule's heading is the days it covers: run again
+                    // for the same days, it says the same thing better, not
+                    // a second thing. A meeting's is its title and the day,
+                    // which two meetings can share, so those are both kept.
+                    happened.event == HookEvent::Schedule.name(),
+                )
                 .map_err(|e| format!("couldn't add it to {title}: {e}"))?;
             Ok(format!("Added to {title}"))
         }
@@ -419,6 +436,32 @@ fn question(name: &str, happened: &Happened, adding: &[Todo]) -> String {
     };
     let about = heading(happened).map_or_else(String::new, |h| format!(" for {h}"));
     format!("{name} wrote{about}: {}{more}.", shown.join(", "))
+}
+
+/// Checks that Reminders has the list a hook adds to.
+#[cfg(target_os = "macos")]
+fn reminders_list(list: &str) -> Result<(), String> {
+    match tauri::async_runtime::block_on(splashdown_apple_shim::reminders_list_exists(list)) {
+        Ok(true) => Ok(()),
+        Ok(false) => Err(no_such_list(list)),
+        Err(e) => Err(crate::voice_actions::calendar_error(
+            e,
+            "reminders",
+            "Reminders",
+        )),
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+fn reminders_list(_: &str) -> Result<(), String> {
+    Ok(())
+}
+
+/// What's said when a hook's list isn't in Reminders.
+fn no_such_list(list: &str) -> String {
+    format!(
+        "Reminders has no list called “{list}”: make it there, or leave List empty for your default list"
+    )
 }
 
 #[cfg(target_os = "macos")]

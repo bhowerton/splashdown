@@ -204,6 +204,8 @@ async function mockInvoke(cmd, args) {
     case "calendar_access":
     case "reminders_access":
       return false;
+    case "reminders_has_list":
+      return args.name.toLowerCase() !== "no such list";
     case "notes_meaning_progress":
       return [0, 0];
     case "coding_agents":

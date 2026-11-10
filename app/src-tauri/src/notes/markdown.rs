@@ -372,6 +372,26 @@ pub(super) fn front_matter_id(text: &str) -> Option<String> {
     })
 }
 
+/// `text` with what's under its last `## {heading}` replaced by `result`,
+/// up to the next heading of that level or the end; `None` when it has no
+/// such section. For a note that collects a hook's results under headings.
+pub fn with_section_again(text: &str, heading: &str, result: &str) -> Option<String> {
+    let lines: Vec<&str> = text.split_inclusive('\n').collect();
+    let wanted = format!("## {}", heading.trim());
+    let at = lines.iter().rposition(|l| l.trim_end() == wanted)?;
+    let end = lines[at + 1..]
+        .iter()
+        .position(|l| l.starts_with("## ") || l.starts_with("# "))
+        .map_or(lines.len(), |next| at + 1 + next);
+    let mut out: String = lines[..at].concat();
+    out.push_str(&format!("{wanted}\n\n{}\n", result.trim()));
+    if end < lines.len() {
+        out.push('\n');
+        out.push_str(&lines[end..].concat());
+    }
+    Some(out)
+}
+
 /// The day a `## 2026-11-10` heading names: what the Inbox puts above
 /// each day's lines, so that they can be told apart later.
 pub fn day_heading(line: &str) -> Option<chrono::NaiveDate> {

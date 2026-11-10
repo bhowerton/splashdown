@@ -952,6 +952,13 @@ function editHook(index) {
       error.hidden = false;
       return;
     }
+    // And for a list it names that Reminders doesn't have: said now, not
+    // when it first runs.
+    if (hook.kind === "ask" && hook.put === "reminders" && hook.to && !(await invoke("reminders_has_list", { name: hook.to }).catch(() => true))) {
+      error.textContent = `Reminders has no list called “${hook.to}”. Make it in Reminders first, or leave List empty for your default list.`;
+      error.hidden = false;
+      return;
+    }
     // Saved here, with what it does said above: it runs without asking.
     hook.trusted = true;
     dialog.close();

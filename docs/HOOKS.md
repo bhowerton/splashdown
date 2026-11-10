@@ -89,7 +89,7 @@ If the AI finds nothing to do (no to-dos in a note), nothing is put anywhere, an
 
 Each to-do line in what the AI wrote (`- [ ] …`) becomes one reminder. If it wrote no to-do lines at all, each plain list line (`- …`, `1. …`) does. Everything else is left out: headings, sentences, and to-dos already ticked off (`- [x]`). With nothing to add, What ran says so.
 
-- **Which list:** the one you name under **List** (in any capitals), or your default list in Reminders when you leave it empty. A list you name has to be there already: Splashdown doesn't make one, so a typing slip fails with a message rather than starting a new list. In `config.toml` it's `to = "Work"`.
+- **Which list:** the one you name under **List** (in any capitals), or your default list in Reminders when you leave it empty. A list you name has to be there already: Splashdown doesn't make one, so a typing slip is caught rather than starting a new list. Settings checks when you save the hook, and each run checks again before the AI is asked. In `config.toml` it's `to = "Work"`.
 - **Where it came from** is in the reminder's notes: the meeting's or note's title and the day, and the hook's name.
 - **Due dates:** a reminder is due only if its line has one date written as `2026-11-12`, today or later. With a time on the 24-hour clock right after it (`2026-11-12 15:00`) it's due then, with an alert; without, that day, with no alert. A day in words ("by Wednesday", "tomorrow") stays in the reminder's text and sets no date: working out which day was meant could get it wrong. The ready-made hooks keep days as they were said, so their reminders have none.
 - **Asking first:** if **Ask before adding events and reminders** is on (Settings → Actions → Choices, shown when voice actions are on), Splashdown shows the to-dos and asks before adding them, as it does for a spoken "remind me to…". Otherwise they're added at once. To take one back, delete it in Reminders.
@@ -114,7 +114,7 @@ A hook on a schedule or before a meeting needn't wait for its time:
 - **Run now**, next to it in Settings, runs it on the notes it would get at this moment: the last day or 7 days up to now, or your next meeting on the calendar that has earlier notes.
 - **By voice**, the way your own actions are run: hold the dictation key, tap the instruction key and say "run my weekly review". It goes by the hook's name, for hooks that ask the AI. One of your own actions with the same name wins.
 
-Either way the result goes where the hook says, and you're told when it's done.
+Either way the result goes where the hook says, and you're told when it's done. A scheduled hook that adds to another note and is run again for the same days writes over what it wrote for them before, so the note says it once.
 
 ### Which AI, and long meetings
 

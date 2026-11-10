@@ -203,6 +203,30 @@ public func splashdown_reminders_access(_ ctx: UnsafeMutableRawPointer?, _ callb
     }
 }
 
+/// The lists in Reminders called `name`, in any capitals.
+private func reminderLists(named name: String) -> [EKCalendar] {
+    reminders.calendars(for: .reminder).filter {
+        $0.title.compare(name, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
+    }
+}
+
+/// Whether Reminders has a list called `name` (in any capitals): replies OK
+/// with "1" or "0", or REFUSED without access. For a hook that adds to a
+/// named list, to say a list isn't there before the AI is asked to write.
+@_cdecl("splashdown_reminders_has_list")
+public func splashdown_reminders_has_list(
+    _ name: UnsafePointer<CChar>,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ callback: SplashdownCallback
+) {
+    let reply = Reply(ctx: ctx, callback: callback)
+    let named = String(cString: name).trimmingCharacters(in: .whitespaces)
+    withAccess(to: .reminder, store: reminders) { granted in
+        guard granted else { return reply.send(REFUSED, "") }
+        reply.send(OK, reminderLists(named: named).isEmpty ? "0" : "1")
+    }
+}
+
 /// Adds a reminder. `fields` holds the text, when it's due (may be empty:
 /// a time as yyyy-MM-ddTHH:mm local, which gets an alert, or a day as
 /// yyyy-MM-dd, which gets none), its notes (may be empty) and the name of
@@ -237,11 +261,8 @@ public func splashdown_calendar_add_reminder(
             }
             reminder.calendar = list
         } else {
-            // By name in any capitals; of two with one name, one that can be
-            // added to.
-            let lists = reminders.calendars(for: .reminder).filter {
-                $0.title.compare(named, options: [.caseInsensitive, .diacriticInsensitive]) == .orderedSame
-            }
+            // Of two with one name, one that can be added to.
+            let lists = reminderLists(named: named)
             guard let list = lists.first(where: { $0.allowsContentModifications }) ?? lists.first else {
                 return reply.send(-1, "Reminders has no list called “\(named)”")
             }
