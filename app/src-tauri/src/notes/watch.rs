@@ -4,10 +4,11 @@
 //! and network folders don't report reliably; a file is taken once it
 //! stops changing, so one still copying or recording isn't taken early.
 //! What was taken (or was already there when the folder was added) is kept
-//! in `watched.json`, so a restart does nothing twice.
+//! in `watched.json`, so a restart does nothing twice, and a file whose
+//! transcription the app quit before finishing is taken again.
 
 use splashdown_core::sync::Locked;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::Deserialize;
 use splashdown_config::WatchedFolder;
@@ -34,6 +35,10 @@ struct Seen {
     modified: u64,
     /// Already in the folder when it was added: left alone unless asked.
     left: bool,
+    /// Taken, but no note has come of it yet: it's in the queue or being
+    /// transcribed, or the app quit (or it failed) before one did.
+    #[serde(default)]
+    waiting: bool,
 }
 
 /// A media file in a folder, as it is now.
@@ -57,6 +62,38 @@ fn ledger() -> std::sync::MutexGuard<'static, Ledger> {
             )
         })
         .locked()
+}
+
+/// The files this run of the app has taken: in the queue, being
+/// transcribed, or tried with nothing to show for it. A file the ledger
+/// still has as `waiting` that isn't here was left by an earlier run, and
+/// is taken again.
+fn taken() -> std::sync::MutexGuard<'static, HashSet<PathBuf>> {
+    static TAKEN: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+    TAKEN.get_or_init(Mutex::default).locked()
+}
+
+/// These watched files are done with: a note came of each (whole, or as
+/// far as it got), or Stop dropped it from the queue. One that failed
+/// before any note isn't among them, and is tried again when the app next
+/// starts.
+pub(super) fn settled(paths: &[PathBuf]) {
+    if paths.is_empty() {
+        return;
+    }
+    let mut ledger = ledger();
+    let mut changed = false;
+    for path in paths {
+        if let Some(seen) = ledger.files.get_mut(path)
+            && seen.waiting
+        {
+            seen.waiting = false;
+            changed = true;
+        }
+    }
+    if changed {
+        save(&ledger);
+    }
 }
 
 fn save(ledger: &Ledger) {
@@ -101,11 +138,13 @@ fn media_in(folder: &Path) -> Vec<Found> {
 }
 
 /// What a scan does: the files to transcribe now. `pending` holds files
-/// seen changing, as they were at the last scan.
+/// seen changing, as they were at the last scan; `taken`, the files this
+/// run of the app has taken already.
 fn scan(
     ledger: &mut Ledger,
     watched: &[WatchedFolder],
     pending: &mut HashMap<PathBuf, (u64, u64)>,
+    taken: &mut HashSet<PathBuf>,
     listed: impl Fn(&Path) -> Vec<Found>,
 ) -> Vec<(Found, WatchedFolder)> {
     // A folder taken off the list is looked at afresh if it comes back.
@@ -122,11 +161,16 @@ fn scan(
         }
         for file in found {
             let now = (file.size, file.modified);
-            if ledger
+            if let Some(seen) = ledger
                 .files
                 .get(&file.path)
-                .is_some_and(|s| (s.size, s.modified) == now)
+                .filter(|s| (s.size, s.modified) == now)
             {
+                // Taken by an earlier run that didn't get to it (the app
+                // quit, or it failed): once more, now.
+                if seen.waiting && taken.insert(file.path.clone()) {
+                    take.push((file, folder.clone()));
+                }
                 continue;
             }
             if pending.get(&file.path) == Some(&now) {
@@ -136,8 +180,10 @@ fn scan(
                         size: file.size,
                         modified: file.modified,
                         left: false,
+                        waiting: true,
                     },
                 );
+                taken.insert(file.path.clone());
                 take.push((file, folder.clone()));
             } else {
                 still.insert(file.path.clone(), now);
@@ -157,6 +203,7 @@ fn remember_as_left(ledger: &mut Ledger, folder: &Path, found: &[Found]) {
                 size: file.size,
                 modified: file.modified,
                 left: true,
+                waiting: false,
             },
         );
     }
@@ -180,7 +227,7 @@ pub fn watch_folders(app: &AppHandle) {
                 let take = {
                     let mut ledger = ledger();
                     let before = ledger.clone();
-                    let take = scan(&mut ledger, &watched, &mut pending, media_in);
+                    let take = scan(&mut ledger, &watched, &mut pending, &mut taken(), media_in);
                     if *ledger != before {
                         save(&ledger);
                     }
@@ -251,11 +298,15 @@ pub fn notes_watch_take_waiting(
     let take: Vec<Found> = {
         let mut ledger = ledger();
         let waiting = waiting_in(&mut ledger, &folder.path);
+        let mut taken = taken();
         for file in &waiting {
             if let Some(seen) = ledger.files.get_mut(&file.path) {
                 seen.left = false;
+                seen.waiting = true;
+                taken.insert(file.path.clone());
             }
         }
+        drop(taken);
         save(&ledger);
         waiting
     };
@@ -321,13 +372,16 @@ mod tests {
         let watched = [folder("/in")];
         let mut ledger = Ledger::default();
         let mut pending = HashMap::new();
+        let mut taken = HashSet::new();
         let mut files = vec![found("/in/old.m4a", 10, 1)];
         let mut run = |ledger: &mut Ledger, files: &[Found]| {
             let files = files.to_vec();
-            scan(ledger, &watched, &mut pending, move |_| files.clone())
-                .into_iter()
-                .map(|(f, _)| f.path)
-                .collect::<Vec<_>>()
+            scan(ledger, &watched, &mut pending, &mut taken, move |_| {
+                files.clone()
+            })
+            .into_iter()
+            .map(|(f, _)| f.path)
+            .collect::<Vec<_>>()
         };
         // First look: what's there already is left alone.
         assert!(run(&mut ledger, &files).is_empty());
@@ -354,18 +408,68 @@ mod tests {
     fn a_folder_taken_off_the_list_starts_afresh() {
         let mut ledger = Ledger::default();
         let mut pending = HashMap::new();
+        let mut taken = HashSet::new();
         let files = vec![found("/in/a.wav", 1, 1)];
         let list = |_: &Path| files.clone();
-        scan(&mut ledger, &[folder("/in")], &mut pending, list);
+        scan(
+            &mut ledger,
+            &[folder("/in")],
+            &mut pending,
+            &mut taken,
+            list,
+        );
         assert_eq!(ledger.folders, [PathBuf::from("/in")]);
-        scan(&mut ledger, &[], &mut pending, list);
+        scan(&mut ledger, &[], &mut pending, &mut taken, list);
         assert!(ledger.folders.is_empty());
         // Back again: a.wav is left alone, not transcribed.
         let more = vec![found("/in/a.wav", 1, 1), found("/in/b.wav", 2, 2)];
         let list = |_: &Path| more.clone();
-        assert!(scan(&mut ledger, &[folder("/in")], &mut pending, list).is_empty());
-        assert!(scan(&mut ledger, &[folder("/in")], &mut pending, list).is_empty());
+        let again = [folder("/in")];
+        assert!(scan(&mut ledger, &again, &mut pending, &mut taken, list).is_empty());
+        assert!(scan(&mut ledger, &again, &mut pending, &mut taken, list).is_empty());
         assert!(ledger.files[Path::new("/in/b.wav")].left);
+    }
+
+    #[test]
+    fn a_file_the_app_quit_on_is_taken_again_and_a_finished_one_isn_t() {
+        let watched = [folder("/in")];
+        let mut ledger = Ledger::default();
+        let mut pending = HashMap::new();
+        let mut taken = HashSet::new();
+        let files = vec![found("/in/a.wav", 1, 1), found("/in/b.wav", 2, 2)];
+        let list = |_: &Path| files.clone();
+        let paths = |take: Vec<(Found, WatchedFolder)>| {
+            let mut paths: Vec<PathBuf> = take.into_iter().map(|(f, _)| f.path).collect();
+            paths.sort();
+            paths
+        };
+        // The folder is known and empty; two files arrive and settle.
+        ledger.folders.push(PathBuf::from("/in"));
+        assert!(scan(&mut ledger, &watched, &mut pending, &mut taken, list).is_empty());
+        assert_eq!(
+            paths(scan(&mut ledger, &watched, &mut pending, &mut taken, list)),
+            [PathBuf::from("/in/a.wav"), PathBuf::from("/in/b.wav")]
+        );
+        // In the queue: not taken twice by the same run.
+        assert!(scan(&mut ledger, &watched, &mut pending, &mut taken, list).is_empty());
+        // a.wav became a note; the app quit before b.wav did.
+        ledger
+            .files
+            .get_mut(Path::new("/in/a.wav"))
+            .unwrap()
+            .waiting = false;
+        let (mut pending, mut taken) = (HashMap::new(), HashSet::new());
+        assert_eq!(
+            paths(scan(&mut ledger, &watched, &mut pending, &mut taken, list)),
+            [PathBuf::from("/in/b.wav")]
+        );
+        assert!(scan(&mut ledger, &watched, &mut pending, &mut taken, list).is_empty());
+        // A ledger from before this was kept reads as nothing waiting.
+        let old: Ledger = serde_json::from_str(
+            r#"{"folders":["/in"],"files":{"/in/a.wav":{"size":1,"modified":1,"left":false}}}"#,
+        )
+        .unwrap();
+        assert!(!old.files[Path::new("/in/a.wav")].waiting);
     }
 
     #[test]

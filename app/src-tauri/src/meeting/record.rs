@@ -32,9 +32,8 @@ pub(super) fn leave_recording(meta: &Path) {
         .and_then(|text| serde_json::from_str::<Spool>(&text).map_err(|e| e.to_string()))
         .and_then(|mut spool| {
             spool.audio_only = true;
-            serde_json::to_string(&spool).map_err(|e| e.to_string())
-        })
-        .and_then(|json| std::fs::write(meta, json).map_err(|e| e.to_string()));
+            crate::data::write(meta, &spool)
+        });
     if let Err(e) = marked {
         tracing::warn!("couldn't mark a meeting's recording as left to keep: {e}");
     }
@@ -201,11 +200,7 @@ pub(super) fn record(
         audio_only: false,
     };
     let meta_path = dir.join(format!("{id}.json"));
-    std::fs::write(
-        &meta_path,
-        serde_json::to_string(&spool).map_err(|e| e.to_string())?,
-    )
-    .map_err(|e| e.to_string())?;
+    crate::data::write(&meta_path, &spool)?;
     let mut raw =
         std::io::BufWriter::new(std::fs::File::create(&raw_path).map_err(|e| e.to_string())?);
 

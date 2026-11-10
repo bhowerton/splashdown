@@ -53,17 +53,13 @@ fn path() -> Option<PathBuf> {
 /// saves them if it says so.
 fn with_stored<T>(f: impl FnOnce(&mut Stored) -> (T, bool)) -> T {
     let mut slot = STORED.locked();
-    let stored = slot.get_or_insert_with(|| {
-        path()
-            .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|text| serde_json::from_str(&text).ok())
-            .unwrap_or_default()
-    });
+    let stored =
+        slot.get_or_insert_with(|| path().map(|p| crate::data::read(&p)).unwrap_or_default());
     let (out, changed) = f(stored);
     if changed
         && let Some(path) = path()
         && let Ok(text) = serde_json::to_string_pretty(stored)
-        && let Err(e) = std::fs::write(&path, text)
+        && let Err(e) = crate::data::write_text(&path, &text)
     {
         tracing::warn!("couldn't save the writing style: {e}");
     }

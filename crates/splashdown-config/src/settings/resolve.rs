@@ -301,7 +301,13 @@ pub struct Budget {
 /// Whether an OpenAI-compatible base URL points at this computer.
 pub fn is_local_url(url: &str) -> bool {
     let rest = url.split_once("://").map_or(url, |(_, r)| r);
-    let authority = rest.split('/').next().unwrap_or("");
+    // A backslash ends the host too, as it does for the request itself.
+    let authority = rest.split(['/', '\\', '?', '#']).next().unwrap_or("");
+    // "name@host": the host is what follows the @, so a name that looks
+    // like this computer ("localhost:11434@elsewhere.example") isn't it.
+    let authority = authority
+        .rsplit_once('@')
+        .map_or(authority, |(_, host)| host);
     let host = match authority.strip_prefix('[') {
         // IPv6 literal, e.g. [::1]:8080
         Some(v6) => v6.split(']').next().unwrap_or(""),

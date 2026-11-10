@@ -271,6 +271,15 @@ fn work(app: AppHandle) {
             ),
             Err(e) => tell(&app, format!("Couldn't transcribe {name}: {e}"), true),
         }
+        if item.watched.is_some() {
+            match &result {
+                // A note came of it, whole or as far as it got.
+                Ok(_) => super::watch::settled(std::slice::from_ref(&item.path)),
+                // Nothing did: it's tried again when the app next starts.
+                // Logged, since nobody may have the Notes window open.
+                Err(e) => tracing::warn!("a watched file couldn't be transcribed: {e}"),
+            }
+        }
         if let Some(reply) = item.reply.take() {
             let _ = reply.send(result);
         }

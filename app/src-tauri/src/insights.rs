@@ -85,10 +85,7 @@ fn key(date: NaiveDate) -> String {
 
 impl Insights {
     pub fn open(path: PathBuf) -> Self {
-        let ledger = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+        let ledger = crate::data::read(&path);
         Self {
             path,
             ledger: Mutex::new(ledger),
@@ -128,10 +125,7 @@ impl Insights {
 
     fn save(&self, ledger: &Ledger) {
         let json = serde_json::to_string_pretty(ledger).expect("insights serialize");
-        if let Some(dir) = self.path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Err(e) = std::fs::write(&self.path, json) {
+        if let Err(e) = crate::data::write_text(&self.path, &json) {
             tracing::warn!("couldn't save insights: {e}");
         }
     }

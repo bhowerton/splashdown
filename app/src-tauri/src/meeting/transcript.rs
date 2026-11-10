@@ -86,7 +86,9 @@ impl<'a> Job<'a> {
                 };
                 progressed = true;
                 let end = piece.start + piece.clip.duration();
-                if end <= self.resume_at {
+                // What started before the resume point is in the note
+                // (see `Meeting::settled`), even if it ended after it.
+                if piece.start < self.resume_at {
                     self.meeting.reached(side, end);
                     continue;
                 }
@@ -106,7 +108,8 @@ impl<'a> Job<'a> {
                 });
             }
             let ready = self.meeting.ready();
-            self.write(ready);
+            let settled = self.meeting.settled();
+            self.write(ready, settled);
             if !progressed {
                 return;
             }
@@ -145,14 +148,17 @@ impl<'a> Job<'a> {
         let meeting = std::mem::take(&mut self.meeting);
         let echoes = meeting.echoes;
         let rest = meeting.finish();
-        self.write(rest);
+        // All of it is in the note now: if the app quits during what
+        // follows (the summary, keeping the recording), finishing it later
+        // adds no turn twice.
+        let all = self.recorded();
+        self.write(rest, all);
         echoes
     }
 
-    pub(super) fn write(&mut self, paragraphs: Vec<Paragraph>) {
-        if paragraphs.is_empty() {
-            return;
-        }
+    /// Writes `paragraphs` into the note, and notes in the spool that the
+    /// note now has every turn that started before `upto`.
+    pub(super) fn write(&mut self, paragraphs: Vec<Paragraph>, upto: Duration) {
         for p in paragraphs {
             let stamp = timestamp(p.start);
             let line = Turn {
@@ -165,6 +171,12 @@ impl<'a> Job<'a> {
                 collected.push(line);
                 continue;
             }
+            // After one turn couldn't be written, none is: finishing the
+            // meeting later starts from that turn, and would add again
+            // whatever went in after it.
+            if self.lost_writes {
+                continue;
+            }
             if let Err(e) = self.store.add_paragraph(self.note, &line) {
                 tracing::warn!("couldn't add to the meeting note: {e}");
                 self.lost_writes = true;
@@ -173,10 +185,11 @@ impl<'a> Job<'a> {
         // How far the note goes, for finishing it after a crash.
         if !self.lost_writes
             && let Some((path, spool)) = &mut self.spool
+            && upto.as_secs_f64() > spool.written
         {
-            spool.written = self.meeting.settled().as_secs_f64();
-            if let Ok(json) = serde_json::to_string(spool) {
-                let _ = std::fs::write(path, json);
+            spool.written = upto.as_secs_f64();
+            if let Err(e) = crate::data::write(path, spool) {
+                tracing::warn!("couldn't note how far the meeting's note goes: {e}");
             }
         }
     }

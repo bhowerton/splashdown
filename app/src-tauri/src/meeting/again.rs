@@ -90,6 +90,12 @@ pub(crate) fn transcribe_again(
         }
         let mut named = false;
         let day = chrono::Local::now().format("%b %-d");
+        // The transcript as it was, with whatever the user put right in
+        // it or wrote under it, stays in the note's versions: the new one
+        // may be worse.
+        if let Err(e) = store.keep_current(note) {
+            tracing::warn!("couldn't keep a version before transcribing again: {e}");
+        }
         store
             .rewrite(note, |body| {
                 let (body, kept) = with_transcript(

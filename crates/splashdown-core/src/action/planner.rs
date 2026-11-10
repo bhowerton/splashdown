@@ -352,6 +352,63 @@ pub fn plan(output: &str, said: &str, ctx: &PlanContext, enabled: Option<&[&str]
         if name == "name" && !in_said {
             return Plan::Invalid(format!("{value:?} wasn't named in what was said"));
         }
+        // Sharing one word with what was said ("this", "email") mustn't
+        // carry the rest of a target in: for an address and for a Shortcut
+        // or action of the user's, no part may come from the selection
+        // alone.
+        if !selection.is_empty()
+            && let Some(part) = strict_parts(name, &value)
+                .into_iter()
+                .find(|part| selection.contains(part.as_str()) && !was_said(&said, part))
+        {
+            return Plan::Invalid(format!(
+                "{name} {value:?} has {part:?} from the selected text, not from what was said"
+            ));
+        }
     }
     plan
+}
+
+/// The parts of a target (folded) that must each have been said when the
+/// selection has them too. For a site given as an address
+/// ("docs.example.com/guide"), every label and path piece but the ending
+/// (".com") and "www"; for a Shortcut or action name, its longer words.
+/// Nothing for an app, a preset or a site given by name, which only ever
+/// resolve to something installed, saved or built in.
+fn strict_parts(field: &str, value: &str) -> Vec<String> {
+    let pieces = |text: &str| -> Vec<String> {
+        text.split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_string)
+            .collect()
+    };
+    match field {
+        "site" if value.contains('.') => {
+            let address = value
+                .trim_start_matches("https://")
+                .trim_start_matches("http://");
+            let (host, path) = address.split_once('/').unwrap_or((address, ""));
+            let mut labels = pieces(host);
+            labels.pop();
+            labels.retain(|l| l != "www");
+            labels.extend(pieces(path));
+            labels
+        }
+        "name" => pieces(value)
+            .into_iter()
+            .filter(|w| w.chars().count() >= 4 || !w.is_ascii())
+            .collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// Whether `part` (folded) is in what was said (folded): anywhere in it,
+/// or as a word of its own when it's too short for that to mean anything.
+fn was_said(said: &str, part: &str) -> bool {
+    if part.is_ascii() && part.len() < 3 {
+        said.split(|c: char| !c.is_alphanumeric())
+            .any(|w| w == part)
+    } else {
+        said.contains(part)
+    }
 }

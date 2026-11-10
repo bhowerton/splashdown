@@ -412,9 +412,18 @@ pub(super) fn run_stoppable(
 #[tauri::command]
 pub fn notes_transcribe_stop() {
     let mut queue = queue();
+    // Watched files dropped here were turned down, not left unfinished:
+    // they aren't taken again.
+    let dropped: Vec<PathBuf> = queue
+        .waiting
+        .iter()
+        .filter(|item| item.watched.is_some())
+        .map(|item| item.path.clone())
+        .collect();
     queue.waiting.clear();
     queue.stop.store(true, Ordering::Relaxed);
     drop(queue);
+    super::watch::settled(&dropped);
     // And a link still downloading.
     CANCEL.store(true, Ordering::Relaxed);
     if let Some(mut child) = DOWNLOADER.locked().take() {

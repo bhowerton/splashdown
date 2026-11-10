@@ -632,6 +632,8 @@ mod tests {
             "http://127.0.0.1:1234/v1",
             "http://[::1]:8080",
             "http://lmstudio.localhost/v1",
+            "http://me:secret@localhost:11434/v1",
+            "http://localhost?x=1",
         ] {
             assert!(is_local_url(u), "{u}");
         }
@@ -639,6 +641,11 @@ mod tests {
             "https://api.groq.com/openai/v1",
             "http://192.168.1.5:11434/v1",
             "http://localhost.evil.com/v1",
+            // A name before the @ that only looks like this computer.
+            "http://localhost:11434@evil.example/v1",
+            "http://localhost@evil.example",
+            "http://evil.example\\@localhost/v1",
+            "http://evil.example#@localhost",
         ] {
             assert!(!is_local_url(u), "{u}");
         }

@@ -102,10 +102,7 @@ fn day_key(now: DateTime<Local>) -> String {
 impl Spend {
     /// Loads `path`, starting empty if it's missing or unreadable.
     pub fn open(path: PathBuf) -> Self {
-        let ledger = std::fs::read_to_string(&path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-            .unwrap_or_default();
+        let ledger = crate::data::read(&path);
         Self {
             path,
             ledger: Mutex::new(ledger),
@@ -132,11 +129,11 @@ impl Spend {
         prune(&mut ledger.months, KEEP_MONTHS);
         prune(&mut ledger.days, KEEP_DAYS);
         let json = serde_json::to_string_pretty(&*ledger).expect("ledger serializes");
-        drop(ledger);
-        if let Some(dir) = self.path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Err(e) = std::fs::write(&self.path, json) {
+        // Saved before the ledger is let go, so two costs recorded at the
+        // same moment can't reach the file in the wrong order; and whole,
+        // since a damaged file would read as nothing spent and lift the
+        // spending limit.
+        if let Err(e) = crate::data::write_text(&self.path, &json) {
             tracing::warn!("couldn't save spending: {e}");
         }
     }
