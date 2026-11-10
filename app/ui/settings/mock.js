@@ -202,6 +202,7 @@ async function mockInvoke(cmd, args) {
       return { state: mockInvoke.state, engine_error: null };
     case "get_launch_at_login":
     case "calendar_access":
+    case "reminders_access":
       return false;
     case "notes_meaning_progress":
       return [0, 0];

@@ -245,6 +245,16 @@ pub async fn calendar_access() -> bool {
     false
 }
 
+/// Asks for Reminders, when a hook that adds reminders is saved: whether
+/// it's allowed.
+#[tauri::command]
+pub async fn reminders_access() -> bool {
+    #[cfg(target_os = "macos")]
+    return splashdown_apple_shim::reminders_access().await;
+    #[cfg(not(target_os = "macos"))]
+    false
+}
+
 /// The sound of the app with `sources` (none: everything the computer
 /// plays but Splashdown).
 fn app_audio(sources: &[u32]) -> Result<LiveAudio, String> {

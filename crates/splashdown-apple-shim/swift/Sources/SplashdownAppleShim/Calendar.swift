@@ -119,7 +119,8 @@ public func splashdown_calendar_upcoming(
 }
 
 // Voice actions: adding an event or a reminder ("add dentist to my calendar
-// on Thursday at 4"), and taking it back again (Undo).
+// on Thursday at 4"), and taking it back again (Undo). A hook that asks the
+// AI can add reminders too, one for each to-do it wrote.
 
 private let reminders = EKEventStore()
 
@@ -129,6 +130,15 @@ private func localTime(_ text: String) -> Date? {
     format.locale = Locale(identifier: "en_US_POSIX")
     format.timeZone = TimeZone.current
     format.dateFormat = "yyyy-MM-dd'T'HH:mm"
+    return format.date(from: text)
+}
+
+/// A day with no time, as a hook writes a to-do's day.
+private func localDay(_ text: String) -> Date? {
+    let format = DateFormatter()
+    format.locale = Locale(identifier: "en_US_POSIX")
+    format.timeZone = TimeZone.current
+    format.dateFormat = "yyyy-MM-dd"
     return format.date(from: text)
 }
 
@@ -183,9 +193,21 @@ public func splashdown_calendar_add_event(
     }
 }
 
-/// Adds a reminder to the default list. `fields` holds the text and the
-/// due time (may be empty), one per line. Replies OK with its identifier,
-/// REFUSED without access, or an error.
+/// Asks for access to Reminders (macOS shows its prompt the first time).
+/// Replies OK when it's allowed, REFUSED otherwise.
+@_cdecl("splashdown_reminders_access")
+public func splashdown_reminders_access(_ ctx: UnsafeMutableRawPointer?, _ callback: SplashdownCallback) {
+    let reply = Reply(ctx: ctx, callback: callback)
+    withAccess(to: .reminder, store: reminders) { granted in
+        reply.send(granted ? OK : REFUSED, "")
+    }
+}
+
+/// Adds a reminder to the default list. `fields` holds the text, when it's
+/// due (may be empty: a time as yyyy-MM-ddTHH:mm local, which gets an alert,
+/// or a day as yyyy-MM-dd, which gets none) and its notes (may be empty),
+/// one per line. Replies OK with its identifier, REFUSED without access, or
+/// an error.
 @_cdecl("splashdown_calendar_add_reminder")
 public func splashdown_calendar_add_reminder(
     _ fields: UnsafePointer<CChar>,
@@ -203,7 +225,10 @@ public func splashdown_calendar_add_reminder(
             reminder.dueDateComponents = Calendar.current.dateComponents(
                 [.year, .month, .day, .hour, .minute], from: due)
             reminder.addAlarm(EKAlarm(absoluteDate: due))
+        } else if let day = localDay(field(1)) {
+            reminder.dueDateComponents = Calendar.current.dateComponents([.year, .month, .day], from: day)
         }
+        if !field(2).isEmpty { reminder.notes = field(2) }
         guard let list = reminders.defaultCalendarForNewReminders() else {
             return reply.send(-1, "there's no reminders list to add it to")
         }

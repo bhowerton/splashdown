@@ -69,6 +69,7 @@ unsafe extern "C" {
         ctx: *mut c_void,
         callback: Callback,
     );
+    pub fn splashdown_reminders_access(ctx: *mut c_void, callback: Callback);
     pub fn splashdown_calendar_remove(
         id: *const c_char,
         reminder: bool,

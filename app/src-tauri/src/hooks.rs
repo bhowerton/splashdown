@@ -741,6 +741,18 @@ fn describe(hook: &Hook) -> String {
                 PutIn::File => format!("adds what it writes to {to}"),
                 PutIn::Clipboard => "copies what it writes".to_string(),
                 PutIn::Web => format!("sends what it writes to {to}"),
+                PutIn::Reminders => {
+                    "adds a reminder to your Reminders for each to-do it writes".to_string()
+                }
+                // The addresses as the hook has them: what the draft is to.
+                PutIn::EmailDraft => match PutIn::addresses(to) {
+                    Some(to) if !to.is_empty() => format!(
+                        "opens what it writes as an email draft to {}, which is not sent",
+                        to.join(", ")
+                    ),
+                    _ => "opens what it writes as an email draft to no one, which is not sent"
+                        .to_string(),
+                },
             };
             let asks: String = instruction.trim().chars().take(ASKS_SHOWN).collect();
             let more = if instruction.trim().chars().count() > ASKS_SHOWN {
@@ -814,7 +826,12 @@ fn test(app: &AppHandle, hook: &Hook) -> Result<String, String> {
             ),
         };
         return Ok(match ask::write(app, asked.instruction, &happened)? {
-            Some(text) => format!("From {from}, it wrote:\n\n{text}"),
+            Some(text) => {
+                // Said, not done: Test puts nothing anywhere.
+                let would = ask::would(&asked, &happened, &text)
+                    .map_or_else(String::new, |would| format!("\n\n{would}"));
+                format!("From {from}, it wrote:\n\n{text}{would}")
+            }
             None => format!("It found nothing to do in {there}."),
         });
     }

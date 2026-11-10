@@ -60,7 +60,9 @@ No code needed: choose **Ask the AI to do something with it**, say what you want
 | Start from | When | What it writes | Where |
 |---|---|---|---|
 | Follow-up email | A meeting ends | A short email to the others: thanks, what was decided, who does what | The meeting's note |
+| Follow-up email, as a draft | A meeting ends | The same | A draft in your mail app, to no one until you add addresses |
 | What I said I'd do | A meeting ends | Your own commitments, as to-dos | A note called Commitments |
+| What I said I'd do, as reminders (Mac) | A meeting ends | The same, each line written to make sense on its own | Your Reminders |
 | Decisions | A meeting ends | What was decided, a line each | A note called Decisions |
 | Key points | A transcript is finished | The main points, with their times | The transcript's note |
 | Study cards | A transcript is finished | Questions and answers to study from | The transcript's note |
@@ -78,8 +80,29 @@ Where what it writes can go:
 | **At the end of a file** | The same, in any file you give the full path of |
 | **On the clipboard** | Replaces what's on the clipboard, ready to paste |
 | **To a web address** | Sent as a web address hook is (below), with `text` holding what the AI wrote instead of the note, and `ask` holding the hook's name |
+| **In Reminders** (Mac) | A reminder for each to-do it wrote, in your default list. See below |
+| **In an email draft** | Opens as a new email in your mail app, for you to check and send. It is never sent for you. See below |
 
-If the AI finds nothing to do (no to-dos in a note), nothing is put anywhere, and What ran says so. **Test** asks about a short sample meeting and shows what it would write, without putting it anywhere.
+If the AI finds nothing to do (no to-dos in a note), nothing is put anywhere, and What ran says so. **Test** asks about a short sample meeting and shows what it would write, without putting it anywhere. For Reminders it also lists the reminders it would add, and for an email draft who it would be to and its subject; it adds and opens nothing.
+
+### Reminders
+
+Each to-do line in what the AI wrote (`- [ ] …`) becomes one reminder in your default list. If it wrote no to-do lines at all, each plain list line (`- …`, `1. …`) does. Everything else is left out: headings, sentences, and to-dos already ticked off (`- [x]`). With nothing to add, What ran says so.
+
+- **Where it came from** is in the reminder's notes: the meeting's or note's title and the day, and the hook's name.
+- **Due dates:** a reminder is due only if its line has one date written as `2026-11-12`, today or later. With a time on the 24-hour clock right after it (`2026-11-12 15:00`) it's due then, with an alert; without, that day, with no alert. A day in words ("by Wednesday", "tomorrow") stays in the reminder's text and sets no date: working out which day was meant could get it wrong. The ready-made hooks keep days as they were said, so their reminders have none.
+- **Asking first:** if **Ask before adding events and reminders** is on (Settings → Actions → Choices, shown when voice actions are on), Splashdown shows the to-dos and asks before adding them, as it does for a spoken "remind me to…". Otherwise they're added at once. To take one back, delete it in Reminders.
+- **Limits:** at most 25 reminders a run (What ran says when there were more), and a long line is cut at 200 characters.
+
+This needs a Mac, where Splashdown can add to Reminders. macOS asks you to allow it when you save the hook; if you say no, the hook fails and tells you where to allow it (System Settings → Privacy & Security → Reminders). On Windows the choice can't be saved, and a hook that has it in `config.toml` doesn't run or ask the AI.
+
+### An email draft
+
+What the AI wrote opens as a new email in your mail app (the one your computer opens email links with), with the hook's name and the meeting's or note's title as its subject ("Follow-up email: Pricing review"). You read it, change it and send it, or close it. Splashdown never sends it. Marks for headings, bold and to-do boxes are taken out, since mail would show them as they are.
+
+- **Who it's to:** only the addresses you type in the hook's **To** field (`to` in `config.toml`), separated by commas. Left empty, the draft is to no one and you fill it in. No address is ever taken from what was said in the meeting or from what the AI wrote: those only ever become the email's text.
+- **Long results:** a draft is opened through a link, and a link can only be so long: about 8,000 characters on a Mac and 2,000 on Windows once the text is encoded, which is roughly 1,000 words and 250 words of English, and fewer in other alphabets. A result longer than that goes on the clipboard instead, the draft opens saying to paste it, and What ran says so.
+- The draft opens in front of what you're doing, when the hook runs.
 
 ### Being told, and running one now
 
@@ -112,6 +135,8 @@ A cloud model reads the whole meeting at once and does both well. Either way, ch
 
 The AI only writes. It can't send, open, delete or run anything, and it can't choose where its text goes: you did. A meeting is mostly other people's words, and those words can't give it orders; the worst a transcript can do is change what gets written. It doesn't run before a dictation goes in (a preset's own instructions do that).
 
+Reminders and an email draft keep to that. Splashdown does one thing with the text, the one you chose in Settings: a reminder for each to-do line, or a draft that isn't sent. Words in a meeting can change what a reminder or a draft says. They can't add a recipient, send the email, set anything but a reminder's text and day, or make anything else happen.
+
 In `config.toml`:
 
 ```toml
@@ -120,8 +145,8 @@ when = "meeting"
 kind = "ask"
 name = "My commitments"
 instruction = "List everything I said I would do, as to-dos."
-put = "other-note"   # note, other-note, file, clipboard or web
-to = "Commitments"   # the note, the file's full path, or the web address
+put = "other-note"   # note, other-note, file, clipboard, web, reminders (a Mac only) or email-draft
+to = "Commitments"   # the note, the file's full path, the web address, or an email draft's addresses (optional)
 title_has = "1:1"    # optional
 
 [[hooks]]
@@ -279,5 +304,6 @@ The note holds what other people said, and an agent that can act may be talked i
 - Hooks are only added in Settings, which says exactly what each one will run. A hook found in `config.toml` that wasn't saved there (written by hand, or by another program) asks before its first run. So does every hook in a settings file you import: the import lists what the file would run or send to before you agree, and nothing in it runs unasked.
 - Voice commands, coding agents and notes can't add or change hooks.
 - A hook that asks the AI gives it no tools: it writes text, and that text goes only where the hook says. Nothing in a meeting or a note can make it do anything else.
+- An email draft is never sent by Splashdown, and is only to addresses you typed in Settings. Reminders are only added by a hook you set to add them, and each holds one line of what the AI wrote.
 - Programs never run through a shell, so nothing in what you said can become a command.
 - A hook gets what you dictated or recorded. A web address sends it off your computer, to whoever runs that address, and asking a cloud AI sends it to that provider: see [PRIVACY.md](PRIVACY.md).

@@ -106,6 +106,12 @@ pub enum PutIn {
     Clipboard,
     /// A web address (`to`), as a webhook gets it, with the result.
     Web,
+    /// The user's Reminders: a reminder for each to-do line in the result.
+    /// On a Mac only, where reminders are added.
+    Reminders,
+    /// A draft in the user's mail app, never sent. `to` may hold the
+    /// addresses it's to, as typed in Settings; without, it's to no one.
+    EmailDraft,
 }
 
 impl PutIn {
@@ -113,6 +119,33 @@ impl PutIn {
     pub fn takes_a_place(self) -> bool {
         matches!(self, PutIn::OtherNote | PutIn::File | PutIn::Web)
     }
+
+    /// The addresses in an email draft's `to`, separated by commas,
+    /// semicolons or spaces; `None` if any of it isn't a plain address
+    /// (`dana@example.com`). Nothing else goes into a draft's link.
+    pub fn addresses(to: &str) -> Option<Vec<String>> {
+        to.split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+            .filter(|part| !part.is_empty())
+            .map(|part| is_address(part).then(|| part.to_string()))
+            .collect()
+    }
+}
+
+/// `name@host.tld` in plain letters and digits, with `.`, `_`, `+` or `-`
+/// in the name and `.` or `-` in the host.
+fn is_address(part: &str) -> bool {
+    let plain = |s: &str, also: &str| {
+        !s.is_empty()
+            && s.chars()
+                .all(|c| c.is_ascii_alphanumeric() || also.contains(c))
+    };
+    part.split_once('@').is_some_and(|(name, host)| {
+        plain(name, "._+-")
+            && plain(host, ".-")
+            && host.contains('.')
+            && !host.starts_with('.')
+            && !host.ends_with('.')
+    })
 }
 
 /// When a scheduled hook runs, and how far back the notes it gets go.
@@ -401,7 +434,19 @@ impl Hook {
                             return Some(problem);
                         }
                     }
-                    PutIn::Note | PutIn::Clipboard => {}
+                    PutIn::Reminders if !cfg!(target_os = "macos") => {
+                        return Some(
+                            "Splashdown can only add reminders on a Mac for now: choose another place for the result."
+                                .into(),
+                        );
+                    }
+                    PutIn::EmailDraft if PutIn::addresses(to).is_none() => {
+                        return Some(
+                            "Give the addresses the draft is to, separated by commas (dana@example.com, sam@example.com), or leave it empty."
+                                .into(),
+                        );
+                    }
+                    PutIn::Note | PutIn::Clipboard | PutIn::Reminders | PutIn::EmailDraft => {}
                 }
             }
         }
@@ -646,6 +691,56 @@ mod tests {
     }
 
     #[test]
+    fn reminders_need_a_mac_and_a_draft_takes_only_addresses() {
+        let reminders = ask(HookEvent::Meeting, PutIn::Reminders, None);
+        if cfg!(target_os = "macos") {
+            assert_eq!(reminders.problem(), None);
+            // From a note said on the phone too, or on a schedule.
+            assert_eq!(
+                ask(HookEvent::PhoneNote, PutIn::Reminders, None).problem(),
+                None
+            );
+        } else {
+            assert!(reminders.problem().is_some_and(|p| p.contains("Mac")));
+        }
+        // A draft to no one, or to addresses typed in Settings.
+        let draft = |to: Option<&str>| ask(HookEvent::Meeting, PutIn::EmailDraft, to).problem();
+        assert_eq!(draft(None), None);
+        assert_eq!(draft(Some("  ")), None);
+        assert_eq!(draft(Some("dana@example.com")), None);
+        assert_eq!(
+            draft(Some("dana.lee+notes@example.com, sam@mail.example.co.uk")),
+            None
+        );
+        for wrong in [
+            "Dana",
+            "Dana Lee <dana@example.com>",
+            "dana@example",
+            "dana@@example.com",
+            "@example.com",
+            "dana@.com",
+            "dana@example.com?bcc=eve@example.com",
+            "dana@example.com&subject=x",
+            "dana@example.com, the team",
+            "mailto:dana@example.com",
+            "dana%40example.com",
+        ] {
+            assert!(draft(Some(wrong)).is_some(), "{wrong}");
+        }
+        assert_eq!(
+            PutIn::addresses("a@example.com; b@example.com\nc@example.com"),
+            Some(vec![
+                "a@example.com".into(),
+                "b@example.com".into(),
+                "c@example.com".into()
+            ])
+        );
+        assert_eq!(PutIn::addresses(""), Some(vec![]));
+        assert_eq!(PutIn::addresses("a@example.com, b"), None);
+        assert!(!PutIn::Reminders.takes_a_place() && !PutIn::EmailDraft.takes_a_place());
+    }
+
+    #[test]
     fn a_scheduled_hook_needs_a_time() {
         let at = |at: &str, days: &[Day]| Hook {
             schedule: Some(Schedule {
@@ -777,9 +872,38 @@ before = { minutes = 5 }
 when = "before-meeting"
 kind = "program"
 path = "/Users/me/bin/brief"
+
+[[hooks]]
+when = "meeting"
+kind = "ask"
+name = "My commitments"
+instruction = "List everything I said I'd do."
+put = "reminders"
+
+[[hooks]]
+when = "meeting"
+kind = "ask"
+name = "Follow-up email"
+instruction = "Draft a follow-up email."
+put = "email-draft"
+to = "dana@example.com, sam@example.com"
 "#;
         let settings = Settings::from_toml(text).unwrap();
-        assert_eq!(settings.hooks.len(), 7);
+        assert_eq!(settings.hooks.len(), 9);
+        assert!(matches!(
+            &settings.hooks[7].run,
+            HookTarget::Ask {
+                put: PutIn::Reminders,
+                to: None,
+                ..
+            }
+        ));
+        assert!(matches!(
+            &settings.hooks[8].run,
+            HookTarget::Ask { put: PutIn::EmailDraft, to: Some(to), .. }
+                if to == "dana@example.com, sam@example.com"
+        ));
+        assert_eq!(settings.hooks[8].problem(), None);
         assert_eq!(settings.hooks[5].when, HookEvent::BeforeMeeting);
         assert_eq!(settings.hooks[5].before, Some(Before { minutes: 5 }));
         assert_eq!(settings.hooks[5].title_has.as_deref(), Some("1:1"));

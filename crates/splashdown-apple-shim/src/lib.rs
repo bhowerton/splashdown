@@ -16,7 +16,7 @@ mod tap;
 
 pub use calendar::{
     AddError, Added, CalendarEvent, Upcoming, add_event, add_reminder, calendar_access,
-    calendar_now, calendar_upcoming, remove,
+    calendar_now, calendar_upcoming, reminders_access, remove,
 };
 pub use providers::{AppleLanguageModel, AppleSpeech};
 pub use screenshot::{Screenshot, ScreenshotError, screenshot, zoom};

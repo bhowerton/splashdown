@@ -301,7 +301,13 @@ fn website(site: &str) -> Option<String> {
         .map(|(_, domain)| format!("https://{domain}"))
 }
 
-fn mailto(to: Option<&str>, subject: Option<&str>, body: &str) -> Result<String, String> {
+/// The link that opens a new email in the mail app, for the user to check
+/// and send. Also what a hook's email draft opens (`hooks/ask.rs`).
+pub(crate) fn mailto(
+    to: Option<&str>,
+    subject: Option<&str>,
+    body: &str,
+) -> Result<String, String> {
     // An address only: a name ("Dana") is left for the user to fill in.
     let to = to
         .map(str::trim)
@@ -492,8 +498,9 @@ fn create_reminder(
         if !confirmed(app, settings, &format!("Remind you of {described}.")) {
             return done("Not added");
         }
-        let added = tauri::async_runtime::block_on(splashdown_apple_shim::add_reminder(text, due))
-            .map_err(|e| calendar_error(e, "reminders", "Reminders"))?;
+        let added =
+            tauri::async_runtime::block_on(splashdown_apple_shim::add_reminder(text, due, None))
+                .map_err(|e| calendar_error(e, "reminders", "Reminders"))?;
         Ok(Done {
             text: format!("Reminder: {described} · say “undo that” to remove it"),
             undo: Some(Undo::Calendar(added)),
@@ -512,7 +519,7 @@ fn create_reminder(
 }
 
 #[cfg(target_os = "macos")]
-fn calendar_error(e: splashdown_apple_shim::AddError, what: &str, pane: &str) -> String {
+pub(crate) fn calendar_error(e: splashdown_apple_shim::AddError, what: &str, pane: &str) -> String {
     match e {
         splashdown_apple_shim::AddError::NoAccess => format!(
             "Splashdown can't add to your {what}: allow it in System Settings → Privacy & Security → {pane}"

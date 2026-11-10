@@ -1,7 +1,7 @@
 //! The calendar, through the Swift shim's EventKit calls: for naming a
 //! meeting (the event on now and who else is invited), only when the user
 //! turns it on; for a hook before a meeting, the events that start soon;
-//! and for voice actions, adding an event or a reminder.
+//! and for voice actions and hooks, adding an event or a reminder.
 
 use std::ffi::CString;
 
@@ -124,9 +124,24 @@ pub async fn add_event(
     add(&fields, false).await
 }
 
-/// Adds a reminder, due at `due` (`YYYY-MM-DDTHH:MM` local) if given.
-pub async fn add_reminder(text: &str, due: Option<&str>) -> Result<Added, AddError> {
-    let fields = [text, due.unwrap_or("")]
+/// Asks for access to Reminders; macOS shows its prompt the first time.
+/// Whether it's allowed.
+pub async fn reminders_access() -> bool {
+    // SAFETY: the shim replies exactly once through the callback.
+    let (status, _) =
+        ffi::call(|ctx, cb| unsafe { ffi::splashdown_reminders_access(ctx, cb) }).await;
+    status == ffi::OK
+}
+
+/// Adds a reminder, due at `due` if given: `YYYY-MM-DDTHH:MM` local, with
+/// an alert then, or `YYYY-MM-DD` for a day with no time and no alert.
+/// `notes` goes in the reminder's notes.
+pub async fn add_reminder(
+    text: &str,
+    due: Option<&str>,
+    notes: Option<&str>,
+) -> Result<Added, AddError> {
+    let fields = [text, due.unwrap_or(""), notes.unwrap_or("")]
         .map(|f| f.replace('\n', " "))
         .join("\n");
     add(&fields, true).await

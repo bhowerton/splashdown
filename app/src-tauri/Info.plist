@@ -19,9 +19,9 @@
   <key>NSCalendarsUsageDescription</key>
   <string>When you turn it on, Splashdown names a meeting note after the calendar event on, and adds events you ask for by voice.</string>
   <key>NSRemindersFullAccessUsageDescription</key>
-  <string>Splashdown adds the reminders you ask for by voice ("remind me at 3 to call Sam").</string>
+  <string>Splashdown adds the reminders you ask for by voice ("remind me at 3 to call Sam"), and the ones a hook you set up adds.</string>
   <key>NSRemindersUsageDescription</key>
-  <string>Splashdown adds the reminders you ask for by voice ("remind me at 3 to call Sam").</string>
+  <string>Splashdown adds the reminders you ask for by voice ("remind me at 3 to call Sam"), and the ones a hook you set up adds.</string>
   <key>NSSpeechRecognitionUsageDescription</key>
   <string>Splashdown can use Apple's on-device speech recognition to transcribe what you say.</string>
   <!-- splashdown://toggle, start, stop and cancel, for Raycast, Alfred and

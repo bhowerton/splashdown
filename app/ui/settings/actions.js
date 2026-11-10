@@ -283,14 +283,23 @@ function beforeWords(h) {
   return `${minutes === 1 ? "a minute" : `${minutes} minutes`} before each meeting on your calendar`;
 }
 
-/** Where what the AI wrote goes. A dictation or a note from the phone has no note of its own. */
+/**
+ * Where what the AI wrote goes. A dictation or a note from the phone has no
+ * note of its own, and reminders are only added on a Mac.
+ */
 const HOOK_PUTS = [
   ["note", "In the note, as a section of its own"],
   ["other-note", "At the end of another note"],
   ["file", "At the end of a file"],
   ["clipboard", "On the clipboard"],
   ["web", "To a web address"],
+  ["reminders", "In Reminders, one for each to-do"],
+  ["email-draft", "In an email draft, for you to send"],
 ];
+
+/** What the follow-up email is asked for, in a note or as a draft. */
+const HOOK_FOLLOW_UP =
+  "Draft a short follow-up email from me to the other people in this meeting. Start with one line of thanks, then what was decided, then each action item with who will do it and by when (only where the meeting said so). Plain and friendly, ready to send. No subject line.";
 
 /** Things to ask the AI that are ready to use, or to start from. */
 const HOOK_STARTERS = [
@@ -299,8 +308,14 @@ const HOOK_STARTERS = [
     when: "meeting",
     name: "Follow-up email",
     put: "note",
-    instruction:
-      "Draft a short follow-up email from me to the other people in this meeting. Start with one line of thanks, then what was decided, then each action item with who will do it and by when (only where the meeting said so). Plain and friendly, ready to send. No subject line.",
+    instruction: HOOK_FOLLOW_UP,
+  },
+  {
+    label: "Follow-up email, as a draft in my mail app",
+    when: "meeting",
+    name: "Follow-up email",
+    put: "email-draft",
+    instruction: HOOK_FOLLOW_UP,
   },
   {
     label: "What I said I'd do, after a meeting",
@@ -310,6 +325,14 @@ const HOOK_STARTERS = [
     to: "Commitments",
     instruction:
       "List everything I (\"You\" in the transcript) said I would do, one per line as a to-do (\"- [ ] \"), with who it's for, and by when if I said so. Only what I took on myself, not what others said they'd do.",
+  },
+  {
+    label: "What I said I'd do, as reminders",
+    when: "meeting",
+    name: "My commitments",
+    put: "reminders",
+    instruction:
+      "List everything I (\"You\" in the transcript) said I would do, one per line as a to-do (\"- [ ] \"), with who it's for, and by when if I said so. Each line is read on its own later, so name the thing and the person rather than \"it\" or \"them\". Only what I took on myself, not what others said they'd do. Write only the list.",
   },
   {
     label: "Decisions, after a meeting",
@@ -397,14 +420,16 @@ function presetName(id) {
 /** What a hook runs, in a few words. */
 function hookSummary(h) {
   if (h.kind === "ask") {
-    const where = {
-      note: "in the note",
-      "other-note": `in the note ${h.to}`,
-      file: `in ${h.to}`,
-      clipboard: "on the clipboard",
-      web: `to ${h.to}`,
+    const does = {
+      note: "puts what it writes in the note",
+      "other-note": `puts what it writes in the note ${h.to}`,
+      file: `puts what it writes in ${h.to}`,
+      clipboard: "puts what it writes on the clipboard",
+      web: `puts what it writes to ${h.to}`,
+      reminders: "adds a reminder for each to-do it writes",
+      "email-draft": `opens what it writes as an email draft${h.to ? ` to ${h.to}` : ""}`,
     }[h.put];
-    return `Asks ${hookAi && !hookAi[1] ? hookAi[0] : "the AI"} and puts what it writes ${where}`;
+    return `Asks ${hookAi && !hookAi[1] ? hookAi[0] : "the AI"} and ${does}`;
   }
   if (h.kind === "web") return `Sends to ${h.url}`;
   return `Runs ${h.path}${h.args?.length ? ` ${h.args.join(" ")}` : ""}`;
@@ -415,6 +440,19 @@ const HOOK_LATE = " If the computer is asleep or Splashdown isn't running then, 
 
 /** What a hook before a meeting leaves alone, and where the calendar is read. */
 const HOOK_CALENDAR = " All-day events and ones you declined are skipped, and a meeting with no earlier notes runs nothing. Your calendar is read on this Mac only; macOS asks first.";
+
+/** What becomes of what the AI wrote when it goes to Reminders or an email draft: the one thing Splashdown does with it. */
+function hookDoes(h) {
+  if (h.put === "reminders") {
+    const a = state.settings.actions ?? {};
+    const asks = a.confirm_events
+      ? "Splashdown asks before adding them, as “Ask before adding events and reminders” is on."
+      : `They're added without asking${a.enabled ? "; “Ask before adding events and reminders”, under Choices, changes that" : ""}.`;
+    return `Each to-do line it writes (“- [ ] …”, or each list line when it writes none of those) becomes a reminder in your default list, with where it came from in its notes. One is due only if its line has a date written like 2026-11-12; a day in words (“by Wednesday”) stays in the reminder's text. Other lines are left out. ${asks} The AI can only write: adding these reminders is all Splashdown does with its text. macOS asks you to allow Reminders the first time.`;
+  }
+  const to = h.to ? `to ${h.to}` : "to no one";
+  return `What it writes opens as a draft in your mail app, ${to}, with this name and the title as its subject, for you to check and send. Splashdown never sends it, and takes no address from what was said or written. One too long for a draft goes on the clipboard instead, to paste into the draft. The AI can only write: opening this draft is all Splashdown does with its text.`;
+}
 
 /** What a hook does, in a sentence, for the editor. */
 function hookSentence(h) {
@@ -441,7 +479,8 @@ function hookSentence(h) {
       : "";
     const late = h.when === "schedule" ? HOOK_LATE : h.when === "before-meeting" ? HOOK_CALENDAR : "";
     const told = h.notify ? " A small panel tells you when it's done." : "";
-    return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. What it writes ${put}.${told} It can only write: it can't send, open or change anything else.${long}${late}`;
+    const does = put ? `What it writes ${put}.${told} It can only write: it can't send, open or change anything else.` : hookDoes(h) + told;
+    return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. ${does}${long}${late}`;
   }
   const what = h.kind === "web"
     ? `Splashdown sends the text and its details to ${h.url || "the web address"}, signed with your webhook secret.`
@@ -672,7 +711,8 @@ function editHook(index) {
   const starter = document.createElement("select");
   starter.append(
     new Option("Your own", ""),
-    ...HOOK_STARTERS.map((st, i) => Object.assign(new Option(st.label, String(i)), { disabled: st.when === "before-meeting" && !mac })),
+    ...HOOK_STARTERS.map((st, i) =>
+      Object.assign(new Option(st.label, String(i)), { disabled: (st.when === "before-meeting" || st.put === "reminders") && !mac })),
   );
   const askName = text(h.name, "Follow-up email");
   const instruction = document.createElement("textarea");
@@ -744,7 +784,8 @@ function editHook(index) {
       hook.name = askName.value.trim();
       hook.instruction = instruction.value.trim();
       hook.put = put.value;
-      if (!toPart.hidden) hook.to = to.value.trim();
+      // A draft's addresses are optional; the other places check theirs.
+      if (!toPart.hidden && to.value.trim()) hook.to = to.value.trim();
       if (notify.checked) hook.notify = true;
     } else {
       hook.path = path.value.trim();
@@ -785,7 +826,10 @@ function editHook(index) {
   const showPut = () => {
     const hasNote = when.value === "meeting" || when.value === "transcript";
     const kept = put.value || (h.kind === "ask" ? h.put : "") || "";
-    put.replaceChildren(...HOOK_PUTS.filter(([v]) => hasNote || v !== "note").map(([v, label]) => new Option(label, v)));
+    put.replaceChildren(
+      ...HOOK_PUTS.filter(([v]) => hasNote || v !== "note").map(([v, label]) =>
+        v === "reminders" && !mac ? Object.assign(new Option(`${label} (on a Mac)`, v), { disabled: true }) : new Option(label, v)),
+    );
     put.value = [...put.options].some((o) => o.value === kept) ? kept : put.options[0].value;
     showTo();
   };
@@ -794,6 +838,7 @@ function editHook(index) {
       "other-note": ["Note", "Commitments", "A note in your notes folder, made if it isn't there."],
       file: ["File", mac ? "/Users/you/Documents/meeting-log.md" : "C:\\Users\\you\\Documents\\meeting-log.md", "Its full path."],
       web: ["Web address", "https://hooks.zapier.com/hooks/catch/…", "What it writes is sent as JSON."],
+      "email-draft": ["To", "dana@example.com, sam@example.com", "Optional. Only addresses you type here: none are taken from the meeting."],
     }[put.value] ?? [];
     toPart.hidden = !label;
     if (!label) return;
@@ -896,6 +941,13 @@ function editHook(index) {
     // the user is here to answer.
     if (hook.when === "before-meeting" && !(await invoke("calendar_access").catch(() => false))) {
       error.textContent = "macOS didn't allow Splashdown to read your calendar. Allow it in System Settings → Privacy & Security → Calendars, then save again.";
+      error.hidden = false;
+      return;
+    }
+    // The same for Reminders: without it, the first run would wait on
+    // macOS's question with nobody there.
+    if (hook.kind === "ask" && hook.put === "reminders" && !(await invoke("reminders_access").catch(() => false))) {
+      error.textContent = "macOS didn't allow Splashdown to add to your reminders. Allow it in System Settings → Privacy & Security → Reminders, then save again.";
       error.hidden = false;
       return;
     }

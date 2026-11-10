@@ -34,6 +34,8 @@ If you turn on Recognize people you've named (Settings → General → Meetings,
 
 If you turn on Name meetings from my calendar (Settings → Notes → Meetings, macOS only), Splashdown reads the calendar event on when a meeting starts, its title and who's invited, to name the note. It's read on your Mac and only goes where the meeting's transcript goes.
 
+If a hook puts what the AI wrote in Reminders (macOS only) or in an email draft, that text goes to your Reminders or your mail app, and from there wherever those sync or send: Splashdown adds the reminders and opens the draft, and sends nothing itself. macOS asks before Splashdown may add to Reminders. A draft is only to addresses you typed in the hook; none is taken from a meeting.
+
 If you add a hook before a meeting (Settings → Actions → When something happens, macOS only), Splashdown looks at your calendar every half minute while that hook is on, for the events that start in the next minutes: their titles, times, who's invited and whether you declined. macOS asks you first. It's read on your Mac, and an event's title, time and people go only where that hook sends them (the table above). Without such a hook the calendar isn't looked at for this.
 
 To offer to record a call, Splashdown checks every two seconds which apps are using the microphone (Settings → Notes → Meetings). Only the apps' names are read, nothing leaves your computer, and nothing is recorded until you click Record.
