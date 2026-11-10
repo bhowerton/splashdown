@@ -458,6 +458,7 @@ fn reminders_list(_: &str) -> Result<(), String> {
 }
 
 /// What's said when a hook's list isn't in Reminders.
+#[cfg(target_os = "macos")]
 fn no_such_list(list: &str) -> String {
     format!(
         "Reminders has no list called “{list}”: make it there, or leave List empty for your default list"
