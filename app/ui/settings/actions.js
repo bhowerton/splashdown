@@ -454,18 +454,29 @@ function hookDoes(h) {
   return `What it writes opens as a draft in your mail app, ${to}, with this name and the title as its subject, for you to check and send. Splashdown never sends it, and takes no address from what was said or written. One too long for a draft goes on the clipboard instead, to paste into the draft. The AI can only write: opening this draft is all Splashdown does with its text.`;
 }
 
+/** What a hook that asks the AI gives it, to go in a sentence. */
+function hookGives(h) {
+  const preset = h.preset ? ` with the ${presetName(h.preset)} preset` : "";
+  return {
+    dictation: `each dictation${preset}`,
+    meeting: "each meeting's note, with its transcript,",
+    transcript: "each finished transcript",
+    "phone-note": "each note from your iPhone",
+    schedule: `the notes from ${coversWords(h.schedule)} (meetings with their summaries, transcripts and your other notes), ${scheduleWords(h.schedule)},`,
+    "before-meeting": `your notes of the last meetings with the same title or the same people, ${beforeWords(h)},`,
+  }[h.when] ?? "the text";
+}
+
+/** The cloud AI a hook's text would go to, by name; null with the AI on this computer, or before it's known. */
+function hookCloud() {
+  return hookAi && !hookAi[1] ? hookAi[0] : null;
+}
+
 /** What a hook does, in a sentence, for the editor. */
 function hookSentence(h) {
   const preset = h.preset ? ` with the ${presetName(h.preset)} preset` : "";
   if (h.kind === "ask") {
-    const text = {
-      dictation: `each dictation${preset}`,
-      meeting: "each meeting's note, with its transcript,",
-      transcript: "each finished transcript",
-      "phone-note": "each note from your iPhone",
-      schedule: `the notes from ${coversWords(h.schedule)} (meetings with their summaries, transcripts and your other notes), ${scheduleWords(h.schedule)},`,
-      "before-meeting": `your notes of the last meetings with the same title or the same people, ${beforeWords(h)},`,
-    }[h.when] ?? "the text";
+    const text = hookGives(h);
     const only = h.title_has ? ` (only when its title has “${h.title_has}”)` : "";
     const put = {
       note: "goes in that note, in a section with this name",
@@ -894,6 +905,17 @@ function editHook(index) {
   const test = button("Test", async () => {
     const hook = current();
     if (!(await check(hook))) return;
+    // A sample is made up, but these two are tried on your own notes:
+    // that's asked before they go to a cloud AI.
+    const own = hook.when === "schedule" || hook.when === "before-meeting";
+    if (hook.kind === "ask" && own && hookCloud()) {
+      const sure = await askConfirm(`Try it on your own notes with ${hookCloud()}?`, {
+        action: "Send and test",
+        danger: false,
+        detail: `Test uses the notes this hook would get now, and sends them to ${hookCloud()}, in the cloud. Nothing is put anywhere.`,
+      });
+      if (!sure) return;
+    }
     test.disabled = true;
     result.hidden = false;
     result.classList.remove("warn-text");
@@ -958,6 +980,23 @@ function editHook(index) {
       error.textContent = `Reminders has no list called “${hook.to}”. Make it in Reminders first, or leave List empty for your default list.`;
       error.hidden = false;
       return;
+    }
+    // What it reads will go to a cloud AI: agreed to once, here, and again
+    // if what it reads or the AI changes. With the AI on this computer
+    // there's nothing to agree to, and none is kept: a later change to a
+    // cloud AI asks at its next run.
+    const cloud = hook.kind === "ask" ? hookCloud() : null;
+    if (cloud) {
+      const agreed = h.kind === "ask" && h.cloud_ok === cloud && h.when === hook.when;
+      if (!agreed) {
+        const sure = await askConfirm(`Let this hook use ${cloud}?`, {
+          action: "Save",
+          danger: false,
+          detail: `Each time it runs, Splashdown gives ${hookGives(hook).replace(/,$/, "")} to ${cloud}, in the cloud, to write from. Nothing is sent now. You're asked once.`,
+        });
+        if (!sure) return;
+      }
+      hook.cloud_ok = cloud;
     }
     // Saved here, with what it does said above: it runs without asking.
     hook.trusted = true;

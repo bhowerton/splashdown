@@ -120,6 +120,8 @@ Either way the result goes where the hook says, and you're told when it's done. 
 
 The text goes to the AI that follows your instructions (Settings → AI Models), and the editor says which one that is: the one on this computer, or a cloud provider. In local-only mode it's always the one on this computer.
 
+A cloud AI is agreed to once for each hook. Saving a hook while a cloud AI follows your instructions asks first, saying what will go there each time it runs. A hook saved with the AI on this computer asks at its next run if you later choose a cloud AI, and again if you change to another provider. Say no and the hook doesn't run. In Settings, Test on a scheduled hook or one before a meeting uses your own notes, so it asks before sending those too; the others test on a made-up sample. In `config.toml` the agreement is `cloud_ok = "OpenRouter"`, the provider's name.
+
 The AI on this computer reads about ten minutes of talk at a time. A longer meeting is read a part at a time, with notes taken from each part for what you asked, and your instruction is then run on the notes. That works, and takes a request per part: about a quarter of a minute for an hour-long meeting on a recent Mac, longer on a computer without a graphics chip the model can use. The meeting summary is written the same way.
 
 What to expect from the AI on this computer (a small model):

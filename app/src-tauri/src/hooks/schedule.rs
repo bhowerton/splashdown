@@ -472,6 +472,7 @@ mod tests {
             on: true,
             trusted: true,
             notify: false,
+            cloud_ok: None,
             schedule: Some(schedule),
             before: None,
         }

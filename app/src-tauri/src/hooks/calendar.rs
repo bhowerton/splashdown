@@ -518,6 +518,7 @@ mod tests {
             on: true,
             trusted: true,
             notify: false,
+            cloud_ok: None,
             schedule: None,
             before: minutes.map(|minutes| Before { minutes }),
         }

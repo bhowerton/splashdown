@@ -1054,6 +1054,7 @@ mod tests {
             on: true,
             trusted: false,
             notify: false,
+            cloud_ok: None,
             schedule: None,
             before: None,
         };

@@ -292,6 +292,12 @@ pub struct Hook {
     /// a way to open it. For a hook that asks the AI.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub notify: bool,
+    /// The cloud AI the user agreed this hook's text may go to, by name
+    /// ("OpenRouter"). For a hook that asks the AI: it's asked once, when
+    /// the hook is saved with a cloud AI or first runs with one, and again
+    /// if the AI becomes another. Unset with the AI on this computer.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloud_ok: Option<String>,
     /// When it runs and what it reads, for a hook on a schedule. Last, as
     /// TOML wants a table after plain values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -311,6 +317,17 @@ fn is_on(on: &bool) -> bool {
 }
 
 impl Hook {
+    /// The cloud AI to ask the user about before this hook runs, given the
+    /// AI that follows instructions now (`ai`: its name, and whether it's
+    /// on this computer): `None` when there's nothing to ask. Only a hook
+    /// that asks the AI gives it the text, a local AI keeps the text here,
+    /// and a cloud one already agreed to isn't asked about twice.
+    pub fn cloud_to_ask<'a>(&self, ai: Option<(&'a str, bool)>) -> Option<&'a str> {
+        let (name, local) = ai?;
+        let asks = matches!(self.run, HookTarget::Ask { .. });
+        (asks && !local && self.cloud_ok.as_deref() != Some(name)).then_some(name)
+    }
+
     /// It runs for `event` in a dictation with `preset` (`None` outside
     /// dictations).
     pub fn applies(&self, event: HookEvent, preset: Option<&str>) -> bool {
@@ -523,6 +540,7 @@ mod tests {
             on: true,
             trusted: false,
             notify: false,
+            cloud_ok: None,
             schedule: None,
             before: None,
         }
@@ -861,6 +879,7 @@ instruction = "Write a review of my week."
 put = "other-note"
 to = "Weekly reviews"
 notify = true
+cloud_ok = "OpenRouter"
 schedule = { at = "16:00", days = ["fri"], covers = "week" }
 
 [[hooks]]
@@ -939,6 +958,23 @@ to = "dana@example.com, sam@example.com"
         assert_eq!(settings.hooks[3].problem(), None);
         // Told when it's done; the others aren't.
         assert!(settings.hooks[3].notify && !settings.hooks[2].notify);
+        // A cloud AI is asked about once, and again when it's another;
+        // the AI on this computer never is, nor is a hook that doesn't
+        // ask the AI.
+        let (agreed, not_yet, program) =
+            (&settings.hooks[3], &settings.hooks[2], &settings.hooks[1]);
+        assert_eq!(agreed.cloud_to_ask(Some(("OpenRouter", false))), None);
+        assert_eq!(agreed.cloud_to_ask(Some(("OpenAI", false))), Some("OpenAI"));
+        assert_eq!(
+            not_yet.cloud_to_ask(Some(("OpenRouter", false))),
+            Some("OpenRouter")
+        );
+        assert_eq!(
+            not_yet.cloud_to_ask(Some(("the AI on this computer", true))),
+            None
+        );
+        assert_eq!(not_yet.cloud_to_ask(None), None);
+        assert_eq!(program.cloud_to_ask(Some(("OpenRouter", false))), None);
         let daily = settings.hooks[4].schedule.clone().unwrap();
         assert_eq!((daily.time(), daily.covers), (Some((8, 30)), Covers::Day));
         assert!(daily.days.is_empty());

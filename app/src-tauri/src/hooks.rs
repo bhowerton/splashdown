@@ -275,6 +275,10 @@ fn run_later(app: &AppHandle, hook: Hook, happened: Happened) {
                     if !hook.trusted && !allowed(&app, &hook) {
                         continue;
                     }
+                    // Nor allowed to give the text to a cloud AI.
+                    if !may_go_to_the_cloud(&app, &hook) {
+                        continue;
+                    }
                     // From here, so that how long it took doesn't count
                     // the wait for an answer.
                     let started = Instant::now();
@@ -465,6 +469,47 @@ fn allowed(app: &AppHandle, hook: &Hook) -> bool {
     });
     if let Err(e) = saved {
         tracing::warn!("couldn't remember allowing a hook: {e}");
+    }
+    crate::state::settings_changed_elsewhere(app);
+    true
+}
+
+/// Asks, once, before a hook gives its text to a cloud AI the user hasn't
+/// agreed to for it: one saved while the AI was on this computer, or with
+/// another cloud AI, or added outside Settings. Agreeing is remembered
+/// with the AI's name. True when there's nothing to ask.
+fn may_go_to_the_cloud(app: &AppHandle, hook: &Hook) -> bool {
+    let Some(state) = app.try_state::<AppState>() else {
+        return true;
+    };
+    let ai = crate::meeting::summary_ai(&state.settings());
+    let Some(cloud) = hook.cloud_to_ask(ai.as_ref().map(|(name, local)| (name.as_str(), *local)))
+    else {
+        return true;
+    };
+    let answer = crate::prompt::ask(
+        app,
+        &format!("Let “{}” use {cloud}?", name(hook)),
+        &format!(
+            "It gives {} to the AI, which is now {cloud}, in the cloud. Each time it runs, that text is sent there. You're asked once.",
+            given(hook)
+        ),
+        &["Allow", "Don't run it"],
+    );
+    if answer != Some(0) {
+        tracing::info!("the hook {} wasn't allowed to use {cloud}", name(hook));
+        return false;
+    }
+    let agreed = cloud.to_string();
+    let saved = state.update(app, |s| {
+        for h in &mut s.hooks {
+            if h.runs_same_as(hook) && h.preset == hook.preset {
+                h.cloud_ok = Some(agreed.clone());
+            }
+        }
+    });
+    if let Err(e) = saved {
+        tracing::warn!("couldn't remember that a hook may use {cloud}: {e}");
     }
     crate::state::settings_changed_elsewhere(app);
     true
@@ -985,6 +1030,7 @@ mod tests {
             on: true,
             trusted: false,
             notify: false,
+            cloud_ok: None,
             schedule: None,
             before: None,
         };
@@ -1082,6 +1128,7 @@ mod tests {
                 on: true,
                 trusted: true,
                 notify: false,
+                cloud_ok: None,
                 schedule: None,
                 before: None,
             }
