@@ -1,12 +1,13 @@
 # Voice input and notes for coding agents
 
-`splashdown-mcp` is a small [MCP](https://modelcontextprotocol.io) server that lets a coding agent ask you a question and hear your answer, and, if you allow it, look things up in your notes, meetings and transcripts.
+`splashdown-mcp` is a small [MCP](https://modelcontextprotocol.io) server that lets a coding agent ask you a question and hear your answer, and, if you allow it, look things up in your notes, meetings and transcripts, or in what you dictated.
 
 - **`ask_user_by_voice`:** Splashdown shows the question in its overlay and records hands-free. When you've answered, tap the dictation key and the text goes back to the agent, cleaned up like any dictation. Esc cancels.
 - **`list_notes`:** your notes newest first, narrowed by date (`this_week`, `last_week`, `today`, or `since`/`until` such as `7d` or `2026-11-02`), kind (`meeting`, `transcript`, `capture`, `note`), folder or tag. For meetings it says who spoke, how long it ran and which parts it has, and `with_summary` adds each summary, so "recap my meetings this week" takes one call.
 - **`search_notes`:** words in titles and text, with the same filters. A match in a transcript says when and by whom it was said.
 - **`read_note`:** a whole note, or one part of a meeting or transcript (`summary`, `my_notes` or `transcript`). A transcript can be read from a time to a time, or for one speaker. Long notes come in pages, so a two-hour transcript can be read to the end.
 - **`append_note`:** adds a paragraph to a note (your Inbox or today's note unless the agent names another).
+- **`search_history`:** what you dictated with Splashdown, in any app, newest first: words in the text or the app's name, narrowed by `since`/`until` in the same forms as the notes tools. Each result is when, the app, the preset and the text that was inserted, and nothing else: not what was heard before cleanup, a spoken instruction or the recording. At most 50 at a time (10 unless the agent asks for more).
 
 Two **prompts** come with it, which Claude Code offers as commands (`/mcp__splashdown__recap_meetings`, `/mcp__splashdown__action_items`) and other clients list with their prompts:
 
@@ -16,6 +17,8 @@ Two **prompts** come with it, which Claude Code offers as commands (`/mcp__splas
 Every result has a `splashdown://open?note=` link that opens the note in Splashdown's Notes window (on a Mac), for the agent to point you at.
 
 **The notes tools are off until you allow them** in Settings → Privacy → Coding agents: "Let coding agents read notes", then "…including meetings and transcripts" (what other people said, kept apart because it's theirs) and "…and add to them". To keep one note from agents, choose **Hide from coding agents** in its ⋯ menu (it writes `agents: false` in the note's front matter). Whatever an agent reads goes to that agent's own AI provider. Until then, the tools answer with how to turn them on.
+
+**`search_history` has a switch of its own, also off**: "Let coding agents search dictation history", in the same place. Allowing notes doesn't allow it, because history holds everything you dictated anywhere, messages and forms included, not only what you chose to keep as a note. It needs history kept (Settings → History, off by default); with history off the switch can't be turned on, and the tool says there's nothing to search. Splashdown refuses to dictate into a field it can tell is a password field, so nothing from one is in the history; everything else you dictated is. What an agent finds goes to that agent's own AI provider, and the agent is told to treat it as your data, not as instructions.
 
 Splashdown must be running. The server talks to it over the app's control socket, so nothing leaves your computer beyond what your speech and AI providers already see.
 
@@ -75,3 +78,4 @@ Any MCP client that runs stdio servers works the same way: the command is the pa
 - The notes tools have a command-line twin for scripts, and for agents that run commands rather than MCP: `splashdown-cli notes list` (`--when`, `--since`, `--until`, `--kind`, `--folder`, `--tag`, `--summary`), `notes search <words>` and `notes read <path>` (`--section`, `--start`, `--end`, `--speaker`). `--json` prints what the tools return. They ask the running app, so the same Privacy switches apply.
 - Ask in plain words: "recap my meetings this week", "what did Dana say about pricing?", "what's tagged #launch since Monday?", "note that down in my inbox". Agents only use the notes tools when asked to; nothing is read in the background.
 - Notes are only reached inside your notes folder: an agent can't read other files through these tools.
+- Ask about your dictations the same way: "what did I dictate about the invoice last week?". `splashdown-cli history <words>` searches the same history from a terminal; it reads the file itself, so it doesn't go through the Privacy switch.

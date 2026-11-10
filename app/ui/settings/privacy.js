@@ -50,12 +50,18 @@ function renderPrivacy() {
   // notes; someone turning notes on for the first time starts with it off.
   $("pv-agents-meetings").checked = s.notes?.agents_meetings ?? !!s.notes?.agents_read;
   $("pv-agents-meetings").disabled = !s.notes?.agents_read;
+  // History has a switch of its own, whatever the notes ones say, and
+  // only while a history is kept.
+  const keepsHistory = s.general.keep_history === true;
+  $("pv-agents-history").checked = keepsHistory && !!s.notes?.agents_history;
+  $("pv-agents-history").disabled = !keepsHistory;
+  $("pv-agents-history-off").hidden = keepsHistory;
   $("pv-shortcuts-group").hidden = state.platform !== "macos";
   $("pv-shortcuts-read").checked = s.notes?.shortcuts_read !== false;
   const days = s.general.history_days;
   const kept = days ? `, deleted after ${plural(days, "day")}` : "";
   $("pv-history").textContent = s.general.keep_history === true
-    ? `On: the last 300 dictations${s.general.keep_audio ? " and their recordings" : ""}${kept}, in this app's settings folder.`
+    ? `On: the last 300 dictations${s.general.keep_audio ? " and their recordings" : ""}${kept}, in this app's settings folder.${s.notes?.agents_history ? " A coding agent you've allowed can search what you dictated." : ""}`
     : `Off (the default). Only the last result is kept in memory, for “Paste last raw transcript”.${days ? ` Anything saved earlier is deleted after ${plural(days, "day")}.` : ""}`;
   $("pv-keys").textContent = state.platform === "macos"
     ? "Stored in your macOS Keychain. Keys in a .env.local file (for development) override it."

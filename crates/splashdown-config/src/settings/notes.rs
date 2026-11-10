@@ -25,6 +25,11 @@ pub struct NotesSettings {
     /// …including meetings and transcripts (other people's words). Unset
     /// means on, as before this choice existed; Settings saves it.
     pub agents_meetings: Option<bool>,
+    /// Let coding agents search the dictation history: what was dictated,
+    /// when and into which app. A switch of its own, off unless turned
+    /// on: history holds everything dictated anywhere, so allowing notes
+    /// doesn't allow it.
+    pub agents_history: bool,
     /// Let Shortcuts actions (Mac) find, read and ask about notes. Unset
     /// means on: the user builds their own shortcuts. Notes hidden from
     /// agents stay hidden from them too.

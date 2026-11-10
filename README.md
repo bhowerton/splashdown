@@ -175,7 +175,7 @@
 
 ### For developers
 
-- **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice and, if you allow it, search, read and add to your notes, and go through your meetings by date ("recap my meetings this week") ([docs/AGENTS.md](docs/AGENTS.md)).
+- **Coding agents:** file names you say become `@file` mentions for Claude Code or Cursor, and `splashdown-mcp` lets an agent ask you a question by voice and, if you allow it, search, read and add to your notes, go through your meetings by date ("recap my meetings this week"), and, with a switch of its own, search what you dictated ([docs/AGENTS.md](docs/AGENTS.md)).
 - **Shortcuts (Mac):** Dictate Text, Add to Note, Record a Voice Note, Start or Stop Dictation, Start Meeting and Stop Meeting (which can wait for the finished note), Find Notes, Get Note Text (a section, or subtitles), Ask My Notes, Transcribe File and Open Note, as actions in your own shortcuts. Settings → Privacy → Shortcuts turns off reading notes.
 - **Scripting:** `splashdown://toggle` links for Raycast, Alfred or Shortcuts; `splashdown-cli toggle` and `splashdown-cli listen` from a terminal; mouse side buttons as the dictation key. `splashdown-cli` comes with the app: Settings → About shows where (on a Mac, `/Applications/Splashdown.app/Contents/MacOS/splashdown-cli`). To type just `splashdown-cli`, link it into a folder on your PATH, for example `ln -s /Applications/Splashdown.app/Contents/MacOS/splashdown-cli ~/.local/bin/`.
 

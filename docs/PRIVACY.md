@@ -42,13 +42,15 @@ To offer to record a call, Splashdown checks every two seconds which apps are us
 
 If you allow coding agents to read your notes (Settings → Privacy, off by default), what an agent reads goes to that agent's own AI provider. Meetings and transcripts, which hold other people's words, have a switch of their own, and a note marked Hide from coding agents (its ⋯ menu) is never reached.
 
+If you allow coding agents to search your dictation history (Settings → Privacy, off by default, and a switch apart from the notes one), the dictations an agent finds go to that agent's own AI provider: for each, when it was, the app, the preset and the text that was inserted. Never what was heard before cleanup, a spoken instruction or a recording. Only when an agent you set up searches it (agents are told to do that only when you ask about something you dictated), and only while history is kept; with history off there is nothing to search. History holds everything you dictated anywhere, so think of what you've said into messages and forms before turning this on.
+
 Each provider handles what it receives under its own privacy policy. Local-only mode (Settings → Privacy) refuses every cloud provider, even when a key is saved.
 
 ## What stays on your computer
 
 - **Settings:** `config.toml` in Splashdown's settings folder.
 - **API keys:** the macOS Keychain or Windows Credential Manager, under "Splashdown". Never in files, never in exported settings.
-- **History:** off by default. When on, the last 300 dictations (and, optionally, their recordings), deleted after the period you choose.
+- **History:** off by default. When on, the last 300 dictations (and, optionally, their recordings), deleted after the period you choose. It stays on your computer unless you let coding agents search it (above).
 - **The recording being processed:** written to Splashdown's settings folder while it's turned into text, and deleted as soon as the text is in. If that fails (offline, a provider outage) or the app closes first, the one recording is kept for Retry (menu bar → Last dictation) until a retry works or a later dictation fails, whatever the history setting.
 - **Insights:** counts only (words per day and per app), never what you said.
 - **Spending:** cost totals per month, for the spending limit.

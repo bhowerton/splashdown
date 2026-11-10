@@ -2,15 +2,20 @@
 //! read and append, each only as far as Settings → Privacy allows. A note
 //! with `agents: false` in its front matter is never reached, and meetings
 //! and transcripts only with their own switch.
+//!
+//! Also their search of the dictation history, which has a switch apart
+//! from the notes ones: it holds everything dictated anywhere.
 
 use std::time::Duration;
 
 use chrono::{DateTime, Datelike, Local, NaiveDate, TimeZone};
 use serde_json::{Value, json};
+use splashdown_config::Settings;
 use splashdown_control::{NoteFilter, ReadPart};
 use splashdown_core::meeting::Turn;
 
 use super::*;
+use crate::history::{Entry, History};
 
 /// Asked for while Settings doesn't allow it.
 pub(super) const AGENTS_OFF: &str = "Splashdown's notes are off for coding agents. To allow it, turn on “Let coding agents read notes” in Splashdown → Settings → Privacy.";
@@ -21,8 +26,17 @@ const MEETINGS_OFF: &str = "Meetings and transcripts are off for coding agents. 
 
 pub(crate) const HIDDEN: &str = "The user keeps this note from coding agents.";
 
+/// The dictation history asked for while Settings doesn't allow it.
+pub(crate) const HISTORY_OFF: &str = "Splashdown's dictation history is off for coding agents. To allow it, turn on “Let coding agents search dictation history” in Splashdown → Settings → Privacy.";
+
+/// …or allowed, while no history is kept.
+pub(crate) const HISTORY_NOT_KEPT: &str = "Splashdown isn't keeping a history of dictations, so there's nothing to search. To keep one, turn on “Keep a history of dictations” in Splashdown → Settings → History.";
+
 /// Most notes one search returns.
 pub(super) const SEARCH_LIMIT: usize = 50;
+
+/// Most dictations one search of the history returns.
+pub(super) const HISTORY_LIMIT: usize = 50;
 
 /// Most notes one page of a list returns, and with summaries.
 const LIST_LIMIT: usize = 100;
@@ -268,6 +282,104 @@ pub fn agent_append(
     ))
 }
 
+// ------------------------------------------------------------ history
+
+/// `search_history`: the dictations whose inserted text or app contains
+/// `query` (any case), newest first; an empty query is the latest.
+///
+/// Each is when, the app, the preset and the text that was inserted.
+/// Never what was heard before cleanup, a spoken instruction, the
+/// recording, the website or which models ran.
+///
+/// History has no mark for password fields, so there is nothing to leave
+/// out by: a dictation into one is refused when it starts
+/// (`session/recording.rs`) and never becomes an entry.
+pub fn agent_history(
+    settings: &Settings,
+    history: &History,
+    query: &str,
+    limit: Option<usize>,
+    since: Option<&str>,
+    until: Option<&str>,
+) -> Result<String, String> {
+    if !settings.notes.agents_history {
+        return Err(HISTORY_OFF.into());
+    }
+    // Entries from when it was on may be left. With it off, keeping them
+    // isn't what the user chose, so they aren't searched.
+    if !settings.general.keep_history() {
+        return Err(HISTORY_NOT_KEPT.into());
+    }
+    history_between(history, query, limit, since, until, Local::now())
+}
+
+fn history_between(
+    history: &History,
+    query: &str,
+    limit: Option<usize>,
+    since: Option<&str>,
+    until: Option<&str>,
+    now: DateTime<Local>,
+) -> Result<String, String> {
+    // The dates are read as the notes tools read them.
+    let span = Filter::parse(
+        &NoteFilter {
+            since: since.map(str::to_string),
+            until: until.map(str::to_string),
+            ..NoteFilter::default()
+        },
+        &NotesSettings::default(),
+        now,
+    )?;
+    let needle = query.trim().to_lowercase();
+    let limit = limit.unwrap_or(10).clamp(1, HISTORY_LIMIT);
+    let mut found: Vec<Entry> = history
+        .list("")
+        .into_iter()
+        .filter(|e| span.covers(e.at as i64))
+        .filter(|e| {
+            needle.is_empty()
+                || e.text.to_lowercase().contains(&needle)
+                || e.app
+                    .as_deref()
+                    .is_some_and(|a| a.to_lowercase().contains(&needle))
+        })
+        .collect();
+    // The History tab lists pinned entries first; here it's by time only.
+    found.sort_by_key(|e| std::cmp::Reverse(e.at));
+    let total = found.len();
+    let entries: Vec<Value> = found.iter().take(limit).map(dictated).collect();
+    let mut out = json!({
+        "entries": entries,
+        "returned": entries.len(),
+        "total": total,
+    });
+    if total == 0 {
+        let mut hint = String::from("No dictations match.");
+        if !needle.is_empty() {
+            hint.push_str(" An empty `query` lists the latest.");
+        }
+        if span.since.is_some() || span.until.is_some() {
+            hint.push_str(" Leaving out `since` and `until` widens it.");
+        }
+        out["hint"] = json!(hint);
+    }
+    fitting(
+        &out,
+        "That's too much to return at once. Ask for fewer dictations (`limit`), or a shorter stretch of time (`since`, `until`).",
+    )
+}
+
+/// One dictation in a search of the history: only these four things.
+fn dictated(e: &Entry) -> Value {
+    json!({
+        "at": iso(e.at),
+        "app": e.app,
+        "preset": e.preset,
+        "text": e.text,
+    })
+}
+
 // ------------------------------------------------------------ who sees what
 
 /// What a note is, for agents: `meeting`, `transcript` (an app's audio,
@@ -384,9 +496,18 @@ fn nothing_found(filter: &Filter, settings: &NotesSettings) -> String {
 }
 
 fn reply(value: &Value) -> Result<String, String> {
+    fitting(
+        value,
+        "That's too much to return at once. Ask for fewer notes (`limit`), leave out `with_summary`, or read with a smaller `max_chars`.",
+    )
+}
+
+/// `value` as JSON if it fits a reply; otherwise `too_much`, which says
+/// what to narrow.
+fn fitting(value: &Value, too_much: &str) -> Result<String, String> {
     let text = serde_json::to_string(value).map_err(|e| e.to_string())?;
     if text.len() > REPLY_BYTES {
-        return Err("That's too much to return at once. Ask for fewer notes (`limit`), leave out `with_summary`, or read with a smaller `max_chars`.".into());
+        return Err(too_much.into());
     }
     Ok(text)
 }
@@ -446,10 +567,15 @@ impl Filter {
         Ok(out)
     }
 
-    fn admits(&self, n: &Summary) -> bool {
-        let at = made(n);
+    /// Whether a time (milliseconds since the Unix epoch) is from `since`
+    /// on and before `until`.
+    fn covers(&self, at: i64) -> bool {
         self.since.is_none_or(|s| at >= s.timestamp_millis())
             && self.until.is_none_or(|u| at < u.timestamp_millis())
+    }
+
+    fn admits(&self, n: &Summary) -> bool {
+        self.covers(made(n))
             && self.kind.is_none_or(|k| kind_of(n) == k)
             && self.folder.as_ref().is_none_or(|want| {
                 let folder = n.folder.to_lowercase();
@@ -1134,6 +1260,231 @@ mod tests {
             agent_list(&s, &NoteFilter::default(), false, None, None).unwrap_err(),
             AGENTS_OFF
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A history in a temporary folder, with three dictations.
+    fn history(name: &str) -> (History, std::path::PathBuf) {
+        let dir = std::env::temp_dir().join(format!(
+            "splashdown-agents-history-{name}-{}",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let h = History::open(dir.join("history.jsonl"));
+        h.add(dictation(
+            "2026-11-01T09:00:00Z",
+            Some("Mail"),
+            "The invoice is attached.",
+        ));
+        h.add(dictation(
+            "2026-11-03T10:00:00Z",
+            Some("Chat"),
+            "Lunch on Friday?",
+        ));
+        h.add(dictation("2026-11-04T08:30:00Z", None, "Use the blue one."));
+        (h, dir)
+    }
+
+    fn dictation(when: &str, app: Option<&str>, text: &str) -> Entry {
+        Entry {
+            at: at(when).timestamp_millis() as u64,
+            app: app.map(String::from),
+            app_id: app.map(|a| format!("com.example.{a}")),
+            site: Some("example.com".into()),
+            mode: splashdown_core::Mode::DictateInstruct,
+            raw: format!("um {text}"),
+            instruction: Some("make it formal".into()),
+            text: text.into(),
+            note: Some("AI unavailable: offline".into()),
+            stt: Some("speech-model".into()),
+            llm: Some("text-model".into()),
+            millis: 500,
+            cost_usd: Some(0.01),
+            audio: false,
+            preset: Some("Default".into()),
+            pinned: false,
+        }
+    }
+
+    fn history_settings() -> Settings {
+        let mut s = Settings::default();
+        s.notes.agents_history = true;
+        s.general.keep_history = Some(true);
+        s
+    }
+
+    fn texts(reply: &Value) -> Vec<&str> {
+        reply["entries"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|e| e["text"].as_str().unwrap())
+            .collect()
+    }
+
+    #[test]
+    fn history_needs_its_own_switch() {
+        let (h, dir) = history("switch");
+        let search = |s: &Settings| agent_history(s, &h, "", None, None, None);
+
+        // Off by default, whatever the notes switches say.
+        let mut s = Settings::default();
+        s.general.keep_history = Some(true);
+        assert_eq!(search(&s).unwrap_err(), HISTORY_OFF);
+        s.notes.agents_read = true;
+        s.notes.agents_write = true;
+        s.notes.agents_meetings = Some(true);
+        assert_eq!(search(&s).unwrap_err(), HISTORY_OFF);
+
+        // Allowed, and it doesn't need the notes switches.
+        s.notes = NotesSettings {
+            agents_history: true,
+            ..NotesSettings::default()
+        };
+        let found: Value = serde_json::from_str(&search(&s).unwrap()).unwrap();
+        assert_eq!(found["total"], 3);
+
+        // No history kept: said so, even with entries left from before.
+        s.general.keep_history = None;
+        assert_eq!(search(&s).unwrap_err(), HISTORY_NOT_KEPT);
+        // Both off: where to allow it comes first.
+        s.notes.agents_history = false;
+        assert_eq!(search(&s).unwrap_err(), HISTORY_OFF);
+
+        assert!(HISTORY_OFF.contains("Settings → Privacy"));
+        assert!(HISTORY_NOT_KEPT.contains("Settings → History"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn history_gives_when_app_preset_and_text_only() {
+        let (h, dir) = history("fields");
+        let reply = agent_history(&history_settings(), &h, "invoice", None, None, None).unwrap();
+        let found: Value = serde_json::from_str(&reply).unwrap();
+        assert_eq!(found["returned"], 1);
+        let entry = found["entries"][0].as_object().unwrap();
+        let mut keys: Vec<&str> = entry.keys().map(String::as_str).collect();
+        keys.sort_unstable();
+        assert_eq!(keys, ["app", "at", "preset", "text"]);
+        assert_eq!(entry["app"], "Mail");
+        assert_eq!(entry["preset"], "Default");
+        assert_eq!(entry["text"], "The invoice is attached.");
+        assert_eq!(
+            at(entry["at"].as_str().unwrap()),
+            at("2026-11-01T09:00:00Z"),
+            "a time with its zone"
+        );
+        // What was heard, the instruction, the site and the models stay out.
+        for kept_back in [
+            "um The",
+            "make it formal",
+            "example.com",
+            "speech-model",
+            "text-model",
+            "offline",
+        ] {
+            assert!(!reply.contains(kept_back), "{kept_back}");
+        }
+        // Nor is what was heard searched: a match there would give it away.
+        let none = agent_history(&history_settings(), &h, "um the", None, None, None).unwrap();
+        let none: Value = serde_json::from_str(&none).unwrap();
+        assert_eq!(none["total"], 0);
+        assert!(none["hint"].as_str().unwrap().contains("empty `query`"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn history_is_searched_by_words_and_dates() {
+        let (h, dir) = history("dates");
+        h.pin(at("2026-11-01T09:00:00Z").timestamp_millis() as u64, true)
+            .unwrap();
+        // Wednesday 2026-11-04, 15:00 UTC.
+        let now = at("2026-11-04T15:00:00Z");
+        let search = |query: &str, since: Option<&str>, until: Option<&str>| {
+            let reply = history_between(&h, query, None, since, until, now)?;
+            Ok::<Value, String>(serde_json::from_str(&reply).unwrap())
+        };
+
+        // The latest, newest first: a pinned entry isn't moved up.
+        let all = search("", None, None).unwrap();
+        assert_eq!(
+            texts(&all),
+            [
+                "Use the blue one.",
+                "Lunch on Friday?",
+                "The invoice is attached."
+            ]
+        );
+        // Any case, in the text or the app's name.
+        assert_eq!(
+            texts(&search("FRIDAY", None, None).unwrap()),
+            ["Lunch on Friday?"]
+        );
+        assert_eq!(
+            texts(&search("mail", None, None).unwrap()),
+            ["The invoice is attached."]
+        );
+
+        // From `since` on, and before `until`.
+        let recent = search("", Some("36h"), None).unwrap();
+        assert_eq!(texts(&recent), ["Use the blue one.", "Lunch on Friday?"]);
+        let older = search("", None, Some("2026-11-03T10:00:00Z")).unwrap();
+        assert_eq!(texts(&older), ["The invoice is attached."]);
+        let between = search(
+            "",
+            Some("2026-11-02T00:00:00Z"),
+            Some("2026-11-04T00:00:00Z"),
+        )
+        .unwrap();
+        assert_eq!(texts(&between), ["Lunch on Friday?"]);
+        // An entry's own time as `until` gives the ones before it.
+        let last = recent["entries"][1]["at"].as_str().unwrap();
+        assert_eq!(
+            texts(&search("", None, Some(last)).unwrap()),
+            ["The invoice is attached."]
+        );
+
+        let none = search("", Some("1h"), None).unwrap();
+        assert_eq!(none["total"], 0);
+        assert!(none["hint"].as_str().unwrap().contains("`since`"));
+        // A date it can't read is said the way the notes tools say it.
+        assert!(
+            search("", Some("a while"), None)
+                .unwrap_err()
+                .contains("`since` takes a date")
+        );
+        assert!(
+            search("", None, Some("soon"))
+                .unwrap_err()
+                .contains("`until`")
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn history_limit_is_small_and_capped() {
+        let (h, dir) = history("limit");
+        let start = at("2026-11-05T00:00:00Z").timestamp_millis() as u64;
+        for i in 0..(HISTORY_LIMIT as u64 + 20) {
+            let mut e = dictation("2026-11-05T00:00:00Z", Some("Mail"), "more");
+            e.at = start + i * 1000;
+            h.add(e);
+        }
+        let s = history_settings();
+        let count = |limit: Option<usize>| {
+            let reply = agent_history(&s, &h, "more", limit, None, None).unwrap();
+            let found: Value = serde_json::from_str(&reply).unwrap();
+            assert_eq!(found["total"], HISTORY_LIMIT + 20);
+            assert_eq!(
+                found["returned"],
+                found["entries"].as_array().unwrap().len()
+            );
+            found["returned"].as_u64().unwrap() as usize
+        };
+        assert_eq!(count(None), 10);
+        assert_eq!(count(Some(3)), 3);
+        assert_eq!(count(Some(0)), 1);
+        assert_eq!(count(Some(10_000)), HISTORY_LIMIT);
         let _ = std::fs::remove_dir_all(&dir);
     }
 

@@ -616,6 +616,18 @@ mod tests {
     }
 
     #[test]
+    fn agents_reach_history_only_with_its_own_switch() {
+        assert!(!NotesSettings::default().agents_history);
+        // Allowing notes doesn't allow history.
+        let notes: NotesSettings =
+            toml::from_str("agents_read = true\nagents_write = true\nagents_meetings = true")
+                .unwrap();
+        assert!(notes.agents_read && !notes.agents_history);
+        let notes: NotesSettings = toml::from_str("agents_history = true").unwrap();
+        assert!(notes.agents_history && !notes.agents_read);
+    }
+
+    #[test]
     fn update_checks_are_on_unless_turned_off() {
         let mut g = GeneralSettings::default();
         assert!(g.check_for_updates());

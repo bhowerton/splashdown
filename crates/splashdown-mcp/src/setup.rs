@@ -657,7 +657,8 @@ Run with no arguments, it's the server (agents start it themselves).
   splashdown-mcp uninstall <agent>      take it out again
   splashdown-mcp config <agent> [--json]  what to add by hand
 
-The notes tools need Settings → Privacy → Coding agents in Splashdown.";
+The notes tools and search_history need Settings → Privacy → Coding agents in
+Splashdown. Each has its own switch there, off until you turn it on.";
 
 #[cfg(test)]
 mod tests {

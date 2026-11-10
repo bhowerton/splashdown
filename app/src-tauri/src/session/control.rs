@@ -74,6 +74,26 @@ impl Controller {
                     crate::notes::agent_list(&n, &filter, with_summary, limit, cursor.as_deref())
                 })
                 .map(Some),
+            Request::SearchHistory {
+                query,
+                limit,
+                since,
+                until,
+            } => self
+                .ui
+                .settings()
+                .ok_or_else(|| "Splashdown is still starting.".to_string())
+                .and_then(|s| {
+                    crate::notes::agent_history(
+                        &s,
+                        &self.history,
+                        &query,
+                        limit,
+                        since.as_deref(),
+                        until.as_deref(),
+                    )
+                })
+                .map(Some),
             Request::Status => serde_json::to_string(&self.status(recording))
                 .map(Some)
                 .map_err(|e| e.to_string()),

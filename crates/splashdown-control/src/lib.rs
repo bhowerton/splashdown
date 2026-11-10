@@ -4,10 +4,11 @@
 //!
 //! One JSON line per connection each way. The request is
 //! `{"cmd":"toggle"|"start"|"stop"|"cancel"}`, `{"cmd":"listen","prompt":"…"}`,
-//! `{"cmd":"note","text":"…"}`, or one of the notes requests for coding
-//! agents (`list_notes`, `search_notes`, `read_note`, `append_note`); the reply is
-//! `{"ok":true}`, `{"ok":true,"text":"…"}` (`listen`: the cleaned-up answer;
-//! notes requests: JSON) or `{"ok":false,"error":"…"}`.
+//! `{"cmd":"note","text":"…"}`, or one of the requests for coding agents
+//! (notes: `list_notes`, `search_notes`, `read_note`, `append_note`;
+//! dictation history: `search_history`); the reply is `{"ok":true}`,
+//! `{"ok":true,"text":"…"}` (`listen`: the cleaned-up answer; agents'
+//! requests: JSON) or `{"ok":false,"error":"…"}`.
 //!
 //! macOS listens on a Unix socket in the config folder
 //! (`Paths::control_socket`), mode 0600, and checks that every peer is the
@@ -119,6 +120,20 @@ pub enum Request {
         text: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         to: Option<String>,
+    },
+    /// Dictation history for coding agents, when Settings allows it (a
+    /// switch apart from the notes ones): the entries matching `query`,
+    /// newest first, as JSON. `since` and `until` are the agent's words,
+    /// as in [`NoteFilter`].
+    #[serde(rename = "search_history")]
+    SearchHistory {
+        query: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        limit: Option<usize>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        since: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<String>,
     },
     /// The settings file was changed outside the app (`splashdown-cli
     /// words import`): read it again.
@@ -456,6 +471,41 @@ mod tests {
             }),
             "{\"cmd\":\"append_note\",\"text\":\"hi\"}\n"
         );
+    }
+
+    #[test]
+    fn history_requests_parse() {
+        assert_eq!(
+            Request::parse(r#"{"cmd":"search_history","query":""}"#),
+            Ok(Request::SearchHistory {
+                query: String::new(),
+                limit: None,
+                since: None,
+                until: None,
+            })
+        );
+        assert_eq!(
+            Request::parse(
+                r#"{"cmd":"search_history","query":"invoice","limit":5,"since":"7d","until":"2026-11-02"}"#
+            ),
+            Ok(Request::SearchHistory {
+                query: "invoice".into(),
+                limit: Some(5),
+                since: Some("7d".into()),
+                until: Some("2026-11-02".into()),
+            })
+        );
+        assert_eq!(
+            to_line(&Request::SearchHistory {
+                query: "invoice".into(),
+                limit: None,
+                since: Some("yesterday".into()),
+                until: None,
+            }),
+            "{\"cmd\":\"search_history\",\"query\":\"invoice\",\"since\":\"yesterday\"}\n"
+        );
+        // The query may be empty but not left out, as in search_notes.
+        assert!(Request::parse(r#"{"cmd":"search_history"}"#).is_err());
     }
 
     #[test]

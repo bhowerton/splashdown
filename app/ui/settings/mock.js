@@ -20,7 +20,7 @@ async function mockInvoke(cmd, args) {
       replacements: [{ find: "teh", replace: "the", regex: false }, { find: "gonna", replace: "going to", regex: false }],
       notes: {
         folder: null, capture_to: "inbox", daily_folder: null, daily_format: null, keep_audio: false,
-        agents_read: false, agents_write: false, agents_meetings: null, shortcuts_read: null,
+        agents_read: false, agents_write: false, agents_meetings: null, agents_history: false, shortcuts_read: null,
         meeting_folder: null, meeting_summary: null, keep_meeting_audio: false, stop_when_quiet: null,
         meeting_pill: null, offer_on_calls: null, ask_uses_notes: null, meeting_reminded: false, keep_on_top: false,
         meeting_calendar: false, meeting_speakers: false, remember_speakers: false, ask_by_meaning: false,
