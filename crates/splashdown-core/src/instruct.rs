@@ -226,6 +226,39 @@ fn tidy(answer: &str) -> &str {
     rest.trim()
 }
 
+/// `text` without the spaces models leave at the ends of lines. Two of
+/// them are Markdown's line break, so they stay where they do something:
+/// between two lines of one paragraph ("Thanks,␠␠" above a name). After a
+/// list item, a heading or a paragraph's last line they do nothing.
+fn without_stray_ends(text: &str) -> String {
+    let lines: Vec<&str> = text.lines().collect();
+    let mut out = String::with_capacity(text.len());
+    for (i, line) in lines.iter().enumerate() {
+        let breaks = !starts_a_block(line) && lines.get(i + 1).is_some_and(|n| !starts_a_block(n));
+        out.push_str(if breaks { line } else { line.trim_end() });
+        if i + 1 < lines.len() {
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// Whether a line of Markdown is empty or starts something new (a list
+/// item, a heading, a quote, a table row, a code fence) rather than
+/// carrying a paragraph on.
+fn starts_a_block(line: &str) -> bool {
+    let line = line.trim_start();
+    let numbered = || {
+        let rest = line.trim_start_matches(|c: char| c.is_ascii_digit());
+        rest.len() < line.len() && (rest.starts_with(". ") || rest.starts_with(") "))
+    };
+    line.is_empty()
+        || ["- ", "* ", "+ ", "#", ">", "|", "```"]
+            .iter()
+            .any(|mark| line.starts_with(mark))
+        || numbered()
+}
+
 /// Whether an answer means "nothing". Models dress it up: "None.",
 /// `NONE`, "**NONE**".
 fn is_nothing(answer: &str) -> bool {
@@ -276,7 +309,7 @@ pub async fn run(
                 text: if is_nothing(text) {
                     String::new()
                 } else {
-                    text.to_string()
+                    without_stray_ends(text)
                 },
                 usage,
                 parts,
@@ -673,6 +706,27 @@ mod tests {
         assert_eq!(tidy(email), email);
         assert_eq!(tidy("Final output:\n"), "Final output:");
         assert_eq!(tidy("  plain  "), "plain");
+    }
+
+    #[test]
+    fn spaces_left_at_line_ends_go_unless_they_break_a_line() {
+        // As a small model writes a list.
+        assert_eq!(
+            without_stray_ends(
+                "- [ ] Call the dentist  \n- [ ] Send Dana the numbers  \n1. One \n2. Two"
+            ),
+            "- [ ] Call the dentist\n- [ ] Send Dana the numbers\n1. One\n2. Two"
+        );
+        assert_eq!(
+            without_stray_ends("## Decided  \n\nFriday it is.  \n\n> quoted  "),
+            "## Decided\n\nFriday it is.\n\n> quoted"
+        );
+        // A line break inside a paragraph is meant.
+        let email = "Hi Dana,\n\nThanks,  \nSam";
+        assert_eq!(without_stray_ends(email), email);
+        // 2026 isn't a numbered item.
+        assert!(!starts_a_block("2026 was the year."));
+        assert!(starts_a_block("  3) third"));
     }
 
     #[test]

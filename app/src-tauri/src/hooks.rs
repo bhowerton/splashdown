@@ -193,14 +193,16 @@ pub fn fire(app: &AppHandle, happened: Happened) {
             .name("hooks".into())
             .spawn(move || {
                 for (hook, happened) in receive {
-                    let started = Instant::now();
-                    let result = run_after(&app, &hook, &happened);
                     // Not allowed to run: nothing happened.
-                    if let Ok(None) = result {
+                    if !hook.trusted && !allowed(&app, &hook) {
                         continue;
                     }
+                    // From here, so that how long it took doesn't count
+                    // the wait for an answer.
+                    let started = Instant::now();
+                    let result = run_after(&app, &hook, &happened);
                     let (ok, said) = match &result {
-                        Ok(said) => (true, said.clone().unwrap_or_default()),
+                        Ok(said) => (true, said.clone()),
                         Err(e) => (false, e.clone()),
                     };
                     runs::record(
@@ -250,16 +252,13 @@ pub fn note_finished(app: &AppHandle, event: HookEvent, rel: &str) {
     }
 }
 
-/// Runs a hook for what happened: what it did, in a few words, or `None`
-/// when the user didn't allow it.
-fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<Option<String>, String> {
-    if !hook.trusted && !allowed(app, hook) {
-        return Ok(None);
-    }
+/// Runs a hook for what happened, once it's allowed to: what it did, in a
+/// few words.
+fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<String, String> {
     match &hook.run {
         HookTarget::Program { path, args } => {
             match crate::programs::run(path, args, &happened.text, &happened.env(), AFTER_LIMIT)? {
-                Ended::Finished { ok: true, .. } => Ok(Some("Ran without errors".into())),
+                Ended::Finished { ok: true, .. } => Ok("Ran without errors".into()),
                 Ended::Finished { error, .. } if !error.is_empty() => Err(error),
                 Ended::Finished { .. } => Err("stopped with an error".into()),
                 Ended::TooLong => Err(format!("stopped after {} seconds", AFTER_LIMIT.as_secs())),
@@ -268,11 +267,11 @@ fn run_after(app: &AppHandle, hook: &Hook, happened: &Happened) -> Result<Option
         HookTarget::Web { url } => {
             let body = serde_json::to_string(happened).map_err(|e| e.to_string())?;
             send(url, happened.event, body)?;
-            Ok(Some(format!("Sent to {}", host(url))))
+            Ok(format!("Sent to {}", host(url)))
         }
         HookTarget::Ask { .. } => {
             let asked = ask::Asked::of(hook).ok_or("not something to ask")?;
-            ask::run(app, &asked, happened).map(Some)
+            ask::run(app, &asked, happened)
         }
     }
 }
