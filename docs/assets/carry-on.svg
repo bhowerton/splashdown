@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="480" viewBox="0 0 960 480" role="img" aria-labelledby="t d">
+<title id="t">Carrying on a meeting in the same note</title>
+<desc id="d">A meeting note, Design review, ends at 12:40. Carry on recording is chosen from its menu. A line in the note marks where it was carried on, and the new turns are timed from there: 12:46, 13:05. When it ends at 21:15, the summary is written again from the whole meeting and gains an action item, and the recording under the transcript is one recording, 21:15 long.</desc>
+<style>@keyframes menu{0%,4.40%{opacity:0;transform:translateY(6px)} 5.00%,29.00%{opacity:1;transform:none} 29.60%,100%{opacity:0;transform:translateY(6px)}}
+.menu{animation:menu 18s linear infinite}
+@keyframes pick{0%,14.40%{opacity:0} 15.00%,29.00%{opacity:1} 29.60%,100%{opacity:0}}
+.pick{animation:pick 18s linear infinite}
+@keyframes recording{0%,30.40%{opacity:0;transform:translateY(6px)} 31.00%,68.00%{opacity:1;transform:none} 68.60%,100%{opacity:0;transform:translateY(6px)}}
+.recording{animation:recording 18s linear infinite}
+@keyframes carried{0%,32.40%{opacity:0;transform:translateY(6px)} 33.00%,99.40%{opacity:1;transform:none}}
+.carried{animation:carried 18s linear infinite}
+@keyframes new0{0%,40.40%{opacity:0;transform:translateY(6px)} 41.00%,99.40%{opacity:1;transform:none}}
+.new0{animation:new0 18s linear infinite}
+@keyframes new1{0%,50.40%{opacity:0;transform:translateY(6px)} 51.00%,99.40%{opacity:1;transform:none}}
+.new1{animation:new1 18s linear infinite}
+@keyframes ended{0%,68.40%{opacity:0;transform:translateY(6px)} 69.00%,99.40%{opacity:1;transform:none}}
+.ended{animation:ended 18s linear infinite}
+@keyframes short{0.60%,68.00%{opacity:1} 68.60%,100%{opacity:0}}
+.short{animation:short 18s linear infinite}
+@keyframes long{0%,68.40%{opacity:0} 69.00%,99.40%{opacity:1}}
+.long{animation:long 18s linear infinite}
+@keyframes again{0%,75.40%{opacity:0;transform:translateY(6px)} 76.00%,99.40%{opacity:1;transform:none}}
+.again{animation:again 18s linear infinite}
+@keyframes say0{0%,0.40%{opacity:0} 1.00%,29.00%{opacity:1} 29.60%,100%{opacity:0}}
+.say0{animation:say0 18s linear infinite}
+@keyframes say1{0%,30.40%{opacity:0} 31.00%,68.00%{opacity:1} 68.60%,100%{opacity:0}}
+.say1{animation:say1 18s linear infinite}
+@keyframes say2{0%,68.40%{opacity:0} 69.00%,99.00%{opacity:1} 99.60%,100%{opacity:0}}
+.say2{animation:say2 18s linear infinite}
+
+@keyframes bar{0%{transform:scaleY(.25)}100%{transform:scaleY(1)}}
+.bar{transform-box:fill-box;transform-origin:center;animation:bar .45s ease-in-out infinite alternate}
+.bar:nth-of-type(2n){animation-delay:-.15s}.bar:nth-of-type(3n){animation-delay:-.3s}
+@keyframes twinkle{0%,100%{opacity:.9}50%{opacity:.35}}
+.star{animation:twinkle 3s ease-in-out infinite}
+.star:nth-of-type(2n){animation-delay:-1.4s}.star:nth-of-type(3n){animation-delay:-2.1s}
+
+/* Without motion: the note carried on, its summary and recording whole. */
+@media (prefers-reduced-motion:reduce){
+  *{animation:none!important}
+  .menu,.pick,.recording,.short,.say0,.say1{opacity:0}
+  .carried,.new0,.new1,.ended,.long,.again,.say2{opacity:1;transform:none}
+}
+</style>
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0A1440"/><stop offset=".65" stop-color="#16337A"/><stop offset="1" stop-color="#2F64B8"/>
+  </linearGradient>
+  <linearGradient id="sea" x1="0" y1="440" x2="0" y2="480" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0F6FA8"/><stop offset="1" stop-color="#06305C"/>
+  </linearGradient>
+  <filter id="shadow" x="-20%" y="-30%" width="140%" height="180%">
+    <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".35"/>
+  </filter>
+  <clipPath id="card"><rect width="960" height="480" rx="28"/></clipPath>
+</defs>
+<g clip-path="url(#card)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="960" height="480" fill="url(#sky)"/>
+  <circle class="star" cx="620" cy="30" r="2" fill="#fff"/><circle class="star" cx="940" cy="60" r="1.8" fill="#fff"/><circle class="star" cx="20" cy="440" r="1.8" fill="#fff"/><circle class="star" cx="616" cy="190" r="1.6" fill="#fff"/><circle class="star" cx="944" cy="430" r="2" fill="#fff"/>
+  <path d="M0 462 C160 450 320 474 480 462 S800 450 960 462 V480 H0 Z" fill="url(#sea)"/>
+
+  <!-- The meeting's note, with its recording under the transcript. -->
+  <g filter="url(#shadow)"><rect x="40" y="36" width="560" height="380" rx="14" fill="#fff"/></g><rect x="40" y="36" width="560" height="34" rx="14" fill="#EEF1F6"/><rect x="40" y="56" width="560" height="14" fill="#EEF1F6"/><circle cx="60" cy="53" r="5.5" fill="#FF5F57"/><circle cx="78" cy="53" r="5.5" fill="#FEBC2E"/><circle cx="96" cy="53" r="5.5" fill="#28C840"/><text x="340.0" y="58" text-anchor="middle" font-size="13" fill="#6B7280">Notes</text><text x="62" y="104" font-size="18" font-weight="700" fill="#111827">Design review</text><text x="62" y="126" font-size="12.5" fill="#6B7280">Thursday 10:00 · with Priya Shah, Dana Ortiz</text><text x="62" y="162" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">12:18</text><text x="116" y="162" font-size="14" fill="#111827"><tspan font-weight="700" fill="#B45309">Them  </tspan>So we ship the beta on the 17th.</text><text x="62" y="192" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">12:31</text><text x="116" y="192" font-size="14" fill="#111827"><tspan font-weight="700" fill="#2563EB">You  </tspan>Agreed. I&#x27;ll send Dana the numbers.</text><text x="62" y="222" font-size="13" font-style="italic" fill="#6B7280">Ended at 12:40.</text><g class="carried"><text x="62" y="258" font-size="13" font-style="italic" fill="#6B7280">Carried on at 12:40, Nov 12, 10:52 AM.</text><rect x="52" y="242" width="3" height="22" rx="1.5" fill="#F2551F"/></g><g class="new0"><text x="62" y="292" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">12:46</text><text x="116" y="292" font-size="14" fill="#111827"><tspan font-weight="700" fill="#B45309">Them  </tspan>One more thing: the pricing page.</text></g><g class="new1"><text x="62" y="322" font-size="12" fill="#2563EB" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">13:05</text><text x="116" y="322" font-size="14" fill="#111827"><tspan font-weight="700" fill="#2563EB">You  </tspan>I can review it before Friday.</text></g><g class="ended"><text x="62" y="352" font-size="13" font-style="italic" fill="#6B7280">Ended at 21:15.</text></g><path d="M64 375 l11 7 -11 7z" fill="#111827"/><rect x="96" y="380" width="410" height="5" rx="2.5" fill="#E5E7EB"/><g class="short"><rect x="96" y="380" width="410" height="5" rx="2.5" fill="#9CA3AF"/><text x="578" y="387" text-anchor="end" font-size="12.5" fill="#6B7280" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">12:40</text></g><g class="long"><rect x="96" y="380" width="246" height="5" rx="2.5" fill="#9CA3AF"/><rect x="345" y="380" width="161" height="5" rx="2.5" fill="#F2551F"/><text x="578" y="387" text-anchor="end" font-size="12.5" fill="#6B7280" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">21:15</text></g>
+
+  <!-- Its summary. -->
+  <g filter="url(#shadow)"><rect x="632" y="212" width="288" height="204" rx="14" fill="#fff"/></g><rect x="632" y="212" width="288" height="34" rx="14" fill="#EEF1F6"/><rect x="632" y="232" width="288" height="14" fill="#EEF1F6"/><circle cx="652" cy="229" r="5.5" fill="#FF5F57"/><circle cx="670" cy="229" r="5.5" fill="#FEBC2E"/><circle cx="688" cy="229" r="5.5" fill="#28C840"/><text x="796.0" y="234" text-anchor="middle" font-size="13" fill="#6B7280">Summary</text><text x="652" y="274" font-size="11.5" font-weight="700" fill="#6B7280" letter-spacing=".05em">ACTION ITEMS</text><text x="652" y="302" font-size="14" fill="#111827">• Ship the beta on the 17th</text><text x="652" y="328" font-size="14" fill="#111827">• You: send Dana the numbers</text><g class="again"><text x="652" y="354" font-size="14" fill="#111827">• You: review the pricing page</text><rect x="652" y="370" width="186" height="24" rx="12" fill="#FFEDD5"/><text x="745" y="386.5" text-anchor="middle" font-size="12" font-weight="600" fill="#C2410C">Written again, from all of it</text></g>
+
+  <!-- The note's menu, then Splashdown recording. -->
+  <g class="menu"><g filter="url(#shadow)"><rect x="660" y="44" width="232" height="144" rx="12" fill="#fff"/></g><rect class="pick" x="666" y="116" width="220" height="32" rx="7" fill="#2563EB"/><text x="678" y="73" font-size="14" fill="#111827">Rename…</text><text x="678" y="105" font-size="14" fill="#111827">Move to…</text><text x="678" y="137" font-size="14" fill="#111827">Carry on recording</text><text class="pick" x="678" y="137" font-size="14" fill="#fff">Carry on recording</text><text x="678" y="169" font-size="14" fill="#111827">Transcribe again…</text></g>
+  <g class="recording"><g filter="url(#shadow)"><rect x="666" y="84" width="206" height="48" rx="24" fill="#17171C" fill-opacity=".94"/></g><circle cx="690" cy="108" r="6" fill="#F2551F"/><text x="704" y="114" font-size="16" font-weight="600" fill="#F4F4F5">Recording</text><g><rect class="bar" x="814" y="99" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="822" y="99" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="830" y="99" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="838" y="99" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="846" y="99" width="4" height="18" rx="2" fill="#FF9A3D"/><rect class="bar" x="854" y="99" width="4" height="18" rx="2" fill="#FF9A3D"/></g></g>
+
+  <text class="say0" x="480.0" y="448" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">A meeting stopped too soon, or picked up again after a break…</text>
+  <text class="say1" x="480.0" y="448" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">…carry on in the same note, timed from where it stopped…</text>
+  <text class="say2" x="480.0" y="448" text-anchor="middle" font-size="19" font-style="italic" fill="#E6ECFF">…and the summary and the recording cover all of it.</text>
+</g>
+</svg>

@@ -149,11 +149,17 @@
   <img src="docs/assets/sources.svg" width="800" alt="Animation: a video call, a podcast app, a video in the browser, the room and a file take turns; each one's sound flows into Splashdown and becomes a note line by line, with time stamps, a summary or action items, and tags.">
 </p>
 
-- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named, and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down; the AI on your computer summarizes an hour-long meeting too, a part at a time. A kept recording plays back from any turn, and can be transcribed again with another speech model. A meeting that stopped too soon, or went on after a break, can be carried on in the same note. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record, says what recording will do with your settings and reminds you to let people know; "Don't offer for Zoom" turns it off for that app only. On a Mac it can also offer a meeting on your calendar two minutes before it starts, with Join for its Zoom, Meet, Teams or Webex link beside Record (Settings → General → Meetings; off until you turn it on).
+- **Meeting notes without a bot.** ⌃⌥M (or Record meeting) records your microphone and what your computer plays, and writes the conversation into a note as it goes, each turn marked You or Them; at the end the other people can be told apart and named, and with your calendar the note takes the meeting's title. Write your own notes beside the live transcript, ask "What did I miss?", and get a summary of decisions, action items and open questions at the end, built around what you wrote down; the AI on your computer summarizes an hour-long meeting too, a part at a time. A kept recording plays back from any turn, and can be transcribed again with another speech model. When Zoom, Teams, Meet or another call app starts using the microphone, Splashdown offers to record, says what recording will do with your settings and reminds you to let people know; "Don't offer for Zoom" turns it off for that app only. On a Mac it can also offer a meeting on your calendar two minutes before it starts, with Join for its Zoom, Meet, Teams or Webex link beside Record (Settings → General → Meetings; off until you turn it on).
 - **Remembers who's who (Mac).** Name a speaker once (Speaker 2 → Priya, from the people invited or typed, or Them on a one-on-one call), and turn on Settings → General → Meetings → Recognize people you've named: in later meetings she's named by her voice when it's a clear match, and anyone new stays Speaker 1, 2. Voiceprints stay on your computer, never in your notes, and Settings lists them with Forget.
 
 <p align="center">
   <img src="docs/assets/speakers.svg" width="800" alt="Animation: in Monday's meeting note, clicking Speaker 2 offers the people invited, and choosing Priya Shah renames every turn; her voice is kept on this computer. In Thursday's meeting, Priya Shah's turns carry her name and 'recognized by voice', while a new voice stays Speaker 2.">
+</p>
+
+- **Carry on a meeting that stopped.** A meeting that ended too soon, or picked up again after a break, doesn't need a second note. Carry on recording (the note's menu in the list, or ⌘K) records more into the same note: a line marks where it picked up, the new turns are timed from where it stopped, and the summary is written again from all of it. A kept recording stays one recording, so it still plays from any turn.
+
+<p align="center">
+  <img src="docs/assets/carry-on.svg" width="800" alt="Animation: a meeting note, Design review, ends at 12:40. Carry on recording is chosen from its menu; a line marks where it was carried on, and the new turns are timed from there. When it ends at 21:15, the summary is written again from all of it and the recording is one recording, 21:15 long.">
 </p>
 
 - **Transcribe an app's audio:** a webinar in the browser, a podcast app, a call you're only listening to. Only that app's sound is recorded, with a level meter that says whether it's hearing words.
@@ -271,7 +277,7 @@ Settings → Privacy shows where your words go for your current settings. The fu
 
 ## How well it works
 
-Every default was chosen by measurement. The cleanup prompt is tested on cases covering fillers, self-corrections, formatting, instructions, transforms, context, names on screen and prompt injection. Spoken commands, voice actions, Compose and speech-to-text have eval sets of their own. The scores for every model tried, and how to run the evals, are in [eval/README.md](eval/README.md).
+Every default was chosen by measurement. The cleanup prompt is tested on cases covering fillers, self-corrections, formatting, instructions, transforms, context, names on screen and prompt injection. Spoken commands, voice actions, Compose, the instructions hooks give the AI and speech-to-text have eval sets of their own. The scores for every model tried, and how to run the evals, are in [eval/README.md](eval/README.md).
 
 **Models you download keep their own licenses**, shown next to each one in Settings:
 - NVIDIA Nemotron Speech Streaming (English): NVIDIA Open Model License.
