@@ -121,6 +121,9 @@ fn what(happened: &Happened) -> String {
                 "the notes they made in a stretch of time{days}, oldest first. Each starts with its title after \"# \" and a line in brackets saying what it is and when it was made. A meeting has its summary, or its transcript when it has none, where \"You\" is the user"
             );
         }
+        "before-meeting" => {
+            "a meeting on their calendar that is about to start, and their notes of earlier meetings with the same title or the same people, newest first. Each starts with its title after \"# \" and a line in brackets saying what it is and when. The first is the meeting about to start, with who is invited. An earlier meeting has its summary, or its transcript when it has none, where \"You\" is the user"
+        }
         _ => "something they dictated",
     }
     .to_string()
@@ -195,12 +198,17 @@ pub(super) fn other_note(to: &str) -> (String, String) {
 }
 
 /// The heading a result goes under in a note or file that collects them:
-/// the meeting's or transcript's title and the day, or the days a
-/// scheduled hook's notes are from. None for a dictation or a note from
-/// the phone, whose results are added as they are.
+/// the meeting's or transcript's title and the day, the days a scheduled
+/// hook's notes are from, or the title of the meeting about to start and
+/// its day. None for a dictation or a note from the phone, whose results
+/// are added as they are.
 fn heading(happened: &Happened) -> Option<String> {
     if let Some(days) = happened.period() {
         return Some(days);
+    }
+    if let Some(meeting) = &happened.meeting {
+        let day = meeting.starts.get(..10).unwrap_or(&meeting.starts);
+        return Some(format!("{} · {day}", meeting.title.trim()));
     }
     let note = happened.note.as_ref()?;
     let day = happened.at.get(..10).unwrap_or(&happened.at);
@@ -254,7 +262,8 @@ pub(super) fn sample(event: HookEvent) -> Happened {
                 .filter(|s| !s.is_empty());
             happened.text = SAMPLE_MEETING.into();
         }
-        None if event == HookEvent::Schedule => {}
+        // These come with notes of their own to try it on.
+        None if matches!(event, HookEvent::Schedule | HookEvent::BeforeMeeting) => {}
         None => happened.text = SAMPLE_SAID.into(),
     }
     happened
@@ -290,6 +299,29 @@ mod tests {
             "Pricing review · 2026-11-09".chars().count()
         );
         assert!(super::heading(&sample(HookEvent::PhoneNote)).is_none());
+        // A brief goes under the meeting to come and its day.
+        let coming = calendar::Event {
+            id: "A1".into(),
+            starts: DateTime::parse_from_rfc3339("2026-11-17T14:00:00+00:00")
+                .unwrap()
+                .with_timezone(&Local),
+            all_day: false,
+            declined: false,
+            title: " Pricing review ".into(),
+            people: vec!["Dana Lee".into()],
+        };
+        let brief = Happened::coming(String::new(), &coming, Local::now());
+        let day = coming.starts.format("%Y-%m-%d");
+        assert_eq!(
+            super::heading(&brief).unwrap(),
+            format!("Pricing review · {day}")
+        );
+        assert!(what(&brief).contains("about to start"));
+        assert!(
+            sample(HookEvent::BeforeMeeting)
+                .text
+                .contains("[An earlier meeting, ")
+        );
         assert!(meeting.text.contains("**[0:13] You:**"));
         assert!(sample(HookEvent::Dictation).text.contains("dentist"));
 

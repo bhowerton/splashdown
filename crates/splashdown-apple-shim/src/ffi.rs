@@ -49,6 +49,7 @@ unsafe extern "C" {
     pub fn splashdown_tap_stop(handle: *mut c_void);
     pub fn splashdown_calendar_access(ctx: *mut c_void, callback: Callback);
     pub fn splashdown_calendar_now(ctx: *mut c_void, callback: Callback);
+    pub fn splashdown_calendar_upcoming(from: f64, to: f64, ctx: *mut c_void, callback: Callback);
     pub fn splashdown_screenshot(
         max_long_edge: i32,
         region_x: f64,

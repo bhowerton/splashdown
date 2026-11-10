@@ -161,7 +161,7 @@ pub(super) fn with_line(people: &[String]) -> String {
 
 /// The people a meeting's note says were invited: its `with_line`, looked
 /// for above the first section so a "With Sam." in My notes doesn't count.
-fn invited(body: &str) -> Vec<String> {
+pub(crate) fn invited(body: &str) -> Vec<String> {
     body.lines()
         .take_while(|l| !l.starts_with("## "))
         .find_map(|l| l.trim().strip_prefix("With ")?.strip_suffix('.'))

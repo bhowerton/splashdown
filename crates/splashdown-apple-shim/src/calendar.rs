@@ -1,6 +1,7 @@
 //! The calendar, through the Swift shim's EventKit calls: for naming a
 //! meeting (the event on now and who else is invited), only when the user
-//! turns it on; and for voice actions, adding an event or a reminder.
+//! turns it on; for a hook before a meeting, the events that start soon;
+//! and for voice actions, adding an event or a reminder.
 
 use std::ffi::CString;
 
@@ -40,6 +41,58 @@ pub async fn calendar_now() -> Option<CalendarEvent> {
             .map(str::to_string)
             .collect(),
     })
+}
+
+/// An event that starts soon.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Upcoming {
+    /// The calendar's identifier for it: the same each time a repeating
+    /// event comes round.
+    pub id: String,
+    /// When it starts, in seconds since 1970.
+    pub starts: i64,
+    pub all_day: bool,
+    /// The user said no to it, or it was called off.
+    pub declined: bool,
+    pub title: String,
+    /// The other people invited, by name (or address when there's no name).
+    pub people: Vec<String>,
+}
+
+/// The events that start between `from` and `to` seconds from now, in the
+/// order they start; `None` when the calendar may not be read. Never asks
+/// for access: `calendar_access` does.
+pub async fn calendar_upcoming(from: f64, to: f64) -> Option<Vec<Upcoming>> {
+    // SAFETY: the shim replies exactly once through the callback.
+    let (status, text) =
+        ffi::call(|ctx, cb| unsafe { ffi::splashdown_calendar_upcoming(from, to, ctx, cb) }).await;
+    (status == ffi::OK).then(|| upcoming(&text))
+}
+
+/// The events in the shim's reply: one on each line, its parts separated
+/// by tabs. A line that isn't one is left out.
+fn upcoming(text: &str) -> Vec<Upcoming> {
+    text.lines()
+        .filter_map(|line| {
+            let mut parts = line.split('\t');
+            let id = parts.next()?.to_string();
+            let starts = parts.next()?.parse().ok()?;
+            let said = parts.next()?;
+            let title = parts.next()?.trim().to_string();
+            Some(Upcoming {
+                id,
+                starts,
+                all_day: said == "all-day",
+                declined: said == "declined",
+                title,
+                people: parts
+                    .map(str::trim)
+                    .filter(|p| !p.is_empty())
+                    .map(str::to_string)
+                    .collect(),
+            })
+        })
+        .collect()
 }
 
 /// Something added to the calendar or reminders, to take back (Undo).
@@ -107,4 +160,31 @@ pub async fn remove(added: &Added) -> Result<(), String> {
     })
     .await;
     if status == ffi::OK { Ok(()) } else { Err(text) }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn upcoming_events_are_read_from_the_shim_s_lines() {
+        let events = upcoming(
+            "A1\t1794322800\t\tPricing review\tDana Lee\tsam@example.com\nB2\t1794326400\tdeclined\tAll hands\nC3\t1794268800\tall-day\tOffsite\nnot an event\nD4\tsoon\t\tNo time",
+        );
+        assert_eq!(events.len(), 3);
+        assert_eq!(
+            events[0],
+            Upcoming {
+                id: "A1".into(),
+                starts: 1_794_322_800,
+                all_day: false,
+                declined: false,
+                title: "Pricing review".into(),
+                people: vec!["Dana Lee".into(), "sam@example.com".into()],
+            }
+        );
+        assert!(events[1].declined && events[1].people.is_empty());
+        assert!(events[2].all_day && !events[2].declined);
+        assert!(upcoming("").is_empty());
+    }
 }

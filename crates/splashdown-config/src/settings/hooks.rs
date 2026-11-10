@@ -24,6 +24,10 @@ pub enum HookEvent {
     /// A time of day came round (the hook's `schedule`): it gets the notes
     /// made since.
     Schedule,
+    /// A calendar event is about to start (the hook's `before` says how
+    /// many minutes ahead): it gets the event and the earlier notes about
+    /// it. The calendar is read on a Mac only.
+    BeforeMeeting,
 }
 
 impl HookEvent {
@@ -36,6 +40,7 @@ impl HookEvent {
             HookEvent::Transcript => "transcript",
             HookEvent::PhoneNote => "phone-note",
             HookEvent::Schedule => "schedule",
+            HookEvent::BeforeMeeting => "before-meeting",
         }
     }
 
@@ -47,6 +52,12 @@ impl HookEvent {
     /// It's about a note with a title of its own.
     pub fn has_note(self) -> bool {
         matches!(self, HookEvent::Meeting | HookEvent::Transcript)
+    }
+
+    /// It's about something with a title to go by: a note, or a calendar
+    /// event.
+    pub fn has_title(self) -> bool {
+        self.has_note() || self == HookEvent::BeforeMeeting
     }
 }
 
@@ -200,6 +211,30 @@ impl Covers {
     }
 }
 
+/// How long before a calendar event starts its hook runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Before {
+    #[serde(default = "Before::usual")]
+    pub minutes: u32,
+}
+
+impl Before {
+    /// The most minutes ahead a hook can run.
+    pub const MOST: u32 = 120;
+
+    fn usual() -> u32 {
+        10
+    }
+}
+
+impl Default for Before {
+    fn default() -> Self {
+        Before {
+            minutes: Before::usual(),
+        }
+    }
+}
+
 /// One hook.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Hook {
@@ -209,8 +244,8 @@ pub struct Hook {
     /// Only dictations with this preset (its id); `None` is every preset.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preset: Option<String>,
-    /// Only meetings and transcripts whose title has this in it, in any
-    /// capitals ("1:1", "Acme"); `None` is all of them.
+    /// Only meetings, transcripts and calendar events whose title has this
+    /// in it, in any capitals ("1:1", "Acme"); `None` is all of them.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title_has: Option<String>,
     /// Off keeps it without running it.
@@ -223,6 +258,10 @@ pub struct Hook {
     /// TOML wants a table after plain values.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub schedule: Option<Schedule>,
+    /// How long before the event it runs, for a hook before a meeting;
+    /// `None` is 10 minutes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<Before>,
 }
 
 fn on() -> bool {
@@ -253,15 +292,34 @@ impl Hook {
             return false;
         }
         match self.title_has.as_deref().map(str::trim) {
-            Some(wanted) if !wanted.is_empty() && event.has_note() => {
+            Some(wanted) if !wanted.is_empty() && event.has_title() => {
                 title.is_some_and(|t| t.to_lowercase().contains(&wanted.to_lowercase()))
             }
             _ => true,
         }
     }
 
+    /// How many minutes before a calendar event it runs.
+    pub fn minutes_before(&self) -> u32 {
+        self.before.unwrap_or_default().minutes
+    }
+
     /// What's wrong with it before it's saved, if anything.
     pub fn problem(&self) -> Option<String> {
+        if self.when == HookEvent::BeforeMeeting {
+            if !cfg!(target_os = "macos") {
+                return Some(
+                    "A hook before a meeting reads your calendar, which Splashdown can only do on a Mac for now."
+                        .into(),
+                );
+            }
+            if !(1..=Before::MOST).contains(&self.minutes_before()) {
+                return Some(format!(
+                    "Choose how many minutes before the meeting it runs, from 1 to {}.",
+                    Before::MOST
+                ));
+            }
+        }
         if self.when == HookEvent::Schedule
             && self.schedule.as_ref().and_then(Schedule::time).is_none()
         {
@@ -347,9 +405,11 @@ impl Hook {
             .title_has
             .as_deref()
             .is_some_and(|t| !t.trim().is_empty())
-            && !self.when.has_note()
+            && !self.when.has_title()
         {
-            return Some("Only meetings and transcripts have a title to go by.".into());
+            return Some(
+                "Only meetings, transcripts and calendar events have a title to go by.".into(),
+            );
         }
         if self.when == HookEvent::BeforeInsert {
             if !matches!(self.run, HookTarget::Program { .. }) {
@@ -407,6 +467,7 @@ mod tests {
             on: true,
             trusted: false,
             schedule: None,
+            before: None,
         }
     }
 
@@ -618,6 +679,45 @@ mod tests {
     }
 
     #[test]
+    fn a_hook_before_a_meeting_says_how_long_before() {
+        let brief = |minutes: Option<u32>| Hook {
+            before: minutes.map(|minutes| Before { minutes }),
+            ..ask(HookEvent::BeforeMeeting, PutIn::OtherNote, Some("Briefs"))
+        };
+        assert_eq!(brief(None).minutes_before(), 10);
+        assert_eq!(brief(Some(5)).minutes_before(), 5);
+        if cfg!(target_os = "macos") {
+            assert_eq!(brief(None).problem(), None);
+            assert_eq!(brief(Some(1)).problem(), None);
+            assert_eq!(brief(Some(120)).problem(), None);
+            for wrong in [0, 121, 10_000] {
+                let problem = brief(Some(wrong)).problem();
+                assert!(problem.is_some_and(|p| p.contains("minutes")), "{wrong}");
+            }
+            // An event has no note of its own to put the result in.
+            let in_note = ask(HookEvent::BeforeMeeting, PutIn::Note, None);
+            assert!(in_note.problem().is_some());
+        } else {
+            // The calendar is only read on a Mac.
+            assert!(brief(None).problem().is_some_and(|p| p.contains("Mac")));
+        }
+        // It can go by the event's title, as a meeting's hook does.
+        let one_on_ones = Hook {
+            title_has: Some("1:1".into()),
+            ..brief(None)
+        };
+        assert!(one_on_ones.applies_to(HookEvent::BeforeMeeting, None, Some("Dana 1:1")));
+        assert!(!one_on_ones.applies_to(HookEvent::BeforeMeeting, None, Some("Weekly sync")));
+        assert!(!one_on_ones.applies_to(HookEvent::Meeting, None, Some("Dana 1:1")));
+        assert!(brief(None).applies_to(HookEvent::BeforeMeeting, None, Some("Weekly sync")));
+        if cfg!(target_os = "macos") {
+            assert_eq!(one_on_ones.problem(), None);
+        }
+        assert!(HookEvent::BeforeMeeting.has_title() && !HookEvent::BeforeMeeting.has_note());
+        assert!(!HookEvent::Schedule.has_title());
+    }
+
+    #[test]
     fn hooks_read_and_write_as_toml() {
         let text = r#"
 [[hooks]]
@@ -656,9 +756,37 @@ when = "schedule"
 kind = "program"
 path = "/Users/me/bin/daily-log"
 schedule = { at = "8:30" }
+
+[[hooks]]
+when = "before-meeting"
+kind = "ask"
+name = "Brief"
+instruction = "Write a brief for this meeting."
+put = "other-note"
+to = "Briefs"
+title_has = "1:1"
+before = { minutes = 5 }
+
+[[hooks]]
+when = "before-meeting"
+kind = "program"
+path = "/Users/me/bin/brief"
 "#;
         let settings = Settings::from_toml(text).unwrap();
-        assert_eq!(settings.hooks.len(), 5);
+        assert_eq!(settings.hooks.len(), 7);
+        assert_eq!(settings.hooks[5].when, HookEvent::BeforeMeeting);
+        assert_eq!(settings.hooks[5].before, Some(Before { minutes: 5 }));
+        assert_eq!(settings.hooks[5].title_has.as_deref(), Some("1:1"));
+        // Without the table: ten minutes before.
+        assert_eq!(settings.hooks[6].before, None);
+        assert_eq!(settings.hooks[6].minutes_before(), 10);
+        assert_eq!(
+            Settings::from_toml("[[hooks]]\nwhen = \"before-meeting\"\nkind = \"web\"\nurl = \"https://example.com/x\"\nbefore = {}\n")
+                .unwrap()
+                .hooks[0]
+                .minutes_before(),
+            10
+        );
         assert_eq!(
             settings.hooks[3].schedule,
             Some(Schedule {

@@ -1,6 +1,7 @@
 // The calendar, for naming a meeting: the event on now, its title and who
 // else is invited. Only used when the user turns it on (Settings → Notes →
-// Meetings); macOS asks them for access the first time.
+// Meetings); macOS asks them for access the first time. And for a hook
+// before a meeting: the events that start soon.
 
 import EventKit
 import Foundation
@@ -61,13 +62,60 @@ public func splashdown_calendar_now(_ ctx: UnsafeMutableRawPointer?, _ callback:
         reply.send(OK, "")
         return
     }
-    let people: [String] = (event.attendees ?? []).filter { !$0.isCurrentUser }.compactMap { person in
+    let title = (event.title ?? "").replacingOccurrences(of: "\n", with: " ")
+    reply.send(
+        OK, ([title] + invited(event).map { $0.replacingOccurrences(of: "\n", with: " ") }).joined(separator: "\n"))
+}
+
+/// The other people invited to an event, by name (or address when there's
+/// no name).
+private func invited(_ event: EKEvent) -> [String] {
+    (event.attendees ?? []).filter { !$0.isCurrentUser }.compactMap { person in
         if let name = person.name, !name.isEmpty, !name.contains("@") { return name }
         let address = person.url.absoluteString.replacingOccurrences(of: "mailto:", with: "")
         return address.isEmpty ? nil : address
     }
-    let title = (event.title ?? "").replacingOccurrences(of: "\n", with: " ")
-    reply.send(OK, ([title] + people.map { $0.replacingOccurrences(of: "\n", with: " ") }).joined(separator: "\n"))
+}
+
+/// The events that start between `from` and `to` seconds from now, in the
+/// order they start. Replies OK with one event on each line, its parts
+/// separated by tabs: its identifier (the same each time a repeating event
+/// comes round), when it starts in seconds since 1970, "all-day",
+/// "declined" (the user said no, or it was called off) or nothing, its
+/// title, and then each other person invited. Replies NOT_ENABLED without
+/// access; it never asks for it.
+@_cdecl("splashdown_calendar_upcoming")
+public func splashdown_calendar_upcoming(
+    _ from: Double,
+    _ to: Double,
+    _ ctx: UnsafeMutableRawPointer?,
+    _ callback: SplashdownCallback
+) {
+    let reply = Reply(ctx: ctx, callback: callback)
+    guard hasAccess() else {
+        reply.send(NOT_ENABLED, "")
+        return
+    }
+    let now = Date()
+    let (first, last) = (now.addingTimeInterval(from), now.addingTimeInterval(to))
+    let range = events.predicateForEvents(withStart: first, end: last, calendars: nil)
+    // The search finds events going on in that time; only ones that start in it count.
+    let coming = events.events(matching: range)
+        .filter { $0.startDate >= first && $0.startDate <= last }
+        .sorted { $0.startDate < $1.startDate }
+    let plain = { (text: String) in
+        text.replacingOccurrences(of: "\n", with: " ").replacingOccurrences(of: "\t", with: " ")
+    }
+    let lines = coming.map { (event: EKEvent) -> String in
+        let me = (event.attendees ?? []).first { $0.isCurrentUser }
+        let said = event.isAllDay
+            ? "all-day" : (event.status == .canceled || me?.participantStatus == .declined) ? "declined" : ""
+        let parts =
+            [event.eventIdentifier ?? "", String(Int(event.startDate.timeIntervalSince1970)), said, event.title ?? ""]
+            + invited(event)
+        return parts.map(plain).joined(separator: "\t")
+    }
+    reply.send(OK, lines.joined(separator: "\n"))
 }
 
 // Voice actions: adding an event or a reminder ("add dentist to my calendar

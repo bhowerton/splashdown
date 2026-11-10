@@ -1,6 +1,6 @@
 # Hooks
 
-A hook does something when something happens in Splashdown: after a dictation, when a meeting or transcript is finished, when a note comes from your iPhone, or at a time you set, with the notes of the day or week. It can ask the AI to do something with the text in your own words ("draft the follow-up email"), run your own script or program, or send to a web address. One kind runs *before* a dictation goes in and changes its text.
+A hook does something when something happens in Splashdown: after a dictation, when a meeting or transcript is finished, when a note comes from your iPhone, at a time you set, with the notes of the day or week, or (on a Mac) a few minutes before a meeting on your calendar, with your notes from the last time. It can ask the AI to do something with the text in your own words ("draft the follow-up email"), run your own script or program, or send to a web address. One kind runs *before* a dictation goes in and changes its text.
 
 Add them in **Settings → Actions → When something happens**. **Test** runs a hook once with sample text before you save it. **What ran** lists the last 50 runs: when, which hook, for which meeting, and what it did or what went wrong (never the text itself).
 
@@ -14,10 +14,11 @@ Add them in **Settings → Actions → When something happens**. **Test** runs a
 | **When a transcript is finished** | The transcript's note: a file, a link, a watched folder, an app's audio or the microphone | No |
 | **When a note comes from your iPhone** | What you said, and when | No |
 | **On a schedule** | The notes you made in the last day or the last 7 days, as one text | No |
+| **Before a meeting on your calendar** (Mac) | The meeting about to start and your notes of the last meetings about it, as one text | No |
 
 A dictation into a note (the note key) doesn't run dictation hooks. Neither does a rewrite of selected text.
 
-A hook for meetings or transcripts can be for some of them only: **Only when the title has** takes a word or two ("1:1", a client's name), matched in any capitals.
+A hook for meetings, transcripts or meetings on your calendar can be for some of them only: **Only when the title has** takes a word or two ("1:1", a client's name), matched in any capitals.
 
 ## On a schedule
 
@@ -34,6 +35,24 @@ If the computer is asleep or Splashdown isn't running at the time, the hook runs
 
 **Test** tries what you wrote on the notes it would get right now (or on a sample, when there are none) and shows the result without putting it anywhere.
 
+## Before a meeting
+
+A hook before a meeting runs a few minutes before an event on your calendar starts (10, unless you choose another number from 1 to 120), with what you need to walk in prepared: your notes from the last time you met. The ready-made **Brief** asks the AI what was decided, what you said you'd do and what others owe you, and collects the answers in a note called Briefs.
+
+This needs a Mac: Splashdown reads the calendar through macOS, which asks you first, and only while a hook like this is on. On Windows the hook can't be added.
+
+What it gets, as one text, each part under its title and a line saying what it is and when:
+
+- **The meeting about to start:** its title, when it starts, and who else is invited.
+- **Your notes of the last meetings about it,** newest first, three at most: meeting notes with the same title (a repeating meeting, whatever the capitals and punctuation), or with mostly the same people (at least half of those invited to either are in both, so a 1:1 finds your last 1:1 with that person and not every large meeting they were at). A note's people are the ones on its "With …" line and the ones named in its transcript. A note that has a summary comes with its summary and your own notes, without its transcript; one that has none comes whole.
+- **Left out:** notes hidden from coding agents (`agents: false`), notes that aren't meetings, and this meeting's own note if you started recording early.
+
+Meeting notes are found by title most easily when they're named from the calendar: turn on **Name meetings from my calendar** in Settings → Notes → Meetings, which also writes the "With …" line.
+
+Each event runs a hook once. All-day events and ones you declined (or that were called off) are skipped. If the computer was asleep, the hook still runs up to 5 minutes after the meeting starts, and not after that. An event moved to later the same day isn't briefed again. A hook you just added, changed or turned back on starts with the meetings still ahead. With no earlier notes about a meeting, nothing runs, and What ran says so.
+
+**Test** tries what you wrote on your next meeting in the coming 7 days that has earlier notes (or on a sample, when there is none) and shows the result without putting it anywhere.
+
 ## Asking the AI
 
 No code needed: choose **Ask the AI to do something with it**, say what you want in your own words, and choose where what it writes goes. Some are ready to use under **Start from**, and can be changed:
@@ -48,13 +67,14 @@ No code needed: choose **Ask the AI to do something with it**, say what you want
 | To-dos from my phone | A note comes from your iPhone | The things to do in it, if any | A note called To-dos |
 | Weekly review | Fridays at 16:00, the last 7 days | What got done or decided, what you said you'd do that's still open, what's waiting on others | A note called Weekly reviews |
 | Daily wrap-up | Weekdays at 17:30, the last day | Your to-dos from the day, then what was decided | A note called Daily wrap-ups |
+| Brief | 10 minutes before a meeting on your calendar (Mac) | What was decided the last times, what you said you'd do, what others said they'd do | A note called Briefs |
 
 Where what it writes can go:
 
 | Put what it writes | What happens |
 |---|---|
 | **In the note** (meetings and transcripts) | A section named after the hook, above the note's summary and transcript. Running it again for the same note replaces that section |
-| **At the end of another note** | Added to a note in your notes folder (made if it isn't there), under a heading with the meeting's title and the day, or the days a scheduled hook covers. Results collect there, meeting after meeting |
+| **At the end of another note** | Added to a note in your notes folder (made if it isn't there), under a heading with the meeting's title and the day (for a hook before a meeting, the meeting about to start and its day), or the days a scheduled hook covers. Results collect there, meeting after meeting |
 | **At the end of a file** | The same, in any file you give the full path of |
 | **On the clipboard** | Replaces what's on the clipboard, ready to paste |
 | **To a web address** | Sent as a web address hook is (below), with `text` holding what the AI wrote instead of the note, and `ask` holding the hook's name |
@@ -72,6 +92,8 @@ What to expect from the AI on this computer (a small model):
 - **Good at finding things that were said:** to-dos, decisions, who agreed to what. It sometimes credits a task to the wrong person, so read the list.
 - **Weaker at writing from a whole long meeting:** a follow-up email for an hour-long meeting can leave things out.
 - **A weekly review needs exact wording:** told plainly which headings to write and what goes under each (as the ready-made one is), it finds most decisions and to-dos in a week of notes and names the note each came from. It can miss one or put it under the wrong heading. Asked loosely ("review my week"), it makes up dates and mixes up who does what.
+
+- **A brief before a meeting needs exact wording too:** with the ready-made one it lists the decisions and to-dos of the last meetings and says which meeting each is from. From notes with summaries it finds nearly all of them. From a transcript alone it can call something decided that was only asked about, or mix up who something is for. It lists everything the notes say is to do, including what you have done since without saying so in a meeting.
 
 A cloud model reads the whole meeting at once and does both well. Either way, check what it wrote before you send it on.
 
@@ -100,23 +122,35 @@ put = "other-note"
 to = "Weekly reviews"
 # days: mon tue wed thu fri sat sun (none is every day); covers: day or week
 schedule = { at = "16:00", days = ["fri"], covers = "week" }
+
+[[hooks]]
+when = "before-meeting"   # a Mac only
+kind = "ask"
+name = "Brief"
+instruction = "Write a brief for the meeting that is about to start, from the notes of the earlier meetings."
+put = "other-note"
+to = "Briefs"
+title_has = "1:1"         # optional: only events with this in their title
+before = { minutes = 10 } # optional: 10 unless you say, from 1 to 120
 ```
 
 ## A script or program
 
 Splashdown starts it directly, never through a shell, with the arguments you gave it, one per line. It gets:
 
-- **The text on its standard input:** the dictation, the note from your iPhone, the whole note (Markdown) for a meeting or transcript, or the notes of the day or week for a hook on a schedule.
+- **The text on its standard input:** the dictation, the note from your iPhone, the whole note (Markdown) for a meeting or transcript, the notes of the day or week for a hook on a schedule, or the meeting about to start and your earlier notes about it for a hook before a meeting.
 - **These environment variables:**
 
 | Variable | Holds |
 |---|---|
-| `SPLASHDOWN_EVENT` | `dictation`, `before-insert`, `meeting`, `transcript`, `phone-note` or `schedule` |
-| `SPLASHDOWN_AT` | When it happened, as `2026-11-09T14:03:22-05:00` (for a note from the iPhone, when you said it; for a schedule, the time it was due) |
+| `SPLASHDOWN_EVENT` | `dictation`, `before-insert`, `meeting`, `transcript`, `phone-note`, `schedule` or `before-meeting` |
+| `SPLASHDOWN_AT` | When it happened, as `2026-11-09T14:03:22-05:00` (for a note from the iPhone, when you said it; for a schedule, the time it was due; before a meeting, when the hook ran) |
 | `SPLASHDOWN_SINCE` | Where the notes start, in the same form (schedules only): they run from then until `SPLASHDOWN_AT` |
 | `SPLASHDOWN_APP` | The app dictated into (dictations only) |
 | `SPLASHDOWN_PRESET` | The preset's name (dictations only) |
-| `SPLASHDOWN_TITLE` | The note's title (meetings and transcripts) |
+| `SPLASHDOWN_TITLE` | The note's title (meetings and transcripts), or the title of the meeting about to start |
+| `SPLASHDOWN_STARTS` | When the meeting starts, in the same form as `SPLASHDOWN_AT` (before a meeting only) |
+| `SPLASHDOWN_PEOPLE` | The other people invited, by name or address, separated by `, ` (before a meeting only; empty when there are none) |
 | `SPLASHDOWN_NOTE` | The note's file (meetings and transcripts) |
 | `SPLASHDOWN_TEST` | `1` when run by Test |
 
@@ -153,7 +187,7 @@ Splashdown sends a `POST` with this JSON:
 }
 ```
 
-For a dictation, `app` and `preset` are filled and `note` is `null`. A hook on a schedule has the notes in `text`, the time it was due in `at`, and adds `"since"` with where the notes start. Test adds `"test": true`. A hook that asks the AI and sends what it wrote here adds `"ask"` with the hook's name, and its `text` is what the AI wrote.
+For a dictation, `app` and `preset` are filled and `note` is `null`. A hook on a schedule has the notes in `text`, the time it was due in `at`, and adds `"since"` with where the notes start. A hook before a meeting has the meeting and your earlier notes in `text`, and adds `"meeting"`: `{"title": "Pricing review", "starts": "2026-11-17T14:00:00-05:00", "people": ["Dana Lee", "Sam Reyes"]}`. Test adds `"test": true`. A hook that asks the AI and sends what it wrote here adds `"ask"` with the hook's name, and its `text` is what the AI wrote.
 
 If the server can't be reached, doesn't answer within 15 seconds, or answers with a 5xx error, it's sent once more, 2 seconds later.
 

@@ -15,7 +15,7 @@ pub use secrets::{
     KeyName, KeySource, Secrets, delete_key, key_source, migrate_legacy_keys, store_key,
 };
 pub use settings::{
-    ActionSettings, AiChoice, AiProvider, AiSettings, Budget, CaptureTo, Covers,
+    ActionSettings, AiChoice, AiProvider, AiSettings, Before, Budget, CaptureTo, Covers,
     DEFAULT_SOUND_VOLUME, Day, Destination, GeneralSettings, Hook, HookEvent, HookTarget,
     HotkeySettings, LOCAL_FAST_MS, LOCAL_SLOW_MS, LoadError, MOST_TRANSLATE_TARGETS,
     MeetingSummary, MyAction, MyActionKind, NotesSettings, OtherAudio, PutIn, Replacement,

@@ -407,7 +407,7 @@ fn lines_between(text: &str, since: DateTime<Local>, until: DateTime<Local>) -> 
 
 /// A note's text as a scheduled hook gets it: without its title line
 /// (given before it), and without its transcript when it has a summary.
-fn shown(body: &str) -> &str {
+pub(super) fn shown(body: &str) -> &str {
     let body = match markdown::transcript_start(body) {
         Some(at) if markdown::section(body, "Summary").is_some_and(|s| !s.trim().is_empty()) => {
             &body[..at]
@@ -472,6 +472,7 @@ mod tests {
             on: true,
             trusted: true,
             schedule: Some(schedule),
+            before: None,
         }
     }
 

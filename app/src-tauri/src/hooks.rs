@@ -1,7 +1,9 @@
 //! Hooks (Settings → Actions → When something happens): when a dictation
 //! goes into a field, a meeting or transcript is finished, a note comes
-//! from the iPhone, or a time of day comes round (`schedule`, with the
-//! notes made since), run the user's script or program with the text, send
+//! from the iPhone, a time of day comes round (`schedule`, with the notes
+//! made since), or a meeting on the calendar is about to start
+//! (`calendar`, with the earlier notes about it), run the user's script or
+//! program with the text, send
 //! it to a web address as signed JSON, or ask the AI to do something with
 //! it (`ask`). One kind runs before a dictation is inserted and changes
 //! its text. What each gets is in docs/HOOKS.md.
@@ -14,6 +16,7 @@
 //! so nothing waits for them.
 
 mod ask;
+pub mod calendar;
 pub mod runs;
 pub mod schedule;
 
@@ -65,8 +68,10 @@ pub struct Happened {
     pub event: &'static str,
     /// When it happened (said, for a note from the iPhone).
     pub at: String,
-    /// The dictation, the note from the iPhone, or the whole note
-    /// (Markdown) for a meeting or transcript.
+    /// The dictation, the note from the iPhone, the whole note (Markdown)
+    /// for a meeting or transcript, the notes of the day or week for a
+    /// schedule, or the meeting about to start and the earlier notes about
+    /// it.
     pub text: String,
     /// The app dictated into.
     pub app: Option<String>,
@@ -77,12 +82,25 @@ pub struct Happened {
     /// until `at`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub since: Option<String>,
+    /// For a hook before a meeting: the calendar event about to start.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub meeting: Option<Coming>,
     /// Sent by Test in Settings.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub test: bool,
     /// The preset's id, to choose the hooks.
     #[serde(skip)]
     preset_id: Option<String>,
+}
+
+/// A calendar event about to start.
+#[derive(Debug, Clone, Serialize)]
+pub struct Coming {
+    pub title: String,
+    /// When it starts.
+    pub starts: String,
+    /// The other people invited, by name (or address when there's no name).
+    pub people: Vec<String>,
 }
 
 /// The note a meeting or transcript went into.
@@ -108,6 +126,7 @@ impl Happened {
             preset: None,
             note: None,
             since: None,
+            meeting: None,
             test: false,
             preset_id: None,
         }
@@ -119,6 +138,19 @@ impl Happened {
         Happened {
             since: Some(since.to_rfc3339()),
             ..Happened::new(HookEvent::Schedule, notes, due)
+        }
+    }
+
+    /// A calendar event is about to start: `text` holds it and the earlier
+    /// notes about it.
+    fn coming(text: String, event: &calendar::Event, now: DateTime<Local>) -> Self {
+        Happened {
+            meeting: Some(Coming {
+                title: event.title.trim().to_string(),
+                starts: event.starts.to_rfc3339(),
+                people: event.people.clone(),
+            }),
+            ..Happened::new(HookEvent::BeforeMeeting, text, now)
         }
     }
 
@@ -192,6 +224,11 @@ impl Happened {
             env.push(("SPLASHDOWN_TITLE", note.title.clone()));
             env.push(("SPLASHDOWN_NOTE", note.path.to_string_lossy().into_owned()));
         }
+        if let Some(meeting) = &self.meeting {
+            env.push(("SPLASHDOWN_TITLE", meeting.title.clone()));
+            env.push(("SPLASHDOWN_STARTS", meeting.starts.clone()));
+            env.push(("SPLASHDOWN_PEOPLE", meeting.people.join(", ")));
+        }
         if self.test {
             env.push(("SPLASHDOWN_TEST", "1".into()));
         }
@@ -255,6 +292,7 @@ fn run_later(app: &AppHandle, hook: Hook, happened: Happened) {
                                 .note
                                 .as_ref()
                                 .map(|n| n.title.clone())
+                                .or_else(|| happened.meeting.as_ref().map(|m| m.title.clone()))
                                 .or_else(|| happened.app.clone())
                                 .or_else(|| happened.period()),
                             ok,
@@ -522,6 +560,7 @@ fn event_named(name: &str) -> Option<HookEvent> {
         HookEvent::Transcript,
         HookEvent::PhoneNote,
         HookEvent::Schedule,
+        HookEvent::BeforeMeeting,
     ]
     .into_iter()
     .find(|e| e.name() == name)
@@ -562,18 +601,20 @@ fn when(hook: &Hook) -> String {
                 .as_ref()
                 .map_or_else(|| "on a schedule".into(), schedule::words);
         }
+        HookEvent::BeforeMeeting => return calendar::words(hook),
     }
     .into()
 }
 
-/// What a hook is given, to go in a sentence: "the text", or the notes a
-/// scheduled one reads.
+/// What a hook is given, to go in a sentence: "the text", the notes a
+/// scheduled one reads, or what one before a meeting does.
 fn given(hook: &Hook) -> String {
     match (hook.when, &hook.schedule) {
         (HookEvent::Schedule, Some(schedule)) => {
             format!("your notes from {}", schedule.covers.words())
         }
         (HookEvent::Schedule, None) => "your notes".into(),
+        (HookEvent::BeforeMeeting, _) => "the meeting and your earlier notes about it".into(),
         _ => "the text".into(),
     }
 }
@@ -658,14 +699,14 @@ pub fn hooks_ai(app: AppHandle) -> Option<(String, bool)> {
 
 fn test(app: &AppHandle, hook: &Hook) -> Result<String, String> {
     if let Some(asked) = ask::Asked::of(hook) {
-        // A scheduled hook is tried on the notes it would get now, when
-        // there are any: a sample week says little about the user's own.
-        let (happened, from, there) = match schedule::now(app, hook) {
-            Some((happened, notes)) => (
-                happened,
-                format!("your notes ({notes})"),
-                "your notes".to_string(),
-            ),
+        // A scheduled hook is tried on the notes it would get now, and one
+        // before a meeting on the next meeting that has earlier notes,
+        // when there are any: a sample says little about the user's own.
+        let own = schedule::now(app, hook)
+            .map(|(happened, notes)| (happened, format!("your notes ({notes})")))
+            .or_else(|| calendar::next(app, hook));
+        let (happened, from, there) = match own {
+            Some((happened, from)) => (happened, from, "your notes".to_string()),
             None => (
                 ask::sample(hook.when),
                 "a sample".to_string(),
@@ -719,6 +760,18 @@ fn sample(event: HookEvent) -> Happened {
                 now - chrono::Duration::days(7),
                 now,
             )
+        }
+        HookEvent::BeforeMeeting => {
+            let now = Local::now();
+            let event = calendar::Event {
+                id: String::new(),
+                starts: now + chrono::Duration::minutes(10),
+                all_day: false,
+                declined: false,
+                title: "Pricing review".into(),
+                people: vec!["Dana Lee".into(), "Sam Reyes".into()],
+            };
+            Happened::coming(calendar::SAMPLE.into(), &event, now)
         }
         HookEvent::Meeting | HookEvent::Transcript => {
             let title = if event == HookEvent::Meeting {
@@ -812,6 +865,7 @@ mod tests {
             on: true,
             trusted: false,
             schedule: None,
+            before: None,
         };
         let asks = hook(HookTarget::Ask {
             name: " Follow-up email ".into(),
@@ -844,6 +898,7 @@ mod tests {
             HookEvent::Transcript,
             HookEvent::PhoneNote,
             HookEvent::Schedule,
+            HookEvent::BeforeMeeting,
         ] {
             assert_eq!(event_named(event.name()), Some(event));
         }
@@ -860,6 +915,29 @@ mod tests {
             summary(&weekly),
             "Gives your notes from the last 7 days to the AI with “Draft a follow-up email to the people in this meeting.” and adds what it writes to the note Drafts on Fridays at 16:00"
         );
+        let brief = Hook {
+            when: HookEvent::BeforeMeeting,
+            before: Some(splashdown_config::Before { minutes: 15 }),
+            ..asks.clone()
+        };
+        assert_eq!(
+            summary(&brief),
+            "Gives the meeting and your earlier notes about it to the AI with “Draft a follow-up email to the people in this meeting.” and adds what it writes to the note Drafts 15 minutes before a meeting on your calendar"
+        );
+        let sent = Hook {
+            run: HookTarget::Web {
+                url: "https://example.com/brief".into(),
+            },
+            before: None,
+            ..brief
+        };
+        assert_eq!(
+            summary(&sent),
+            "Sends the meeting and your earlier notes about it to https://example.com/brief 10 minutes before a meeting on your calendar"
+        );
+        let test = sample(HookEvent::BeforeMeeting);
+        assert_eq!(test.meeting.as_ref().unwrap().title, "Pricing review");
+        assert!(test.test && test.text.starts_with("# Pricing review\n["));
     }
 
     #[cfg(unix)]
@@ -883,6 +961,7 @@ mod tests {
                 on: true,
                 trusted: true,
                 schedule: None,
+                before: None,
             }
         };
         let happened =

@@ -228,6 +228,7 @@ const HOOK_EVENTS = [
   ["transcript", "When a transcript is finished"],
   ["phone-note", "When a note comes from your iPhone"],
   ["schedule", "On a schedule, with your notes since"],
+  ["before-meeting", "Before a meeting on your calendar"],
 ];
 
 /** The days a scheduled hook can run on, as the settings name them. */
@@ -274,6 +275,12 @@ function scheduleWords(sc) {
 /** The notes a schedule reads, in words: "the last 7 days". */
 function coversWords(sc) {
   return sc?.covers === "week" ? "the last 7 days" : "the last day";
+}
+
+/** When a hook before a meeting runs, to end a sentence: "10 minutes before each meeting on your calendar". */
+function beforeWords(h) {
+  const minutes = h.before?.minutes ?? 10;
+  return `${minutes === 1 ? "a minute" : `${minutes} minutes`} before each meeting on your calendar`;
 }
 
 /** Where what the AI wrote goes. A dictation or a note from the phone has no note of its own. */
@@ -358,6 +365,16 @@ const HOOK_STARTERS = [
     instruction:
       "From these notes of my day, write two lists, each under its heading. \"For me to do\": only what the notes say I (\"You\") will do or said I would do, each as a to-do (\"- [ ] \") with who it's for and by when; things I dictated to myself count. \"Decided\": what the notes say was decided, one line each. Take each note in turn. End each line with the title of the note it comes from, in brackets. Keep days as the notes say them (\"by Wednesday\") and add no dates of your own. Leave out what is already done.",
   },
+  {
+    label: "Brief, before a meeting",
+    when: "before-meeting",
+    before: { minutes: 10 },
+    name: "Brief",
+    put: "other-note",
+    to: "Briefs",
+    instruction:
+      "Write a brief for the meeting that is about to start, from the notes of the earlier meetings, under three headings. \"Decided\": what the notes say was decided, one line each. \"For me to do\": only what the notes say I (\"You\") will do or said I would do, each as a to-do (\"- [ ] \") with who it is for and by when. \"Waiting on others\": what someone else said they would do, each line starting with their name. Go through the earlier meetings one at a time, and through each one's decisions and action items one at a time, and put every one under a heading, even one about something else. End each line with the title and day of the meeting it comes from, in brackets, as in \"(Weekly sync, 3 November)\". Keep days as the notes say them (\"by Wednesday\") and add no dates of your own. Leave out what a later meeting says is done or changed.",
+  },
 ];
 
 /** The AI a hook's instruction goes to, as `[name, onThisComputer]`, once known. */
@@ -393,6 +410,9 @@ function hookSummary(h) {
 /** What happens to a scheduled hook whose time passes unseen. */
 const HOOK_LATE = " If the computer is asleep or Splashdown isn't running then, it runs when it next can, with the notes up to that time.";
 
+/** What a hook before a meeting leaves alone, and where the calendar is read. */
+const HOOK_CALENDAR = " All-day events and ones you declined are skipped, and a meeting with no earlier notes runs nothing. Your calendar is read on this Mac only; macOS asks first.";
+
 /** What a hook does, in a sentence, for the editor. */
 function hookSentence(h) {
   const preset = h.preset ? ` with the ${presetName(h.preset)} preset` : "";
@@ -403,6 +423,7 @@ function hookSentence(h) {
       transcript: "each finished transcript",
       "phone-note": "each note from your iPhone",
       schedule: `the notes from ${coversWords(h.schedule)} (meetings with their summaries, transcripts and your other notes), ${scheduleWords(h.schedule)},`,
+      "before-meeting": `your notes of the last meetings with the same title or the same people, ${beforeWords(h)},`,
     }[h.when] ?? "the text";
     const only = h.title_has ? ` (only when its title has “${h.title_has}”)` : "";
     const put = {
@@ -413,9 +434,9 @@ function hookSentence(h) {
       web: `is sent to ${h.to || "the web address"}, signed with your webhook secret`,
     }[h.put];
     const long = hookAi?.[1]
-      ? ` ${h.when === "schedule" ? "Many notes are" : "A long meeting is"} read a part at a time there, which can take a few minutes.`
+      ? ` ${h.when === "schedule" || h.when === "before-meeting" ? "Many notes are" : "A long meeting is"} read a part at a time there, which can take a few minutes.`
       : "";
-    const late = h.when === "schedule" ? HOOK_LATE : "";
+    const late = h.when === "schedule" ? HOOK_LATE : h.when === "before-meeting" ? HOOK_CALENDAR : "";
     return `Splashdown gives ${text}${only} to ${hookAiName()} with what you wrote above. What it writes ${put}. It can only write: it can't send, open or change anything else.${long}${late}`;
   }
   const what = h.kind === "web"
@@ -428,6 +449,7 @@ function hookSentence(h) {
     transcript: " When a transcript of a file, a link, an app's audio or the microphone is finished.",
     "phone-note": " For each note from your iPhone.",
     schedule: ` ${scheduleWords(h.schedule).replace(/^./, (c) => c.toUpperCase())}, with the notes from ${coversWords(h.schedule)} as the text.${HOOK_LATE}`,
+    "before-meeting": ` ${beforeWords(h).replace(/^./, (c) => c.toUpperCase())}, with the meeting and your notes of the last meetings with the same title or the same people as the text.${HOOK_CALENDAR}`,
   }[h.when];
   const only = h.title_has ? ` Only when the title has “${h.title_has}”.` : "";
   return what + when + only;
@@ -444,9 +466,10 @@ function renderHooks(hooks) {
       row.classList.toggle("dim", !on);
       const lbl = document.createElement("span");
       lbl.className = "lbl";
-      const when = h.when === "schedule" ? scheduleWords(h.schedule) : HOOK_EVENTS.find(([v]) => v === h.when)?.[1] ?? h.when;
+      const timed = h.when === "schedule" ? scheduleWords(h.schedule) : h.when === "before-meeting" ? beforeWords(h) : null;
+      const when = timed ?? HOOK_EVENTS.find(([v]) => v === h.when)?.[1] ?? h.when;
       const only = h.preset ? ` · ${presetName(h.preset)}` : h.title_has ? ` · “${h.title_has}”` : "";
-      const shown = h.when === "schedule" ? when : when.toLowerCase();
+      const shown = timed ? when : when.toLowerCase();
       lbl.textContent = (h.kind === "ask" ? `${h.name} · ${shown}` : when.replace(/^./, (c) => c.toUpperCase())) + only;
       const small = document.createElement("small");
       small.textContent = hookSummary(h) + (on ? "" : " · off");
@@ -565,6 +588,12 @@ function editHook(index) {
   title.textContent = index === null ? "Add a hook" : "Edit hook";
   const when = document.createElement("select");
   for (const [value, label] of HOOK_EVENTS) when.append(new Option(label, value));
+  // The calendar is only read on a Mac.
+  const beforeMeeting = when.querySelector('option[value="before-meeting"]');
+  if (!mac) {
+    beforeMeeting.disabled = true;
+    beforeMeeting.textContent += " (on a Mac)";
+  }
   when.value = h.when;
   const preset = document.createElement("select");
   const presetPart = field("Preset", preset);
@@ -614,9 +643,19 @@ function editHook(index) {
     field("On", days),
     field("With the notes from", covers, "Meetings come with their summaries. Notes hidden from coding agents are left out."),
   );
+  // Before a meeting: how long before.
+  const minutes = document.createElement("input");
+  minutes.type = "number";
+  minutes.min = "1";
+  minutes.max = "120";
+  minutes.value = String(h.before?.minutes ?? 10);
+  const beforePart = field("Minutes before it starts", minutes, "Long enough for the AI to write: a minute or two on this computer.");
   // Asking the AI.
   const starter = document.createElement("select");
-  starter.append(new Option("Your own", ""), ...HOOK_STARTERS.map((st, i) => new Option(st.label, String(i))));
+  starter.append(
+    new Option("Your own", ""),
+    ...HOOK_STARTERS.map((st, i) => Object.assign(new Option(st.label, String(i)), { disabled: st.when === "before-meeting" && !mac })),
+  );
   const askName = text(h.name, "Follow-up email");
   const instruction = document.createElement("textarea");
   instruction.className = "ma-instruction";
@@ -671,6 +710,7 @@ function editHook(index) {
       hook.schedule = { at: at.value, covers: covers.value };
       if (chosenDays().length) hook.schedule.days = chosenDays();
     }
+    if (when.value === "before-meeting") hook.before = { minutes: Math.round(Number(minutes.value)) || 0 };
     if (preset.value) hook.preset = preset.value;
     if (!titlePart.hidden && titleHas.value.trim()) hook.title_has = titleHas.value.trim();
     if (kind.value === "web") hook.url = url.value.trim();
@@ -710,8 +750,9 @@ function editHook(index) {
     webPart.hidden = kind.value !== "web";
     programPart.hidden = kind.value !== "program";
     askPart.hidden = kind.value !== "ask";
-    titlePart.hidden = when.value !== "meeting" && when.value !== "transcript";
+    titlePart.hidden = !["meeting", "transcript", "before-meeting"].includes(when.value);
     schedulePart.hidden = when.value !== "schedule";
+    beforePart.hidden = when.value !== "before-meeting";
   };
   // Where the result can go for this event, and what that place needs.
   const showPut = () => {
@@ -756,6 +797,7 @@ function editHook(index) {
       covers.value = st.schedule.covers;
       showDays(st.schedule.days);
     }
+    if (st.before) minutes.value = String(st.before.minutes);
     askName.value = st.name;
     instruction.value = st.instruction;
     refresh();
@@ -764,7 +806,7 @@ function editHook(index) {
     showTo();
     describe();
   });
-  for (const input of [url, path, args, titleHas, askName, instruction, to, at]) input.addEventListener("input", describe);
+  for (const input of [url, path, args, titleHas, askName, instruction, to, at, minutes]) input.addEventListener("input", describe);
   for (const input of [days, covers]) input.addEventListener("change", describe);
   refresh();
   const check = async (hook) => {
@@ -781,7 +823,10 @@ function editHook(index) {
     test.disabled = true;
     result.hidden = false;
     result.classList.remove("warn-text");
-    const about = hook.when === "schedule" ? `your notes from ${coversWords(hook.schedule)}` : "a sample";
+    const about = {
+      schedule: `your notes from ${coversWords(hook.schedule)}`,
+      "before-meeting": "your next meeting",
+    }[hook.when] ?? "a sample";
     result.textContent = hook.kind === "ask" ? `Asking ${hookAiName()} about ${about}…` : "Testing…";
     try {
       result.textContent = await invoke("hooks_test", { hook });
@@ -805,6 +850,7 @@ function editHook(index) {
     presetPart,
     titlePart,
     schedulePart,
+    beforePart,
     field("What it does", kind),
     webPart,
     programPart,
@@ -818,6 +864,13 @@ function editHook(index) {
     e.preventDefault();
     const hook = current();
     if (!(await check(hook))) return;
+    // A hook before a meeting needs the calendar: macOS asks now, while
+    // the user is here to answer.
+    if (hook.when === "before-meeting" && !(await invoke("calendar_access").catch(() => false))) {
+      error.textContent = "macOS didn't allow Splashdown to read your calendar. Allow it in System Settings → Privacy & Security → Calendars, then save again.";
+      error.hidden = false;
+      return;
+    }
     // Saved here, with what it does said above: it runs without asking.
     hook.trusted = true;
     dialog.close();
