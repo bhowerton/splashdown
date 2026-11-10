@@ -262,6 +262,7 @@ function showItemMenu(n, at) {
     item(isMac ? "Show in Finder" : "Show in File Explorer", () =>
       call("notes_reveal", { path: n.path }),
     ),
+    ...(canCarryOn(n.source) ? [item("Carry on recording", onIt(() => carryOn(n.path)), { disabled: busy || !!meeting })] : []),
     ...(hasRecording(n.text) ? [item("Transcribe again…", () => transcribeAgain(n.path, at), { disabled: busy })] : []),
     ...(hasTimedTranscript(n.text)
       ? [

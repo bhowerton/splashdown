@@ -197,6 +197,7 @@ fn main() {
             meeting::meeting_set_notes,
             meeting::meeting_start_app,
             meeting::meeting_start_microphone,
+            meeting::meeting_carry_on,
             meeting::calendar_access,
             meeting::reminders_access,
             meeting::reminders_has_list,

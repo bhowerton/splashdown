@@ -86,6 +86,8 @@ pub(super) fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
     let mut job = Job::new(&store, note, &speech);
     job.resume_at = resume_at;
     job.one_sided = spool.app.is_some();
+    // A note that was being carried on is timed from where it had got to.
+    job.offset = Duration::from_secs_f64(spool.offset.max(0.0));
     // Half a second at a time, as when it was recorded: all at once, every
     // turn would scan the whole meeting.
     let mut file = std::io::BufReader::new(std::fs::File::open(&raw).map_err(|e| e.to_string())?);
@@ -111,10 +113,19 @@ pub(super) fn recover_one(app: &AppHandle, meta: &Path) -> Result<(), String> {
         note,
         &format!(
             "*Finished after Splashdown closed; the recording ends at {}.*",
-            timestamp(job.recorded())
+            timestamp(job.offset + job.recorded())
         ),
     );
-    if let Err(e) = finish(app, &store, note, &raw, &settings, spool.app.is_some()) {
+    let carried_on = (!job.offset.is_zero()).then_some(job.offset);
+    if let Err(e) = finish(
+        app,
+        &store,
+        note,
+        &raw,
+        &settings,
+        spool.app.is_some(),
+        carried_on,
+    ) {
         leave_recording(meta);
         return Err(format!(
             "the recording couldn't be kept with its note ({e}); it stays"
@@ -150,7 +161,12 @@ fn keep_left_recording(
     match answer {
         Some(0) => {
             let (store, _) = crate::notes::store_for(Some(spool.folder.clone()))?;
-            add_recording(&store, &spool.note, raw)?;
+            if spool.offset > 0.0 {
+                let offset = Duration::from_secs_f64(spool.offset);
+                add_to_recording(&store, &spool.note, raw, offset)?;
+            } else {
+                add_recording(&store, &spool.note, raw)?;
+            }
         }
         Some(1) => {}
         _ => return Ok(()),
@@ -170,6 +186,41 @@ pub(super) fn read_full(file: &mut impl std::io::Read, buf: &mut [u8]) -> std::i
         }
     }
     Ok(filled)
+}
+
+/// How far a finished meeting's note goes: the latest time in it, from
+/// its turns and from the lines that say when it ended ("*Ended at
+/// 12:40.*"). A recording that carries the note on is timed from there.
+pub(super) fn ended_at(body: &str) -> Duration {
+    let said = |line: &str| {
+        // A line of ours about the recording's end: "*Ended at 5:23.*",
+        // "*Stopped at 1:02:07: the microphone went away.*".
+        let line = line.trim();
+        let after = ["*Ended at ", "*Stopped at "]
+            .iter()
+            .find_map(|start| line.strip_prefix(start))
+            .or_else(|| {
+                let (_, after) = line.split_once("; the recording ends at ")?;
+                line.starts_with("*Finished after").then_some(after)
+            })?;
+        let stamp: String = after
+            .chars()
+            .take_while(|c| c.is_ascii_digit() || *c == ':')
+            .collect();
+        let parts: Vec<u64> = stamp
+            .trim_end_matches(':')
+            .split(':')
+            .map(str::parse)
+            .collect::<Result<_, _>>()
+            .ok()?;
+        (2..=3)
+            .contains(&parts.len())
+            .then(|| Duration::from_secs(parts.iter().fold(0, |sum, part| sum * 60 + part)))
+    };
+    body.lines()
+        .filter_map(|line| Turn::parse(line).map(|t| t.at()).or_else(|| said(line)))
+        .max()
+        .unwrap_or_default()
 }
 
 /// The time of the last transcript turn in a meeting note.

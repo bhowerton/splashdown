@@ -86,7 +86,7 @@ function liveHere() {
 /** The note being written to by a transcription or a meeting, so typing
  *  can't be lost under its next paragraph. */
 function locked() {
-  return (!!job && !job.downloading && job.note === current.path) || liveHere();
+  return (!!job && !job.downloading && job.note === current.path) || liveHere() || (!!carryingOn && carryingOn === current.path);
 }
 
 /** Draws the note: plain, a meeting's tabs, or a meeting recording now. */

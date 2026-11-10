@@ -22,6 +22,10 @@ pub(super) struct Spool {
     /// (a full disk, say), and is what's left to do.
     #[serde(default)]
     pub(super) audio_only: bool,
+    /// Seconds the note already had when this recording carried it on: its
+    /// turns are timed from there.
+    #[serde(default)]
+    pub(super) offset: f64,
 }
 
 /// Marks the spool at `meta` as finished but for its recording, which
@@ -76,12 +80,14 @@ pub(super) fn call_app() -> (Option<String>, String) {
 }
 
 /// Records a meeting (or an app's audio) until it's stopped, then finishes
-/// its note.
+/// its note. With `carry_on`, the note is one that was finished before:
+/// the recording adds to it, timed from where it stopped.
 pub(super) fn record(
     app: &AppHandle,
     source: &Source,
     stop: &AtomicBool,
     keep: &AtomicBool,
+    carry_on: Option<&str>,
 ) -> Result<(), String> {
     let state = app.state::<AppState>();
     let mut settings = state.settings();
@@ -159,29 +165,53 @@ pub(super) fn record(
         "# {title} · {}\n\n{with}{recorded_from} · transcribed {place}.\n",
         now.format("%b %-d, %-I:%M %p")
     );
-    let note = store
-        .create_in(
-            if listening.is_some() {
-                ""
-            } else {
-                settings.notes.meeting_folder()
-            },
-            &header,
-            now,
-            &Origin {
-                app: app_name.as_deref(),
-                source: Some(match source {
-                    Source::Meeting => "meeting",
-                    Source::App { .. } => APP_AUDIO,
-                    Source::Microphone => RECORDING,
-                }),
-                ..Origin::default()
-            },
-        )
-        .map_err(|e| e.to_string())?;
+    // The note, and how far it already goes: a new one, or the one being
+    // carried on, marked where the recording picks up.
+    let (note_path, offset) = match carry_on {
+        Some(rel) => {
+            let body = store.read(rel).map_err(|e| e.to_string())?.body;
+            // Past its last time, and past the recording kept with it,
+            // which this one is added to.
+            let offset = ended_at(&body).max(recording_length(&store, rel).unwrap_or_default());
+            store
+                .add_paragraph(
+                    rel,
+                    &format!(
+                        "*Carried on at {}, {}.*",
+                        timestamp(offset),
+                        now.format("%b %-d, %-I:%M %p")
+                    ),
+                )
+                .map_err(|e| e.to_string())?;
+            (rel.to_string(), offset)
+        }
+        None => {
+            let note = store
+                .create_in(
+                    if listening.is_some() {
+                        ""
+                    } else {
+                        settings.notes.meeting_folder()
+                    },
+                    &header,
+                    now,
+                    &Origin {
+                        app: app_name.as_deref(),
+                        source: Some(match source {
+                            Source::Meeting => "meeting",
+                            Source::App { .. } => APP_AUDIO,
+                            Source::Microphone => RECORDING,
+                        }),
+                        ..Origin::default()
+                    },
+                )
+                .map_err(|e| e.to_string())?;
+            (note.path, Duration::ZERO)
+        }
+    };
     if let Some(problem) = &them_problem {
         let _ = store.add_paragraph(
-            &note.path,
+            &note_path,
             &format!("*Only your side is recorded: {problem}*"),
         );
     }
@@ -192,12 +222,13 @@ pub(super) fn record(
     let id = now.format("%Y%m%d-%H%M%S").to_string();
     let raw_path = dir.join(format!("{id}.raw"));
     let spool = Spool {
-        note: note.path.clone(),
+        note: note_path.clone(),
         folder: store.root().to_path_buf(),
         started: now.to_rfc3339(),
         written: 0.0,
         app: listening.clone(),
         audio_only: false,
+        offset: offset.as_secs_f64(),
     };
     let meta_path = dir.join(format!("{id}.json"));
     crate::data::write(&meta_path, &spool)?;
@@ -207,7 +238,7 @@ pub(super) fn record(
     crate::notes::open(app);
     let mut step = InStep::default();
     let mut status = Status {
-        note: note.path.clone(),
+        note: note_path.clone(),
         them_problem: them_problem.clone(),
         place: place.to_string(),
         app: listening.clone(),
@@ -236,11 +267,12 @@ pub(super) fn record(
     let (echoes, lost_writes) = std::thread::scope(|scope| {
         let (tx, rx) = std::sync::mpsc::channel::<(Vec<f32>, Vec<f32>)>();
         let (store, note_path, speech, heard, listened) =
-            (&store, &note.path, &speech, &heard, &listened);
+            (&store, &note_path, &speech, &heard, &listened);
         let spool = (meta_path.clone(), spool);
         let transcriber = scope.spawn(move || {
             let mut job = Job::new(store, note_path, speech);
             job.one_sided = one_sided;
+            job.offset = offset;
             job.spool = Some(spool);
             while let Ok((you, them)) = rx.recv() {
                 job.push(&you, &them);
@@ -328,7 +360,9 @@ pub(super) fn record(
             }
             show(app, Some(&status));
 
-            let at = timestamp(recorded_for);
+            // In the note's time: a note carried on is further along than
+            // this recording.
+            let at = timestamp(offset + recorded_for);
             if stop.load(Ordering::Relaxed) {
                 ended = Some(format!("*Ended at {at}.*"));
             } else if you.lost() {
@@ -373,7 +407,7 @@ pub(super) fn record(
     });
     drop((you, them, raw));
     if let Some(ended) = &ended {
-        let _ = store.add_paragraph(&note.path, ended);
+        let _ = store.add_paragraph(&note_path, ended);
     }
     if echoes > 0 {
         tell(
@@ -395,10 +429,11 @@ pub(super) fn record(
     let finished = finish(
         app,
         &store,
-        &note.path,
+        &note_path,
         &raw_path,
         &settings,
         listening.is_some(),
+        (!offset.is_zero()).then_some(offset),
     );
     if let Err(e) = finished {
         // The spool is the only copy of the recording: it stays.

@@ -233,6 +233,19 @@ pub(super) fn starts_part(line: &str) -> bool {
         })
 }
 
+/// What's above a meeting's transcript, without the summary put there
+/// before: from `## Summary` to the `## Transcript` that ends it. The
+/// summary that's inserted next brings both headings again.
+pub fn without_summary(above: &str) -> &str {
+    let Some(rest) = above.trim_end().strip_suffix("\n## Transcript") else {
+        return above;
+    };
+    match rest.rfind("\n## Summary\n") {
+        Some(at) => rest[..at].trim_end(),
+        None => rest.trim_end(),
+    }
+}
+
 /// Where the transcript's first turn starts in `text`, if it has one.
 pub fn transcript_start(text: &str) -> Option<usize> {
     let mut at = 0;

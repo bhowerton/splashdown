@@ -27,9 +27,42 @@ function flushLiveNotes() {
   return liveNotesSaving;
 }
 
+/** The note a finished meeting is about to be carried on in. It's locked
+ *  from when that's asked for, so nothing typed since is saved over the
+ *  line the recording adds to it. */
+let carryingOn = null;
+
+/** A finished meeting's note (or a microphone recording's) can take more:
+ *  an app's audio or a transcribed file can't. */
+function canCarryOn(source) {
+  return source === "meeting" || source === "recording";
+}
+
+/** Records more into the finished meeting in note `path`, from where it
+ *  stopped. */
+async function carryOn(path) {
+  if (meeting) return toast(meeting.app ? "Already recording." : "A meeting is recording.");
+  if (current.path === path) await saveNow();
+  carryingOn = path;
+  if (current.path === path) render();
+  try {
+    await invoke("meeting_carry_on", { path });
+  } catch (e) {
+    carryingOn = null;
+    if (current.path === path) render();
+    toast(String(e), true);
+  }
+}
+
 async function showMeeting(next) {
   const before = meeting;
   meeting = next;
+  // It started, or couldn't: either way the note is no longer waiting.
+  if (carryingOn) {
+    const waited = carryingOn;
+    carryingOn = null;
+    if (!meeting && current.path === waited) render();
+  }
   if (meeting) {
     const text = meeting.question
       ? meeting.question.title

@@ -24,6 +24,9 @@ function actions() {
     list.push({ title: "Rewrite: say how…", icon: "pen", sub: "In your own words: shorter, warmer, in French…", run: () => runTransform("", {}) });
   }
   if (asMeeting && !locked()) list.push({ title: "Summarize the meeting again", icon: "pen", run: summarize });
+  if (asMeeting && canCarryOn(current.source) && !locked()) {
+    list.push({ title: "Carry on recording", icon: "rec", sub: "More of this meeting, added to this note from where it stopped", run: () => carryOn(current.path), off: !!meeting });
+  }
   if (have && hasRecording(body) && !locked()) {
     list.push({ title: "Transcribe again with another model…", icon: "pen", run: () => transcribeAgain(current.path) });
   }

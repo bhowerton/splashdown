@@ -922,14 +922,16 @@ impl Store {
     }
 
     /// Puts `summary` under `## Summary` above the transcript of note `rel`
-    /// (before its first `**[` paragraph), with `## Transcript` after it.
+    /// (before its first `**[` paragraph), with `## Transcript` after it;
+    /// in place of the summary it has, when it was summarized before (a
+    /// meeting carried on).
     pub fn insert_summary(&self, rel: &str, summary: &str) -> io::Result<()> {
         let _appending = self.appending.locked();
         let path = self.resolve(rel)?;
         let text = std::fs::read_to_string(&path)?;
         let at = transcript_start(&text).unwrap_or(text.len());
         let (before, after) = text.split_at(at);
-        let before = before.trim_end();
+        let before = without_summary(before.trim_end());
         let block = format!("\n\n## Summary\n\n{}\n\n## Transcript\n\n", summary.trim());
         self.write(&path, &format!("{before}{block}{after}"))
     }
@@ -1477,6 +1479,17 @@ mod tests {
         assert_eq!(
             store.read(&meeting.path).unwrap().body,
             "# Zoom meeting\n\nRecorded on this computer.\n\n## My notes\n\n- pricing?\n- Sam: numbers by Thu\n\n## Summary\n\n### Overview\nA hello.\n\n## Transcript\n\n**[0:00] Them:** Hi.\n\n**[0:04] You:** Hello.\n"
+        );
+        // Summarized again (the meeting was carried on): in its place.
+        store
+            .add_paragraph(&meeting.path, "**[0:09] Them:** And bye.")
+            .unwrap();
+        store
+            .insert_summary(&meeting.path, "### Overview\nA hello and a goodbye.")
+            .unwrap();
+        assert_eq!(
+            store.read(&meeting.path).unwrap().body,
+            "# Zoom meeting\n\nRecorded on this computer.\n\n## My notes\n\n- pricing?\n- Sam: numbers by Thu\n\n## Summary\n\n### Overview\nA hello and a goodbye.\n\n## Transcript\n\n**[0:00] Them:** Hi.\n\n**[0:04] You:** Hello.\n\n**[0:09] Them:** And bye.\n"
         );
         let _ = std::fs::remove_dir_all(store.root());
     }

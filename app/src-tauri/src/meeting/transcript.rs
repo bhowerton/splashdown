@@ -19,6 +19,9 @@ pub(super) struct Job<'a> {
     /// Turns that ended before this (an earlier, unfinished run of the
     /// same meeting) are already in the note.
     pub(super) resume_at: Duration,
+    /// How far the note already went when this recording carried it on:
+    /// its turns are timed from there, not from the recording's start.
+    pub(super) offset: Duration,
     /// The spool's sidecar, kept up to date with how much is written.
     pub(super) spool: Option<(PathBuf, Spool)>,
     /// A turn couldn't be written into the note.
@@ -51,6 +54,7 @@ impl<'a> Job<'a> {
             taken: [0, 0],
             heard_at: Duration::ZERO,
             resume_at: Duration::ZERO,
+            offset: Duration::ZERO,
             spool: None,
             lost_writes: false,
             one_sided: false,
@@ -89,7 +93,7 @@ impl<'a> Job<'a> {
                 // What started before the resume point is in the note
                 // (see `Meeting::settled`), even if it ended after it.
                 if piece.start < self.resume_at {
-                    self.meeting.reached(side, end);
+                    self.meeting.reached(side, self.offset + end);
                     continue;
                 }
                 let text = match splashdown_audio::prepare_with(&piece.clip, self.cleanup) {
@@ -100,15 +104,17 @@ impl<'a> Job<'a> {
                     }
                     None => String::new(),
                 };
+                // In the note's time.
                 self.meeting.push(Segment {
                     side,
-                    start: piece.start,
-                    end,
+                    start: self.offset + piece.start,
+                    end: self.offset + end,
                     text,
                 });
             }
             let ready = self.meeting.ready();
-            let settled = self.meeting.settled();
+            // The spool goes by the recording's own time.
+            let settled = self.meeting.settled().saturating_sub(self.offset);
             self.write(ready, settled);
             if !progressed {
                 return;
@@ -229,10 +235,13 @@ pub(super) fn finish(
     raw: &Path,
     settings: &Settings,
     one_sided: bool,
+    carried_on: Option<Duration>,
 ) -> Result<(), String> {
     // Speakers first, so the summary can say who said what. Recognizing
-    // people needs them told apart first.
-    if settings.notes.tells_speakers_apart() {
+    // people needs them told apart first. Not for a note carried on (from
+    // `carried_on` into it): the recording is only its later part, and its
+    // Speaker 1 needn't be the one the note already has.
+    if settings.notes.tells_speakers_apart() && carried_on.is_none() {
         name_speakers(
             store,
             note,
@@ -242,10 +251,10 @@ pub(super) fn finish(
         );
     }
     summarize(app, store, note, settings, one_sided);
-    let kept = if settings.notes.keep_meeting_audio {
-        add_recording(store, note, raw)
-    } else {
-        Ok(())
+    let kept = match carried_on {
+        _ if !settings.notes.keep_meeting_audio => Ok(()),
+        Some(offset) => add_to_recording(store, note, raw, offset),
+        None => add_recording(store, note, raw),
     };
     let event = if one_sided {
         splashdown_config::HookEvent::Transcript
@@ -261,6 +270,77 @@ pub(super) fn add_recording(store: &Store, note: &str, raw: &Path) -> Result<(),
     let link = keep_recording(store, note, raw)?;
     let _ = store.add_paragraph(note, &format!("[Recording]({})", link.replace(' ', "%20")));
     Ok(())
+}
+
+/// Keeps the recording of a part that carried a note on: joined to the
+/// recording the note already has, starting `offset` into it, so that one
+/// recording plays the whole note and its turns' times are places in it.
+pub(super) fn add_to_recording(
+    store: &Store,
+    note: &str,
+    raw: &Path,
+    offset: Duration,
+) -> Result<(), String> {
+    let Some(existing) = recording_of(store, note) else {
+        let _ = store.add_paragraph(
+            note,
+            "*This part's recording isn't kept: the note's earlier part has none to add it to.*",
+        );
+        return Ok(());
+    };
+    extend_recording(&existing, raw, offset)
+}
+
+/// How long the recording kept with `note` is, if it has one.
+pub(super) fn recording_length(store: &Store, note: &str) -> Option<Duration> {
+    let reader = hound::WavReader::open(recording_of(store, note)?).ok()?;
+    let rate = f64::from(reader.spec().sample_rate.max(1));
+    Some(Duration::from_secs_f64(f64::from(reader.duration()) / rate))
+}
+
+/// Adds the spooled audio in `raw` to the recording `existing`, starting
+/// `offset` into it (silence fills what's between). The recording is
+/// written afresh beside the old one and then takes its place, so a full
+/// disk leaves the old one as it was.
+pub(super) fn extend_recording(
+    existing: &Path,
+    raw: &Path,
+    offset: Duration,
+) -> Result<(), String> {
+    let part = existing.with_extension("wav.part");
+    let written = (|| {
+        let mut reader = hound::WavReader::open(existing).map_err(|e| e.to_string())?;
+        let spec = reader.spec();
+        if spec.channels != 2 || spec.sample_rate != RATE as u32 || spec.bits_per_sample != 16 {
+            return Err("the note's recording isn't one Splashdown made".to_string());
+        }
+        let mut writer = hound::WavWriter::create(&part, spec).map_err(|e| e.to_string())?;
+        // Two samples a frame: You and Them.
+        let start = (offset.as_secs_f64() * RATE as f64).round() as usize * 2;
+        let mut copied = 0;
+        for sample in reader.samples::<i16>() {
+            writer
+                .write_sample(sample.map_err(|e| e.to_string())?)
+                .map_err(|e| e.to_string())?;
+            copied += 1;
+        }
+        for _ in copied..start {
+            writer.write_sample(0i16).map_err(|e| e.to_string())?;
+        }
+        let bytes = std::fs::read(raw).map_err(|e| e.to_string())?;
+        for pair in bytes.as_chunks::<2>().0 {
+            writer
+                .write_sample(i16::from_le_bytes(*pair))
+                .map_err(|e| e.to_string())?;
+        }
+        writer.finalize().map_err(|e| e.to_string())
+    })();
+    let replaced =
+        written.and_then(|()| std::fs::rename(&part, existing).map_err(|e| e.to_string()));
+    if replaced.is_err() {
+        let _ = std::fs::remove_file(&part);
+    }
+    replaced
 }
 
 /// Tells the other people apart (a meeting's Them side, or everyone in a

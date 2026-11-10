@@ -11,6 +11,9 @@
 //! or a forced quit loses nothing: the next launch offers to finish the
 //! transcript. The spool is deleted once the note is done.
 //!
+//! A finished meeting can be carried on: more is recorded into its note,
+//! timed from where it stopped (`carry_on`).
+//!
 //! This file starts and stops recordings and has the commands; the rest is
 //! in `meeting/`: `record.rs` (the audio), `transcript.rs` (turns into the
 //! note, speakers, each turn's language), `voices.rs` (recognizing people
@@ -175,6 +178,26 @@ pub fn start(app: &AppHandle) -> Result<String, String> {
 
 /// Starts recording `source`, as `start`.
 pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String> {
+    start_on(app, source, None)
+}
+
+/// Carries on the finished meeting (or microphone recording) in note
+/// `rel`: records more into it, timed from where it stopped, and
+/// summarizes all of it again at the end.
+pub fn carry_on(app: &AppHandle, rel: &str) -> Result<String, String> {
+    let folder = app.state::<AppState>().settings().notes.folder;
+    let (store, _) = crate::notes::store_for(folder)?;
+    let note = store.read(rel).map_err(|e| e.to_string())?;
+    let source = match note.source.as_str() {
+        "meeting" => Source::Meeting,
+        RECORDING => Source::Microphone,
+        _ => return Err("Only a meeting or a microphone recording can be carried on.".into()),
+    };
+    start_on(app, source, Some(rel.to_string()))
+}
+
+/// Starts recording `source`: into a new note, or the one to carry on.
+fn start_on(app: &AppHandle, source: Source, carry_on: Option<String>) -> Result<String, String> {
     // Held until the thread's handle is stored, so a thread that ends at
     // once (and clears the slot) can't leave its handle on a later meeting.
     let mut slot = running();
@@ -192,7 +215,7 @@ pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String
         .spawn(move || {
             // A panic mustn't leave a meeting marked as recording for good.
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                record(&handle, &source, &stop, &keep)
+                record(&handle, &source, &stop, &keep, carry_on.as_deref())
             }))
             .unwrap_or_else(|_| Err("the recording stopped unexpectedly".into()));
             if let Err(e) = result {
@@ -430,6 +453,12 @@ pub async fn meeting_start_microphone(app: AppHandle) -> Result<(), String> {
     start_recording(&app, Source::Microphone).map(|_| ())
 }
 
+/// Records more into the finished meeting in note `path`.
+#[tauri::command]
+pub async fn meeting_carry_on(path: String, app: AppHandle) -> Result<(), String> {
+    carry_on(&app, &path).map(|_| ())
+}
+
 /// What the user writes beside a meeting while it records: kept under
 /// `## My notes` in its note, above the transcript (which only this side
 /// writes to until the meeting ends).
@@ -559,6 +588,43 @@ mod tests {
         assert!(job.recorded() >= Duration::from_secs(5));
     }
 
+    #[test]
+    #[ignore = "needs eval/audio (splashdown-cli eval make-audio, on a Mac)"]
+    fn a_note_carried_on_is_timed_from_where_it_stopped() {
+        let root = std::env::temp_dir().join(format!("splashdown-carry-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        let store = Store::new(root.clone());
+        let note = store
+            .create_in(
+                "Meetings",
+                "# Meeting\n\n**[0:04] Them:** Hi.\n\n*Ended at 12:40.*\n",
+                chrono::Local::now(),
+                &Origin::default(),
+            )
+            .unwrap();
+        let speech = crate::session::FileSpeech {
+            stt: Arc::new(Lengths),
+            hints: splashdown_core::SttHints::default(),
+            cleanup: splashdown_audio::Cleanup::default(),
+        };
+        let mut job = Job::new(&store, &note.path, &speech);
+        job.offset = ended_at(&store.read(&note.path).unwrap().body);
+        let you = [clip("question"), vec![0.0; RATE]].concat();
+        let them = vec![0.0; you.len()];
+        for (y, t) in you.chunks(RATE / 2).zip(them.chunks(RATE / 2)) {
+            job.push(y, t);
+            job.transcribe(false);
+        }
+        assert_eq!(job.finish(), 0);
+        let body = store.read(&note.path).unwrap().body;
+        let _ = std::fs::remove_dir_all(&root);
+        let turns: Vec<&str> = body.lines().filter(|l| l.starts_with("**[")).collect();
+        assert_eq!(turns.len(), 2, "{body}");
+        assert!(turns[1].starts_with("**[12:40] You:** Heard"), "{body}");
+        // The recording's own length is its own: the spool goes by it.
+        assert!(job.recorded() < Duration::from_secs(60));
+    }
+
     /// A meeting's recording transcribed again with a downloaded model.
     /// `SPLASHDOWN_AGAIN_WAV` is a stereo 16 kHz recording (You left, Them
     /// right) and `SPLASHDOWN_AGAIN_MODEL` a downloaded speech model's id.
@@ -674,6 +740,62 @@ mod tests {
             "# Zoom meeting\n\n**[0:04] Them:** Hi.\n\n**[1:02:30] You:** Bye.\n\n*Ended.*\n";
         assert_eq!(last_timestamp(body), Some(Duration::from_secs(3750)));
         assert_eq!(last_timestamp("# Empty\n"), None);
+    }
+
+    #[test]
+    fn finds_how_far_a_finished_note_goes() {
+        // Past its last turn, to where the recording was stopped.
+        let body = "# Zoom meeting\n\n## Summary\n\n*Met at 9:30.*\n\n## Transcript\n\n**[0:04] Them:** Hi.\n\n**[5:10] You:** Bye.\n\n*Ended at 5:23.*\n\n[Recording](Attachments/Zoom%20meeting.wav)\n";
+        assert_eq!(ended_at(body), Duration::from_secs(323));
+        // Carried on once already: the later part counts.
+        let twice = format!(
+            "{body}\n*Carried on at 5:23, Nov 3, 2:00 PM.*\n\n**[5:30] You:** Back.\n\n*Stopped at 1:02:07: nobody had spoken for a while.*\n"
+        );
+        assert_eq!(ended_at(&twice), Duration::from_secs(3727));
+        // No line about its end (an older note): its last turn.
+        assert_eq!(
+            ended_at("# Call\n\n**[0:04] Them:** Hi.\n"),
+            Duration::from_secs(4)
+        );
+        assert_eq!(ended_at("# Empty\n\n*Nothing at all.*\n"), Duration::ZERO);
+    }
+
+    #[test]
+    fn a_later_part_joins_the_recording_where_the_note_had_got_to() {
+        let dir = std::env::temp_dir().join(format!("splashdown-join-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let (wav, raw) = (dir.join("Meeting.wav"), dir.join("part.raw"));
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: RATE as u32,
+            bits_per_sample: 16,
+            sample_format: hound::SampleFormat::Int,
+        };
+        // One second kept, of a note that ends at 1.5 s.
+        let mut writer = hound::WavWriter::create(&wav, spec).unwrap();
+        for _ in 0..RATE * 2 {
+            writer.write_sample(7i16).unwrap();
+        }
+        writer.finalize().unwrap();
+        // Half a second more.
+        let more: Vec<u8> = std::iter::repeat_n(9i16.to_le_bytes(), RATE)
+            .flatten()
+            .collect();
+        std::fs::write(&raw, more).unwrap();
+        extend_recording(&wav, &raw, Duration::from_millis(1500)).unwrap();
+        let samples: Vec<i16> = hound::WavReader::open(&wav)
+            .unwrap()
+            .samples::<i16>()
+            .map(Result::unwrap)
+            .collect();
+        let left_over = dir.join("Meeting.wav.part").exists();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(samples.len(), RATE * 4, "two seconds, two sides");
+        assert!(samples[..RATE * 2].iter().all(|&s| s == 7));
+        assert!(samples[RATE * 2..RATE * 3].iter().all(|&s| s == 0));
+        assert!(samples[RATE * 3..].iter().all(|&s| s == 9));
+        assert!(!left_over);
     }
 
     #[test]
