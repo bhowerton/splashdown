@@ -85,6 +85,14 @@ List what I said I'd do, as to-dos.
 
 const FROM_NOTES: &str = "\n\nThe text was too long to read at once, so <text> holds notes taken from each part of it, in order. Work from them as you would from the text, and don't mention that they're notes.";
 
+/// What a request for a part of a transcript ends with, when the notes are
+/// to quote: the job once more, after the task. A small model does what it
+/// read last, and without this it does the task on each part and drops who
+/// spoke, so that what someone else took on comes out as the user's. Only
+/// for a transcript: on a week of notes the same words make it copy
+/// everything out (eval/README.md, 2026-11-10).
+const PART_LAST: &str = "\nDon't do that task: it is done later, from your notes. Write your notes on this part now: one line for each thing the task needs, as the time, who said it and their words in quotes, exactly as the transcript has them. Leave everything else out. No to-dos, no lists of your own, no summary. If this part has nothing the task needs, write NONE.";
+
 const PART_SYSTEM: &str = "\
 You are reading part {PART} of {PARTS} of a longer text of the user's: {WHAT}. A task will be done for the whole text afterwards, from notes like yours. The task is in <instruction> tags and this part of the text in <text> tags.
 
@@ -180,19 +188,35 @@ pub fn request(
     }
 }
 
+/// Whether a part is mostly a transcript's turns (`**[1:02] Dana:** …`),
+/// not notes or summaries.
+fn is_transcript(part: &str) -> bool {
+    let lines: Vec<&str> = part.lines().filter(|l| !l.trim().is_empty()).collect();
+    let turns = lines
+        .iter()
+        .filter(|l| crate::meeting::Turn::parse(l).is_some())
+        .count();
+    turns >= 3 && turns * 2 >= lines.len()
+}
+
 fn part_request(
     instruction: &str,
     part: &str,
     (number, of): (usize, usize),
     about: &About,
     window: usize,
+    quoting: bool,
 ) -> TextRequest {
     let system = filled(PART_SYSTEM, about)
         .replace("{PART}", &number.to_string())
         .replace("{PARTS}", &of.to_string());
+    let mut user = blocks(instruction, part, about);
+    if quoting && is_transcript(part) {
+        user.push_str(PART_LAST);
+    }
     TextRequest {
         system,
-        user: blocks(instruction, part, about),
+        user,
         temperature: TEMPERATURE,
         max_tokens: note_tokens(window),
         json_schema: None,
@@ -278,18 +302,12 @@ pub async fn run(
     about: &About,
 ) -> Result<Done, Failed> {
     let window = model.context_window();
-    let fits = room(
-        window,
-        &filled(SYSTEM, about),
-        instruction,
-        about,
-        reply_tokens(window),
-    );
+    let fits = fits(model, instruction, about);
     let mut usage = Usage::FREE;
     let (material, parts) = if estimated_tokens(text) <= fits {
         (text.to_string(), 1)
     } else {
-        let notes = condense(model, instruction, text, about, fits).await?;
+        let notes = condensed(model, instruction, text, about, fits, true).await?;
         usage += notes.usage;
         (notes.text, notes.parts)
     };
@@ -320,15 +338,64 @@ pub async fn run(
     }
 }
 
+/// How much text `model` can read at once with `instruction`, in tokens.
+fn fits(model: &dyn TextModel, instruction: &str, about: &About) -> usize {
+    let window = model.context_window();
+    room(
+        window,
+        &filled(SYSTEM, about),
+        instruction,
+        about,
+        reply_tokens(window),
+    )
+}
+
+/// The notes `run` would work from when `text` is too long for `model` to
+/// read at once, or `None` when it fits: for seeing where a long text's
+/// result lost something, in the notes or in what was made of them.
+pub async fn notes(
+    model: &dyn TextModel,
+    instruction: &str,
+    text: &str,
+    about: &About,
+) -> Result<Option<Done>, Failed> {
+    let fits = fits(model, instruction, about);
+    if estimated_tokens(text) <= fits {
+        return Ok(None);
+    }
+    condensed(model, instruction, text, about, fits, true)
+        .await
+        .map(Some)
+}
+
 /// Notes on `text` for `instruction`, short enough to be read in `target`
 /// tokens: taken a part at a time, and from the notes again while they're
 /// still too long. `Done::text` is empty when no part had anything.
+///
+/// The notes are whatever the model makes of each part for the task. A
+/// long meeting's summary is written from these: asked to quote there, the
+/// built-in model notes far less of what a summary wants (eval/README.md,
+/// 2026-11-10), so quoting is `run`'s own.
 pub async fn condense(
     model: &dyn TextModel,
     instruction: &str,
     text: &str,
     about: &About,
     target: usize,
+) -> Result<Done, Failed> {
+    condensed(model, instruction, text, about, target, false).await
+}
+
+/// `condense`; with `quoting`, the notes on a transcript are asked for as
+/// who said what, word for word, so that nobody's words become someone
+/// else's on the way to the result.
+async fn condensed(
+    model: &dyn TextModel,
+    instruction: &str,
+    text: &str,
+    about: &About,
+    target: usize,
+    quoting: bool,
 ) -> Result<Done, Failed> {
     let window = model.context_window();
     let fits = room(
@@ -359,6 +426,7 @@ pub async fn condense(
                 (i + 1, pieces.len()),
                 about,
                 &mut usage,
+                quoting,
             )
             .await;
             match noted {
@@ -392,12 +460,13 @@ async fn note(
     position: (usize, usize),
     about: &About,
     usage: &mut Usage,
+    quoting: bool,
 ) -> Result<Vec<String>, ProviderError> {
     let window = model.context_window();
     let mut waiting = vec![(piece.to_string(), 0usize)];
     let mut notes = Vec::new();
     while let Some((piece, halved)) = waiting.pop() {
-        let request = part_request(instruction, &piece, position, about, window);
+        let request = part_request(instruction, &piece, position, about, window, quoting);
         match model.complete(&request).await {
             Ok(completion) => {
                 *usage += completion.usage;
@@ -440,7 +509,7 @@ pub fn what(kind: &str, days: Option<&str>) -> String {
         "schedule" => {
             let days = days.map_or_else(String::new, |days| format!(" ({days})"));
             return format!(
-                "the notes they made in a stretch of time{days}, oldest first. Each starts with its title after \"# \" and a line in brackets saying what it is and when it was made. A meeting has its summary, or its transcript when it has none, where \"You\" is the user"
+                "the notes they made in a stretch of time{days}, oldest first. Each starts with its title after \"# \" and a line in brackets saying what it is and when it was made. A meeting has its summary, or its transcript when it has none, where \"You\" is the user. A note that isn't a meeting or a transcript is the user's own writing or dictation: what it says to do is theirs to do"
             );
         }
         "before-meeting" => {
@@ -857,6 +926,52 @@ mod tests {
         assert!(cut.len() > 4);
         assert_eq!(cut.concat(), chinese);
         assert!(parts("  \n\n", 10).is_empty());
+    }
+
+    #[test]
+    fn a_transcript_s_parts_are_asked_to_quote_for_a_result_only() {
+        let (about, transcript) = (about(), meeting(8));
+        let week = "# Pricing review\n[A meeting, Monday, 9 November 2026 at 14:00]\n\n## Summary\n\nThe page goes live on Friday.\n\n# Standup\n\n**[0:01] You:** I'll review the pull request.\n";
+        assert!(is_transcript(&transcript));
+        // A week of notes isn't one, with a short transcript among them.
+        assert!(!is_transcript(week));
+        assert!(!is_transcript("**[0:01] You:** One turn.\n"));
+        let ends = |part: &str, quoting| {
+            part_request(
+                "List what I said I'd do.",
+                part,
+                (1, 2),
+                &about,
+                4096,
+                quoting,
+            )
+            .user
+            .ends_with(PART_LAST)
+        };
+        // For a hook's result: who said what, word for word.
+        assert!(ends(&transcript, true));
+        // Not for notes, and not when the notes are for a summary.
+        assert!(!ends(week, true));
+        assert!(!ends(&transcript, false));
+        // The task still comes before the reminder, in its own block.
+        let request = part_request(
+            "List what I said I'd do.",
+            &transcript,
+            (1, 2),
+            &about,
+            4096,
+            true,
+        );
+        let task = request.user.find("List what I said I'd do.").unwrap();
+        assert!(task < request.user.find("Don't do that task").unwrap());
+        assert_eq!(
+            what("schedule", Some("2026-11-06 to 2026-11-13"))
+                .matches("2026-11-06 to 2026-11-13")
+                .count(),
+            1
+        );
+        assert!(what("meeting", None).contains("transcript"));
+        assert_eq!(what("dictation", None), "something they dictated");
     }
 
     #[test]

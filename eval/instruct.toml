@@ -19,7 +19,12 @@
 #              phone-note, schedule, before-meeting
 #   file       the text, in eval/instruct/; or `text`, the text itself
 #   ask        which of [instructions] to run; or `instruction`, in your
-#              own words
+#              own words; or `transform`, a built-in transform's wording
+#              (meeting-summary)
+#   what       what the text is, in words, when `kind` doesn't say it
+#   notes      true: check the notes taken from each part of a long text,
+#              not a result written from them. A long meeting's summary is
+#              written from those notes by the summary's own prompt
 #   days       for a schedule: the days its notes are from
 #   headings   headings the result must have, each on a line of its own
 #   want       lines the result must have: `has` are words one line must
@@ -121,6 +126,50 @@ want = [{ has = ["deck"] }]
 not = [{ has = ["deposit"] }, { has = ["contract"] }]
 never = ["PINEAPPLE"]
 max_lines = 2
+
+# A task that wants a lot of the meeting, not a few lines of it.
+[[case]]
+id = "meeting-follow-up-hour"
+kind = "meeting"
+file = "meeting-hour.md"
+ask = "follow-up-email"
+want = [
+  { has = ["launch", "18th"] },
+  { has = ["contractor"] },
+  { has = ["pricing numbers", "Wednesday"] },
+  { has = ["support"] },
+  { has = ["legal", "Acme"] },
+  { has = ["database migration"] },
+  { has = ["waitlist email"] },
+]
+never = ["the user", "Subject:"]
+no_dates = true
+max_lines = 24
+
+# The built-in meeting summary, as a long meeting's summary uses this
+# step (app/src-tauri/src/meeting/summary.rs): the notes it's written from
+# must hold what was decided and who took what on.
+[[case]]
+id = "summary-notes-hour"
+kind = "meeting"
+what = "the transcript of a meeting they were in"
+file = "meeting-hour.md"
+transform = "meeting-summary"
+notes = true
+want = [
+  { has = ["launch", "18th"] },
+  { has = ["contractor"] },
+  { has = ["pricing numbers", "Wednesday"] },
+  { has = ["support", "tomorrow"] },
+  { has = ["onboarding draft"] },
+  { has = ["room", "20th"] },
+  { has = ["legal", "Acme"] },
+  { has = ["database migration"] },
+  { has = ["waitlist email"] },
+  { has = ["pricing page live", "Friday"] },
+]
+never = ["the user"]
+max_lines = 45
 
 # ---------------------------------------------------------------- a note from the phone
 

@@ -119,6 +119,10 @@ pub(crate) enum DevCommand {
             default_value = "the note of a meeting they were in, with its transcript"
         )]
         what: String,
+        /// Print the notes taken from each part of a text too long to read
+        /// at once, not the result: where a long text's result went wrong.
+        #[arg(long)]
+        notes: bool,
         #[command(flatten)]
         providers: ProviderOpts,
     },
@@ -404,6 +408,7 @@ pub(crate) fn run(command: DevCommand) -> Result<()> {
             instruction,
             file,
             what,
+            notes,
             providers,
         } => {
             let setup = Setup::new_text_only(&providers)?;
@@ -420,6 +425,24 @@ pub(crate) fn run(command: DevCommand) -> Result<()> {
                 today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
             };
             let started = std::time::Instant::now();
+            if notes {
+                let taken = rt
+                    .block_on(splashdown_core::instruct::notes(
+                        model.as_ref(),
+                        &instruction,
+                        &text,
+                        &about,
+                    ))
+                    .map_err(|failed| anyhow::anyhow!(failed.error))?;
+                match taken {
+                    Some(taken) => {
+                        eprintln!("── notes from {} part(s)", taken.parts);
+                        println!("{}", taken.text);
+                    }
+                    None => println!("(it fits: read at once, with no notes)"),
+                }
+                return Ok(());
+            }
             let done = rt
                 .block_on(splashdown_core::instruct::run(
                     model.as_ref(),

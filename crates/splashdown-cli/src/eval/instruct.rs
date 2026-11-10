@@ -26,9 +26,17 @@ pub(super) struct InstructCase {
     /// The text: a file beside the cases, in `instruct/`, or itself.
     pub(super) file: Option<String>,
     pub(super) text: Option<String>,
-    /// Which of the file's `instructions` to run, or one in own words.
+    /// Which of the file's `instructions` to run, or one in own words, or
+    /// a built-in transform's (`meeting-summary`).
     pub(super) ask: Option<String>,
     pub(super) instruction: Option<String>,
+    pub(super) transform: Option<String>,
+    /// What the text is, in words, when it isn't what `kind` says.
+    pub(super) what: Option<String>,
+    /// Check the notes taken from each part, not a result written from
+    /// them: what a long meeting's summary is written from.
+    #[serde(default)]
+    pub(super) notes: bool,
     /// For a schedule: the days its notes are from.
     pub(super) days: Option<String>,
     #[serde(default)]
@@ -239,16 +247,25 @@ pub(super) fn check(case: &InstructCase, source: &str, result: &str) -> Checked 
     checked
 }
 
-/// The instruction a case runs: one of the file's, or its own.
-pub(super) fn instruction<'a>(file: &'a InstructFile, case: &'a InstructCase) -> Result<&'a str> {
-    match (&case.ask, &case.instruction) {
-        (Some(ask), None) => file
+/// The instruction a case runs: one of the file's, its own, or a built-in
+/// transform's.
+pub(super) fn instruction(file: &InstructFile, case: &InstructCase) -> Result<String> {
+    match (&case.ask, &case.instruction, &case.transform) {
+        (Some(ask), None, None) => file
             .instructions
             .get(ask)
-            .map(String::as_str)
+            .cloned()
             .with_context(|| format!("{}: no instruction called {ask:?}", case.id)),
-        (None, Some(own)) => Ok(own),
-        _ => bail!("{}: give `ask` or `instruction`, one of them", case.id),
+        (None, Some(own), None) => Ok(own.clone()),
+        (None, None, Some(id)) => splashdown_config::builtin_transforms()
+            .into_iter()
+            .find(|t| &t.id == id)
+            .map(|t| t.instruction)
+            .with_context(|| format!("{}: no built-in transform called {id:?}", case.id)),
+        _ => bail!(
+            "{}: give `ask`, `instruction` or `transform`, one of them",
+            case.id
+        ),
     }
 }
 
@@ -277,7 +294,10 @@ pub(super) async fn instruct(
         .answer_model()
         .context("this eval needs an AI provider (--ai …)")?;
     let about = |case: &InstructCase, text: &str| About {
-        what: instruct::what(&case.kind, case.days.as_deref()),
+        what: case
+            .what
+            .clone()
+            .unwrap_or_else(|| instruct::what(&case.kind, case.days.as_deref())),
         // As the app gives it: a meeting's or transcript's own title.
         title: matches!(case.kind.as_str(), "meeting" | "transcript")
             .then(|| text.lines().find_map(|l| l.strip_prefix("# ")))
@@ -308,8 +328,16 @@ pub(super) async fn instruct(
         let source = text(case, dir)?;
         let instruction = instruction(file, case)?;
         let started = Instant::now();
-        let result =
-            instruct::run(model.as_ref(), instruction, &source, &about(case, &source)).await;
+        let about = about(case, &source);
+        let result = if case.notes {
+            // As a long meeting's summary takes them
+            // (app/src-tauri/src/meeting/summary.rs): the model's own notes,
+            // short enough to leave the summary's prompt its room.
+            let fits = model.context_window().saturating_sub(2000) * 3 / 4;
+            instruct::condense(model.as_ref(), &instruction, &source, &about, fits).await
+        } else {
+            instruct::run(model.as_ref(), &instruction, &source, &about).await
+        };
         latencies.push(started.elapsed());
         wanted += case.want.len();
         let (written, parts, checked) = match result {
