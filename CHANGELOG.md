@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.12.1 — 2026-11-10
 
 - **Updates can install by themselves.** Settings → General → Updates now has three choices: tell me when there's one (as before, and still what you get unless you change it), install them by themselves, or don't check. Installing by itself waits until a version has been out for two days, and for a moment when Splashdown has been idle for ten minutes with nothing recording, no file being transcribed, no model downloading and none of its windows open. It then restarts, and the menu bar and Settings → About say what it updated to for a day, with a link to what changed. The setup guide offers it.
 - **Settings has tabs for Notes and Meetings, and a search.** Everything about notes, watched folders and meetings was under General, which had grown to a third of all settings. They're now two tabs of their own, and Meetings is in four groups: recording, starting one, who said what, and when it ends. The two switches for how Compose drafts moved to Words & language, beside the rest of your writing style. A search field at the top of the sidebar (⌘F) finds a setting by its name, its description or another word for it ("shortcut" finds the hotkeys), and takes you to it.
