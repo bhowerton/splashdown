@@ -37,6 +37,10 @@ if ($missing) {
 $profileName = if ($env:PROFILE) { $env:PROFILE } else { "release" }
 $targetDir = if ($profileName -eq "dev") { "debug" } else { $profileName }
 
+# The speech library is built as the installer's is, not tuned to this
+# machine, so what's tried here is what ships.
+. (Join-Path $PSScriptRoot "win-cpu-floor.ps1")
+
 # The app, plus the helper that runs the built-in local text model and the
 # MCP server for coding agents, which the app finds next to itself.
 cargo build -p splashdown -p splashdown-llm -p splashdown-mcp --profile $profileName

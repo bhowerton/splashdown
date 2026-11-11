@@ -20,6 +20,10 @@
 $ErrorActionPreference = "Stop"
 Set-Location (Join-Path $PSScriptRoot "..")
 
+# The speech library is built for a named set of processor instructions, not
+# for this machine's.
+. (Join-Path $PSScriptRoot "win-cpu-floor.ps1")
+
 # llama.cpp's and whisper.cpp's Rust bindings are generated with libclang.
 if (-not $env:LIBCLANG_PATH) {
     $llvm = Join-Path $env:ProgramFiles "LLVM\bin"

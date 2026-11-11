@@ -82,6 +82,14 @@ jobs:
         run: |
           [ -d target ] || exit 0
           find target -type d \( -name sherpa-onnx-prebuilt -o -name 'sherpa-onnx-sys-*' \) -prune -exec rm -rf {} +
+      - name: Build the speech library for a named processor, not this machine's
+        if: runner.os == 'Windows'
+        # Otherwise it's tuned to whichever machine builds it, and a build
+        # restored from the cache stops with "illegal instruction" on a
+        # machine with an older processor. The same setting as the
+        # installer's (scripts/win-cpu-floor.ps1).
+        shell: pwsh
+        run: scripts/win-cpu-floor.ps1
       - name: Clippy
         run: |
           cargo clippy --workspace --all-targets --locked -- -D warnings

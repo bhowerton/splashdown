@@ -26,6 +26,10 @@ impl Silero {
     /// Loads the model, writing its file into `models_dir` first if it
     /// isn't there.
     pub fn load(models_dir: &Path) -> Result<Silero, String> {
+        // Before anything in the library runs.
+        if !crate::speech_library_runs_here() {
+            return Err("this processor is too old for it".into());
+        }
         let path = models_dir.join(FILE);
         let current = std::fs::metadata(&path).is_ok_and(|m| m.len() == WEIGHTS.len() as u64);
         if !current {

@@ -119,6 +119,12 @@ impl Loaded {
 }
 
 fn open(path: &Path, cpu: bool) -> ProviderResult<Model> {
+    // Before anything in the library runs.
+    if !crate::speech_library_runs_here() {
+        return Err(ProviderError::Unavailable(
+            crate::SPEECH_NEEDS_NEWER_PROCESSOR.into(),
+        ));
+    }
     static INIT: Once = Once::new();
     INIT.call_once(|| {
         // Its own and ggml's logging would go to stderr.

@@ -14,8 +14,11 @@ use crate::{ChatAudioTranscriber, ChatModel, Endpoint, SpeechModel, Transcriptio
 pub fn on_device(language: Option<&str>, models_dir: &Path) -> Situation {
     Situation {
         local_model: local_model_available(models_dir),
-        local_speech: SpeechModel::from_id(splashdown_config::defaults::LOCAL_SPEECH)
-            .is_some_and(|m| m.is_downloaded(models_dir)),
+        // Only where the processor can run it: "automatic" then goes to
+        // whatever else is set up instead of to a model that can't load.
+        local_speech: crate::speech_library_runs_here()
+            && SpeechModel::from_id(splashdown_config::defaults::LOCAL_SPEECH)
+                .is_some_and(|m| m.is_downloaded(models_dir)),
         ..crate::apple::on_device(language)
     }
 }
