@@ -1,5 +1,6 @@
-//! The mini bar (setting `general.mini_bar`): a small pill that stays on
-//! screen for people who'd rather click than hold a key. Clicking it does
+//! The mini bar (setting `general.mini_bar`; "the dictation pill" to the
+//! user): a small pill that stays on screen for people who'd rather click
+//! than hold a key. Clicking it does
 //! what `splash toggle` does: starts a hands-free dictation into the
 //! focused field, or finishes the one in progress. It never takes focus
 //! (see `splashdown_platform::MiniBar`), shows whether Splashdown is
@@ -28,7 +29,7 @@ static APP: OnceLock<AppHandle> = OnceLock::new();
 static LISTENING: AtomicBool = AtomicBool::new(false);
 
 /// The right-click menu, in order (see `on_event`).
-const MENU: [&str; 2] = ["Settings…", "Hide mini bar"];
+const MENU: [&str; 2] = ["Settings…", "Hide the pill"];
 
 #[derive(Default)]
 struct Model {
