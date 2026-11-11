@@ -157,6 +157,34 @@ impl Controller {
             }
             _ => {}
         }
+        // Words to replace in the last dictation are replaced here, exactly,
+        // and the result put in its place like any new version of "that".
+        let mut replaced = None;
+        let command = match command {
+            Command::FindReplace(edits) => {
+                let recent = self
+                    .last_insert
+                    .is_some_and(|(pid, at)| Some(pid) == target_pid && at.elapsed() < UNDO_WINDOW);
+                let before = self.last_text.trim().to_string();
+                if !recent || before.is_empty() {
+                    return self.notice(Tone::Info, "Nothing to change here");
+                }
+                let (after, done) = splashdown_core::replace::apply(&before, &edits);
+                if done.total() == 0 {
+                    let words: Vec<&str> = edits.iter().map(|e| e.find.as_str()).collect();
+                    return self.notice(
+                        Tone::Info,
+                        &short(&format!(
+                            "Didn't find “{}” in the last dictation",
+                            words.join("”, “")
+                        )),
+                    );
+                }
+                replaced = Some((before, done.summary()));
+                Command::ReplaceLast(after)
+            }
+            other => other,
+        };
         // The rest select something first: the last dictation, or the
         // sentence before the cursor.
         let Some((focus, (text, cursor))) = focus.and_then(|f| Some((f, f.text_and_cursor()?)))
@@ -176,7 +204,10 @@ impl Controller {
                     self.last_text = new.clone();
                     self.last_insert = target_pid.map(|pid| (pid, Instant::now()));
                 }
-                return self.finish_command(result, "Done");
+                // The dictation was undone, not selected: putting it back
+                // means pasting it again.
+                let done = self.replaced_words(replaced, &result, target_pid, false);
+                return self.finish_command(result, done.as_deref().unwrap_or("Done"));
             }
             return self.notice(
                 Tone::Warning,
@@ -218,12 +249,38 @@ impl Controller {
             self.last_text = new.clone();
             self.last_insert = target_pid.map(|pid| (pid, Instant::now()));
         }
+        // Pasted over the selected dictation: undoing the paste puts it back.
+        let replaced = self.replaced_words(replaced, &result, target_pid, true);
         let done = match command {
+            _ if replaced.is_some() => replaced.as_deref().unwrap_or_default(),
             Command::DeleteLastSentence => "Deleted",
             Command::SelectLast => "Selected",
             _ => "Done",
         };
         self.finish_command(result, done);
+    }
+
+    /// After words were replaced in the last dictation (`replaced`: what it
+    /// was, and what changed): lets the undo shortcut put it back, and
+    /// says what changed. `in_place`: the paste went over the selected
+    /// dictation, so undoing the paste alone restores it.
+    fn replaced_words(
+        &mut self,
+        replaced: Option<(String, String)>,
+        result: &splashdown_platform::Result<()>,
+        target_pid: Option<i32>,
+        in_place: bool,
+    ) -> Option<String> {
+        let (before, summary) = replaced?;
+        if let (Ok(()), Some(pid)) = (result, target_pid) {
+            self.last_ai_edit = Some(AiEdit {
+                pid,
+                at: Instant::now(),
+                said: before,
+                in_place,
+            });
+        }
+        Some(short(&summary))
     }
 
     /// A command for a voice action: plans it into one action from the

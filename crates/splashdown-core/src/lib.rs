@@ -24,6 +24,7 @@ mod mode;
 pub mod pipeline;
 pub mod prompt;
 pub mod provider;
+pub mod replace;
 pub mod spoken;
 pub mod style;
 pub mod subtitles;

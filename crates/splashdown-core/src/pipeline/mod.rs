@@ -139,6 +139,12 @@ pub struct Outcome {
     /// selection ("reply to this saying I'm in"): what to write, as said.
     /// `text` is empty.
     pub compose: Option<String>,
+    /// A Transform's instruction only asked to replace or remove words
+    /// ("change every Tuesday to Thursday"), and at least one was in the
+    /// selection: `text` is the selection with exactly those changes
+    /// (`crate::replace::apply`), and this says what they were. The AI's
+    /// rewrite wasn't used.
+    pub replaced: Option<crate::replace::Replaced>,
 }
 
 pub struct Pipeline {

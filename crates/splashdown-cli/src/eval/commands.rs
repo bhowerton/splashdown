@@ -40,6 +40,7 @@ pub(super) struct CommandCase {
 pub(super) fn command_id(command: &Command) -> &'static str {
     match command {
         Command::ReplaceLast(_) => "replace_last",
+        Command::FindReplace(_) => "find_replace",
         Command::DeleteLastWord => "delete_last_word",
         Command::DeleteLastSentence => "delete_last_sentence",
         Command::SelectLast => "select_last",
@@ -56,15 +57,21 @@ pub(super) fn command_id(command: &Command) -> &'static str {
     }
 }
 
-pub(super) fn command_text(command: &Command) -> &str {
+/// The command's text; for a replacement, its edits ("Tuesday → Thursday").
+pub(super) fn command_text(command: &Command) -> String {
     match command {
         Command::ReplaceLast(t)
         | Command::Write(t)
         | Command::Compose(t)
         | Command::Ask(t)
         | Command::Read(t)
-        | Command::Do(t) => t,
-        _ => "",
+        | Command::Do(t) => t.clone(),
+        Command::FindReplace(edits) => edits
+            .iter()
+            .map(|e| format!("{} → {}", e.find, e.replace))
+            .collect::<Vec<_>>()
+            .join(", "),
+        _ => String::new(),
     }
 }
 
@@ -110,7 +117,7 @@ pub(super) async fn commands(
                 Ok(out) => {
                     cost += out.usage;
                     let id = command_id(&out.command);
-                    (id, command_text(&out.command).to_string(), Vec::new())
+                    (id, command_text(&out.command), Vec::new())
                 }
                 Err(e) => {
                     errors += 1;

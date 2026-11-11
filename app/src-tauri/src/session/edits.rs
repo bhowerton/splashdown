@@ -127,7 +127,18 @@ impl Controller {
         } else {
             outcome.text
         };
-        Ok((transform.name.clone(), TransformOutcome { text, unchanged }))
+        let replaced = outcome
+            .replaced
+            .filter(|_| unchanged.is_none())
+            .map(|r| r.summary());
+        Ok((
+            transform.name.clone(),
+            TransformOutcome {
+                text,
+                unchanged,
+                replaced,
+            },
+        ))
     }
 
     /// A transform's shortcut in another app: the selection, or else the
@@ -552,6 +563,9 @@ impl Controller {
             return;
         }
         let result = splashdown_platform::press(KeyAction::Undo).and_then(|()| {
+            if edit.in_place {
+                return Ok(());
+            }
             std::thread::sleep(UNDO_SETTLE);
             splashdown_platform::insert_text(&edit.said, InsertMethod::Paste)
         });
@@ -559,7 +573,11 @@ impl Controller {
             Ok(()) => {
                 self.last_insert = Some((edit.pid, Instant::now()));
                 self.last_text = edit.said;
-                self.done("Replaced with what you said");
+                self.done(if edit.in_place {
+                    "Put back as it was"
+                } else {
+                    "Replaced with what you said"
+                });
             }
             Err(e) => self.notice(Tone::Warning, &short(&e.to_string())),
         }

@@ -40,8 +40,50 @@ text = ["mañana"]
 id = "en-fix-word"
 said = "change Tuesday to Thursday"
 last = "Let's meet on Tuesday at noon."
-expect = "replace_last"
+expect = ["find_replace", "replace_last"]
 text = ["Thursday"]
+
+# ── Replacing words (find_replace: applied exactly by the app)
+
+[[case]]
+id = "en-replace-every"
+said = "change every Tuesday to Thursday"
+last = "Tuesday works for me. If Tuesday is busy, Wednesday."
+expect = "find_replace"
+text = ["Tuesday → Thursday"]
+
+[[case]]
+id = "en-replace-name"
+said = "replace Smith with Smythe"
+last = "Thanks, Mr Smith. I'll copy Ms Smith too."
+expect = "find_replace"
+text = ["Smith → Smythe"]
+
+[[case]]
+id = "en-remove-word"
+said = "remove every very"
+last = "It was very good and very quick."
+expect = "find_replace"
+text = ["very → "]
+
+[[case]]
+id = "es-replace"
+said = "cambia lunes por martes"
+last = "Nos vemos el lunes. El lunes a las cinco."
+expect = "find_replace"
+text = ["lunes → martes"]
+
+[[case]]
+id = "en-typos-not-replace"
+said = "fix the typos"
+last = "Teh meeting is on tusday."
+expect = "replace_last"
+
+[[case]]
+id = "en-tone-not-replace"
+said = "change the tone to be friendlier"
+last = "Send me the file by noon."
+expect = "replace_last"
 
 [[case]]
 id = "en-bullets"

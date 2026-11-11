@@ -448,6 +448,81 @@ fn an_instruction_for_a_selection_can_ask_to_hear_it() {
     assert_eq!(out.text, "");
 }
 
+/// Answers the command check with `check`, and the rewrite with
+/// `rewrite`, or never when that's `None`.
+struct CheckingLlm {
+    check: &'static str,
+    rewrite: Option<&'static str>,
+}
+
+#[async_trait]
+impl TextModel for CheckingLlm {
+    fn name(&self) -> String {
+        "checking-llm".into()
+    }
+    async fn complete(&self, req: &TextRequest) -> ProviderResult<Completion> {
+        let text = if req.system.contains("You interpret a spoken command") {
+            self.check
+        } else {
+            match self.rewrite {
+                Some(text) => text,
+                None => std::future::pending().await,
+            }
+        };
+        Ok(Completion {
+            text: text.to_string(),
+            usage: Usage::priced(0.0002),
+        })
+    }
+    fn supports_json_schema(&self) -> bool {
+        false
+    }
+    fn context_window(&self) -> usize {
+        8192
+    }
+}
+
+fn checked(check: &'static str, rewrite: Option<&'static str>, selection: &str) -> Outcome {
+    let p = Pipeline::new(
+        Arc::new(FakeStt(vec![], Mutex::new(0))),
+        Some(Arc::new(CheckingLlm { check, rewrite })),
+    );
+    block_on(p.process_text(TextJob {
+        mode: Mode::Transform,
+        content: String::new(),
+        instruction: Some("change every Tuesday to Thursday".into()),
+        selection: Some(selection.into()),
+        context: PromptContext::default(),
+    }))
+    .unwrap()
+}
+
+#[test]
+fn a_replacement_for_a_selection_is_made_exactly() {
+    let check = r#"{"action": "find_replace", "text": "", "edits": [{"find": "tuesday", "replace": "thursday"}]}"#;
+    // The rewrite never answers: it isn't waited for.
+    let out = checked(check, None, "Tuesday at 3. TUESDAY! Not Tuesdays.");
+    assert_eq!(out.text, "Thursday at 3. THURSDAY! Not Tuesdays.");
+    let replaced = out.replaced.unwrap();
+    assert_eq!(replaced.counts, vec![2]);
+    assert_eq!(replaced.summary(), "Changed 2 · tuesday → thursday");
+    assert_eq!(out.fallback, None);
+
+    // None of it in the selection: the rewrite is used after all.
+    let out = checked(check, Some("Wednesday it is."), "Weds it is.");
+    assert_eq!(out.text, "Wednesday it is.");
+    assert_eq!(out.replaced, None);
+
+    // Not a replacement, or one the check got wrong: the rewrite.
+    let out = checked(
+        r#"{"action": "find_replace", "text": "", "edits": "Tuesday"}"#,
+        Some("Thursday at 3."),
+        "Tuesday at 3.",
+    );
+    assert_eq!(out.text, "Thursday at 3.");
+    assert_eq!(out.replaced, None);
+}
+
 #[test]
 fn a_saved_transform_s_instruction_is_never_a_command() {
     // The meeting summary, run by name on notes that talk of sending and

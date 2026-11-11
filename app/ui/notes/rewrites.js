@@ -90,7 +90,8 @@ async function rewrite(id, extra) {
   let label = extra ? (t ? `${name}, your way` : "Your way") : name;
   const same = asked.tries.filter((x) => x.label === label || x.label.startsWith(`${label} `)).length;
   if (same) label = `${label} ${same + 1}`;
-  asked.tries.push({ label, text: out.text, place: t?.place ?? "replace", id: id ?? "", extra });
+  // Words replaced exactly ("change every Tuesday to Thursday") say what changed.
+  asked.tries.push({ label, text: out.text, place: t?.place ?? "replace", id: id ?? "", extra, replaced: out.replaced ?? null });
   asked.shown = asked.tries.length - 1;
   $("nt-review-extra").value = "";
   renderReview();
@@ -131,7 +132,7 @@ function renderReview() {
       : shown
         ? shown.place === "below"
           ? "Goes below the text"
-          : `${words(r.source).toLocaleString()} → ${words(shown.text).toLocaleString()} words`
+          : shown.replaced ?? `${words(r.source).toLocaleString()} → ${words(shown.text).toLocaleString()} words`
         : "As it was";
   // Original, then each try.
   const seg = $("nt-review-versions");

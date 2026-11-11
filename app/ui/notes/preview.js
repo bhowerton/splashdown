@@ -59,7 +59,7 @@ async function mockInvoke(cmd, args) {
       ];
     case "notes_transform":
       await new Promise((r) => setTimeout(r, 300));
-      return { text: args.text.replace("lead with", "Lead with").replace("mention it's", "Say it's").replace(/- \[ \] ask Dana about the table/, "- [ ] Ask Dana whether the table helps"), unchanged: null };
+      return { text: args.text.replace("lead with", "Lead with").replace("mention it's", "Say it's").replace(/- \[ \] ask Dana about the table/, "- [ ] Ask Dana whether the table helps"), unchanged: null, replaced: null };
     case "audio_apps":
       return [
         { id: "com.google.Chrome", name: "Google Chrome", playing: true, sources: [221, 222] },

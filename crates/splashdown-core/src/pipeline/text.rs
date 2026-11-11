@@ -4,6 +4,8 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
+use futures_util::future::Either;
+
 use super::{Fallback, Outcome, Pipeline, PipelineError, TextJob};
 use crate::Mode;
 use crate::command::Command;
@@ -96,30 +98,57 @@ impl Pipeline {
             && !job.context.saved_instruction
             && !selection.trim().is_empty()
             && !instruction.trim().is_empty();
+        // It may also only ask to replace words ("change every Tuesday to
+        // Thursday"): then that's done exactly, here, and the rewrite isn't
+        // waited for.
         let started = Instant::now();
         let result = if check {
-            let (command, result) = futures_util::future::join(
-                self.interpret(
-                    instruction,
-                    Some(&head(selection, CHECK_SELECTION_CHARS)),
-                    &job.context,
-                    self.actions,
-                    Some(CHECK_TOKENS),
-                ),
-                llm.complete(&request),
-            )
-            .await;
+            let head = head(selection, CHECK_SELECTION_CHARS);
+            let interpret = std::pin::pin!(self.interpret(
+                instruction,
+                Some(&head),
+                &job.context,
+                self.actions,
+                Some(CHECK_TOKENS),
+            ));
+            let mut rewrite = std::pin::pin!(llm.complete(&request));
+            let (command, rewritten) =
+                match futures_util::future::select(interpret, rewrite.as_mut()).await {
+                    Either::Left((command, _)) => (command, None),
+                    Either::Right((rewritten, interpret)) => (interpret.await, Some(rewritten)),
+                };
             // An error here leaves it a transform.
-            if let Ok(command) = command {
-                outcome.add_llm_usage(command.usage);
-                if outcome.take_request(command.command) {
-                    if let Ok(transformed) = &result {
-                        outcome.add_llm_usage(transformed.usage);
+            let command = command.ok().map(|c| {
+                outcome.add_llm_usage(c.usage);
+                c.command
+            });
+            if let Some(Command::FindReplace(edits)) = &command {
+                let (text, replaced) = crate::replace::apply(selection, edits);
+                // None of it is there: perhaps spelled another way, which
+                // the rewrite can still handle.
+                if replaced.total() > 0 {
+                    if let Some(Ok(rewritten)) = &rewritten {
+                        outcome.add_llm_usage(rewritten.usage);
                     }
                     outcome.llm_time = started.elapsed();
-                    outcome.text = String::new();
+                    outcome.text = text;
+                    outcome.replaced = Some(replaced);
                     return Ok(outcome);
                 }
+            }
+            let result = match rewritten {
+                Some(result) => result,
+                None => rewrite.await,
+            };
+            if let Some(command) = command
+                && outcome.take_request(command)
+            {
+                if let Ok(transformed) = &result {
+                    outcome.add_llm_usage(transformed.usage);
+                }
+                outcome.llm_time = started.elapsed();
+                outcome.text = String::new();
+                return Ok(outcome);
             }
             result
         } else {
@@ -300,6 +329,7 @@ impl Outcome {
             action: None,
             read: None,
             compose: None,
+            replaced: None,
         }
     }
 

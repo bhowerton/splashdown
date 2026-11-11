@@ -509,7 +509,22 @@ impl Controller {
                 } else {
                     outcome.raw.clone()
                 },
+                in_place: false,
             });
+        // Words replaced in the selection: undoing the paste puts the
+        // selection back as it was.
+        if outcome.replaced.is_some()
+            && method == InsertMethod::Paste
+            && !send
+            && let (Some(pid), Selection::Text(before)) = (target_pid, &active.selection)
+        {
+            self.last_ai_edit = Some(AiEdit {
+                pid,
+                at: Instant::now(),
+                said: before.clone(),
+                in_place: true,
+            });
+        }
         // Into an app of the user's, not one of Splashdown's own windows
         // (the setup guide's practice box).
         let elsewhere = target_pid.is_some_and(|pid| pid as u32 != std::process::id());
@@ -565,6 +580,9 @@ impl Controller {
             status.push_str(" · done on this computer (cloud didn't answer)");
         } else if self.local_is_slow(&outcome) {
             status = "Inserted · tidying up is slow here: a cloud key is faster".into();
+        }
+        if let Some(replaced) = &outcome.replaced {
+            status = short(&replaced.summary());
         }
         if unconfirmed {
             status = unconfirmed_status(&status);

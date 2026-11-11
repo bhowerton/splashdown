@@ -242,6 +242,9 @@ pub struct TransformOutcome {
     pub text: String,
     /// Why the text is as it was, when it is.
     pub unchanged: Option<String>,
+    /// When the instruction only asked to replace words, and that was done
+    /// exactly: what changed ("Changed 4 · Tuesday → Thursday").
+    pub replaced: Option<String>,
 }
 
 pub struct Redo {
@@ -405,6 +408,9 @@ struct AiEdit {
     pid: i32,
     at: Instant,
     said: String,
+    /// The edit pasted over text that was selected, so undoing the paste
+    /// alone puts back what was there (`said`); nothing is pasted after.
+    in_place: bool,
 }
 
 /// A recording in progress.
