@@ -287,6 +287,54 @@ pub struct CloudPlace {
     /// Where the notes would go: `Splashdown Notes` at the top of it.
     pub folder: String,
     pub label: String,
+    /// The service's own icon as this computer has it (its app's), as a
+    /// `data:` address for Settings. `None` when the app isn't found.
+    pub icon: Option<String>,
+}
+
+/// The app each sync service installs, as the system names it (a bundle
+/// ID on macOS, a program on Windows): its icon is the service's.
+fn service_apps(service: &str) -> &'static [&'static str] {
+    if cfg!(target_os = "macos") {
+        match service {
+            "Dropbox" => &["com.getdropbox.dropbox"],
+            "Google Drive" => &["com.google.drivefs"],
+            "OneDrive" => &["com.microsoft.OneDrive", "com.microsoft.OneDrive-mac"],
+            "Box" => &["com.box.desktop"],
+            // iCloud Drive has no app of its own on a Mac.
+            _ => &[],
+        }
+    } else {
+        match service {
+            "Dropbox" => &["Dropbox.exe"],
+            "Google Drive" => &["GoogleDriveFS.exe"],
+            "OneDrive" => &["OneDrive.exe"],
+            "Box" => &["Box.exe"],
+            "iCloud Drive" => &["iCloudDrive.exe", "iCloudHome.exe"],
+            _ => &[],
+        }
+    }
+}
+
+/// The service's icon, drawn once: the system's own picture of its app,
+/// so none of these companies' artwork is kept in Splashdown.
+pub fn service_icon(service: &str) -> Option<String> {
+    use base64::Engine;
+    static DRAWN: Mutex<Vec<(String, Option<String>)>> = Mutex::new(Vec::new());
+    if let Some((_, icon)) = DRAWN.locked().iter().find(|(s, _)| s == service) {
+        return icon.clone();
+    }
+    let icon = service_apps(service)
+        .iter()
+        .find_map(|app| splashdown_platform::app_display(app)?.icon_png)
+        .map(|png| {
+            format!(
+                "data:image/png;base64,{}",
+                base64::engine::general_purpose::STANDARD.encode(png)
+            )
+        });
+    DRAWN.locked().push((service.to_string(), icon.clone()));
+    icon
 }
 
 /// The sync services this computer has (best effort), each once.
@@ -300,6 +348,7 @@ pub fn cloud_places() -> Vec<CloudPlace> {
                 account,
                 label: label(&folder),
                 folder: folder.display().to_string(),
+                icon: None,
             }
         })
         .collect();

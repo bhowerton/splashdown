@@ -897,26 +897,46 @@ async function renderNotesPlace() {
   } catch {
     return;
   }
-  const note = $("nt-folder-note");
-  note.textContent = folder.synced
-    ? `${folder.label}, in ${folder.synced}.`
-    : `${folder.label}, on this computer.`;
-  note.title = folder.path;
   const inside = (p) => folder.path === p.folder || folder.path.startsWith(p.folder.replace(/Splashdown Notes$/, ""));
-  const options = places.cloud.filter((p) => !inside(p));
-  // Back to Documents, once they're kept in a sync service.
-  if (folder.synced && places.local && places.local.folder !== folder.path) options.push(places.local);
-  const list = $("nt-places");
-  list.replaceChildren(...options.map((p) => {
+  // Every place they could be, with the one they're in marked: the sync
+  // services this computer has, then this computer itself.
+  const all = [...places.cloud, ...(places.local ? [places.local] : [])];
+  const isLocal = (p) => p.service === "this computer";
+  const here = all.find((p) => (isLocal(p) ? folder.path === p.folder : inside(p)));
+  const note = $("nt-folder-note");
+  note.textContent = !here
+    ? `${folder.label}, a folder you chose.`
+    : isLocal(here)
+      ? `${folder.label}, on this computer only.`
+      : `${folder.label}.`;
+  note.title = folder.path;
+  $("nt-places").replaceChildren(...all.map((p) => {
     const b = document.createElement("button");
     b.type = "button";
-    b.className = "btn";
-    b.textContent = p.account ? `${p.service} (${p.account})` : p.service;
+    b.className = `btn place${p === here ? " on" : ""}`;
+    b.setAttribute("aria-pressed", String(p === here));
     b.title = p.folder;
-    b.addEventListener("click", () => moveNotesTo(p));
+    // The service's own icon, as this computer shows it; a plain cloud or
+    // computer where there's none.
+    if (p.icon) {
+      const img = document.createElement("img");
+      img.src = p.icon;
+      img.alt = "";
+      b.append(img);
+    } else {
+      const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+      svg.setAttribute("aria-hidden", "true");
+      const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
+      use.setAttribute("href", isLocal(p) ? "#i-computer" : "#i-cloud");
+      svg.append(use);
+      b.append(svg);
+    }
+    const name = document.createElement("span");
+    name.textContent = isLocal(p) ? "This computer" : p.account ? `${p.service} (${p.account})` : p.service;
+    b.append(name);
+    if (p !== here) b.addEventListener("click", () => moveNotesTo(p));
     return b;
   }));
-  $("nt-places-row").hidden = options.length === 0;
   renderPhone();
 }
 

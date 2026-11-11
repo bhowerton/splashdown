@@ -13,6 +13,8 @@
   <symbol id="i-words" viewBox="0 0 24 24"><path d="M5 4.5h14a1.5 1.5 0 0 1 1.5 1.5v9a1.5 1.5 0 0 1-1.5 1.5h-7.5L7 20v-3.5H5A1.5 1.5 0 0 1 3.5 15V6A1.5 1.5 0 0 1 5 4.5z"/><path d="M8 9h8M8 12.5h5"/></symbol>
   <symbol id="i-actions" viewBox="0 0 24 24"><path d="M13 3 5 13.5h6L10 21l8-10.5h-6L13 3z"/></symbol>
   <symbol id="i-presets" viewBox="0 0 24 24"><path d="M12 3.5 3 8.5l9 5 9-5-9-5z"/><path d="m3 13 9 5 9-5"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7.2 18.5h9.6a4 4 0 0 0 .7-7.94 5.5 5.5 0 0 0-10.5-1.1A4.55 4.55 0 0 0 7.2 18.5z"/></symbol>
+  <symbol id="i-computer" viewBox="0 0 24 24"><rect x="5" y="5.5" width="14" height="9.5" rx="1.5"/><path d="M3 18.5h18"/></symbol>
   <symbol id="i-notes" viewBox="0 0 24 24"><path d="M7.5 3.5H14l4 4V19a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 6 19V5a1.5 1.5 0 0 1 1.5-1.5z"/><path d="M14 3.5V8h4M9.5 12.5h5M9.5 16h5"/></symbol>
   <symbol id="i-meetings" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3"/><path d="M3.5 19.5c.6-3.3 2.7-5.2 5.5-5.2s4.9 1.9 5.5 5.2"/><circle cx="17" cy="9.5" r="2.3"/><path d="M16.5 14.4c2.2.3 3.6 1.8 4 4.4"/></symbol>
   <symbol id="i-providers" viewBox="0 0 24 24"><path d="M11 3c.7 4.6 2.9 6.8 7.5 7.5-4.6.7-6.8 2.9-7.5 7.5-.7-4.6-2.9-6.8-7.5-7.5C8.1 9.8 10.3 7.6 11 3z"/><path d="M19 15.5v5M16.5 18h5"/></symbol>
@@ -145,10 +147,9 @@
       </header>
       <div class="group">
         <div class="gh">Your notes</div>
-        <div class="row"><span class="lbl">Notes folder<small id="nt-folder-note"></small></span>
-          <button type="button" class="link" id="nt-folder-choose">Choose…</button></div>
-        <div class="row" id="nt-places-row" hidden><span class="lbl">Keep them in<small>To have them on your other computers and your phone. Your notes move to a Splashdown Notes folder there, and that service keeps a copy.</small></span>
-          <span class="nt-places" id="nt-places"></span></div>
+        <div class="row column" id="nt-places-row"><span class="lbl">Where your notes are kept<small id="nt-folder-note"></small><small>In a sync service, they're on your other computers and your phone too. Choosing another place moves your notes there.</small></span>
+          <span class="nt-places"><span class="nt-places" id="nt-places" role="group" aria-label="Where your notes are kept"></span>
+            <button type="button" class="link" id="nt-folder-choose">Another folder…</button></span></div>
         <label class="row"><span class="lbl">Dictations into a note go to<small>When you hold the dictation key and press the note letter, or use <code>splashdown-cli note</code></small></span>
           <select id="nt-capture-to" data-setting>
             <option value="inbox">Inbox</option>

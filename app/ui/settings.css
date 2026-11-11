@@ -253,7 +253,9 @@ input.letter-key { width: 44px !important; text-align: center; text-transform: u
   .side { display: flex; overflow-x: auto; margin: 8px; padding: 6px; }
   .side-head, .side-h { display: none; }
   .side-search { flex: none; width: 150px; margin: 0 6px 0 0; }
-  .side-group { display: flex; }
+  /* Each group keeps its width (the strip scrolls), or its tabs would be
+     squeezed under the next group's. */
+  .side-group { display: flex; flex: none; }
   .side-group + .side-group { margin-top: 0; }
   .side a { flex: none; }
   .pane { padding: 16px; }
@@ -272,7 +274,17 @@ input.letter-key { width: 44px !important; text-align: center; text-transform: u
 .transform textarea { width: 100%; resize: vertical; font-size: 12.5px; }
 .transform .warn-text { font-size: 12px; }
 .transform-acts { display: flex; gap: 12px; align-items: center; }
-.nt-places { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+/* Under the label, not beside it: a service's name carries its account, and
+   three of those beside the label left it a word wide. */
+.nt-places { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; max-width: 100%; }
+.nt-places .btn { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* A place notes can be kept: its icon and name, the one in use marked. */
+.place { display: inline-flex; align-items: center; gap: 7px; padding-left: 8px; }
+.place img, .place svg { width: 18px; height: 18px; flex: none; }
+.place svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.place span { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.place.on { border-color: var(--accent); background: var(--accent-soft); }
+.place.on::after { content: "✓"; color: var(--accent); font-weight: 700; }
 button.link:disabled { color: var(--muted); cursor: default; text-decoration: none; }
 .lbl small.managed-note { color: var(--text); font-weight: 600; margin-top: 2px; }
 .nt-daily { display: flex; align-items: center; gap: 6px; color: var(--muted); }

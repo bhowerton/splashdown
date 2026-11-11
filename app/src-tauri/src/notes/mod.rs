@@ -421,12 +421,19 @@ pub struct Places {
 #[tauri::command]
 pub async fn notes_cloud_places() -> Result<Places, String> {
     tauri::async_runtime::spawn_blocking(|| Places {
-        cloud: cloud_places(),
+        cloud: cloud_places()
+            .into_iter()
+            .map(|place| CloudPlace {
+                icon: service_icon(&place.service),
+                ..place
+            })
+            .collect(),
         local: default_folder().map(|folder| CloudPlace {
             service: "this computer".into(),
             account: None,
             label: label(&folder),
             folder: folder.display().to_string(),
+            icon: None,
         }),
     })
     .await

@@ -134,7 +134,7 @@
 ### Notes
 
 - **⌃⌥N opens Notes**, for when there's no text field around. Every note is a plain Markdown file in a folder you choose, so Obsidian, iCloud Drive and Dropbox work, and nothing is locked in.
-- **On all your devices.** Settings → Notes → Keep them in moves your notes to iCloud Drive, Dropbox, Google Drive or OneDrive in one click, whichever this computer has. They stay on your computer unless you choose one.
+- **On all your devices.** Settings → Notes → Where your notes are kept moves your notes to iCloud Drive, Dropbox, Google Drive or OneDrive in one click, whichever this computer has. They stay on your computer unless you choose one.
 - **Notes from your iPhone.** The [Splashdown Note shortcut](https://splashdown.app/iphone/) turns what you say on your phone (from the Action Button, the Lock Screen or Siri) into a note that's added to your Inbox or today's note, through your iCloud Drive, while Splashdown runs on your Mac or PC. No app to install.
 - **Folders and tags.** Nested folders (the real ones on disk) and Obsidian-style `#tags`, nested with `/`, in a column with counts. Drag a note onto a folder, or use Move to….
 - **Formatting as you write:** headings, bullets and checkboxes you can click, with the Markdown marks out of the way.
