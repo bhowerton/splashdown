@@ -92,6 +92,27 @@ impl PhysicalKey {
     pub fn is_mouse(self) -> bool {
         matches!(self, PhysicalKey::MouseBack | PhysicalKey::MouseForward)
     }
+
+    /// Whether this key, held as the dictation key, is also pressed with a
+    /// letter for an ordinary shortcut or capital (Ctrl+N, ⌘N, Shift+N,
+    /// Fn+N), so a letter pressed straight after it is taken for that until
+    /// it has been held a moment. Option on macOS isn't: Option+letter has
+    /// no shortcuts there, and the gesture letters are told with Option, so
+    /// they must work however quickly they follow it. Alt on Windows is:
+    /// Alt+letter opens menus, and Right Alt is AltGr on many layouts.
+    fn chords_with_letters(self) -> bool {
+        match self {
+            PhysicalKey::LeftAlt | PhysicalKey::RightAlt => !cfg!(target_os = "macos"),
+            PhysicalKey::LeftShift
+            | PhysicalKey::RightShift
+            | PhysicalKey::LeftControl
+            | PhysicalKey::RightControl
+            | PhysicalKey::LeftMeta
+            | PhysicalKey::RightMeta
+            | PhysicalKey::Fn => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -327,6 +348,13 @@ impl Recognizer {
         self.processing_until.is_some_and(|t| now < t)
     }
 
+    /// Whether a gesture letter pressed now, with the dictation key down
+    /// since `since`, is the gesture rather than a quick shortcut such as
+    /// Right Ctrl+N (a new window).
+    fn letter_is_gesture(&self, since: Instant, now: Instant) -> bool {
+        !self.dictation.chords_with_letters() || now.duration_since(since) >= self.timing.hold
+    }
+
     /// Whether the dictation key is taken to be down, its release still
     /// to come: it holds a recording open, or the recording ended with the
     /// key still held. If that release is lost on the way (the screen
@@ -476,9 +504,10 @@ impl Recognizer {
                 return (true, None);
             }
             // Not a quick chord such as Right Ctrl+N (a new window): the
-            // dictation key has been held a moment first.
+            // dictation key has been held a moment first, if it makes
+            // shortcuts with letters.
             if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
-                && now.duration_since(since) >= self.timing.hold
+                && self.letter_is_gesture(since, now)
             {
                 self.swallow_capture = true;
                 return (true, Some(Action::Capture));
@@ -498,7 +527,7 @@ impl Recognizer {
             }
             // As for the note key: Right Ctrl+A (select all) passes through.
             if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
-                && now.duration_since(since) >= self.timing.hold
+                && self.letter_is_gesture(since, now)
             {
                 self.swallow_ask = true;
                 return (true, Some(Action::Ask));
@@ -519,7 +548,7 @@ impl Recognizer {
                 return (true, None);
             }
             if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
-                && now.duration_since(since) >= self.timing.hold
+                && self.letter_is_gesture(since, now)
             {
                 self.swallow_compose = true;
                 return (true, Some(Action::Compose));
@@ -541,7 +570,7 @@ impl Recognizer {
                 return (true, None);
             }
             if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
-                && now.duration_since(since) >= self.timing.hold
+                && self.letter_is_gesture(since, now)
             {
                 self.swallow_translate = true;
                 return (true, Some(Action::Translate));
@@ -912,8 +941,9 @@ mod tests {
     #[test]
     fn a_quick_chord_is_a_shortcut_not_translate() {
         let mut c = Clock::new();
-        c.r = Recognizer::new(DICT, RightShift, Timing::default()).with_translate(Letter('t'));
-        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.r = Recognizer::new(RightControl, RightShift, Timing::default())
+            .with_translate(Letter('t'));
+        assert_eq!(c.at(0).down(RightControl), Some(Action::Start));
         // Right Ctrl+T, a new tab: reaches the app.
         c.at(60);
         let (swallowed, action) = c.r.on_event(KeyEvent::down(Letter('t')), c.now);
@@ -924,8 +954,9 @@ mod tests {
     #[test]
     fn a_quick_chord_is_a_shortcut_not_compose() {
         let mut c = Clock::new();
-        c.r = Recognizer::new(DICT, RightShift, Timing::default()).with_compose(Letter('c'));
-        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.r =
+            Recognizer::new(RightControl, RightShift, Timing::default()).with_compose(Letter('c'));
+        assert_eq!(c.at(0).down(RightControl), Some(Action::Start));
         // Right Ctrl+C, copy: reaches the app.
         c.at(60);
         let (swallowed, action) = c.r.on_event(KeyEvent::down(Letter('c')), c.now);
@@ -936,13 +967,120 @@ mod tests {
     #[test]
     fn a_quick_chord_is_a_shortcut_not_ask() {
         let mut c = Clock::new();
-        c.r = Recognizer::new(DICT, RightShift, Timing::default()).with_ask(Letter('a'));
-        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.r = Recognizer::new(RightControl, RightShift, Timing::default()).with_ask(Letter('a'));
+        assert_eq!(c.at(0).down(RightControl), Some(Action::Start));
         // Right Ctrl+A, select all: reaches the app.
         c.at(60);
         let (swallowed, action) = c.r.on_event(KeyEvent::down(Letter('a')), c.now);
         assert!(!swallowed);
         assert_ne!(action, Some(Action::Ask));
+    }
+
+    /// Every gesture letter and the instruction key, with the default
+    /// letters plus a compose letter.
+    fn all_letters(dictation: PhysicalKey) -> Recognizer {
+        Recognizer::new(dictation, RightShift, Timing::default())
+            .with_hands_free(Letter('h'), false)
+            .with_capture(Letter('n'))
+            .with_ask(Letter('a'))
+            .with_compose(Letter('c'))
+            .with_translate(Letter('t'))
+    }
+
+    #[test]
+    fn a_quick_chord_is_a_shortcut_not_a_note() {
+        // Right Ctrl+N (a new window), Right Command+N (a new document) and
+        // Right Shift+N (a capital) reach the app and end the recording.
+        for dictation in [RightControl, RightMeta, LeftShift] {
+            let mut r = all_letters(dictation);
+            let t = Instant::now();
+            assert_eq!(
+                r.on_event(KeyEvent::down(dictation), t).1,
+                Some(Action::Start)
+            );
+            assert_eq!(
+                r.on_event(KeyEvent::down(Letter('n')), t + Duration::from_millis(5)),
+                (false, Some(Action::Cancel { silent: true })),
+                "{dictation:?}"
+            );
+        }
+    }
+
+    /// Right Option, the default on macOS, and a gesture letter pressed
+    /// `after_ms` later: the action, swallowed, and the recording goes on
+    /// until the key is let go.
+    #[cfg(target_os = "macos")]
+    fn option_then(key: PhysicalKey, after_ms: u64) -> (bool, Option<Action>) {
+        let mut c = Clock::new();
+        c.r = all_letters(RightAlt);
+        assert_eq!(c.at(0).down(RightAlt), Some(Action::Start));
+        c.at(after_ms);
+        let got = c.r.on_event(KeyEvent::down(key), c.now);
+        assert!(c.r.is_recording(), "{key:?} after {after_ms} ms");
+        c.at(after_ms + 10);
+        assert_eq!(c.r.on_event(KeyEvent::up(key), c.now).0, got.0);
+        got
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_letter_straight_after_option_counts_as_after_a_pause() {
+        let expected = [
+            (Letter('n'), (true, Some(Action::Capture))),
+            (Letter('h'), (true, Some(Action::HandsFree))),
+            (Letter('a'), (true, Some(Action::Ask))),
+            (Letter('c'), (true, Some(Action::Compose))),
+            (Letter('t'), (true, Some(Action::Translate))),
+            (RightShift, (false, Some(Action::MarkInstruction))),
+        ];
+        for (key, want) in expected {
+            for after_ms in [0, 1, 5, 30, 249, 250, 400] {
+                assert_eq!(
+                    option_then(key, after_ms),
+                    want,
+                    "{key:?} after {after_ms} ms"
+                );
+            }
+        }
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_quick_note_with_option_goes_on_until_the_key_is_let_go() {
+        let mut c = Clock::new();
+        c.r = all_letters(RightAlt);
+        c.at(0).down(RightAlt);
+        assert_eq!(c.at(3).down(Letter('n')), Some(Action::Capture));
+        c.at(40).up(Letter('n'));
+        assert!(c.r.is_recording());
+        assert_eq!(c.at(3_000).up(RightAlt), Some(Action::Finish));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn other_letters_with_option_still_type_and_cancel() {
+        // Option+E, an accent: typed, and the recording ends at once.
+        let mut c = Clock::new();
+        c.r = all_letters(RightAlt);
+        c.at(0).down(RightAlt);
+        c.at(5);
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('e')), c.now),
+            (false, Some(Action::Cancel { silent: true }))
+        );
+        assert!(!c.r.is_recording());
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn a_quick_right_alt_chord_is_altgr_on_windows() {
+        let mut r = all_letters(RightAlt);
+        let t = Instant::now();
+        r.on_event(KeyEvent::down(RightAlt), t);
+        assert_eq!(
+            r.on_event(KeyEvent::down(Letter('n')), t + Duration::from_millis(5)),
+            (false, Some(Action::Cancel { silent: true }))
+        );
     }
 
     #[test]
