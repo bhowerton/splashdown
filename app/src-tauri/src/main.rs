@@ -146,6 +146,7 @@ fn main() {
             commands::check_for_updates,
             commands::install_update,
             commands::send_feedback,
+            commands::show_release_notes,
             notes::notes_load,
             notes::subtitles::notes_export_subtitles,
             notes::watch::notes_watch_waiting,

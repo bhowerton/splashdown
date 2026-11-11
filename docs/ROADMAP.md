@@ -118,7 +118,7 @@ Cheap features that close visible gaps.
 - ⬜ **Windows:**
   - ✅ Code signing: Azure Artifact Signing, certificate "Point Dynamics, LLC" (2026-10-30).
   - MSI/NSIS installers for x64 and ARM64.
-- ✅ **Auto-update** with signed manifests (Tauri updater, from GitHub Releases): a daily check (switchable), "Update to vX.Y.Z…" in the menu bar, and install only on request from About. Release steps are in CONTRIBUTING. ⬜ Not tried end to end until there's a release.
+- ✅ **Auto-update** with signed manifests (Tauri updater, from GitHub Releases): a daily check (switchable), "Update to vX.Y.Z…" in the menu bar, and install only on request from About. Optionally (`general.install_updates`, Settings → General → Updates) a release installs by itself once it has been out two days and the app is idle (`updates::install_due`, `idle`), and the next launch says what it updated to (`updated.json`, for a day). ⬜ The unasked install has never been run for real, on either platform. Release steps are in CONTRIBUTING. ⬜ Not tried end to end until there's a release.
 - 🟡 **Feedback without telemetry:** ✅ "Send feedback…" (About and the menu bar) opens a pre-filled GitHub issue with versions and providers, no keys or text. ⬜ Local crash logs.
 - 🟡 **Public presence:** ✅ the license: dual MIT/Apache-2.0. ⬜ A landing page with a demo GIF, docs, and a privacy statement ("your text goes only to the provider you choose").
 - 🟡 **Package managers:** a Homebrew cask in the `bhowerton/homebrew-tap` tap (passes `brew audit --strict --online`); the main homebrew-cask repository needs more stars first. ⬜ winget, once the installer is signed.

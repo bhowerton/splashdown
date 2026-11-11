@@ -635,6 +635,13 @@ mod tests {
         assert!(!g.check_for_updates());
         let parsed: GeneralSettings = toml::from_str("check_for_updates = false").unwrap();
         assert!(!parsed.check_for_updates());
+        // Installing by themselves is off unless chosen, and needs checking.
+        assert!(!GeneralSettings::default().install_updates());
+        let auto: GeneralSettings = toml::from_str("install_updates = true").unwrap();
+        assert!(auto.install_updates());
+        let off: GeneralSettings =
+            toml::from_str("install_updates = true\ncheck_for_updates = false").unwrap();
+        assert!(!off.install_updates());
     }
 
     #[test]

@@ -95,8 +95,12 @@
         <div class="gh">Startup</div>
         <label class="row"><span class="lbl">Start Splashdown when I log in</span>
           <input id="gen-login" type="checkbox" class="switch"></label>
-        <label class="row"><span class="lbl">Check for updates automatically<small>Looks for a new version at launch and once a day. Updates install only when you click; see About</small></span>
-          <input id="gen-updates" type="checkbox" class="switch" data-setting></label>
+        <label class="row"><span class="lbl">Updates<small id="gen-updates-what"></small></span>
+          <select id="gen-updates" data-setting>
+            <option value="">Tell me when there's one</option>
+            <option value="install">Install them by themselves</option>
+            <option value="off">Don't check</option>
+          </select></label>
       </div>
       <div class="group">
         <div class="gh">Microphone</div>
@@ -638,7 +642,7 @@
       </div>
       <div class="group">
         <div class="gh">Other connections</div>
-        <div class="row"><span class="lbl">Update checks<small>At launch and once a day, asks GitHub whether a new version exists. Nothing about you or your dictation is sent.</small></span><button class="link" data-goto="general">Change</button></div>
+        <div class="row"><span class="lbl">Update checks<small>At launch and once a day, asks GitHub whether a new version exists, and downloads it if you chose to have updates install by themselves. Nothing about you or your dictation is sent.</small></span><button class="link" data-goto="general">Change</button></div>
       </div>
     </section>
 
@@ -663,7 +667,7 @@
       <div class="group">
         <div class="gh">Updates</div>
         <div class="row"><span class="lbl"><span id="upd-title">Splashdown is up to date</span><small id="upd-detail"></small></span>
-          <span class="keypick"><button class="btn" id="upd-check">Check now</button><button class="btn primary" id="upd-install" hidden>Install and restart</button></span></div>
+          <span class="keypick"><button class="link" id="upd-changed" hidden>What changed</button><button class="btn" id="upd-check">Check now</button><button class="btn primary" id="upd-install" hidden>Install and restart</button></span></div>
         <div class="row column" id="upd-notes-row" hidden><span class="lbl"><small>What's new</small></span><span id="upd-notes" class="notes"></span></div>
       </div>
       <div class="group">

@@ -789,8 +789,19 @@ $("mini-bar").addEventListener("change", async (e) => {
   showMiniBar();
 });
 
+$("auto-update").addEventListener("change", async (e) => {
+  const on = e.target.checked;
+  const saved = await changeSettings((s) => {
+    s.general.install_updates = on ? true : null;
+    // Installing by itself needs checking, which may have been turned off.
+    if (on) s.general.check_for_updates = null;
+  });
+  if (!saved) e.target.checked = !on;
+});
+
 function renderDone() {
   showMiniBar();
+  $("auto-update").checked = state.settings.general.install_updates === true && state.settings.general.check_for_updates !== false;
   const k = keys();
   const home = $("done-home");
   home.replaceChildren();

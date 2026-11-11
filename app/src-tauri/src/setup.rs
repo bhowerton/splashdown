@@ -158,6 +158,11 @@ fn status() -> std::sync::MutexGuard<'static, Option<Status>> {
     STATUS.locked()
 }
 
+/// Whether models are being downloaded and set up right now.
+pub(crate) fn working() -> bool {
+    status().as_ref().is_some_and(|s| s.working)
+}
+
 /// What `local_setup_plan` says before anything starts.
 #[tauri::command]
 pub fn local_setup_plan(speech_only: bool) -> Result<Plan, String> {

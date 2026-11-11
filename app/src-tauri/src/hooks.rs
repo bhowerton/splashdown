@@ -279,10 +279,14 @@ fn run_later(app: &AppHandle, hook: Hook, happened: Happened) {
                     if !may_go_to_the_cloud(&app, &hook) {
                         continue;
                     }
+                    // A hook at work is no time for an update to restart
+                    // the app: before it, and again when it's done.
+                    crate::updates::active();
                     // From here, so that how long it took doesn't count
                     // the wait for an answer.
                     let started = Instant::now();
                     let result = run_after(&app, &hook, &happened);
+                    crate::updates::active();
                     let (ok, said) = match &result {
                         Ok(did) => (true, did.said.clone()),
                         Err(e) => (false, e.clone()),

@@ -101,6 +101,12 @@ impl Paths {
         self.config_dir.join("history.jsonl")
     }
 
+    /// What an update that installed itself was from and to, so the next
+    /// launch can say so.
+    pub fn updated_file(&self) -> PathBuf {
+        self.config_dir.join("updated.json")
+    }
+
     /// Where the mini bar was last dragged to.
     pub fn mini_bar_file(&self) -> PathBuf {
         self.config_dir.join("mini-bar.json")

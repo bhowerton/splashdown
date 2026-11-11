@@ -370,21 +370,19 @@ impl TrayMenu {
         }
     }
 
-    /// Shows "Update to vX.Y.Z…" under the status while an update is
-    /// available, and takes it away when there's none.
-    pub fn set_update(&self, version: Option<&str>) {
+    /// Shows `line` under the status ("Update to v1.2.3…" while an update
+    /// is available, "Updated to v1.2.3" after one installed itself), and
+    /// takes it away when there's nothing to say.
+    pub fn set_update(&self, line: Option<&str>) {
         let shown = self.menu.get("update-ready").is_some();
-        let result = match version {
-            Some(v) => self
-                .update_ready
-                .set_text(format!("Update to v{}…", v.trim_start_matches('v')))
-                .and_then(|()| {
-                    if shown {
-                        Ok(())
-                    } else {
-                        self.menu.insert(&self.update_ready, UPDATE_READY_AT)
-                    }
-                }),
+        let result = match line {
+            Some(line) => self.update_ready.set_text(line).and_then(|()| {
+                if shown {
+                    Ok(())
+                } else {
+                    self.menu.insert(&self.update_ready, UPDATE_READY_AT)
+                }
+            }),
             None if shown => self.menu.remove(&self.update_ready),
             None => Ok(()),
         };

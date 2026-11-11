@@ -1,5 +1,21 @@
 "use strict";
 
+/** Settings → General → Updates: "" (tell me), "install" (by themselves)
+ *  or "off" (don't check), from the two settings behind it. */
+function updatesChoice(general) {
+  if (general.check_for_updates === false) return "off";
+  return general.install_updates === true ? "install" : "";
+}
+
+/** What the choice of updates means, under it. */
+function describeUpdates() {
+  $("gen-updates-what").textContent = {
+    "": "Looks for a new version at launch and once a day. It installs only when you click; see About.",
+    install: "A new version installs by itself once it has been out two days, at a moment when Splashdown has been idle for ten minutes: nothing recording, no window open. It restarts, and the menu bar says what it updated to.",
+    off: "Splashdown never looks for a new version. Check by hand in About.",
+  }[$("gen-updates").value];
+}
+
 // General, Notes and Meetings tabs: hotkey pickers and their legend, launch at login, updates,
 // microphone, live preview, sounds. Also the Notes and Meetings sections
 // (watched folders, people known by voice, the calendar), and the Words &
@@ -116,7 +132,8 @@ function renderGeneral() {
   $("gen-learn").checked = s.general.learn_vocabulary !== false;
   $("gen-learn-style").checked = s.general.learn_style !== false;
   loadStyles();
-  $("gen-updates").checked = s.general.check_for_updates !== false;
+  setValue($("gen-updates"), updatesChoice(s.general));
+  describeUpdates();
   $("gen-sounds").checked = s.general.sounds !== false;
   const volume = s.general.sound_volume ?? state.defaults.sound_volume ?? DEFAULT_SOUND_VOLUME;
   setValue($("gen-volume"), Math.round(volume * 100));

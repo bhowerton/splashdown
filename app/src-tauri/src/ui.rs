@@ -99,6 +99,7 @@ impl Ui {
         let generation = self.generation.fetch_add(1, Ordering::SeqCst) + 1;
         let appearing = !self.shown.swap(true, Ordering::SeqCst);
         let announcement = announcement(&state);
+        crate::updates::active();
         crate::minibar::working(matches!(state, OverlayState::Working { .. }));
         let ui = self.clone();
         self.on_overlay(move |o| {
@@ -127,6 +128,7 @@ impl Ui {
     }
 
     pub fn level(&self, level: f32) {
+        crate::updates::active();
         crate::minibar::level(level);
         self.on_overlay(move |o| o.set_level(level));
     }

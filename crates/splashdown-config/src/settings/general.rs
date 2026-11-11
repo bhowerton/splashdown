@@ -79,8 +79,11 @@ pub struct GeneralSettings {
     /// Limits on what cloud providers may cost.
     pub budget: Budget,
     /// Look for a new release on launch and once a day. Unset means on.
-    /// Updates are only ever installed when the user clicks.
     pub check_for_updates: Option<bool>,
+    /// Install a release that's found without being asked, once it has
+    /// been out a couple of days and Splashdown is idle. Unset means off:
+    /// then updates are only ever installed when the user clicks.
+    pub install_updates: Option<bool>,
     /// Whisper mode: raise quiet speech before transcribing it. Unset
     /// means off.
     pub whisper_mode: Option<bool>,
@@ -271,6 +274,11 @@ impl GeneralSettings {
 
     pub fn check_for_updates(&self) -> bool {
         self.check_for_updates.unwrap_or(true)
+    }
+
+    /// Whether updates install by themselves: only while checking is on.
+    pub fn install_updates(&self) -> bool {
+        self.check_for_updates() && self.install_updates.unwrap_or(false)
     }
 
     /// The microphones to try, in order, before the automatic choice.

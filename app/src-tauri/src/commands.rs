@@ -179,11 +179,27 @@ pub async fn check_for_updates(app: AppHandle) -> Result<Option<String>, String>
     crate::updates::check(&app, true).await
 }
 
+/// "What changed" beside a version in Settings → About: its release notes
+/// on GitHub. Only digits and dots get into the address.
+#[tauri::command]
+pub fn show_release_notes(version: String) -> Result<(), String> {
+    let version: String = version
+        .trim_start_matches('v')
+        .chars()
+        .filter(|c| c.is_ascii_digit() || *c == '.')
+        .collect();
+    if version.is_empty() {
+        return Err("No version to show.".into());
+    }
+    let url = format!("https://github.com/bhowerton/splashdown/releases/tag/v{version}");
+    splashdown_platform::open_url(&url).map_err(|e| e.to_string())
+}
+
 /// "Install and restart": downloads the update found by the last check,
 /// installs it and relaunches. Returns only if that fails.
 #[tauri::command]
 pub async fn install_update(app: AppHandle) -> Result<(), String> {
-    crate::updates::install(&app).await
+    crate::updates::install(&app, false).await
 }
 
 /// "Send feedback": a prefilled GitHub issue in the browser.

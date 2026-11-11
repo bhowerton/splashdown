@@ -82,9 +82,14 @@ function renderUpdate() {
     detail = u.progress != null && u.progress < 100 ? `Downloading: ${u.progress}%` : "Splashdown restarts when it's done";
   } else if (u.available) {
     title = `Version ${u.available} is available`;
-    detail = `You have ${state.version}. Nothing is installed until you click, then Splashdown restarts.`;
+    detail = state.settings.general.install_updates === true && state.settings.general.check_for_updates !== false
+      ? `You have ${state.version}. It installs by itself once it has been out two days and Splashdown is idle, or now if you click.`
+      : `You have ${state.version}. Nothing is installed until you click, then Splashdown restarts.`;
   } else if (u.checking) {
     title = "Checking for updates…";
+  } else if (u.updated) {
+    title = `Updated to version ${u.updated}`;
+    detail = "It installed by itself while Splashdown was idle, as you chose in General.";
   } else if (u.last_checked) {
     title = "Splashdown is up to date";
     detail = `Last checked ${new Date(u.last_checked).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })}`;
@@ -99,6 +104,7 @@ function renderUpdate() {
   $("upd-check").disabled = busy;
   $("upd-check").textContent = u.checking ? "Checking…" : "Check now";
   $("upd-install").hidden = !u.available;
+  $("upd-changed").hidden = !u.updated || !!u.available || busy;
   $("upd-install").disabled = busy;
   $("upd-notes-row").hidden = !(u.available && u.notes);
   $("upd-notes").textContent = u.notes ?? "";
@@ -194,7 +200,8 @@ function collect() {
   s.general.insights = $("ins-keep").checked ? null : false;
   s.general.learn_vocabulary = $("gen-learn").checked ? null : false;
   s.general.learn_style = $("gen-learn-style").checked ? null : false;
-  s.general.check_for_updates = $("gen-updates").checked ? null : false;
+  s.general.check_for_updates = $("gen-updates").value === "off" ? false : null;
+  s.general.install_updates = $("gen-updates").value === "install" ? true : null;
   s.general.sounds = $("gen-sounds").checked ? null : false;
   s.general.sound_volume = Number($("gen-volume").value) / 100;
   s.general.read_voice = ttsVoice();
@@ -288,8 +295,11 @@ $("upd-check").addEventListener("click", async () => {
   }
   await refresh();
 });
-// Only ever on this click: downloads, installs and relaunches.
+// On this click: downloads, installs and relaunches. (With "Install them
+// by themselves" chosen in General, the app also does it when it's idle.)
 $("upd-install").addEventListener("click", () => call("install_update"));
+$("upd-changed").addEventListener("click", () => call("show_release_notes", { version: state.update?.updated ?? state.version }));
+$("gen-updates").addEventListener("change", describeUpdates);
 $("send-feedback").addEventListener("click", () => call("send_feedback"));
 
 // About → Settings: export writes config.toml (no keys) to Downloads; import
