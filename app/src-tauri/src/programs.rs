@@ -263,7 +263,9 @@ mod tests {
             &[],
             "hello there",
             &[("SPLASHDOWN_EVENT", "dictation".into())],
-            Duration::from_secs(5),
+            // Long enough for a machine busy with the other tests: five
+            // seconds wasn't, now and then.
+            Duration::from_secs(30),
         )
         .unwrap();
         match ended {
@@ -278,7 +280,7 @@ mod tests {
     #[test]
     fn a_failing_program_says_why_and_a_slow_one_is_stopped() {
         let path = script("fail.sh", "echo 'no token set' >&2; exit 3");
-        match run(&path, &[], "", &[], Duration::from_secs(5)).unwrap() {
+        match run(&path, &[], "", &[], Duration::from_secs(30)).unwrap() {
             Ended::Finished { ok, error, .. } => {
                 assert!(!ok);
                 assert_eq!(error, "no token set");
