@@ -41,6 +41,18 @@ function translateDefault(hotkeys) {
   return ["t", "l", "y"].find((c) => !taken.includes(c)) ?? "t";
 }
 
+/** The draft letter when none is chosen: D, or the next one free
+ *  (matches HotkeySettings::draft_key). */
+function draftDefault(hotkeys) {
+  const hands = (hotkeys.hands_free || "h").toLowerCase();
+  const note = (hotkeys.note || (hands === "n" ? "m" : "n")).toLowerCase();
+  const ask = (hotkeys.ask || askDefault(hotkeys)).toLowerCase();
+  const compose = (hotkeys.compose || "").toLowerCase();
+  const translate = (hotkeys.translate || translateDefault(hotkeys)).toLowerCase();
+  const taken = [hands, note, ask, compose, translate];
+  return ["d", "g", "b"].find((c) => !taken.includes(c)) ?? "d";
+}
+
 /** Fallback for a backend that doesn't send `defaults.sound_volume` yet.
  *  Matches splashdown_config's DEFAULT_SOUND_VOLUME. */
 const DEFAULT_SOUND_VOLUME = 0.12;
@@ -187,6 +199,7 @@ function renderGeneral() {
   setValue($("hk-ask"), (s.hotkeys.ask || askDefault(s.hotkeys)).toUpperCase());
   setValue($("hk-compose"), (s.hotkeys.compose || "").toUpperCase());
   setValue($("hk-translate"), (s.hotkeys.translate || translateDefault(s.hotkeys)).toUpperCase());
+  setValue($("hk-draft"), (s.hotkeys.draft || draftDefault(s.hotkeys)).toUpperCase());
   $("gen-compose-panel").checked = s.general.compose_panel === true;
   $("gen-compose-style").checked = s.general.compose_style !== false;
   const notes = s.notes ?? {};
@@ -550,10 +563,12 @@ function renderHotkeyLegend(d) {
   const k = keyShort(d);
   const mouse = d.startsWith("mouse-");
   const letter = (state.settings.hotkeys.hands_free || "h").toUpperCase();
+  const draft = (state.settings.hotkeys.draft || draftDefault(state.settings.hotkeys)).toUpperCase();
   const items = [
     [`Hold ${k}`, "Talk", "let go to type it"],
     [mouse ? `${k} ×2` : `${k} + ${letter}`, "Hands-free", mouse ? "click again to finish" : `then let go; tap ${k} to finish`],
     [`${k} + ↩`, "Send", "presses Return after"],
+    [`${k} + ${draft}`, "Draft", "opens what you say in a panel to add to and change, then insert"],
     ["Esc", "Cancel", ""],
     [`${k} ${keyShort($("hk-instruction").dataset.value)}`, "Command", "tap the instruction key first, then say it, e.g. “delete that”"],
   ];

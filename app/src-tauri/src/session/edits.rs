@@ -361,6 +361,7 @@ impl Controller {
         active.capture = false;
         active.ask = false;
         active.compose = false;
+        active.draft = false;
         let before = active
             .untranslated
             .get_or_insert_with(|| active.preset.clone())

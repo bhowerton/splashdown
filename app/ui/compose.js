@@ -1,26 +1,48 @@
 "use strict";
 
 // The Compose panel: a draft written from what the user said they want
-// to write, streamed in by the Rust side (`compose.rs`). While it's open,
-// a dictation changes the draft; so do the quick changes and a typed
-// change. ‹ › go between versions; Insert pastes the one shown into the
-// app it's for; Esc closes.
+// to write, streamed in by the Rust side (`compose.rs`), or one they
+// dictated (the draft letter). While it's open, a dictation adds its words
+// to the draft, and one with the instruction key tapped changes it; so do
+// the quick changes and a typed change. ‹ › go between versions; Insert
+// pastes the one shown into the app it's for; Esc closes.
 
 /** What the panel shows (`compose::Shown`). */
 let shown = { versions: [], at: 0, writing: false, error: null, app: null, replying: false, read_window: false, removed: false };
 /** Something is being read aloud (`reading.rs`). */
 let reading = false;
-/** The dictation key's name, for the hint. */
+/** The dictation and instruction keys' names, for the hint. */
 let dictKey = "the dictation key";
+let instrKey = "the instruction key";
 
 function current() {
-  return shown.versions[shown.at] ?? { said: "", text: "" };
+  return shown.versions[shown.at] ?? { said: "", text: "", made: "asked" };
+}
+
+/** What made a version, in a few words (`compose::Made`). */
+function madeBy(version) {
+  switch (version.made) {
+    case "dictated":
+      return "Dictated";
+    case "added":
+      return "Added";
+    case "replaced":
+      return version.said;
+    default:
+      return version.said ? `“${version.said}”` : "";
+  }
+}
+
+function kbd(text) {
+  const key = document.createElement("kbd");
+  key.textContent = text;
+  return key;
 }
 
 function render() {
   const version = current();
   const ready = !shown.writing && !shown.error && Boolean(version.text);
-  $("cp-said").textContent = version.said ? `“${version.said}”` : "";
+  $("cp-said").textContent = madeBy(version);
   $("cp-removed").hidden = !shown.removed;
   const source = shown.replying
     ? "Answering the text you selected"
@@ -46,22 +68,21 @@ function render() {
   $("cp-ver").textContent = `${shown.at + 1} of ${shown.versions.length}`;
   $("cp-prev").disabled = shown.writing || shown.at === 0;
   $("cp-next").disabled = shown.writing || shown.at >= shown.versions.length - 1;
-  const hint = $("cp-hint");
-  const key = document.createElement("kbd");
-  key.textContent = dictKey;
-  hint.replaceChildren("Hold ", key, " and say a change");
+  $("cp-hint").replaceChildren("Hold ", kbd(dictKey), " to add words, and tap ", kbd(instrKey), " to change");
 }
 
-async function change(text) {
+/** Asks for a change. `quick`: one of the panel's own buttons, which
+ *  never only replaces words, so that isn't checked for. */
+async function change(text, quick = false) {
   if (!text.trim()) return;
   try {
-    await invoke("compose_change", { change: text });
+    await invoke("compose_change", { change: text, quick });
   } catch (e) {
     toast(String(e), true);
   }
 }
 
-document.querySelectorAll(".cp-chip").forEach((chip) => chip.addEventListener("click", () => change(chip.dataset.change)));
+document.querySelectorAll(".cp-chip").forEach((chip) => chip.addEventListener("click", () => change(chip.dataset.change, true)));
 
 $("cp-change").addEventListener("submit", (e) => {
   e.preventDefault();
@@ -131,6 +152,7 @@ listen("compose-changed", (event) => {
 invoke("get_state")
   .then((state) => {
     dictKey = dictationKeyLabel(state);
+    instrKey = instructionKeyLabel(state);
     render();
   })
   .catch(() => {});

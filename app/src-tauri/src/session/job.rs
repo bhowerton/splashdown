@@ -33,10 +33,10 @@ impl Controller {
             label: label.into(),
         });
 
-        // A note capture is what was said: text selected in the app isn't
-        // something to change.
+        // A note capture or a draft is what was said: text selected in the
+        // app isn't something to change.
         let mut selection = match &active.selection {
-            Selection::Text(s) if !active.capture => Some(s.clone()),
+            Selection::Text(s) if !active.capture && !active.draft => Some(s.clone()),
             _ => None,
         };
         // The app didn't report its selection: try copying it. Only after a
@@ -44,6 +44,7 @@ impl Controller {
         // with a held modifier.
         if active.selection == Selection::Unknown
             && !active.capture
+            && !active.draft
             && !active.hands_free
             && active.focus.as_ref().is_some_and(Focus::is_current)
         {
@@ -141,6 +142,7 @@ impl Controller {
             Some(focus)
                 if engine.share_recent
                     && !active.capture
+                    && !active.draft
                     && matches!(mode, Mode::Dictate | Mode::DictateInstruct)
                     && active.field_text.is_none() =>
             {

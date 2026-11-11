@@ -152,6 +152,10 @@ pub enum Action {
     /// The translate key while holding the dictation key: this recording,
     /// or the selected text, comes out in another language.
     Translate,
+    /// The draft letter while holding the dictation key: this recording
+    /// opens in the draft panel, to add to and change by voice, instead of
+    /// being typed.
+    Draft,
     /// Stop recording and process it.
     Finish,
     /// Stop recording and throw it away. `silent` cancels (accidental tap,
@@ -248,6 +252,10 @@ pub struct Recognizer {
     translate: PhysicalKey,
     /// We swallowed the translate key's key-down: its repeats and key-up too.
     swallow_translate: bool,
+    /// Pressed while holding the dictation key: the recording is a draft.
+    draft: PhysicalKey,
+    /// We swallowed the draft key's key-down: its repeats and key-up too.
+    swallow_draft: bool,
     timing: Timing,
     state: State,
     /// We swallowed an Esc key-down, so swallow its key-up too.
@@ -282,6 +290,8 @@ impl Recognizer {
             swallow_compose: false,
             translate: PhysicalKey::Other,
             swallow_translate: false,
+            draft: PhysicalKey::Other,
+            swallow_draft: false,
             timing,
             state: State::Idle,
             swallow_escape_up: false,
@@ -327,6 +337,13 @@ impl Recognizer {
     /// translates the recording or the selection.
     pub fn with_translate(mut self, key: PhysicalKey) -> Self {
         self.translate = key;
+        self
+    }
+
+    /// Sets the key that, pressed while holding the dictation key, opens
+    /// the recording in the draft panel.
+    pub fn with_draft(mut self, key: PhysicalKey) -> Self {
+        self.draft = key;
         self
     }
 
@@ -574,6 +591,29 @@ impl Recognizer {
             {
                 self.swallow_translate = true;
                 return (true, Some(Action::Translate));
+            }
+        }
+
+        // The draft key while holding the dictation key. Swallowed like the
+        // others, and a quick chord (Right Ctrl+D, a bookmark) passes
+        // through.
+        if ev.key == self.draft
+            && ev.key != self.hands_free
+            && ev.key != self.capture
+            && ev.key != self.ask
+            && ev.key != self.compose
+            && ev.key != self.translate
+            && ev.key != PhysicalKey::Other
+        {
+            if self.swallow_draft {
+                self.swallow_draft = ev.down;
+                return (true, None);
+            }
+            if let (State::Pressed { since, .. }, true) = (self.state, ev.down)
+                && self.letter_is_gesture(since, now)
+            {
+                self.swallow_draft = true;
+                return (true, Some(Action::Draft));
             }
         }
 
@@ -939,6 +979,53 @@ mod tests {
     }
 
     #[test]
+    fn draft_key_while_holding_drafts_and_is_swallowed() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(DICT, RightShift, Timing::default())
+            .with_capture(Letter('n'))
+            .with_draft(Letter('d'));
+        assert_eq!(c.at(0).down(DICT), Some(Action::Start));
+        c.at(400);
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('d')), c.now),
+            (true, Some(Action::Draft))
+        );
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('d')), c.now),
+            (true, None)
+        );
+        assert_eq!(c.r.on_event(KeyEvent::up(Letter('d')), c.now), (true, None));
+        assert!(c.r.is_recording());
+        assert_eq!(c.at(2000).up(DICT), Some(Action::Finish));
+        // Typing D later is untouched.
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('d')), c.now),
+            (false, None)
+        );
+    }
+
+    #[test]
+    fn a_quick_chord_is_a_shortcut_not_a_draft() {
+        let mut c = Clock::new();
+        c.r = Recognizer::new(RightControl, RightShift, Timing::default()).with_draft(Letter('d'));
+        assert_eq!(c.at(0).down(RightControl), Some(Action::Start));
+        // Right Ctrl+D, a bookmark: reaches the app.
+        c.at(60);
+        let (swallowed, action) = c.r.on_event(KeyEvent::down(Letter('d')), c.now);
+        assert!(!swallowed);
+        assert_ne!(action, Some(Action::Draft));
+        // Held a moment first: the draft.
+        let mut c = Clock::new();
+        c.r = Recognizer::new(RightControl, RightShift, Timing::default()).with_draft(Letter('d'));
+        c.at(0).down(RightControl);
+        c.at(400);
+        assert_eq!(
+            c.r.on_event(KeyEvent::down(Letter('d')), c.now),
+            (true, Some(Action::Draft))
+        );
+    }
+
+    #[test]
     fn a_quick_chord_is_a_shortcut_not_translate() {
         let mut c = Clock::new();
         c.r = Recognizer::new(RightControl, RightShift, Timing::default())
@@ -977,7 +1064,7 @@ mod tests {
     }
 
     /// Every gesture letter and the instruction key, with the default
-    /// letters plus a compose letter.
+    /// letters plus a compose letter and the draft letter.
     fn all_letters(dictation: PhysicalKey) -> Recognizer {
         Recognizer::new(dictation, RightShift, Timing::default())
             .with_hands_free(Letter('h'), false)
@@ -985,6 +1072,7 @@ mod tests {
             .with_ask(Letter('a'))
             .with_compose(Letter('c'))
             .with_translate(Letter('t'))
+            .with_draft(Letter('d'))
     }
 
     #[test]
@@ -1031,6 +1119,7 @@ mod tests {
             (Letter('a'), (true, Some(Action::Ask))),
             (Letter('c'), (true, Some(Action::Compose))),
             (Letter('t'), (true, Some(Action::Translate))),
+            (Letter('d'), (true, Some(Action::Draft))),
             (RightShift, (false, Some(Action::MarkInstruction))),
         ];
         for (key, want) in expected {

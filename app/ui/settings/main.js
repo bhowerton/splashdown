@@ -183,6 +183,11 @@ function collect() {
     /^[a-z]$/.test(translate) && translate !== translateDefault(s.hotkeys) && !translateShown
       ? translate
       : null;
+  // A letter; the default (D, or the next free one) is saved as unset, and
+  // moves like Ask's when another letter takes its place.
+  const draft = $("hk-draft").value.trim().toLowerCase();
+  const draftShown = !state.settings.hotkeys.draft && draft === draftDefault(state.settings.hotkeys);
+  s.hotkeys.draft = /^[a-z]$/.test(draft) && draft !== draftDefault(s.hotkeys) && !draftShown ? draft : null;
   s.notes = { ...(s.notes ?? {}) };
   s.notes.capture_to = $("nt-capture-to").value;
   s.notes.daily_folder = $("nt-daily-folder").value.trim() || null;

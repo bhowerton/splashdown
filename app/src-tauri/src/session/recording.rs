@@ -1,6 +1,7 @@
 //! Starting a recording and what happens while the key is held: the
-//! preset, the live preview, and switching to a note, a question or a
-//! draft (the note, ask and compose letters).
+//! preset, the live preview, and switching to a note, a question, a
+//! written draft or a dictated one (the note, ask, compose and draft
+//! letters).
 
 use super::*;
 
@@ -335,6 +336,8 @@ impl Controller {
             capture: false,
             ask: false,
             compose: false,
+            draft: false,
+            marked: false,
             quiet_due: self
                 .engine
                 .as_ref()
@@ -489,6 +492,7 @@ impl Controller {
         active.capture = true;
         active.ask = false;
         active.compose = false;
+        active.draft = false;
         match &mut active.shown {
             OverlayState::Listening { preset } | OverlayState::HandsFree { preset } => {
                 *preset = Some(label);
@@ -522,6 +526,7 @@ impl Controller {
         active.ask = true;
         active.capture = false;
         active.compose = false;
+        active.draft = false;
         let label = Some("Ask".to_string());
         active.shown = if active.hands_free {
             OverlayState::HandsFree { preset: label }
@@ -543,7 +548,31 @@ impl Controller {
         active.compose = true;
         active.capture = false;
         active.ask = false;
+        active.draft = false;
         let label = Some("Compose".to_string());
+        active.shown = if active.hands_free {
+            OverlayState::HandsFree { preset: label }
+        } else {
+            OverlayState::Listening { preset: label }
+        };
+        self.ui.show(active.shown.clone());
+        // Nothing is typed, so there's nothing to send.
+        self.lock().set_send(false);
+        self.ui.set_send(false);
+    }
+
+    /// The draft key while holding the dictation key: what's said opens in
+    /// the draft panel as its first version, to add to and change by voice.
+    /// Selected text is left alone, as for a note.
+    pub(super) fn start_draft(&mut self) {
+        let Some(active) = &mut self.active else {
+            return;
+        };
+        active.draft = true;
+        active.capture = false;
+        active.ask = false;
+        active.compose = false;
+        let label = Some("Draft".to_string());
         active.shown = if active.hands_free {
             OverlayState::HandsFree { preset: label }
         } else {
@@ -684,6 +713,7 @@ fn their_preset(active: &Active) -> Option<Preset> {
     if active.capture
         || active.ask
         || active.compose
+        || active.draft
         || active.preset.translate_to.is_some()
         || matches!(active.selection, Selection::Text(_))
     {

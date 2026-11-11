@@ -125,6 +125,16 @@ impl Settings {
         .contains(&Some(h.translate_key()))
         {
             Some("The translate letter must differ from the other letters.")
+        } else if [
+            Some(h.hands_free_key()),
+            Some(h.note_key()),
+            Some(h.ask_key()),
+            h.compose_key(),
+            Some(h.translate_key()),
+        ]
+        .contains(&Some(h.draft_key()))
+        {
+            Some("The draft letter must differ from the other letters.")
         } else {
             None
         }
@@ -687,6 +697,21 @@ mod tests {
         assert!(Settings::load(&path).is_ok());
         assert!(!dir.join("config.toml.tmp").exists());
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn a_draft_letter_another_letter_uses_is_refused() {
+        let mut s = Settings::default();
+        assert_eq!(s.hotkey_problem(), None);
+        s.hotkeys.draft = Some('n');
+        assert_eq!(
+            s.hotkey_problem(),
+            Some("The draft letter must differ from the other letters.")
+        );
+        // The default moves out of the way of a letter chosen for another.
+        s.hotkeys.draft = None;
+        s.hotkeys.translate = Some('d');
+        assert_eq!(s.hotkey_problem(), None);
     }
 
     #[test]

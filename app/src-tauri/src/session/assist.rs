@@ -1,5 +1,6 @@
 //! Asking and writing: a question for Ask, a draft for Compose (straight
-//! into the field, or in its panel), and reading text aloud.
+//! into the field, or in its panel), a dictated draft (in the same panel),
+//! and reading text aloud.
 
 use super::*;
 
@@ -101,11 +102,6 @@ impl Controller {
             None if selection.is_none() => tracing::info!("compose read nothing from the window"),
             None => {}
         }
-        let tone = active.preset.tone.map(|t| match t {
-            splashdown_config::Tone::Formal => "formal",
-            splashdown_config::Tone::Casual => "casual",
-            splashdown_config::Tone::VeryCasual => "very-casual",
-        });
         let context = splashdown_core::compose::ComposeContext {
             replying_to: selection.map(|s| head_chars(&s, READ_CHARS)),
             field_text,
@@ -122,7 +118,7 @@ impl Controller {
                 .map(|f| f.app.name.clone()),
             user_name: engine.context.user_name.clone(),
             today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
-            tone: tone.and_then(splashdown_core::compose::tone),
+            tone: preset_tone(&active.preset),
             match_style: engine.compose_style,
             // Learned from how the user edited earlier drafts here.
             style: active
@@ -177,6 +173,74 @@ impl Controller {
                 asked,
                 context,
                 model,
+                target: active
+                    .focus
+                    .as_ref()
+                    .map(|f| (f.app.pid, f.app.name.clone())),
+            },
+        );
+        self.ui.hide();
+    }
+
+    /// A dictation for the draft panel (see `finish`): a new draft, opened
+    /// as it was said (the draft key), or with `adding`, its words added to
+    /// the draft open there. Nothing goes into the app.
+    pub(super) fn deliver_draft(
+        &mut self,
+        active: Active,
+        outcome: Outcome,
+        took: Duration,
+        adding: bool,
+    ) {
+        if outcome.text.trim().is_empty() {
+            return self.notice(Tone::Info, "Didn't catch that");
+        }
+        self.record(&outcome, active.focus.as_ref(), &active.preset, took);
+        if adding {
+            if crate::compose::add(self.ui.app(), &outcome.text).is_err() {
+                // A change is still being written: the words aren't lost.
+                let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
+                return self.notice(
+                    Tone::Info,
+                    "Still writing · your words are on the clipboard",
+                );
+            }
+            tracing::info!(
+                "added {} characters to the draft",
+                outcome.text.chars().count()
+            );
+            return self.ui.hide();
+        }
+        let Ok(engine) = &self.engine else {
+            return;
+        };
+        // Only what helps change the user's own words: no conversation,
+        // notes or writing style, which are for writing a message.
+        let context = splashdown_core::compose::ComposeContext {
+            clipboard: active
+                .clipboard
+                .clone()
+                .filter(|_| active.preset.clipboard_context),
+            app_name: active
+                .focus
+                .as_ref()
+                .filter(|_| engine.share_app_name)
+                .map(|f| f.app.name.clone()),
+            user_name: engine.context.user_name.clone(),
+            today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
+            tone: preset_tone(&active.preset),
+            ..splashdown_core::compose::ComposeContext::default()
+        };
+        tracing::info!(
+            "a dictated draft of {} characters",
+            outcome.text.chars().count()
+        );
+        crate::compose::start_dictated(
+            self.ui.app(),
+            crate::compose::Dictated {
+                text: outcome.text,
+                context,
+                model: engine.pipeline_for(&active.preset).answer_model(),
                 target: active
                     .focus
                     .as_ref()
@@ -373,6 +437,15 @@ impl Controller {
         crate::did::note(crate::did::READ, "");
         self.show_answer(active, what, Some(text), true);
     }
+}
+
+/// The preset's tone in words, for a draft.
+fn preset_tone(preset: &Preset) -> Option<&'static str> {
+    splashdown_core::compose::tone(match preset.tone? {
+        splashdown_config::Tone::Formal => "formal",
+        splashdown_config::Tone::Casual => "casual",
+        splashdown_config::Tone::VeryCasual => "very-casual",
+    })
 }
 
 /// What a spoken request is for.

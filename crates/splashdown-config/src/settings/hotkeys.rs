@@ -29,6 +29,11 @@ pub struct HotkeySettings {
     /// the dictation (or the selected text) into the language picked under
     /// Translate into. Unset means T (L if another letter is T).
     pub translate: Option<char>,
+    /// The letter that, pressed while holding the dictation key, opens the
+    /// dictation in the draft panel instead of typing it, to add to and
+    /// change by voice before inserting it. Unset means D (G or B if
+    /// another letter is D).
+    pub draft: Option<char>,
     /// Double-tap the dictation key for hands-free too. Unset means off:
     /// other apps may use a double-tap of Option for their own shortcuts.
     pub double_tap: Option<bool>,
@@ -105,11 +110,50 @@ impl HotkeySettings {
         PhysicalKey::Letter(letter)
     }
 
+    /// The draft letter: after the others, so a letter someone already
+    /// chose for one of them keeps its meaning.
+    pub fn draft_key(&self) -> PhysicalKey {
+        let taken = [
+            Some(self.hands_free_key()),
+            Some(self.note_key()),
+            Some(self.ask_key()),
+            self.compose_key(),
+            Some(self.translate_key()),
+        ];
+        let fallback = ['d', 'g', 'b']
+            .into_iter()
+            .find(|&c| !taken.contains(&Some(PhysicalKey::Letter(c))))
+            .unwrap_or('d');
+        let letter = self
+            .draft
+            .map(|c| c.to_ascii_lowercase())
+            .filter(char::is_ascii_lowercase)
+            .unwrap_or(fallback);
+        PhysicalKey::Letter(letter)
+    }
+
     /// The compose letter, if one is set.
     pub fn compose_key(&self) -> Option<PhysicalKey> {
         self.compose
             .map(|c| c.to_ascii_lowercase())
             .filter(char::is_ascii_lowercase)
             .map(PhysicalKey::Letter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_draft_letter_is_d_unless_another_letter_is() {
+        let mut h = HotkeySettings::default();
+        assert_eq!(h.draft_key(), PhysicalKey::Letter('d'));
+        h.compose = Some('d');
+        assert_eq!(h.draft_key(), PhysicalKey::Letter('g'));
+        h.translate = Some('g');
+        assert_eq!(h.draft_key(), PhysicalKey::Letter('b'));
+        h.draft = Some('X');
+        assert_eq!(h.draft_key(), PhysicalKey::Letter('x'));
     }
 }

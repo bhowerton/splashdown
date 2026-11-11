@@ -290,6 +290,10 @@ pub fn sheet(settings: &Settings) -> Sheet {
         ),
         press("Ask a question", key(h.ask_key())),
         press(
+            "Dictate a draft to add to and change by voice before it goes in",
+            key(h.draft_key()),
+        ),
+        press(
             &format!("Go hands-free (tap {dictation} again to finish)"),
             key(h.hands_free_key()),
         ),

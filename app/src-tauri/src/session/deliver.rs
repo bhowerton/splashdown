@@ -21,10 +21,19 @@ impl Controller {
             self.ask(active, Asked::Draft);
             return;
         }
-        // While a draft is open, what's said changes it ("shorter").
-        if !active.capture && crate::compose::is_open(self.ui.app()) {
-            self.ask(active, Asked::Change);
-            return;
+        // While a draft is open, what's said goes to it, told apart by key as
+        // everywhere: after the instruction key it's a change ("shorter"),
+        // otherwise its words are added. Selected text in the panel is
+        // neither changed nor copied.
+        let mut adding = false;
+        if !active.capture && !active.draft && crate::compose::is_open(self.ui.app()) {
+            if active.marked {
+                self.ask(active, Asked::Change);
+                return;
+            }
+            active.draft = true;
+            active.selection = Selection::Empty;
+            adding = true;
         }
         // Only an error from this dictation's own run counts below.
         self.pipeline_error = None;
@@ -132,6 +141,17 @@ impl Controller {
             }
             _ => crate::rescue::done(),
         }
+        // For the draft panel: the words as dictated (cleaned up), never
+        // taken as a request to act on, answer or write from.
+        if active.draft {
+            if let Some((outcome, took)) = outcome {
+                crate::spend::record_outcome(&outcome);
+                self.pending_audio = recording;
+                self.deliver_draft(active, outcome, took, adding);
+                self.check_budget();
+            }
+            return;
+        }
         if let Some((outcome, _)) = &outcome
             && let Some(request) = &outcome.action
         {
@@ -177,7 +197,7 @@ impl Controller {
     /// The user's hooks that change this preset's dictations, run before
     /// it's inserted. Why it's inserted as it was, if one failed.
     fn change_by_hooks(&self, active: &Active, outcome: &mut Outcome) -> Option<String> {
-        if active.capture || outcome.mode == Mode::Transform {
+        if active.capture || active.draft || outcome.mode == Mode::Transform {
             return None;
         }
         let settings = self.ui.settings()?;
@@ -244,7 +264,7 @@ impl Controller {
         files: Option<Arc<Project>>,
     ) -> Option<StreamTyper> {
         let engine = self.engine.as_ref().ok()?;
-        if !engine.stream_typing || active.capture {
+        if !engine.stream_typing || active.capture || active.draft {
             return None;
         }
         // A hook changes the text before it goes in.

@@ -234,6 +234,7 @@ pub fn keys(settings: &Settings) -> Keys {
             .compose_key()
             .unwrap_or(splashdown_core::gesture::PhysicalKey::Other),
         translate: settings.hotkeys.translate_key(),
+        draft: settings.hotkeys.draft_key(),
     }
 }
 

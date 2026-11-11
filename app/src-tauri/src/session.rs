@@ -17,10 +17,10 @@
 //!
 //! | File | What it does |
 //! |---|---|
-//! | `recording.rs` | Starting a recording; the preset, live preview, and the note, ask and compose letters while the key is held |
+//! | `recording.rs` | Starting a recording; the preset, live preview, and the note, ask, compose and draft letters while the key is held |
 //! | `job.rs` | Turning the recording into a pipeline job, with its context |
 //! | `deliver.rs` | Running the pipeline and inserting the text (or adding it to a note) |
-//! | `assist.rs` | Ask, Compose and reading aloud |
+//! | `assist.rs` | Ask, Compose, dictated drafts and reading aloud |
 //! | `spoken.rs` | Spoken commands and voice actions |
 //! | `edits.rs` | Redo, transforms on selected text, retry and undo |
 //! | `corrections.rs` | Watching for corrected names and learning them |
@@ -146,6 +146,9 @@ pub struct Keys {
     /// Pressed while holding the dictation key: the dictation, or the
     /// selection, is translated.
     pub translate: PhysicalKey,
+    /// Pressed while holding the dictation key: the dictation opens in the
+    /// draft panel instead of being typed.
+    pub draft: PhysicalKey,
 }
 
 enum Msg {
@@ -439,6 +442,12 @@ struct Active {
     ask: bool,
     /// The compose key was pressed: it says what to write, for Compose.
     compose: bool,
+    /// The text goes into the draft panel, not the field: the draft key
+    /// was pressed (a new draft), or words are being added to the draft
+    /// open there (see `finish`).
+    draft: bool,
+    /// The instruction key was tapped (with or without a selection).
+    marked: bool,
     /// When to quiet other sounds (after the start sound has played).
     quiet_due: Option<Instant>,
     /// Other sounds, quieted while recording; dropping it restores them.
@@ -564,7 +573,8 @@ impl Controller {
                     .with_capture(keys.note)
                     .with_ask(keys.ask)
                     .with_compose(keys.compose)
-                    .with_translate(keys.translate),
+                    .with_translate(keys.translate)
+                    .with_draft(keys.draft),
             )),
             ui,
             engine,
@@ -798,7 +808,8 @@ impl Controller {
             .with_capture(keys.note)
             .with_ask(keys.ask)
             .with_compose(keys.compose)
-            .with_translate(keys.translate);
+            .with_translate(keys.translate)
+            .with_draft(keys.draft);
         self.preview = preview_worker(&engine, &self.tx);
         self.engine = engine;
         self.keys = keys;
@@ -831,6 +842,9 @@ impl Controller {
                 self.refresh_tray();
             }
             Action::MarkInstruction => {
+                if let Some(active) = &mut self.active {
+                    active.marked = true;
+                }
                 if let Some(active) = &mut self.active
                     && active.content.is_none()
                     && !matches!(active.selection, Selection::Text(_))
@@ -848,6 +862,7 @@ impl Controller {
             Action::Ask => self.start_ask(),
             Action::Compose => self.start_compose(),
             Action::Translate => self.translate_key(),
+            Action::Draft => self.start_draft(),
             Action::HandsFree => {
                 if let Some(active) = &mut self.active {
                     active.hands_free = true;
