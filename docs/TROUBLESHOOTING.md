@@ -21,6 +21,8 @@ If the microphone is unplugged mid-recording, Splashdown stops and types what it
 ## The text didn't appear
 
 - **"Focus changed — copied to clipboard":** you switched windows before the text was ready. Paste it with ⌘V or Ctrl+V.
+- **"No text box — copied to clipboard":** the cursor wasn't in a text field (a web page outside any box, a list of files, the desktop). Click where the text should go and paste it.
+- **"Couldn't check it went in · it's on the clipboard too":** the app you were in doesn't say whether a text field has focus, so Splashdown sent the text and kept a copy on the clipboard in case it went nowhere. If nothing appeared, click where it should go and paste. In such apps what you had copied before isn't put back after a dictation.
 - **"Couldn't type it — copied to clipboard":** the app wouldn't accept pasted text. Paste it yourself, or switch that app's preset to insert by **Type** (Settings → Presets).
 - **Password fields:** Splashdown never dictates into them, by design.
 - **Windows:** apps running as administrator don't accept typing from other apps. Splashdown copies the text instead.

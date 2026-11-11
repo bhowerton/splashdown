@@ -385,7 +385,20 @@ impl Controller {
             .flatten();
         // Nothing to type into (a web page outside any field, a list): the
         // keys go nowhere, so the text stays on the clipboard to paste.
-        let no_field = active.focus.as_ref().and_then(Focus::takes_text) == Some(false);
+        let takes_text = active.focus.as_ref().and_then(Focus::takes_text);
+        let no_field = takes_text == Some(false);
+        // Nothing says whether what has focus takes text (an app that
+        // reports nothing, a part of one it has no name for). Where its
+        // text can be read, that's what shows whether this went in.
+        let held = takes_text
+            .is_none()
+            .then(|| {
+                active
+                    .focus
+                    .as_ref()
+                    .and_then(|f| f.field_text().map(|t| (f, t)))
+            })
+            .flatten();
         let mut lost = false;
         let mut inserted = match &mut typer {
             Some(typer) => match active.focus.as_ref() {
@@ -435,9 +448,24 @@ impl Controller {
             return;
         }
 
+        // It may have gone nowhere, and a paste puts the clipboard back as
+        // it was: unless the field is seen to change, the text stays on the
+        // clipboard and the overlay says so, not "Inserted".
+        let unconfirmed = takes_text.is_none()
+            && !held
+                .as_ref()
+                .is_some_and(|(focus, before)| field_changed(focus, before));
+        if unconfirmed {
+            let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
+        }
         tracing::info!(
-            "inserted {} characters into {app_id} ({method:?})",
-            outcome.text.chars().count()
+            "inserted {} characters into {app_id} ({method:?}{})",
+            outcome.text.chars().count(),
+            if unconfirmed {
+                "; nothing says it went in, so it's on the clipboard too"
+            } else {
+                ""
+            }
         );
         self.last_insert = target_pid.map(|pid| (pid, Instant::now()));
         self.last_text = outcome.text.clone();
@@ -537,6 +565,9 @@ impl Controller {
             status.push_str(" · done on this computer (cloud didn't answer)");
         } else if self.local_is_slow(&outcome) {
             status = "Inserted · tidying up is slow here: a cloud key is faster".into();
+        }
+        if unconfirmed {
+            status = unconfirmed_status(&status);
         }
         self.done(&status);
     }
@@ -682,6 +713,14 @@ pub(super) fn field_changed(focus: &Focus, before: &str) -> bool {
     }
 }
 
+/// `status` (an "Inserted · …" message) for text that was sent to an app
+/// with nothing to confirm a field took it. It doesn't say the text went
+/// in, since it may not have: only that it's on the clipboard as well.
+pub(super) fn unconfirmed_status(status: &str) -> String {
+    let rest = status.strip_prefix("Inserted").unwrap_or(status);
+    format!("Couldn't check it went in{rest} · it's on the clipboard too")
+}
+
 /// The overlay message after a successful insertion. When the words were
 /// to be `translated` but went in as said, it says so.
 pub(super) fn inserted_status(
@@ -763,6 +802,20 @@ mod tests {
                 true
             ),
             "Inserted · 1.2 s · not translated (offline?)"
+        );
+    }
+
+    #[test]
+    fn an_unconfirmed_insertion_doesn_t_say_it_went_in() {
+        let took = Duration::from_millis(1240);
+        let status = inserted_status(took, false, None, None, false);
+        assert_eq!(
+            unconfirmed_status(&status),
+            "Couldn't check it went in · 1.2 s · it's on the clipboard too"
+        );
+        assert_eq!(
+            unconfirmed_status(&inserted_status(took, true, None, None, false)),
+            "Couldn't check it went in · 1.2 s · sent · it's on the clipboard too"
         );
     }
 }

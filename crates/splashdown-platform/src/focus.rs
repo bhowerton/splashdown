@@ -103,10 +103,22 @@ impl Focus {
     }
 
     /// Whether the focused element takes typed text. `Some(false)` only when
-    /// it clearly doesn't (a button, a list, a web page outside any field),
-    /// `None` when that can't be told, as in apps that expose nothing.
+    /// it clearly doesn't (a button, a list, a web page outside any field,
+    /// Finder's desktop), `None` when that can't be told, as in apps that
+    /// expose nothing.
     pub fn takes_text(&self) -> Option<bool> {
-        imp::takes_text(&self.inner)
+        let known = imp::takes_text(&self.inner);
+        // An element of no telling kind that has nothing a text view has
+        // isn't one. Terminals are left out: some draw their own text and
+        // say nothing about it.
+        #[cfg(target_os = "macos")]
+        if known.is_none()
+            && !crate::is_terminal(&self.app.id)
+            && imp::nothing_like_text(&self.inner)
+        {
+            return Some(false);
+        }
+        known
     }
 
     /// The text around the field in its window, besides the field's own:

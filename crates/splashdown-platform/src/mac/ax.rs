@@ -445,6 +445,22 @@ pub(crate) fn takes_text(focus: &FocusElement) -> Option<bool> {
     }
 }
 
+/// Whether the focused element has nothing a text view has: no value, no
+/// selection, no length. Finder's desktop and a window's empty background
+/// are like that (a plain `AXGroup`), and typing there goes nowhere. False
+/// when there's no element, or when the app didn't answer, since then
+/// nothing is known.
+pub(crate) fn nothing_like_text(focus: &FocusElement) -> bool {
+    // "Attribute unsupported" and "no value": the element said so itself.
+    const ABSENT: [i32; 2] = [-25205, -25212];
+    let Some(el) = focus.element.as_ref() else {
+        return false;
+    };
+    ["AXValue", "AXSelectedTextRange", "AXNumberOfCharacters"]
+        .iter()
+        .all(|name| matches!(el.attribute(name), Err(code) if ABSENT.contains(&code)))
+}
+
 pub(crate) fn selection(focus: &FocusElement) -> Selection {
     let Some(el) = &focus.element else {
         return Selection::Unknown;
