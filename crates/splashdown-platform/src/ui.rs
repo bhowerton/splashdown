@@ -134,16 +134,16 @@ pub enum MiniBarEvent {
 /// Called on the main thread for each event; must not block.
 pub type MiniBarHandler = Box<dyn Fn(MiniBarEvent) + 'static>;
 
-/// A small round button that stays on screen, for starting and finishing
-/// dictation with the mouse. Unlike the overlay it takes clicks, but it
-/// still never takes focus: clicking it leaves the user's app active and
-/// its text field focused. It can be dragged anywhere. Create and use it on
-/// the main (UI) thread only.
+/// A small pill of five dots that stays on screen, for starting and
+/// finishing dictation with the mouse. Unlike the overlay it takes clicks,
+/// but it still never takes focus: clicking it leaves the user's app active
+/// and its text field focused. It can be dragged anywhere. Create and use
+/// it on the main (UI) thread only.
 pub struct MiniBar(imp::MiniBar);
 
 impl MiniBar {
-    /// Creates the bar, hidden, at `position` (or a default place by the
-    /// right edge of the screen when it's unset or no longer on a screen).
+    /// Creates the bar, hidden, at `position` (or at the bottom middle of
+    /// the screen when it's unset or no longer on a screen).
     /// `menu` lists the right-click menu's items (macOS only for now).
     pub fn new(
         position: Option<MiniBarPosition>,
@@ -163,6 +163,12 @@ impl MiniBar {
 
     pub fn set_state(&self, state: MiniBarState) {
         self.0.set_state(state);
+    }
+
+    /// Feeds the live microphone level (0.0–1.0) to the dots, which show it
+    /// while the bar is `Recording`.
+    pub fn set_level(&self, level: f32) {
+        self.0.set_level(level);
     }
 
     /// The hint shown when the pointer rests on the bar, also read out by

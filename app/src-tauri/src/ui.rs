@@ -127,6 +127,7 @@ impl Ui {
     }
 
     pub fn level(&self, level: f32) {
+        crate::minibar::level(level);
         self.on_overlay(move |o| o.set_level(level));
     }
 

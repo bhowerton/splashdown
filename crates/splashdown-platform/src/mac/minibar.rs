@@ -1,5 +1,7 @@
-//! The mini bar: a small round button that stays on screen, for starting
-//! and finishing dictation with the mouse.
+//! The mini bar: a small pill of five dots that stays on screen, for
+//! starting and finishing dictation with the mouse. The dots turn orange
+//! under the pointer, become the sound's level while it listens, and
+//! sweep while it works.
 //!
 //! Unlike the overlay it takes clicks, but it must never take focus, or the
 //! text would have nowhere to go. Three things make sure of that:
@@ -12,32 +14,46 @@
 //!   the mouse itself, so the click acts at once instead of first trying
 //!   to bring the window forward.
 
-use std::cell::{Cell, OnceCell};
+use std::cell::{Cell, OnceCell, RefCell};
 
 use objc2::rc::Retained;
 use objc2::runtime::AnyObject;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSAccessibility, NSAccessibilityButtonRole, NSAppearance, NSAppearanceCustomization,
-    NSAppearanceNameDarkAqua, NSBackingStoreType, NSBox, NSBoxType, NSColor, NSControlSize,
-    NSEvent, NSEventModifierFlags, NSImage, NSImageScaling, NSImageView, NSMenu, NSMenuItem,
-    NSPanel, NSProgressIndicator, NSProgressIndicatorStyle, NSScreen, NSStatusWindowLevel,
-    NSTitlePosition, NSView, NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSAccessibility, NSAccessibilityButtonRole, NSBackingStoreType, NSBox, NSBoxType, NSColor,
+    NSEvent, NSEventModifierFlags, NSMenu, NSMenuItem, NSPanel, NSScreen, NSStatusWindowLevel,
+    NSTitlePosition, NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindowCollectionBehavior,
+    NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::{MiniBarEvent, MiniBarHandler, MiniBarPosition, MiniBarState, PlatformError, Result};
 
-/// The button's diameter.
-const SIZE: f64 = 40.0;
-const GLYPH: f64 = 18.0;
-const SPIN: f64 = 18.0;
+/// The pill.
+const WIDTH: f64 = 48.0;
+const HEIGHT: f64 = 22.0;
+/// Its dots: how many, how wide, and the space between them.
+const DOTS: usize = 5;
+const DOT: f64 = 4.0;
+const GAP: f64 = 4.0;
+/// A dot as a bar of the sound's level, while it listens.
+const BAR_W: f64 = 3.0;
+const BAR_MIN_H: f64 = 4.0;
+const BAR_MAX_H: f64 = 14.0;
+/// How much of the level each bar shows: tallest in the middle.
+const ENVELOPE: [f64; DOTS] = [0.55, 0.8, 1.0, 0.8, 0.55];
+/// Seconds between the steps of the sweep that shows it's working.
+const SWEEP: f64 = 0.11;
 /// The mouse must move this far before a press counts as a drag.
 const DRAG_SLOP: f64 = 3.0;
-/// Default place: this far in from the right edge of the screen…
-const EDGE_MARGIN: f64 = 12.0;
-/// …and this far up it (a fraction of its height).
-const DEFAULT_HEIGHT: f64 = 0.3;
+/// Default place: the bottom middle of the screen, this far above the Dock.
+const BOTTOM_MARGIN: f64 = 10.0;
+
+/// What's drawn: the pill and its dots.
+struct Parts {
+    background: Retained<NSBox>,
+    dots: Vec<Retained<NSBox>>,
+}
 
 struct Ivars {
     handler: MiniBarHandler,
@@ -45,6 +61,17 @@ struct Ivars {
     press: Cell<Option<(NSPoint, NSPoint)>>,
     dragged: Cell<bool>,
     menu: OnceCell<Retained<NSMenu>>,
+    parts: OnceCell<Parts>,
+    state: Cell<MiniBarState>,
+    /// The pointer is over the pill.
+    hover: Cell<bool>,
+    /// The last levels heard (0–1), newest last: the middle bar shows the
+    /// newest, the ones beside it the ones before.
+    levels: RefCell<[f32; 3]>,
+    /// Where the sweep is, while it works.
+    step: Cell<usize>,
+    /// A step of the sweep is waiting to run.
+    sweeping: Cell<bool>,
 }
 
 define_class!(
@@ -69,7 +96,7 @@ define_class!(
             false
         }
 
-        /// Every click inside lands here, not on the glyph or spinner.
+        /// Every click inside lands here, not on the pill or a dot.
         #[unsafe(method_id(hitTest:))]
         fn hit_test(&self, point: NSPoint) -> Option<Retained<NSView>> {
             // SAFETY: calls NSView's own hitTest: with its own argument.
@@ -133,6 +160,30 @@ define_class!(
             self.show_menu(event);
         }
 
+        #[unsafe(method(mouseEntered:))]
+        fn mouse_entered(&self, _event: &NSEvent) {
+            self.ivars().hover.set(true);
+            self.redraw();
+        }
+
+        #[unsafe(method(mouseExited:))]
+        fn mouse_exited(&self, _event: &NSEvent) {
+            self.ivars().hover.set(false);
+            self.redraw();
+        }
+
+        /// The next step of the sweep, for as long as it's working.
+        #[unsafe(method(sweep))]
+        fn sweep(&self) {
+            self.ivars().sweeping.set(false);
+            if self.ivars().state.get() != MiniBarState::Working {
+                return;
+            }
+            self.ivars().step.set(self.ivars().step.get() + 1);
+            self.redraw();
+            self.sweep_later();
+        }
+
         #[unsafe(method(menuItemChosen:))]
         fn menu_item_chosen(&self, item: &NSMenuItem) {
             if let Ok(index) = usize::try_from(item.tag()) {
@@ -156,8 +207,14 @@ impl BarView {
             press: Cell::new(None),
             dragged: Cell::new(false),
             menu: OnceCell::new(),
+            parts: OnceCell::new(),
+            state: Cell::new(MiniBarState::Idle),
+            hover: Cell::new(false),
+            levels: RefCell::new([0.0; 3]),
+            step: Cell::new(0),
+            sweeping: Cell::new(false),
         });
-        let frame = NSRect::new(NSPoint::ZERO, NSSize::new(SIZE, SIZE));
+        let frame = NSRect::new(NSPoint::ZERO, NSSize::new(WIDTH, HEIGHT));
         // SAFETY: NSView's designated initializer, on a freshly allocated
         // instance whose ivars are set.
         unsafe { msg_send![super(this), initWithFrame: frame] }
@@ -168,26 +225,108 @@ impl BarView {
             NSMenu::popUpContextMenu_withEvent_forView(menu, event, self);
         }
     }
+
+    /// Runs `sweep` once, a moment from now, unless one is already waiting
+    /// (or motion is to be kept down: then the dots stay still).
+    fn sweep_later(&self) {
+        if self.ivars().sweeping.get() || crate::reduce_motion() {
+            return;
+        }
+        self.ivars().sweeping.set(true);
+        // SAFETY: `sweep` is a method of this class taking no arguments;
+        // the run loop keeps `self` alive until it has run.
+        let _: () = unsafe {
+            msg_send![
+                self,
+                performSelector: sel!(sweep),
+                withObject: None::<&AnyObject>,
+                afterDelay: SWEEP
+            ]
+        };
+    }
+
+    /// Draws the pill and its dots for the state it's in.
+    fn redraw(&self) {
+        let Some(parts) = self.ivars().parts.get() else {
+            return;
+        };
+        let state = self.ivars().state.get();
+        let orange = color(1.0, 0.60, 0.24, 1.0);
+        let white = |alpha: f64| color(1.0, 1.0, 1.0, alpha);
+
+        parts
+            .background
+            .setFillColor(&color(0.09, 0.09, 0.11, 0.92));
+        // A hairline so it shows on a dark desktop; orange while it listens.
+        if state == MiniBarState::Recording {
+            parts.background.setBorderWidth(1.5);
+            parts.background.setBorderColor(&orange);
+        } else {
+            parts.background.setBorderWidth(1.0);
+            parts.background.setBorderColor(&white(0.18));
+        }
+
+        let levels = *self.ivars().levels.borrow();
+        // The sweep goes to the last dot and back.
+        let step = self.ivars().step.get() % (2 * DOTS - 2);
+        let lit = if step < DOTS {
+            step
+        } else {
+            2 * DOTS - 2 - step
+        };
+        let x0 = (WIDTH - (DOTS as f64 * DOT + (DOTS - 1) as f64 * GAP)) / 2.0;
+        for (i, dot) in parts.dots.iter().enumerate() {
+            let from_middle = i.abs_diff(DOTS / 2);
+            let (w, h, fill) = match state {
+                MiniBarState::Recording => {
+                    // Speech RMS is roughly 0.01–0.2; a square-root curve
+                    // makes quiet speech visible without loud speech pinning
+                    // the bars (as the overlay's waveform does).
+                    let level = f64::from(levels[2 - from_middle]);
+                    let norm = (level * 25.0).sqrt().min(1.0) * ENVELOPE[i];
+                    let h = (BAR_MIN_H + norm * (BAR_MAX_H - BAR_MIN_H)).round();
+                    (BAR_W, h, orange.clone())
+                }
+                MiniBarState::Working => {
+                    let alpha = match i.abs_diff(lit) {
+                        0 => 1.0,
+                        1 => 0.55,
+                        _ => 0.28,
+                    };
+                    (DOT, DOT, white(alpha))
+                }
+                MiniBarState::NotReady => (DOT, DOT, white(0.25)),
+                MiniBarState::Idle if self.ivars().hover.get() => (DOT, DOT, orange.clone()),
+                MiniBarState::Idle => (DOT, DOT, white(0.6)),
+            };
+            let center = x0 + i as f64 * (DOT + GAP) + DOT / 2.0;
+            dot.setFrame(NSRect::new(
+                NSPoint::new(center - w / 2.0, (HEIGHT - h) / 2.0),
+                NSSize::new(w, h),
+            ));
+            dot.setCornerRadius(w / 2.0);
+            dot.setFillColor(&fill);
+        }
+    }
+}
+
+/// A plain filled box, for the pill and each dot.
+fn filled_box(mtm: MainThreadMarker, frame: NSRect) -> Retained<NSBox> {
+    let b = NSBox::initWithFrame(NSBox::alloc(mtm), frame);
+    b.setBoxType(NSBoxType::Custom);
+    b.setTitlePosition(NSTitlePosition::NoTitle);
+    b.setBorderWidth(0.0);
+    b.setContentViewMargins(NSSize::ZERO);
+    b
 }
 
 fn color(r: f64, g: f64, b: f64, a: f64) -> Retained<NSColor> {
     NSColor::colorWithSRGBRed_green_blue_alpha(r, g, b, a)
 }
 
-fn symbol(name: &str) -> Option<Retained<NSImage>> {
-    NSImage::imageWithSystemSymbolName_accessibilityDescription(&NSString::from_str(name), None)
-}
-
 pub(crate) struct MiniBar {
     panel: Retained<NSPanel>,
     view: Retained<BarView>,
-    background: Retained<NSBox>,
-    glyph: Retained<NSImageView>,
-    spinner: Retained<NSProgressIndicator>,
-    /// The symbols for each state, looked up once.
-    mic: Option<Retained<NSImage>>,
-    mic_off: Option<Retained<NSImage>>,
-    stop: Option<Retained<NSImage>>,
 }
 
 impl MiniBar {
@@ -208,7 +347,7 @@ impl MiniBar {
         // `NonactivatingPanel` only works when given here, at creation.
         let panel = NSPanel::initWithContentRect_styleMask_backing_defer(
             NSPanel::alloc(mtm),
-            NSRect::new(origin, NSSize::new(SIZE, SIZE)),
+            NSRect::new(origin, NSSize::new(WIDTH, HEIGHT)),
             NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel,
             NSBackingStoreType::Buffered,
             false,
@@ -229,10 +368,6 @@ impl MiniBar {
                 | NSWindowCollectionBehavior::Stationary
                 | NSWindowCollectionBehavior::IgnoresCycle,
         );
-        // SAFETY: reads an immutable constant exported by AppKit.
-        let dark = NSAppearance::appearanceNamed(unsafe { NSAppearanceNameDarkAqua });
-        // The spinner is drawn for a dark background.
-        panel.setAppearance(dark.as_deref());
         // SAFETY: on the main thread (`mtm`). Turning this off is what makes
         // owning the panel through `Retained` sound: closing it won't also
         // release it behind our back.
@@ -244,38 +379,33 @@ impl MiniBar {
         view.setAccessibilityRole(Some(unsafe { NSAccessibilityButtonRole }));
         view.setAccessibilityLabel(Some(&NSString::from_str("Splashdown dictation")));
 
-        let background = NSBox::initWithFrame(
-            NSBox::alloc(mtm),
-            NSRect::new(NSPoint::ZERO, NSSize::new(SIZE, SIZE)),
-        );
-        background.setBoxType(NSBoxType::Custom);
-        background.setTitlePosition(NSTitlePosition::NoTitle);
-        background.setBorderWidth(0.0);
-        background.setCornerRadius(SIZE / 2.0);
-        background.setContentViewMargins(NSSize::ZERO);
+        let background = filled_box(mtm, NSRect::new(NSPoint::ZERO, NSSize::new(WIDTH, HEIGHT)));
+        background.setCornerRadius(HEIGHT / 2.0);
         view.addSubview(&background);
+        let dots: Vec<Retained<NSBox>> = (0..DOTS)
+            .map(|_| {
+                let dot = filled_box(mtm, NSRect::ZERO);
+                view.addSubview(&dot);
+                dot
+            })
+            .collect();
+        let _ = view.ivars().parts.set(Parts { background, dots });
 
-        let glyph = NSImageView::initWithFrame(
-            NSImageView::alloc(mtm),
-            NSRect::new(
-                NSPoint::new((SIZE - GLYPH) / 2.0, (SIZE - GLYPH) / 2.0),
-                NSSize::new(GLYPH, GLYPH),
-            ),
-        );
-        glyph.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
-        view.addSubview(&glyph);
-
-        let spinner = NSProgressIndicator::initWithFrame(
-            NSProgressIndicator::alloc(mtm),
-            NSRect::new(
-                NSPoint::new((SIZE - SPIN) / 2.0, (SIZE - SPIN) / 2.0),
-                NSSize::new(SPIN, SPIN),
-            ),
-        );
-        spinner.setStyle(NSProgressIndicatorStyle::Spinning);
-        spinner.setControlSize(NSControlSize::Small);
-        spinner.setDisplayedWhenStopped(false);
-        view.addSubview(&spinner);
+        // The pointer coming and going, whichever app is in front.
+        // SAFETY: the area is owned by the view it reports to, which
+        // implements `mouseEntered:` and `mouseExited:`.
+        let area = unsafe {
+            NSTrackingArea::initWithRect_options_owner_userInfo(
+                objc2::AllocAnyThread::alloc(),
+                NSRect::ZERO,
+                NSTrackingAreaOptions::MouseEnteredAndExited
+                    | NSTrackingAreaOptions::ActiveAlways
+                    | NSTrackingAreaOptions::InVisibleRect,
+                Some(&view),
+                None,
+            )
+        };
+        view.addTrackingArea(&area);
 
         if !menu.is_empty() {
             let items = NSMenu::new(mtm);
@@ -296,16 +426,7 @@ impl MiniBar {
 
         panel.setContentView(Some(&view));
 
-        let bar = Self {
-            panel,
-            view,
-            background,
-            glyph,
-            spinner,
-            mic: symbol("mic.fill"),
-            mic_off: symbol("mic.slash.fill"),
-            stop: symbol("stop.fill"),
-        };
+        let bar = Self { panel, view };
         bar.set_state(MiniBarState::Idle);
         Ok(bar)
     }
@@ -320,30 +441,27 @@ impl MiniBar {
     }
 
     pub(crate) fn set_state(&self, state: MiniBarState) {
-        let dark = color(0.09, 0.09, 0.11, 0.92);
-        let (fill, image, tint) = match state {
-            MiniBarState::Idle => (dark, &self.mic, color(0.96, 0.96, 0.96, 0.95)),
-            MiniBarState::Recording => (
-                color(0.94, 0.27, 0.27, 1.0),
-                &self.stop,
-                color(1.0, 1.0, 1.0, 1.0),
-            ),
-            MiniBarState::Working => (dark, &None, color(1.0, 1.0, 1.0, 1.0)),
-            MiniBarState::NotReady => (dark, &self.mic_off, color(0.70, 0.70, 0.72, 0.8)),
-        };
-        self.background.setFillColor(&fill);
-        self.glyph.setImage(image.as_deref());
-        self.glyph.setContentTintColor(Some(&tint));
-        let working = state == MiniBarState::Working;
-        self.glyph.setHidden(working);
-        // SAFETY: on the main thread (we hold a main-thread-only view); the
-        // sender argument is unused and may be nil.
-        unsafe {
-            if working {
-                self.spinner.startAnimation(None);
-            } else {
-                self.spinner.stopAnimation(None);
-            }
+        let ivars = self.view.ivars();
+        if ivars.state.replace(state) != state {
+            *ivars.levels.borrow_mut() = [0.0; 3];
+            ivars.step.set(DOTS / 2);
+        }
+        self.view.redraw();
+        if state == MiniBarState::Working {
+            self.view.sweep_later();
+        }
+    }
+
+    /// The live microphone level (0–1), shown while it listens.
+    pub(crate) fn set_level(&self, level: f32) {
+        let ivars = self.view.ivars();
+        {
+            let mut levels = ivars.levels.borrow_mut();
+            levels.rotate_left(1);
+            levels[2] = level;
+        }
+        if ivars.state.get() == MiniBarState::Recording {
+            self.view.redraw();
         }
     }
 
@@ -371,15 +489,15 @@ fn on_a_screen(mtm: MainThreadMarker, origin: NSPoint) -> bool {
 }
 
 fn center(origin: NSPoint) -> NSPoint {
-    NSPoint::new(origin.x + SIZE / 2.0, origin.y + SIZE / 2.0)
+    NSPoint::new(origin.x + WIDTH / 2.0, origin.y + HEIGHT / 2.0)
 }
 
-/// By the right edge of the main screen, a little below the middle.
+/// The bottom middle of the main screen, just above the Dock.
 fn default_origin(mtm: MainThreadMarker) -> Option<NSPoint> {
     let vis = NSScreen::mainScreen(mtm)?.visibleFrame();
     Some(NSPoint::new(
-        (vis.origin.x + vis.size.width - SIZE - EDGE_MARGIN).round(),
-        (vis.origin.y + vis.size.height * DEFAULT_HEIGHT).round(),
+        (vis.origin.x + (vis.size.width - WIDTH) / 2.0).round(),
+        (vis.origin.y + BOTTOM_MARGIN).round(),
     ))
 }
 
@@ -393,12 +511,12 @@ fn keep_on_screen(mtm: MainThreadMarker, origin: NSPoint) -> NSPoint {
     NSPoint::new(
         origin
             .x
-            .min(vis.origin.x + vis.size.width - SIZE)
+            .min(vis.origin.x + vis.size.width - WIDTH)
             .max(vis.origin.x)
             .round(),
         origin
             .y
-            .min(vis.origin.y + vis.size.height - SIZE)
+            .min(vis.origin.y + vis.size.height - HEIGHT)
             .max(vis.origin.y)
             .round(),
     )

@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **The mini bar is a small pill, and setup shows it.** The button that stays on screen for clicking instead of holding a key is now a slim pill of five dots at the bottom middle of the screen, where it was a round button by the right edge. The dots turn orange under the pointer, become the sound of your voice while it listens, and sweep while your words are worked on. The end of a first setup shows it, with a switch to turn it off; it's still in Settings → General, can be dragged anywhere, and stays where you put it.
+
 ## 0.12.0 — 2026-11-10
 
 - **Coding agents can search what you dictated, if you let them.** A new tool in `splashdown-mcp`, `search_history`, finds your dictations by words or date: "what did I dictate about the invoice last week?". It has a switch of its own, off by default, in Settings → Privacy → Coding agents; allowing notes doesn't allow it, because history holds everything you dictated anywhere. An agent gets when, the app, the preset and the text that was inserted, never what was heard before cleanup or the recording, and it needs history kept.

@@ -1,16 +1,18 @@
-//! The mini bar (setting `general.mini_bar`): a small button that stays on
+//! The mini bar (setting `general.mini_bar`): a small pill that stays on
 //! screen for people who'd rather click than hold a key. Clicking it does
 //! what `splash toggle` does: starts a hands-free dictation into the
 //! focused field, or finishes the one in progress. It never takes focus
 //! (see `splashdown_platform::MiniBar`), shows whether Splashdown is
-//! recording or working, and remembers where it was dragged to.
+//! recording (with the sound's level) or working, and remembers where it
+//! was dragged to.
 //!
 //! The bar lives on the main thread. The session reports its state through
-//! `Ui` (`tray_state`, `working`, `pinned_preset`); clicks go back to the
+//! `Ui` (`tray_state`, `working`, `level`, `pinned_preset`); clicks go back to the
 //! session from a spawned thread, because `Handle::control` waits.
 
 use std::cell::RefCell;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 use splashdown_control::Request;
@@ -21,6 +23,9 @@ use crate::state::AppState;
 use crate::tray::TrayIconState;
 
 static APP: OnceLock<AppHandle> = OnceLock::new();
+/// The bar is on screen and listening: only then is the level worth a trip
+/// to the main thread.
+static LISTENING: AtomicBool = AtomicBool::new(false);
 
 /// The right-click menu, in order (see `on_event`).
 const MENU: [&str; 2] = ["Settings…", "Hide mini bar"];
@@ -86,6 +91,10 @@ impl Model {
             if self.visible { "shown" } else { "hidden" }
         );
         let state = self.state();
+        LISTENING.store(
+            self.visible && state == MiniBarState::Recording,
+            Ordering::Relaxed,
+        );
         bar.set_state(state);
         bar.set_tooltip(&self.tooltip(state));
         if self.visible {
@@ -119,6 +128,25 @@ pub fn tray_state(state: TrayIconState) {
 /// Whether the overlay shows "Working…". Any thread.
 pub fn working(on: bool) {
     on_main(move |m| m.working = on);
+}
+
+/// The live microphone level (0–1), for the bar's dots. Any thread.
+pub fn level(level: f32) {
+    if !LISTENING.load(Ordering::Relaxed) {
+        return;
+    }
+    let Some(app) = APP.get() else {
+        return;
+    };
+    let _ = app.run_on_main_thread(move || {
+        MODEL.with(|m| {
+            if let Ok(m) = m.try_borrow()
+                && let Some(bar) = &m.bar
+            {
+                bar.set_level(level);
+            }
+        });
+    });
 }
 
 /// The preset chosen in the menu bar (`None`: by app). Any thread.

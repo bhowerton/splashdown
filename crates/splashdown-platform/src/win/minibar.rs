@@ -1,12 +1,14 @@
-//! The mini bar: a small round, topmost tool window that stays
-//! on screen, for starting and finishing dictation with the mouse.
+//! The mini bar: a small pill of five dots, a topmost tool window that
+//! stays on screen, for starting and finishing dictation with the mouse.
+//! The dots turn orange under the pointer, become the sound's level while
+//! it listens, and sweep while it works.
 //!
 //! Unlike the overlay it takes clicks, but it never activates: it's created
 //! with `WS_EX_NOACTIVATE` and answers `WM_MOUSEACTIVATE` with
 //! `MA_NOACTIVATE`, so the foreground window and its focused field stay as
 //! they were. Dragging uses mouse capture rather than the system's move
-//! loop, which would activate the window. Painted with GDI; the round shape
-//! is a window region.
+//! loop, which would activate the window. Painted with GDI; the pill's
+//! shape is a window region.
 //!
 //! Not done on Windows yet: the tooltip and screen-reader name (they need a
 //! tooltip control and a UI Automation provider), and the right-click menu
@@ -17,17 +19,17 @@ use std::rc::Rc;
 
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, BitBlt, CLEARTYPE_QUALITY, CLIP_DEFAULT_PRECIS, CreateCompatibleBitmap,
-    CreateCompatibleDC, CreateEllipticRgn, CreateFontW, CreateSolidBrush, DEFAULT_CHARSET,
-    DT_CENTER, DT_NOPREFIX, DT_SINGLELINE, DT_VCENTER, DeleteDC, DeleteObject, DrawTextW, Ellipse,
-    EndPaint, FW_NORMAL, FillRect, GetMonitorInfoW, GetStockObject, HDC, HFONT, HGDIOBJ,
-    InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTONULL, MONITOR_DEFAULTTOPRIMARY,
-    MONITORINFO, MonitorFromPoint, NULL_PEN, OUT_DEFAULT_PRECIS, PAINTSTRUCT, RoundRect, SRCCOPY,
-    SelectObject, SetBkMode, SetTextColor, SetWindowRgn, TRANSPARENT, UpdateWindow,
+    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateRoundRectRgn,
+    CreateSolidBrush, DeleteDC, DeleteObject, Ellipse, EndPaint, FillRect, GetMonitorInfoW,
+    GetStockObject, HDC, HGDIOBJ, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTONULL,
+    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, NULL_PEN, PAINTSTRUCT, RoundRect,
+    SRCCOPY, SelectObject, SetWindowRgn, UpdateWindow,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
-use windows::Win32::UI::Input::KeyboardAndMouse::{GetCapture, ReleaseCapture, SetCapture};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    GetCapture, ReleaseCapture, SetCapture, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+};
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, GetCursorPos, GetWindowRect, HWND_TOPMOST,
     KillTimer, LWA_ALPHA, MA_NOACTIVATE, RegisterClassExW, SW_HIDE, SW_SHOWNOACTIVATE,
@@ -42,24 +44,36 @@ use windows::core::w;
 use crate::{MiniBarEvent, MiniBarHandler, MiniBarPosition, MiniBarState, PlatformError, Result};
 
 // Sizes in device-independent pixels (scaled by the monitor's DPI).
-/// The button's diameter.
-const SIZE: f64 = 40.0;
-const GLYPH_PX: f64 = 17.0;
-const STOP: f64 = 12.0;
+/// The pill.
+const WIDTH: f64 = 48.0;
+const HEIGHT: f64 = 22.0;
+/// Its dots: how many, how wide, and the space between them.
+const DOTS: usize = 5;
+const DOT: f64 = 4.0;
+const GAP: f64 = 4.0;
+/// A dot as a bar of the sound's level, while it listens.
+const BAR_W: f64 = 3.0;
+const BAR_MIN_H: f64 = 4.0;
+const BAR_MAX_H: f64 = 14.0;
+/// How much of the level each bar shows: tallest in the middle.
+const ENVELOPE: [f64; DOTS] = [0.55, 0.8, 1.0, 0.8, 0.55];
+/// The orange line around it while it listens.
+const RING: f64 = 1.5;
 /// The mouse must move this far before a press counts as a drag.
 const DRAG_SLOP: f64 = 3.0;
-/// Default place: this far in from the right edge of the work area…
-const EDGE_MARGIN: f64 = 12.0;
-/// …and this far up it (a fraction of its height).
-const DEFAULT_HEIGHT: f64 = 0.3;
+/// Default place: the bottom middle of the work area, this far above the
+/// taskbar.
+const BOTTOM_MARGIN: f64 = 10.0;
 
-/// Timer that turns the "working" spinner.
+/// The pointer left the window (asked for with `TrackMouseEvent`). The
+/// bindings keep it with the common controls, which aren't used here.
+const WM_MOUSELEAVE: u32 = 0x02A3;
+
+/// Timer that moves the sweep which shows it's working.
 const SPIN_TIMER: usize = 1;
-const SPIN_MS: u32 = 90;
-const SPIN_DOTS: u8 = 8;
-
-/// Segoe MDL2 Assets' microphone (Windows 10 and later).
-const MIC_GLYPH: &str = "\u{E720}";
+const SPIN_MS: u32 = 110;
+/// The sweep goes to the last dot and back.
+const SWEEP_STEPS: usize = 2 * DOTS - 2;
 
 #[derive(Clone, Copy)]
 struct Rgb(u8, u8, u8);
@@ -76,19 +90,24 @@ impl Rgb {
     }
 }
 
-const RED: Rgb = Rgb(240, 69, 69);
+const ORANGE: Rgb = Rgb(255, 154, 61);
 const BACKGROUND: Rgb = Rgb(23, 23, 28);
 const TEXT: Rgb = Rgb(245, 245, 245);
-const GRAY: Rgb = Rgb(150, 150, 156);
 
 /// What the bar shows, its size, and the drag in progress.
 struct Model {
     state: MiniBarState,
-    spin: u8,
+    /// Where the sweep is, while it works.
+    step: usize,
+    /// The pointer is over the pill.
+    hover: bool,
+    /// The last levels heard (0–1), newest last: the middle bar shows the
+    /// newest, the ones beside it the ones before.
+    levels: [f32; 3],
     scale: f64,
-    /// Diameter in physical pixels.
-    size: i32,
-    font: Option<HFONT>,
+    /// Width and height in physical pixels.
+    width: i32,
+    height: i32,
     /// Cursor and window position when the button went down.
     press: Option<(POINT, POINT)>,
     dragged: bool,
@@ -100,42 +119,14 @@ impl Model {
     }
 
     fn set_scale(&mut self, scale: f64) {
-        if self.font.is_some() && (scale - self.scale).abs() < f64::EPSILON {
-            return;
-        }
         self.scale = scale;
-        self.size = self.px(SIZE);
-        if let Some(old) = self.font.take() {
-            // SAFETY: the font was created by us and isn't selected into any
-            // DC (each paint restores the DC's previous font).
-            let _ = unsafe { DeleteObject(old.into()) };
-        }
-        // SAFETY: plain values and a NUL-terminated face name; returns a new
-        // font (or null, which GDI treats as "use the default font").
-        let font = unsafe {
-            CreateFontW(
-                -self.px(GLYPH_PX),
-                0,
-                0,
-                0,
-                FW_NORMAL.0 as i32,
-                0,
-                0,
-                0,
-                DEFAULT_CHARSET,
-                OUT_DEFAULT_PRECIS,
-                CLIP_DEFAULT_PRECIS,
-                CLEARTYPE_QUALITY,
-                0,
-                w!("Segoe MDL2 Assets"),
-            )
-        };
-        self.font = (!font.is_invalid()).then_some(font);
+        self.width = self.px(WIDTH);
+        self.height = self.px(HEIGHT);
     }
 
     fn draw(&self, dc: HDC) {
-        let s = self.size;
-        if s <= 0 {
+        let (w, h) = (self.width, self.height);
+        if w <= 0 || h <= 0 {
             return;
         }
         // SAFETY: every GDI object created here is selected out and deleted
@@ -143,74 +134,84 @@ impl Model {
         unsafe {
             // Draw off-screen, then copy, so updates don't flicker.
             let mem = CreateCompatibleDC(Some(dc));
-            let bitmap = CreateCompatibleBitmap(dc, s, s);
+            let bitmap = CreateCompatibleBitmap(dc, w, h);
             let old_bitmap = SelectObject(mem, bitmap.into());
             let old_pen = SelectObject(mem, GetStockObject(NULL_PEN));
 
-            let fill = match self.state {
-                MiniBarState::Recording => RED,
-                _ => BACKGROUND,
-            };
-            let brush = CreateSolidBrush(fill.colorref());
             let rect = RECT {
                 left: 0,
                 top: 0,
-                right: s,
-                bottom: s,
+                right: w,
+                bottom: h,
             };
-            FillRect(mem, &rect, brush);
-            let _ = DeleteObject(brush.into());
+            if self.state == MiniBarState::Recording {
+                // An orange line around it: orange all over, then the
+                // pill's own color a little inside.
+                fill(mem, ORANGE, &rect);
+                let ring = self.px(RING).max(1);
+                fill_round(
+                    mem,
+                    BACKGROUND,
+                    RECT {
+                        left: ring,
+                        top: ring,
+                        right: w - ring,
+                        bottom: h - ring,
+                    },
+                    h - 2 * ring,
+                );
+            } else {
+                fill(mem, BACKGROUND, &rect);
+            }
 
-            let c = f64::from(s) / 2.0;
-            match self.state {
-                MiniBarState::Idle | MiniBarState::NotReady => {
-                    let color = if self.state == MiniBarState::Idle {
-                        TEXT
-                    } else {
-                        GRAY
-                    };
-                    let mut glyph: Vec<u16> = MIC_GLYPH.encode_utf16().collect();
-                    let mut bounds = rect;
-                    let old_font = self.font.map(|f| SelectObject(mem, f.into()));
-                    SetBkMode(mem, TRANSPARENT);
-                    SetTextColor(mem, color.colorref());
-                    DrawTextW(
-                        mem,
-                        &mut glyph,
-                        &mut bounds,
-                        DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX,
-                    );
-                    if let Some(old) = old_font {
-                        SelectObject(mem, old);
+            let lit = if self.step < DOTS {
+                self.step
+            } else {
+                SWEEP_STEPS - self.step
+            };
+            let dots_width = DOTS as f64 * DOT + (DOTS - 1) as f64 * GAP;
+            let x0 = (WIDTH - dots_width) / 2.0;
+            let cy = f64::from(h) / 2.0;
+            for (i, share) in ENVELOPE.iter().enumerate() {
+                let cx = (x0 + i as f64 * (DOT + GAP) + DOT / 2.0) * self.scale;
+                let dot = |color: Rgb| fill_ellipse(mem, color, cx, cy, DOT * self.scale / 2.0);
+                match self.state {
+                    MiniBarState::Recording => {
+                        // Speech RMS is roughly 0.01–0.2; a square-root
+                        // curve makes quiet speech visible without loud
+                        // speech pinning the bars (as the overlay's does).
+                        let level = f64::from(self.levels[2 - i.abs_diff(DOTS / 2)]);
+                        let norm = (level * 25.0).sqrt().min(1.0) * share;
+                        let half_h =
+                            (BAR_MIN_H + norm * (BAR_MAX_H - BAR_MIN_H)) * self.scale / 2.0;
+                        let half_w = BAR_W * self.scale / 2.0;
+                        fill_round(
+                            mem,
+                            ORANGE,
+                            RECT {
+                                left: (cx - half_w).round() as i32,
+                                top: (cy - half_h).round() as i32,
+                                right: (cx + half_w).round() as i32,
+                                bottom: (cy + half_h).round() as i32,
+                            },
+                            self.px(BAR_W),
+                        );
                     }
-                }
-                MiniBarState::Recording => {
-                    // A stop square: click to finish.
-                    let half = STOP * self.scale / 2.0;
-                    let brush = CreateSolidBrush(TEXT.colorref());
-                    let old_brush = SelectObject(mem, brush.into());
-                    let (l, t) = ((c - half).round() as i32, (c - half).round() as i32);
-                    let (r, b) = ((c + half).round() as i32, (c + half).round() as i32);
-                    let round = self.px(3.0);
-                    let _ = RoundRect(mem, l, t, r + 1, b + 1, round, round);
-                    SelectObject(mem, old_brush);
-                    let _ = DeleteObject(brush.into());
-                }
-                MiniBarState::Working => {
-                    // A ring of dots, brightest at the current step.
-                    let ring = 6.5 * self.scale;
-                    let r = 1.6 * self.scale;
-                    for i in 0..SPIN_DOTS {
-                        let age = (self.spin + SPIN_DOTS - i) % SPIN_DOTS;
-                        let t = 1.0 - f64::from(age) / f64::from(SPIN_DOTS);
-                        let angle = f64::from(i) * std::f64::consts::TAU / f64::from(SPIN_DOTS);
-                        let (x, y) = (c + ring * angle.sin(), c - ring * angle.cos());
-                        fill_ellipse(mem, BACKGROUND.mix(TEXT, 0.15 + 0.85 * t), x, y, r);
+                    MiniBarState::Working => {
+                        let bright = match i.abs_diff(lit) {
+                            0 => 1.0,
+                            1 => 0.55,
+                            _ => 0.28,
+                        };
+                        dot(BACKGROUND.mix(TEXT, bright));
                     }
+                    MiniBarState::NotReady => dot(BACKGROUND.mix(TEXT, 0.25)),
+                    MiniBarState::Idle if self.hover => dot(ORANGE),
+                    MiniBarState::Idle => dot(BACKGROUND.mix(TEXT, 0.6)),
                 }
             }
 
-            let _ = BitBlt(dc, 0, 0, s, s, Some(mem), 0, 0, SRCCOPY);
+            let _ = BitBlt(dc, 0, 0, w, h, Some(mem), 0, 0, SRCCOPY);
             SelectObject(mem, old_pen);
             SelectObject(mem, old_bitmap);
             let _ = DeleteObject(bitmap.into());
@@ -219,12 +220,44 @@ impl Model {
     }
 }
 
-impl Drop for Model {
-    fn drop(&mut self) {
-        if let Some(font) = self.font.take() {
-            // SAFETY: our font, not selected into any DC.
-            let _ = unsafe { DeleteObject(font.into()) };
-        }
+/// Fills `rect` with the null pen selected (no outline).
+///
+/// # Safety
+///
+/// `dc` must be a valid device context.
+unsafe fn fill(dc: HDC, color: Rgb, rect: &RECT) {
+    // SAFETY: the caller guarantees `dc`; the brush is deleted before
+    // returning.
+    unsafe {
+        let brush = CreateSolidBrush(color.colorref());
+        FillRect(dc, rect, brush);
+        let _ = DeleteObject(brush.into());
+    }
+}
+
+/// Fills `rect` with corners rounded by `round` (their width and height),
+/// with the null pen selected (no outline).
+///
+/// # Safety
+///
+/// `dc` must be a valid device context.
+unsafe fn fill_round(dc: HDC, color: Rgb, rect: RECT, round: i32) {
+    // SAFETY: the caller guarantees `dc`; the brush is selected out and
+    // deleted before returning.
+    unsafe {
+        let brush = CreateSolidBrush(color.colorref());
+        let old = SelectObject(dc, brush.into());
+        let _ = RoundRect(
+            dc,
+            rect.left,
+            rect.top,
+            rect.right + 1,
+            rect.bottom + 1,
+            round,
+            round,
+        );
+        SelectObject(dc, old);
+        let _ = DeleteObject(brush.into());
     }
 }
 
@@ -310,6 +343,22 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_MOUSEMOVE => {
+            // The pointer has come over the pill: say so, and ask to be
+            // told when it leaves.
+            if update(|m| !std::mem::replace(&mut m.hover, true)) == Some(true) {
+                let mut track = TRACKMOUSEEVENT {
+                    cbSize: std::mem::size_of::<TRACKMOUSEEVENT>() as u32,
+                    dwFlags: TME_LEAVE,
+                    hwndTrack: hwnd,
+                    dwHoverTime: 0,
+                };
+                // SAFETY: `track` is fully initialized and `hwnd` is our
+                // live window.
+                unsafe {
+                    let _ = TrackMouseEvent(&mut track);
+                    let _ = InvalidateRect(Some(hwnd), None, false);
+                }
+            }
             let now = cursor();
             let to = update(|m| {
                 let (start, origin) = m.press?;
@@ -339,7 +388,8 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_LBUTTONUP => {
-            let ended = update(|m| m.press.take().map(|_| (m.dragged, m.size))).flatten();
+            let ended =
+                update(|m| m.press.take().map(|_| (m.dragged, (m.width, m.height)))).flatten();
             // SAFETY: releases the capture taken on button-down (harmless
             // if it was already lost).
             let _ = unsafe { ReleaseCapture() };
@@ -366,6 +416,12 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
                 }
                 None => {}
             }
+            LRESULT(0)
+        }
+        WM_MOUSELEAVE => {
+            update(|m| m.hover = false);
+            // SAFETY: `hwnd` is our live window.
+            let _ = unsafe { InvalidateRect(Some(hwnd), None, false) };
             LRESULT(0)
         }
         WM_CAPTURECHANGED => {
@@ -395,7 +451,7 @@ unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: 
             LRESULT(0)
         }
         WM_TIMER if wparam.0 == SPIN_TIMER => {
-            update(|m| m.spin = (m.spin + 1) % SPIN_DOTS);
+            update(|m| m.step = (m.step + 1) % SWEEP_STEPS);
             // SAFETY: `hwnd` is our live window.
             let _ = unsafe { InvalidateRect(Some(hwnd), None, false) };
             LRESULT(0)
@@ -431,8 +487,8 @@ fn monitor_at(point: POINT, nearest: bool) -> Option<(RECT, f64)> {
     }
 }
 
-/// By the right edge of the primary monitor's work area, a little below
-/// the middle.
+/// The bottom middle of the primary monitor's work area, just above the
+/// taskbar.
 fn default_origin() -> (POINT, f64) {
     // SAFETY: a plain query; (0, 0) is always on the primary monitor.
     let primary = unsafe { MonitorFromPoint(POINT::default(), MONITOR_DEFAULTTOPRIMARY) };
@@ -448,25 +504,26 @@ fn default_origin() -> (POINT, f64) {
     }
     let scale = f64::from(dpi_x.max(96)) / 96.0;
     let work = info.rcWork;
-    let size = (SIZE * scale).round() as i32;
-    let x = work.right - size - (EDGE_MARGIN * scale).round() as i32;
-    let y = work.bottom - (f64::from(work.bottom - work.top) * DEFAULT_HEIGHT).round() as i32;
-    (POINT { x, y: y - size }, scale)
+    let width = (WIDTH * scale).round() as i32;
+    let height = (HEIGHT * scale).round() as i32;
+    let x = work.left + (work.right - work.left - width) / 2;
+    let y = work.bottom - height - (BOTTOM_MARGIN * scale).round() as i32;
+    (POINT { x, y }, scale)
 }
 
 /// Pulls a dropped bar fully inside the work area of the monitor its
 /// center is nearest to.
-fn keep_on_screen(origin: POINT, size: i32) -> POINT {
+fn keep_on_screen(origin: POINT, (width, height): (i32, i32)) -> POINT {
     let center = POINT {
-        x: origin.x + size / 2,
-        y: origin.y + size / 2,
+        x: origin.x + width / 2,
+        y: origin.y + height / 2,
     };
     let Some((work, _)) = monitor_at(center, true) else {
         return origin;
     };
     POINT {
-        x: origin.x.min(work.right - size).max(work.left),
-        y: origin.y.min(work.bottom - size).max(work.top),
+        x: origin.x.min(work.right - width).max(work.left),
+        y: origin.y.min(work.bottom - height).max(work.top),
     }
 }
 
@@ -496,10 +553,9 @@ impl MiniBar {
         let (origin, scale) = saved
             .and_then(|p| {
                 let (_, scale) = monitor_at(p, false)?;
-                let half = (SIZE * scale / 2.0).round() as i32;
                 let center = POINT {
-                    x: p.x + half,
-                    y: p.y + half,
+                    x: p.x + (WIDTH * scale / 2.0).round() as i32,
+                    y: p.y + (HEIGHT * scale / 2.0).round() as i32,
                 };
                 monitor_at(center, false).map(|(_, scale)| (p, scale))
             })
@@ -521,15 +577,17 @@ impl MiniBar {
 
         let mut model = Model {
             state: MiniBarState::Idle,
-            spin: 0,
+            step: DOTS / 2,
+            hover: false,
+            levels: [0.0; 3],
             scale: 1.0,
-            size: 0,
-            font: None,
+            width: 0,
+            height: 0,
             press: None,
             dragged: false,
         };
         model.set_scale(scale);
-        let size = model.size;
+        let (width, height) = (model.width, model.height);
 
         // SAFETY: the class was registered above with a valid window
         // procedure; no parent, menu or creation data.
@@ -541,8 +599,8 @@ impl MiniBar {
                 WS_POPUP,
                 origin.x,
                 origin.y,
-                size,
-                size,
+                width,
+                height,
                 None,
                 None,
                 Some(module.into()),
@@ -556,7 +614,7 @@ impl MiniBar {
         // SAFETY: `hwnd` is our live window. The region is handed to the
         // system on success (it then owns and frees it).
         unsafe {
-            let region = CreateEllipticRgn(0, 0, size + 1, size + 1);
+            let region = CreateRoundRectRgn(0, 0, width + 1, height + 1, height, height);
             if !region.is_invalid() && SetWindowRgn(hwnd, Some(region), true) == 0 {
                 let _ = DeleteObject(HGDIOBJ(region.0));
             }
@@ -590,17 +648,38 @@ impl MiniBar {
     }
 
     pub(crate) fn set_state(&self, state: MiniBarState) {
-        update(|m| m.state = state);
+        update(|m| {
+            if m.state != state {
+                m.levels = [0.0; 3];
+                m.step = DOTS / 2;
+            }
+            m.state = state;
+        });
+        // The dots stay still when motion is to be kept down.
+        let sweep = state == MiniBarState::Working && !crate::reduce_motion();
         // SAFETY: `self.hwnd` is our live window; timer 1 has no callback,
         // so it arrives as WM_TIMER in `wndproc`.
         unsafe {
-            if state == MiniBarState::Working {
+            if sweep {
                 SetTimer(Some(self.hwnd), SPIN_TIMER, SPIN_MS, None);
             } else {
                 let _ = KillTimer(Some(self.hwnd), SPIN_TIMER);
             }
         }
         self.repaint();
+    }
+
+    /// The live microphone level (0–1), shown while it listens.
+    pub(crate) fn set_level(&self, level: f32) {
+        let listening = update(|m| {
+            m.levels.rotate_left(1);
+            m.levels[2] = level;
+            m.state == MiniBarState::Recording
+        });
+        if listening == Some(true) {
+            // SAFETY: `self.hwnd` is our live window.
+            let _ = unsafe { InvalidateRect(Some(self.hwnd), None, false) };
+        }
     }
 
     /// Not shown on Windows yet (see the module docs).

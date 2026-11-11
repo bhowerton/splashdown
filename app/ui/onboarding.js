@@ -762,7 +762,35 @@ document.querySelectorAll("[data-actions]").forEach((b) =>
 
 // ---------------------------------------------------------------- step 5: done
 
+/** The pill on screen was shown at the end of this guide (once: turning it
+ *  off there keeps it off). */
+let miniBarShown = false;
+
+/** At the end of a first setup the pill is shown, so it's seen at least
+ *  once; the switch beside it turns it off. Setup run again later leaves
+ *  it as it is. */
+async function showMiniBar() {
+  const box = $("mini-bar");
+  const on = () => state.settings.general.mini_bar === true;
+  if (!miniBarShown && !state.settings.general.onboarded && !on()) {
+    miniBarShown = true;
+    await changeSettings((s) => { s.general.mini_bar = true; });
+  }
+  miniBarShown = true;
+  box.checked = on();
+  $("mini-bar-what").textContent = on()
+    ? "Click it to dictate when you'd rather not hold a key, and again to finish. It's at the bottom of your screen now, and can be dragged anywhere."
+    : "Click it to dictate when you'd rather not hold a key, and again to finish. Turn it on here, or later in Settings → General.";
+}
+
+$("mini-bar").addEventListener("change", async (e) => {
+  const on = e.target.checked;
+  await changeSettings((s) => { s.general.mini_bar = on ? true : null; });
+  showMiniBar();
+});
+
 function renderDone() {
+  showMiniBar();
   const k = keys();
   const home = $("done-home");
   home.replaceChildren();

@@ -191,7 +191,7 @@ Settings → Actions → When something happens. A hook runs after a meeting, a 
 ### Everything else
 
 - **A dictation is never lost.** If the speech service or the AI fails, or Splashdown closes mid-way, the recording is kept and **Retry** (menu bar → Last dictation) turns it into text. A cloud provider that's down is stood in for by a model on your computer.
-- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), and an always-on-screen **mini bar** for clicking instead of holding a key.
+- **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), and the **mini bar**: a small pill at the bottom of your screen to click instead of holding a key, whose dots show the sound while it listens. Setup shows it once; drag it anywhere, or turn it off.
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose.
 - **A setup guide that has you try it.** The first run shows what Splashdown does, gets speech to text ready in about a minute (the AI follows in the background, and is optional), then has you try the main things one at a time: dictate, dictate in one of your own apps, change selected text, hear it read back, and do things. Each ticks off when it works, and any can be skipped.
