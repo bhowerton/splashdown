@@ -383,3 +383,30 @@ pub(super) fn running_exe(app_id: &str) -> Option<String> {
     let _ = unsafe { EnumWindows(Some(visit), LPARAM(&raw mut search as isize)) };
     search.found
 }
+
+/// Makes this program the one that opens `scheme://` links for the
+/// signed-in user: a click then starts it with the link as its argument.
+/// Written again at each start, so it follows the program when it moves.
+pub(crate) fn register_link_scheme(scheme: &str, name: &str) -> crate::Result<()> {
+    let exe = std::env::current_exe().map_err(|e| PlatformError::Failed(e.to_string()))?;
+    let exe = exe
+        .to_str()
+        .ok_or_else(|| PlatformError::Failed("the program's path isn't text".into()))?;
+    let class = format!("Software\\Classes\\{scheme}");
+    let written = reg_set_string(HKEY_CURRENT_USER, &class, None, &format!("URL:{name}"))
+        // Its presence is what makes the class a link type.
+        && reg_set_string(HKEY_CURRENT_USER, &class, Some("URL Protocol"), "")
+        && reg_set_string(
+            HKEY_CURRENT_USER,
+            &format!("{class}\\shell\\open\\command"),
+            None,
+            &format!("\"{exe}\" \"%1\""),
+        );
+    if written {
+        Ok(())
+    } else {
+        Err(PlatformError::Failed(
+            "couldn't write the link type to the registry".into(),
+        ))
+    }
+}

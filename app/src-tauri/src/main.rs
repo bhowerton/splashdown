@@ -349,6 +349,12 @@ fn main() {
             } else if !splashdown_platform::permissions().accessibility {
                 tray::open_settings(app.handle());
             }
+            // Windows starts the app with a clicked link; from now on,
+            // this copy is the one it starts.
+            triggers::register_links();
+            if let Some(url) = triggers::launch_link() {
+                triggers::open_url(app.handle(), &url);
+            }
             Ok(())
         })
         .build(tauri::generate_context!())

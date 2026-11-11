@@ -32,8 +32,8 @@
       <a class="btn primary" id="open" href="#">Open in Splashdown</a>
       <button class="btn" id="copy" type="button">Copy this link</button>
     </div>
-    <p class="fine" id="how">Splashdown says what the list has and asks before using it. The list is a file in that shared folder: this link only says where it is, and the folder has to be shared with you and synced to this computer.</p>
-    <p class="fine" id="windows" hidden>On Windows, copy this link, then in Splashdown choose Settings → Words &amp; language → Your team's words → Join with an invite link…</p>
+    <p class="fine">Splashdown says what the list has and asks before using it. The list is a file in that shared folder: this link only says where it is, and the folder has to be shared with you and synced to this computer.</p>
+    <p class="fine">Nothing happened? Copy this link, then in Splashdown choose Settings → Words &amp; language → Your team's words → Join with an invite link…</p>
     <p class="fine">Don't have Splashdown yet? <a href="../#download">Download it</a>, then open this link again.</p>
   </section>
 
@@ -78,11 +78,6 @@
       button.textContent = "Copied";
     });
   });
-  if (/Win/.test(navigator.platform || navigator.userAgent)) {
-    // The Windows app can't be handed a link yet: it takes one pasted.
-    document.getElementById("open").hidden = true;
-    document.getElementById("windows").hidden = false;
-  }
   document.getElementById("invited").hidden = false;
   document.getElementById("plain").hidden = true;
 })();

@@ -12,11 +12,39 @@ use tauri::Manager;
 use crate::session::Handle;
 use crate::state::AppState;
 
-/// Asks a copy of the app that's already running to show Settings. True
-/// if one answered: this copy should quit, or both would answer the
-/// dictation key and insert the text twice.
+/// A `splashdown://` link among the words this copy was started with:
+/// how Windows delivers a click on one (the link type's command is this
+/// program and the link, `register_links`).
+pub fn launch_link() -> Option<String> {
+    std::env::args().skip(1).find(|arg| is_link(arg))
+}
+
+fn is_link(text: &str) -> bool {
+    text.split_once(':')
+        .is_some_and(|(scheme, rest)| scheme.eq_ignore_ascii_case("splashdown") && !rest.is_empty())
+}
+
+/// Makes this copy the one Windows starts for a `splashdown://` link.
+/// Not a debug build, which would take the links from the installed app.
+pub fn register_links() {
+    if cfg!(debug_assertions) {
+        return;
+    }
+    if let Err(e) = splashdown_platform::register_link_scheme("splashdown", "Splashdown") {
+        tracing::warn!("splashdown:// links won't open the app: {e}");
+    }
+}
+
+/// Asks a copy of the app that's already running to show Settings, or to
+/// open the link this copy was started with. True if one answered: this
+/// copy should quit, or both would answer the dictation key and insert
+/// the text twice.
 pub fn hand_over() -> bool {
-    match splashdown_control::send(&Request::Settings) {
+    let request = match launch_link() {
+        Some(url) => Request::Open { url },
+        None => Request::Settings,
+    };
+    match splashdown_control::send(&request) {
         Err(ClientError::NotRunning) => false,
         // Can't tell: two copies are better than none.
         Err(ClientError::Io(e)) => {
@@ -44,29 +72,32 @@ pub fn serve(session: Handle) -> bool {
     true
 }
 
-/// Handles `splashdown://` links the system hands the app (macOS
-/// `application:openURLs:`; the scheme is registered in Info.plist).
+/// Handles `splashdown://` links macOS hands the app
+/// (`application:openURLs:`; the link type is declared in Info.plist).
 /// Called on the main thread, so it never waits for the session.
 pub fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
-    let urls = opened_urls(event);
-    if urls.is_empty() {
-        return;
+    for url in opened_urls(event) {
+        open_url(app, &url);
     }
+}
+
+/// Opens one `splashdown://` link: from macOS, from the copy of the app
+/// Windows started for it (`Request::Open`), or the one this copy was
+/// started with. On the main thread; never waits for the session.
+pub fn open_url(app: &tauri::AppHandle, url: &str) {
     let Some(state) = app.try_state::<AppState>() else {
         return;
     };
-    for url in urls {
-        // An invite to a team's words: asks before anything changes.
-        if crate::shared_words::is_invite_link(&url) {
-            crate::shared_words::open_invite(app, &url);
-            continue;
-        }
-        if let Some(path) = note_link(&url) {
-            crate::notes::open_to(app, Some(&format!("note:{path}")));
-            continue;
-        }
-        open_link(&state.session, &url);
+    // An invite to a team's words: asks before anything changes.
+    if crate::shared_words::is_invite_link(url) {
+        crate::shared_words::open_invite(app, url);
+        return;
     }
+    if let Some(path) = note_link(url) {
+        crate::notes::open_to(app, Some(&format!("note:{path}")));
+        return;
+    }
+    open_link(&state.session, url);
 }
 
 /// `splashdown://open?note=<path>` (what coding agents are given to point
@@ -139,8 +170,8 @@ fn opened_urls(event: &tauri::RunEvent) -> Vec<String> {
     }
 }
 
-/// Windows hands links to a new process on its command line, which needs
-/// the single-instance plumbing the Windows port doesn't have yet.
+/// Only macOS hands links to a running app this way: on Windows a click
+/// starts another copy with the link (`launch_link`, `hand_over`).
 #[cfg(not(target_os = "macos"))]
 fn opened_urls(_event: &tauri::RunEvent) -> Vec<String> {
     Vec::new()
@@ -173,6 +204,16 @@ fn link_request(url: &str) -> Option<Request> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_link_is_told_from_other_arguments() {
+        assert!(is_link("splashdown://toggle"));
+        assert!(is_link("SPLASHDOWN:team-words?in=Dropbox&file=a.txt"));
+        assert!(!is_link("splashdown:"));
+        assert!(!is_link("--hidden"));
+        assert!(!is_link("C:\\Users\\priya\\notes.txt"));
+        assert!(!is_link("https://splashdown.app/team/"));
+    }
 
     #[test]
     fn links_map_to_requests() {

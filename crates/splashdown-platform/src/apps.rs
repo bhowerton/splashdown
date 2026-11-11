@@ -4,6 +4,22 @@
 
 use super::*;
 
+/// Makes this program the one that opens `scheme://` links for the
+/// signed-in user, on Windows (a click then starts the program with the
+/// link as its argument). On macOS the link type is declared in the app's
+/// own bundle, and this does nothing.
+pub fn register_link_scheme(scheme: &str, name: &str) -> Result<()> {
+    #[cfg(windows)]
+    {
+        imp::register_link_scheme(scheme, name)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (scheme, name);
+        Ok(())
+    }
+}
+
 /// Opens a web page in the default browser.
 /// On Windows, `ShellExecuteW` (no console, and any characters in a path),
 /// which also opens `ms-settings:` pages and files such as an `.ics`.

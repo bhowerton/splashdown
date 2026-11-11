@@ -39,7 +39,9 @@ pub use app_audio::AppLoopback;
 #[cfg(windows)]
 pub(crate) use app_audio::{app_loopback, audio_apps};
 #[cfg(windows)]
-pub(crate) use apps::{activate_app, app_display, frontmost_app, running_apps};
+pub(crate) use apps::{
+    activate_app, app_display, frontmost_app, register_link_scheme, running_apps,
+};
 #[cfg(windows)]
 pub(crate) use clipboard::{
     clipboard_text, copy_selection, copy_to_clipboard, paste_text, press, press_combo,

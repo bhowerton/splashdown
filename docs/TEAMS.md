@@ -24,7 +24,7 @@ Click the invite link. Splashdown says where the list is and how many words it h
 
 The link only says where the file is ("Dropbox › Team › Splashdown team words.txt"), so the folder has to be shared with you and synced to your computer first. If the shared folder sits somewhere else in your drive, Splashdown looks a few folders down for the file.
 
-On Windows, or if the link doesn't open the app: copy the link, then choose **Join with an invite link…** in the same place in Settings.
+If the link doesn't open the app (an older Splashdown, or a browser that won't hand it over): copy the link, then choose **Join with an invite link…** in the same place in Settings.
 
 ### Changing the list
 

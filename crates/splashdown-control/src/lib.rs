@@ -154,6 +154,10 @@ pub enum Request {
     /// Show the Settings window. A second copy of the app sends this to
     /// the first, then quits.
     Settings,
+    /// Open a `splashdown://` link, as clicking it would. A copy of the
+    /// app started with one (how Windows delivers a click) sends this to
+    /// the copy already running, then quits.
+    Open { url: String },
 }
 
 impl Request {
@@ -384,6 +388,18 @@ mod tests {
         assert_eq!(
             Request::parse(r#"{"cmd":"settings"}"#),
             Ok(Request::Settings)
+        );
+        // What a copy started with a link sends the one already running.
+        let open = Request::Open {
+            url: "splashdown://toggle".into(),
+        };
+        assert_eq!(
+            serde_json::to_string(&open).unwrap(),
+            r#"{"cmd":"open","url":"splashdown://toggle"}"#
+        );
+        assert_eq!(
+            Request::parse(r#"{"cmd":"open","url":"splashdown://toggle"}"#),
+            Ok(open)
         );
         assert_eq!(
             Request::parse(r#"{"cmd":"listen"}"#),

@@ -115,6 +115,15 @@ impl Controller {
                 .notes_settings()
                 .and_then(|n| crate::notes::agent_append(&n, &text, to.as_deref()))
                 .map(Some),
+            Request::Open { url } => {
+                tracing::info!("opened again with a link: opening it");
+                let app = self.ui.app().clone();
+                let _ = self
+                    .ui
+                    .app()
+                    .run_on_main_thread(move || crate::triggers::open_url(&app, &url));
+                Ok(None)
+            }
             Request::Settings => {
                 tracing::info!("opened again while running: showing Settings");
                 let app = self.ui.app().clone();
