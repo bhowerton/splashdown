@@ -4,6 +4,8 @@
 .t-words { --tile: #a550e0; }
 .t-presets { --tile: #f08700; }
 .t-actions { --tile: #d4a106; }
+.t-notes { --tile: #b9772a; }
+.t-meetings { --tile: #0f8a5f; }
 .t-providers { --tile: #5b5bd6; }
 .t-spending { --tile: #2ba84a; }
 .t-history { --tile: #1e88ff; }
@@ -26,14 +28,27 @@
   background: var(--sidebar); margin: 10px 0 10px 10px; border-radius: 14px; border: 1px solid var(--border);
   padding: 12px 8px; overflow-y: auto;
 }
-.side-head { display: flex; align-items: center; gap: 10px; padding: 2px 8px 14px; }
+.side-head { display: flex; align-items: center; gap: 10px; padding: 2px 8px 12px; }
 .side-head img { width: 40px; height: 40px; border-radius: 9px; flex: none; }
 .side-head b { display: block; font-size: 14.5px; font-weight: 650; }
 .side-head small { display: block; color: var(--muted); font-size: 12px; }
-.side-group + .side-group { margin-top: 14px; }
+/* The search field, above the sections. */
+.side-search { position: relative; margin: 0 2px 10px; }
+.side-search svg { position: absolute; left: 8px; top: 50%; width: 13px; height: 13px; margin-top: -6.5px; fill: none; stroke: var(--muted); stroke-width: 2.4; stroke-linecap: round; pointer-events: none; }
+.side-search input { width: 100% !important; min-width: 0; padding-left: 26px; }
+/* What a search found: each a row to click, with where it is at the right. */
+.row.result { width: 100%; text-align: left; font: inherit; color: inherit; background: none; border-width: 1px 0 0; border-style: solid; border-color: var(--border); border-radius: 0; cursor: default; }
+.row.result:first-child { border-top: 0; }
+.row.result:hover, .row.result:focus-visible { background: color-mix(in srgb, var(--text) 6%, transparent); }
+.result-where { margin-left: auto; flex: none; max-width: 45%; text-align: right; color: var(--muted); font-size: 12px; }
+/* The setting a search went to, marked for a moment. */
+@keyframes found { 0%, 60% { background: var(--accent-soft); } 100% { background: transparent; } }
+.found { animation: found 2.2s ease-out; border-radius: 8px; }
+@media (prefers-reduced-motion: reduce) { .found { animation: none; outline: 2px solid var(--accent); outline-offset: -2px; } }
+.side-group + .side-group { margin-top: 11px; }
 .side-h { padding: 0 10px 4px; font-size: 11.5px; font-weight: 600; color: var(--muted); }
 .side a {
-  display: flex; align-items: center; gap: 10px; padding: 5px 8px; margin-bottom: 1px;
+  display: flex; align-items: center; gap: 10px; padding: 4px 8px; margin-bottom: 1px;
   border-radius: 8px; color: var(--text); text-decoration: none; cursor: default; font-weight: 500;
 }
 .side a[data-tab]:hover { background: color-mix(in srgb, var(--text) 7%, transparent); }
@@ -237,6 +252,7 @@ input.letter-key { width: 44px !important; text-align: center; text-transform: u
   .settings { grid-template-columns: 1fr; height: auto; }
   .side { display: flex; overflow-x: auto; margin: 8px; padding: 6px; }
   .side-head, .side-h { display: none; }
+  .side-search { flex: none; width: 150px; margin: 0 6px 0 0; }
   .side-group { display: flex; }
   .side-group + .side-group { margin-top: 0; }
   .side a { flex: none; }

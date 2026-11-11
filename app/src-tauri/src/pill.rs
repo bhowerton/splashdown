@@ -2,7 +2,7 @@
 //! records, with the time, both sides' levels and Stop. Windows can't show
 //! the time next to the tray icon, so it's on there by default; on macOS
 //! the menu bar shows it (unless the notch hides it), and the pill is a
-//! setting (Settings → Notes → Meetings).
+//! setting (Settings → Meetings).
 
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 

@@ -274,7 +274,7 @@ pub(crate) fn calendar_event() -> Option<Event> {
     None
 }
 
-/// Asks for the calendar (Settings → Notes → Meetings): whether it's allowed.
+/// Asks for the calendar (Settings → Meetings): whether it's allowed.
 #[tauri::command]
 pub async fn calendar_access() -> bool {
     #[cfg(target_os = "macos")]

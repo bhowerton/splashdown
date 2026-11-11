@@ -1,7 +1,7 @@
 //! Noticing calls: when a call app (Zoom, Teams, Meet in a browser…)
 //! starts using the microphone, a small panel offers to record the meeting;
 //! when the app it was recording stops using it, the panel offers to stop.
-//! Nothing is recorded until the user clicks. Settings → Notes → Meetings
+//! Nothing is recorded until the user clicks. Settings → Meetings
 //! turns the offer off.
 //!
 //! The same panel offers a meeting on the calendar that's about to start,
@@ -430,7 +430,7 @@ pub fn call_offer_state() -> Option<Panel> {
 #[tauri::command]
 pub async fn call_offer_answer(answer: String, app: AppHandle) -> Result<(), String> {
     if answer == "settings" {
-        crate::tray::open_settings(&app);
+        crate::tray::open_settings_tab(&app, "meetings");
         return Ok(());
     }
     let panel = shown().as_ref().map(|(panel, _)| panel.clone());

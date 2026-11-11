@@ -1,6 +1,6 @@
 "use strict";
 
-// General tab: hotkey pickers and their legend, launch at login, updates,
+// General, Notes and Meetings tabs: hotkey pickers and their legend, launch at login, updates,
 // microphone, live preview, sounds. Also the Notes and Meetings sections
 // (watched folders, people known by voice, the calendar), and the Words &
 // language tab's name, languages, translate targets, vocabulary, learned

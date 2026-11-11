@@ -1,4 +1,4 @@
-//! Remembering people by voice (Settings → Notes → Meetings → "Recognize people
+//! Remembering people by voice (Settings → Meetings → "Recognize people
 //! you've named"). After a meeting's speakers are told apart, each one's
 //! voiceprint is made and checked against the people the user named
 //! before (`voices.json`); a clear match gets the name. The meeting's

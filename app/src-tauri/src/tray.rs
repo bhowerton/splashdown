@@ -486,7 +486,7 @@ pub fn open_settings(app: &AppHandle) {
         SETTINGS_WINDOW,
         "index.html",
         "Splashdown Settings",
-        (960.0, 680.0),
+        (960.0, 750.0),
         true,
     );
 }
@@ -507,7 +507,7 @@ pub fn open_settings_tab(app: &AppHandle, tab: &str) {
         SETTINGS_WINDOW,
         &format!("index.html#{tab}"),
         "Splashdown Settings",
-        (960.0, 680.0),
+        (960.0, 750.0),
         true,
     );
 }

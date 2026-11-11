@@ -3,7 +3,7 @@
 //! Join, which opens the link, and Record. One place to join and start
 //! recording, before any call app has touched the microphone.
 //!
-//! Off unless it's turned on (Settings → Notes → Meetings), and on a Mac
+//! Off unless it's turned on (Settings → Meetings), and on a Mac
 //! only, where the calendar is read; macOS asks for it the first time.
 //! While it's on, the events that start soon are looked at every half
 //! minute. Each event is offered once: which ones were is kept in a file,
