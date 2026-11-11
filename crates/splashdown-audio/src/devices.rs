@@ -3,7 +3,8 @@
 //! "Automatic" uses the system default input unless it's a Bluetooth headset
 //! (AirPods etc.). Opening a headset's mic switches it into low-quality
 //! call mode, which also degrades whatever the user is listening to, so
-//! the built-in mic is used instead when there is one.
+//! the built-in mic is used instead when there is one. A default that is
+//! known never to carry a microphone is passed over the same way.
 
 /// What the platform knows about an input device.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,10 +25,53 @@ pub fn choose(preferred: &[String], inputs: &[InputInfo]) -> Option<String> {
         return Some(name.clone());
     }
     let default = inputs.iter().find(|i| i.is_default)?;
-    if !default.bluetooth {
+    let useless = never_a_microphone(&default.name);
+    if !default.bluetooth && !useless {
         return None;
     }
-    inputs.iter().find(|i| i.built_in).map(|i| i.name.clone())
+    if let Some(built_in) = inputs.iter().find(|i| i.built_in) {
+        return Some(built_in.name.clone());
+    }
+    if useless {
+        return inputs
+            .iter()
+            .find(|i| !never_a_microphone(&i.name))
+            .map(|i| i.name.clone());
+    }
+    None
+}
+
+/// Devices that show up as inputs but never carry a microphone: call apps
+/// install them as virtual sound devices. "Automatic" doesn't use them (a
+/// default like that records silence); choosing one by hand still works.
+/// Matched by exact name, ignoring case. Add one per line.
+const NEVER_A_MICROPHONE: &[&str] = &["ZoomAudioDevice", "Microsoft Teams Audio"];
+
+/// Whether `name` is one of the devices that never carries a microphone.
+pub fn never_a_microphone(name: &str) -> bool {
+    NEVER_A_MICROPHONE
+        .iter()
+        .any(|n| n.eq_ignore_ascii_case(name))
+}
+
+/// The name of the device `choose` ends up opening, which for the system
+/// default is that device's own name. `None` when there is no default.
+pub fn resolve(preferred: &[String], inputs: &[InputInfo]) -> Option<String> {
+    choose(preferred, inputs)
+        .or_else(|| inputs.iter().find(|i| i.is_default).map(|i| i.name.clone()))
+}
+
+/// Another input to offer when `silent` hears nothing: the built-in one
+/// first, otherwise one that isn't Bluetooth (its mic degrades the
+/// headphones) and isn't known to carry no microphone.
+pub fn alternative(silent: &str, inputs: &[InputInfo]) -> Option<String> {
+    let usable = |i: &&InputInfo| i.name != silent && !never_a_microphone(&i.name);
+    inputs
+        .iter()
+        .filter(usable)
+        .find(|i| i.built_in)
+        .or_else(|| inputs.iter().filter(usable).find(|i| !i.bluetooth))
+        .map(|i| i.name.clone())
 }
 
 /// Input devices with their transport, for choosing and for Settings.
@@ -289,6 +333,93 @@ mod tests {
         assert_eq!(choose(&wanted, &inputs).as_deref(), Some("AirPods Pro"));
         let gone = ["Yeti".to_string(), "Rode".to_string()];
         assert_eq!(choose(&gone, &inputs), None, "automatic");
+    }
+
+    #[test]
+    fn skips_a_default_that_never_carries_a_microphone() {
+        let inputs = [
+            input("ZoomAudioDevice", false, false, true),
+            input("MacBook Pro Microphone", false, true, false),
+        ];
+        assert_eq!(
+            choose(&[], &inputs).as_deref(),
+            Some("MacBook Pro Microphone")
+        );
+        let teams = [
+            input("Microsoft Teams Audio", false, false, true),
+            input("Yeti", false, false, false),
+            input("Headset", false, false, false),
+        ];
+        assert_eq!(
+            choose(&[], &teams).as_deref(),
+            Some("Yeti"),
+            "no built-in one: the first that isn't on the list"
+        );
+        let lone = [input("ZoomAudioDevice", false, false, true)];
+        assert_eq!(choose(&[], &lone), None, "nothing else to use");
+    }
+
+    #[test]
+    fn the_list_matches_whole_names_ignoring_case() {
+        assert!(never_a_microphone("zoomaudiodevice"));
+        assert!(never_a_microphone("Microsoft Teams Audio"));
+        assert!(!never_a_microphone("Zoom"));
+        assert!(!never_a_microphone("ZoomAudioDevice 2"));
+        let inputs = [
+            input("Loopback Audio", false, false, true),
+            input("MacBook Pro Microphone", false, true, false),
+        ];
+        assert_eq!(choose(&[], &inputs), None, "other virtual devices stay");
+    }
+
+    #[test]
+    fn a_device_on_the_list_can_still_be_chosen() {
+        let inputs = [
+            input("ZoomAudioDevice", false, false, true),
+            input("MacBook Pro Microphone", false, true, false),
+        ];
+        assert_eq!(
+            choose(&["ZoomAudioDevice".into()], &inputs).as_deref(),
+            Some("ZoomAudioDevice")
+        );
+    }
+
+    #[test]
+    fn resolve_names_the_system_default() {
+        let inputs = [
+            input("Yeti", false, false, true),
+            input("MacBook Pro Microphone", false, true, false),
+        ];
+        assert_eq!(resolve(&[], &inputs).as_deref(), Some("Yeti"));
+        assert_eq!(
+            resolve(&["MacBook Pro Microphone".into()], &inputs).as_deref(),
+            Some("MacBook Pro Microphone")
+        );
+        assert_eq!(resolve(&[], &[]), None);
+    }
+
+    #[test]
+    fn offers_the_built_in_microphone_first() {
+        let inputs = [
+            input("Yeti", false, false, true),
+            input("AirPods Pro", true, false, false),
+            input("ZoomAudioDevice", false, false, false),
+            input("MacBook Pro Microphone", false, true, false),
+        ];
+        assert_eq!(
+            alternative("Yeti", &inputs).as_deref(),
+            Some("MacBook Pro Microphone")
+        );
+        let no_built_in = [
+            input("Yeti", false, false, true),
+            input("AirPods Pro", true, false, false),
+            input("Headset", false, false, false),
+        ];
+        assert_eq!(
+            alternative("Yeti", &no_built_in).as_deref(),
+            Some("Headset")
+        );
+        assert_eq!(alternative("Yeti", &no_built_in[..2]), None);
     }
 
     #[test]

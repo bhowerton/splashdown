@@ -412,6 +412,10 @@ $("cfg-import-file").addEventListener("change", async () => {
 });
 // The menu bar opens a tab here ("Update to…" → About).
 listen("show-tab", (event) => showTab(event.payload));
+// A microphone plugged in while the window was in the background.
+window.addEventListener("focus", () => {
+  if (state && !$("tab-general").hidden) loadMicrophones();
+});
 
 (async () => {
   showTab();

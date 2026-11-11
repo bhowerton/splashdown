@@ -94,8 +94,16 @@ const SPEECH_LEVEL: f32 = 0.01;
 const MIC_SILENT: f32 = 0.0004;
 /// How long to listen before saying the microphone hears nothing.
 const MIC_CHECK_AFTER: Duration = Duration::from_millis(2500);
-const MIC_SILENT_NOTICE: &str =
-    "Microphone hears nothing — muted, or the wrong one? (Settings → General)";
+
+/// What the overlay says when the microphone in use hears nothing.
+fn mic_silent_notice(microphone: Option<&str>) -> String {
+    match microphone {
+        Some(name) => {
+            format!("{name} hears nothing. Muted, or the wrong one? (Settings → General)")
+        }
+        None => "Microphone hears nothing. Muted, or the wrong one? (Settings → General)".into(),
+    }
+}
 /// How much the level meter (and hands-free's speech check) is raised in
 /// whisper mode.
 const WHISPER_BOOST: f32 = 5.0;
@@ -408,6 +416,8 @@ struct Active {
     focus: Option<Focus>,
     selection: Selection,
     level: Level,
+    /// The microphone in use, by name.
+    microphone: Option<String>,
     /// Content recorded before the instruction-key tap.
     content: Option<AudioClip>,
     started: Instant,
@@ -521,6 +531,9 @@ struct Controller {
     last_notice: Option<String>,
     /// The microphone went away mid-recording; the result says so.
     mic_lost: bool,
+    /// The microphone that heard nothing in the last dictation, to offer
+    /// another once the notice is gone.
+    silent_microphone: Option<String>,
     /// The dictation key as the system reports it during a hold, to
     /// notice a release the key listener never got.
     hold: Hold,
@@ -574,6 +587,7 @@ impl Controller {
             pending_audio: None,
             last_notice: None,
             mic_lost: false,
+            silent_microphone: None,
             hold: Hold::default(),
             slow_local: 0,
             suggested_cloud: false,

@@ -682,7 +682,10 @@ function renderMicrophones() {
   // calls this again once it has.
   if (!state) return;
   const g = state.settings.general;
-  const tag = (m) => [m.built_in && "built-in", m.bluetooth && "Bluetooth"].filter(Boolean).join(", ");
+  const tag = (m) =>
+    [m.built_in && "built-in", m.bluetooth && "Bluetooth", m.no_microphone && "no microphone, Automatic skips it"]
+      .filter(Boolean)
+      .join(", ");
   const options = (skip) => [
     new Option(`Automatic${micList.automatic ? ` (${micList.automatic})` : ""}`, ""),
     ...micList.devices

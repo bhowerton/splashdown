@@ -44,7 +44,7 @@ impl Controller {
                 .and_then(splashdown_platform::quiet_output);
         }
         let quiet = self.engine.as_ref().is_ok_and(|e| e.whisper_mode);
-        let mut mic_silent = false;
+        let mut mic_silent = None;
         let mut mic_back = None;
         if self.active.as_ref().is_some_and(|a| a.level.lost()) {
             // Unplugged or switched off: finish with what it recorded rather
@@ -71,7 +71,7 @@ impl Controller {
                 && active.loudest < MIC_SILENT
             {
                 active.mic_warned = true;
-                mic_silent = true;
+                mic_silent = Some(mic_silent_notice(active.microphone.as_deref()));
             }
             // Whisper mode: quiet speech still moves the meter and counts
             // as speaking.
@@ -90,19 +90,69 @@ impl Controller {
                 }
             }
         }
-        if mic_silent {
+        if let Some(text) = mic_silent {
             tracing::warn!("the microphone has picked up nothing");
             self.ui.show(OverlayState::Message {
                 tone: Tone::Warning,
-                text: MIC_SILENT_NOTICE.into(),
+                text,
             });
         }
+        self.offer_other_microphone();
         if let Some(shown) = mic_back {
             self.ui.show(shown);
         }
         if self.listener.is_none() {
             self.try_listen();
         }
+    }
+
+    /// After a dictation in which the microphone heard nothing: asks, once
+    /// per run of the app for each such microphone, whether to use another
+    /// input instead. Waits until the notice is gone and nothing records.
+    pub(super) fn offer_other_microphone(&mut self) {
+        use crate::state::AppState;
+        use tauri::Manager;
+        static ASKED: Mutex<Vec<String>> = Mutex::new(Vec::new());
+        if self.active.is_some() || self.hide_at.is_some() {
+            return;
+        }
+        let Some(silent) = self.silent_microphone.take() else {
+            return;
+        };
+        {
+            let mut asked = ASKED.locked();
+            if asked.contains(&silent) {
+                return;
+            }
+            asked.push(silent.clone());
+        }
+        let app = self.ui.app().clone();
+        std::thread::spawn(move || {
+            let Some(other) = splashdown_audio::devices::alternative(
+                &silent,
+                &splashdown_audio::devices::inputs(),
+            ) else {
+                return;
+            };
+            let text = format!("{silent} didn't pick up any sound. Use {other} instead?");
+            if crate::prompt::ask(
+                &app,
+                "Use another microphone?",
+                &text,
+                &["Use it", "Not now"],
+            ) != Some(0)
+            {
+                return;
+            }
+            let state = app.state::<AppState>();
+            if let Err(e) = state.update(&app, |s| s.general.microphone = Some(other)) {
+                tracing::warn!("couldn't save the microphone: {e}");
+                return;
+            }
+            if let Some(e) = tauri::async_runtime::block_on(state.apply()) {
+                tracing::warn!("after changing the microphone: {e}");
+            }
+        });
     }
 
     /// The dictation key's release sometimes never reaches the key
@@ -182,7 +232,7 @@ impl Controller {
             .as_ref()
             .map(|e| e.microphones.clone())
             .unwrap_or_default();
-        let level = match self.audio.start(microphones) {
+        let (level, microphone) = match self.audio.start(microphones) {
             Ok(level) => level,
             Err(e) => return self.refuse(&format!("Microphone unavailable: {e}")),
         };
@@ -276,6 +326,7 @@ impl Controller {
             focus,
             selection,
             level,
+            microphone,
             content: None,
             started: now,
             last_voice: now,

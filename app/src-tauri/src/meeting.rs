@@ -70,6 +70,8 @@ const LONGEST: Duration = Duration::from_secs(4 * 3600);
 const RATE: usize = splashdown_audio::TARGET_SAMPLE_RATE as usize;
 /// How often to look for a change of output device.
 const OUTPUT_CHECK: Duration = Duration::from_secs(2);
+/// ...and for a change of microphone.
+const MICROPHONE_CHECK: Duration = Duration::from_secs(2);
 /// The heading of what the user writes during the meeting, in its note.
 pub const MY_NOTES: &str = "My notes";
 /// An app's audio note's `source`, in its front matter.

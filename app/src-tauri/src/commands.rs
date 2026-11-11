@@ -399,6 +399,8 @@ pub struct Microphone {
     bluetooth: bool,
     built_in: bool,
     is_default: bool,
+    /// Never carries a microphone, so Automatic doesn't use it.
+    no_microphone: bool,
 }
 
 #[derive(Serialize)]
@@ -411,12 +413,12 @@ pub struct Microphones {
 #[tauri::command]
 pub fn list_microphones() -> Microphones {
     let inputs = splashdown_audio::devices::inputs();
-    let automatic = splashdown_audio::devices::choose(&[], &inputs)
-        .or_else(|| inputs.iter().find(|i| i.is_default).map(|i| i.name.clone()));
+    let automatic = splashdown_audio::devices::resolve(&[], &inputs);
     Microphones {
         devices: inputs
             .into_iter()
             .map(|i| Microphone {
+                no_microphone: splashdown_audio::devices::never_a_microphone(&i.name),
                 name: i.name,
                 bluetooth: i.bluetooth,
                 built_in: i.built_in,

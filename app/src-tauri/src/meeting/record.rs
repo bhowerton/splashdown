@@ -116,27 +116,35 @@ pub(super) fn record(
 
     // An app's audio takes the microphone's place: it's the one side, and
     // keeps the time.
+    let preferred = settings.general.microphones();
     let microphone = || {
-        LiveAudio::microphone(
-            splashdown_audio::devices::choose(
-                &settings.general.microphones(),
-                &splashdown_audio::devices::inputs(),
-            )
-            .as_deref(),
-        )
-        .map_err(|e| e.to_string())
+        let inputs = splashdown_audio::devices::inputs();
+        let device = splashdown_audio::devices::choose(&preferred, &inputs);
+        let name = splashdown_audio::devices::resolve(&preferred, &inputs);
+        LiveAudio::microphone(device.as_deref())
+            .map(|live| (live, name))
+            .map_err(|e| e.to_string())
     };
+    // The microphone in use, to notice when the choice becomes another.
+    let mut in_use = None;
     let (mut you, mut them, them_problem) = match source {
         Source::Meeting => {
-            let you = microphone()?;
+            let (you, name) = microphone()?;
+            in_use = name;
             match system_audio() {
                 Ok(them) => (you, Some(them), None),
                 Err(e) => (you, None, Some(e)),
             }
         }
         Source::App { sources, .. } => (app_audio(sources)?, None, None),
-        Source::Microphone => (microphone()?, None, None),
+        Source::Microphone => {
+            let (you, name) = microphone()?;
+            in_use = name;
+            (you, None, None)
+        }
     };
+    // An app's audio isn't a microphone: only the others follow a change.
+    let follows_microphone = !matches!(source, Source::App { .. });
 
     let now = chrono::Local::now();
     // A meeting on the calendar names the note and says who's in it.
@@ -263,6 +271,7 @@ pub(super) fn record(
     let mut kept_at = Duration::ZERO;
     let mut output = splashdown_audio::devices::default_output();
     let mut output_checked = Instant::now();
+    let mut microphone_checked = Instant::now();
 
     // Transcribing runs beside the recording: a turn waiting for the
     // speech model (busy with a dictation, say) never holds up capture,
@@ -313,7 +322,34 @@ pub(super) fn record(
                     };
                 }
             }
-            let mine = you.take();
+            // The microphone follows the choice: a headset plugged in, or
+            // the one in use gone. What the old one still holds is kept, and
+            // the time it takes to open the new one is made up with silence
+            // by `InStep`, as when the computer's sound is reopened.
+            let mut mine = Vec::new();
+            let gone = you.lost();
+            if follows_microphone && (gone || microphone_checked.elapsed() >= MICROPHONE_CHECK) {
+                microphone_checked = Instant::now();
+                let wanted = splashdown_audio::devices::resolve(
+                    &preferred,
+                    &splashdown_audio::devices::inputs(),
+                );
+                if wanted.is_some() && wanted != in_use {
+                    match microphone() {
+                        Ok((again, name)) => {
+                            tracing::info!(
+                                "the microphone changed: recording from {} now",
+                                name.as_deref().unwrap_or("the system default")
+                            );
+                            mine = you.take();
+                            you = again;
+                            in_use = name;
+                        }
+                        Err(e) => tracing::warn!("couldn't switch microphone: {e}"),
+                    }
+                }
+            }
+            mine.extend(you.take());
             let theirs = match them.as_mut() {
                 Some(them) => them.take(),
                 // Without the other side, silence keeps it in step.

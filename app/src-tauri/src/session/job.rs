@@ -78,7 +78,12 @@ impl Controller {
                 active.loudest
             );
             if heard_nothing {
-                self.notice(Tone::Warning, MIC_SILENT_NOTICE);
+                self.notice(
+                    Tone::Warning,
+                    &mic_silent_notice(active.microphone.as_deref()),
+                );
+                // Offered once the notice is gone and nothing is recording.
+                self.silent_microphone = active.microphone.clone();
             } else {
                 self.notice(Tone::Info, "Didn't catch that");
             }

@@ -12,7 +12,8 @@ const RELEASE_TAIL: Duration = Duration::from_millis(200);
 
 enum Command {
     /// Start recording from the preferred device (or the automatic choice).
-    Start(Vec<String>, Sender<Result<Level, String>>),
+    /// The reply names the microphone that was opened.
+    Start(Vec<String>, Sender<Result<(Level, Option<String>), String>>),
     /// Return what's been recorded so far and keep recording.
     Take(Sender<AudioClip>),
     /// Copy what's been recorded so far, leaving it in place.
@@ -38,10 +39,9 @@ impl AudioWorker {
                         Command::Start(preferred, reply) => {
                             // A new session replaces any unfinished one.
                             drop(recorder.take());
-                            let device = splashdown_audio::devices::choose(
-                                &preferred,
-                                &splashdown_audio::devices::inputs(),
-                            );
+                            let inputs = splashdown_audio::devices::inputs();
+                            let device = splashdown_audio::devices::choose(&preferred, &inputs);
+                            let name = splashdown_audio::devices::resolve(&preferred, &inputs);
                             let started = std::time::Instant::now();
                             let result =
                                 Recorder::start(device.as_deref()).map_err(|e| e.to_string());
@@ -50,8 +50,12 @@ impl AudioWorker {
                                 device.as_deref().unwrap_or("(system default)"),
                                 started.elapsed().as_millis()
                             );
-                            let _ = reply
-                                .send(result.as_ref().map(Recorder::level).map_err(Clone::clone));
+                            let _ = reply.send(
+                                result
+                                    .as_ref()
+                                    .map(|r| (r.level(), name))
+                                    .map_err(Clone::clone),
+                            );
                             recorder = result.ok();
                         }
                         Command::Take(reply) => {
@@ -89,7 +93,7 @@ impl AudioWorker {
         Self { tx }
     }
 
-    pub fn start(&self, preferred: Vec<String>) -> Result<Level, String> {
+    pub fn start(&self, preferred: Vec<String>) -> Result<(Level, Option<String>), String> {
         let (tx, rx) = mpsc::channel();
         self.tx
             .send(Command::Start(preferred, tx))

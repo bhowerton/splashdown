@@ -10,10 +10,10 @@ The common problems and their fixes. If yours isn't here, use **Send feedback** 
 
 ## The microphone hears nothing
 
-The pill says **"Microphone hears nothing — muted, or the wrong one?"** after 2.5 seconds of silence.
+The pill names the microphone and says it **"hears nothing. Muted, or the wrong one?"** after 2.5 seconds of silence. After a dictation where it heard nothing at all, Splashdown asks once whether to use another microphone.
 
 - Unmute the microphone, or check its input level in your system's sound settings.
-- Choose the microphone in Settings → General. "Automatic" uses the system default, but avoids Bluetooth headsets so AirPods don't switch into call mode.
+- Choose the microphone in Settings → General. "Automatic" uses the system default, but avoids Bluetooth headsets so AirPods don't switch into call mode, and passes over the audio devices some call apps install, which are never a microphone.
 - **Mac:** check Settings → Permissions → Microphone. **Windows:** Settings → Privacy & security → Microphone, with "Let desktop apps access your microphone" on.
 
 If the microphone is unplugged mid-recording, Splashdown stops and types what it heard so far.
