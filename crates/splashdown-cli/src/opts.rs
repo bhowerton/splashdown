@@ -94,7 +94,10 @@ impl ContextOpts {
     }
 
     fn vocabulary(&self, settings: &Settings) -> Vec<String> {
-        let mut v = settings.general.vocabulary.clone();
+        // The user's own words, then their team's (a file that can't be
+        // read gives none).
+        let shared = splashdown_config::shared::load(settings).unwrap_or_default();
+        let mut v = shared.vocabulary_with(&settings.general.vocabulary);
         v.extend(self.vocab.iter().cloned());
         v
     }
@@ -133,6 +136,8 @@ pub fn settings(opts: &ProviderOpts) -> Result<Settings> {
     if opts.base_url.is_some() {
         s.ai.base_url = opts.base_url.clone();
     }
+    // What the organization set, whatever the file or the options say.
+    splashdown_config::managed::Managed::current().apply(&mut s);
     Ok(s)
 }
 

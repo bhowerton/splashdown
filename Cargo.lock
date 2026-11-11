@@ -6647,12 +6647,14 @@ version = "0.12.1"
 dependencies = [
  "directories",
  "keyring 3.6.3",
+ "plist",
  "regex",
  "serde",
  "serde_json",
  "splashdown-core",
  "thiserror 2.0.21",
  "toml 0.9.12+spec-1.1.0",
+ "windows 0.62.2",
 ]
 
 [[package]]

@@ -53,7 +53,7 @@ function button(text, onclick, cls = "btn") {
  * `window.confirm` (it returns false without showing anything), so this draws
  * its own modal. Resolves true only if the action button is clicked.
  */
-function askConfirm(message, { action = "Delete", detail = "", danger = true } = {}) {
+function askConfirm(message, { action = "Delete", detail = "", danger = true, cancel: no = "Cancel" } = {}) {
   return new Promise((resolve) => {
     const dialog = document.createElement("dialog");
     dialog.className = "confirm";
@@ -69,7 +69,7 @@ function askConfirm(message, { action = "Delete", detail = "", danger = true } =
     }
     const acts = document.createElement("div");
     acts.className = "confirm-acts";
-    const cancel = button("Cancel", () => dialog.close("cancel"));
+    const cancel = button(no, () => dialog.close("cancel"));
     const ok = button(action, () => dialog.close("ok"), danger ? "btn danger-solid" : "btn primary");
     acts.append(cancel, ok);
     dialog.append(acts);

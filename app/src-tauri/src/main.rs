@@ -43,6 +43,7 @@ mod replacements;
 mod rescue;
 mod session;
 mod setup;
+mod shared_words;
 mod shortcuts;
 mod snapshot;
 mod spend;
@@ -243,6 +244,13 @@ fn main() {
             hooks::hooks_new_secret,
             hooks::hooks_docs_page,
             my_actions::my_action_pick_program,
+            shared_words::shared_words_status,
+            shared_words::shared_words_pick,
+            shared_words::shared_words_set,
+            shared_words::shared_words_join,
+            shared_words::shared_words_pick_folder,
+            shared_words::shared_words_start,
+            shared_words::shared_words_edit,
             did::did_since,
             prompt::prompt_state,
             prompt::prompt_answer,
@@ -281,6 +289,7 @@ fn main() {
             calls::watch(app.handle());
             notes::watch_front_app(app.handle());
             notes::watch::watch_folders(app.handle());
+            shared_words::watch(app.handle());
             notes::phone::watch_phone(app.handle());
             hooks::schedule::watch(app.handle());
             hooks::calendar::watch(app.handle());

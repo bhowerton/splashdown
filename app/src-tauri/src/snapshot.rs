@@ -125,6 +125,9 @@ pub struct Snapshot {
     pub(super) config_path: String,
     /// New releases (Settings → About).
     pub(super) update: crate::updates::Status,
+    /// What the organization set: Settings shows these as theirs, not
+    /// the user's to change.
+    pub(super) managed: splashdown_config::managed::Managed,
     /// AI providers a preset can choose as its own model, usable now.
     pub(super) preset_ai_options: Vec<AiOption>,
     /// The speech model the user chose is still loading.
@@ -336,6 +339,7 @@ pub(super) fn snapshot(
             .map(|p| p.config_file().display().to_string())
             .unwrap_or_default(),
         update,
+        managed: splashdown_config::managed::Managed::current(),
         preset_ai_options,
         shortcut_errors: crate::shortcuts::errors(),
         speech_loading: splashdown_providers::speech_model_loading(),

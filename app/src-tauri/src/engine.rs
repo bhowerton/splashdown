@@ -148,6 +148,8 @@ pub fn load_settings() -> Settings {
         Settings::default()
     });
     repair(&mut settings);
+    // What the organization set, in place of the user's own choices.
+    splashdown_config::managed::Managed::current().apply(&mut settings);
     settings
 }
 
@@ -341,7 +343,9 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         }
     }
 
-    let vocabulary = settings.general.vocabulary.clone();
+    // The user's own words and corrections, then their team's.
+    let shared = crate::shared_words::load(settings);
+    let vocabulary = shared.vocabulary_with(&settings.general.vocabulary);
     Ok(Engine {
         budget: settings.general.budget,
         over_budget: on_device.over_budget,
@@ -352,7 +356,9 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         whisper_mode: settings.general.whisper_mode(),
         noise_reduction: settings.general.noise_reduction(),
         keep_insights: settings.general.keep_insights(),
-        replacements: crate::replacements::Replacements::new(&settings.replacements),
+        replacements: crate::replacements::Replacements::new(
+            &shared.replacements_with(&settings.replacements),
+        ),
         learn_vocabulary: settings.general.learn_vocabulary(),
         share_app_name: settings.general.share_app_name(),
         // Apple's on-device model repeats and even obeys earlier text

@@ -291,6 +291,111 @@ pub struct CloudPlace {
 
 /// The sync services this computer has (best effort), each once.
 pub fn cloud_places() -> Vec<CloudPlace> {
+    let mut places: Vec<CloudPlace> = sync_roots()
+        .into_iter()
+        .map(|(service, account, root)| {
+            let folder = root.join(NOTES_FOLDER_NAME);
+            CloudPlace {
+                service,
+                account,
+                label: label(&folder),
+                folder: folder.display().to_string(),
+            }
+        })
+        .collect();
+    // An account is only worth showing when there's more than one.
+    let counts = |service: &str| places.iter().filter(|p| p.service == service).count();
+    let single: Vec<bool> = places.iter().map(|p| counts(&p.service) == 1).collect();
+    for (place, single) in places.iter_mut().zip(single) {
+        if single {
+            place.account = None;
+        }
+    }
+    places
+}
+
+/// A sync service's folder on this computer, for finding the same file
+/// on someone else's (a team's vocabulary, `shared_words::invite`).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncBase {
+    /// "Dropbox".
+    pub service: String,
+    pub dir: PathBuf,
+    /// What this folder is called inside the service, when it's one part
+    /// of it kept somewhere of its own: Google Drive's "My Drive" as a
+    /// folder in the home folder. A path in the service that starts with
+    /// this name is inside `dir`.
+    pub inside: Option<String>,
+}
+
+/// Each sync service's folders on this computer. Google Drive's is the
+/// folder that holds both My Drive and Shared drives, where there is one.
+pub fn sync_bases() -> Vec<SyncBase> {
+    let home = directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf());
+    let mut bases: Vec<SyncBase> = Vec::new();
+    for (service, _, root) in sync_roots() {
+        let my_drive = service == "Google Drive" && root.ends_with("My Drive");
+        let base = match root.parent() {
+            // Kept in the home folder: only My Drive is there.
+            Some(parent) if my_drive && Some(parent) == home.as_deref() => SyncBase {
+                service,
+                dir: root,
+                inside: Some("My Drive".into()),
+            },
+            Some(parent) if my_drive => SyncBase {
+                service,
+                dir: parent.to_path_buf(),
+                inside: None,
+            },
+            _ => SyncBase {
+                service,
+                dir: root,
+                inside: None,
+            },
+        };
+        bases.push(base);
+    }
+    // Shared drives are here even when My Drive is kept in the home folder.
+    for dir in google_drive_folders() {
+        if !bases.iter().any(|b| b.dir == dir) {
+            bases.push(SyncBase {
+                service: "Google Drive".into(),
+                dir,
+                inside: None,
+            });
+        }
+    }
+    bases
+}
+
+/// Google Drive's own folders on a Mac, one per account
+/// (`~/Library/CloudStorage/GoogleDrive-ben@example.com`).
+fn google_drive_folders() -> Vec<PathBuf> {
+    if !cfg!(target_os = "macos") {
+        return Vec::new();
+    }
+    let Some(home) = directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf()) else {
+        return Vec::new();
+    };
+    let mut found: Vec<PathBuf> = std::fs::read_dir(home.join("Library/CloudStorage"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.is_dir()
+                && p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("GoogleDrive-"))
+        })
+        .collect();
+    found.sort();
+    found
+}
+
+/// Where each sync service keeps its files here: the service, the account
+/// where the folder's name gives one, and the folder. Only folders that
+/// exist, each once.
+fn sync_roots() -> Vec<(String, Option<String>, PathBuf)> {
     let Some(home) = directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf()) else {
         return Vec::new();
     };
@@ -331,6 +436,11 @@ pub fn cloud_places() -> Vec<CloudPlace> {
         }
         roots.extend(dropbox_roots(&home.join(".dropbox/info.json")));
         roots.push(("Dropbox".into(), None, home.join("Dropbox")));
+        // Google Drive set to keep My Drive on this Mac ("mirror files")
+        // puts it in the home folder, not with its other folders.
+        if !google_drive_folders().is_empty() {
+            roots.push(("Google Drive".into(), None, home.join("My Drive")));
+        }
     } else {
         for name in ["iCloudDrive", "iCloud Drive"] {
             roots.push(("iCloud Drive".into(), None, home.join(name)));
@@ -366,30 +476,15 @@ pub fn cloud_places() -> Vec<CloudPlace> {
         }
         roots.push(("Box".into(), None, home.join("Box")));
     }
-    let mut places: Vec<CloudPlace> = Vec::new();
     let mut seen: Vec<PathBuf> = Vec::new();
-    for (service, account, root) in roots {
-        if !root.is_dir() || seen.contains(&root) {
-            continue;
+    roots.retain(|(_, _, root)| {
+        let new = root.is_dir() && !seen.contains(root);
+        if new {
+            seen.push(root.clone());
         }
-        seen.push(root.clone());
-        let folder = root.join(NOTES_FOLDER_NAME);
-        places.push(CloudPlace {
-            service,
-            account,
-            label: label(&folder),
-            folder: folder.display().to_string(),
-        });
-    }
-    // An account is only worth showing when there's more than one.
-    let counts = |service: &str| places.iter().filter(|p| p.service == service).count();
-    let single: Vec<bool> = places.iter().map(|p| counts(&p.service) == 1).collect();
-    for (place, single) in places.iter_mut().zip(single) {
-        if single {
-            place.account = None;
-        }
-    }
-    places
+        new
+    });
+    roots
 }
 
 /// The folder notes get inside a sync service, as in Documents.

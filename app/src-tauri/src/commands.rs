@@ -49,6 +49,8 @@ pub async fn save_settings(
         // Set by the first meeting, which Settings may not have seen.
         settings.notes.meeting_reminded |= current.notes.meeting_reminded;
         settings.general.settle_learned();
+        // What the organization set stays, whatever the window sent.
+        splashdown_config::managed::Managed::current().apply(&mut settings);
         settings.save(&engine::paths()?.config_file())?;
         *current = settings.clone();
         settings

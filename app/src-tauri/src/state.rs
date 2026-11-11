@@ -44,6 +44,7 @@ impl AppState {
             let mut current = self.settings.locked();
             let mut settings = current.clone();
             change(&mut settings);
+            splashdown_config::managed::Managed::current().apply(&mut settings);
             settings.save(&engine::paths()?.config_file())?;
             *current = settings.clone();
             settings

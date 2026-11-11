@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Your team's words · Splashdown</title>
+<meta name="description" content="One list of names, terms and corrections for a whole team's dictation, kept in a folder you already share. No server and no accounts.">
+<link rel="canonical" href="https://splashdown.app/team/">
+<link rel="icon" href="../assets/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../assets/icon-180.png">
+<meta name="theme-color" content="#0A1440">
+<link rel="stylesheet" href="../style.css">
+<style>[hidden] { display: none !important; }</style>
+</head>
+<body>
+
+<header class="top">
+  <a class="brand" href="../"><img src="../assets/icon.svg" alt="" width="36" height="36">Splashdown</a>
+  <nav>
+    <a href="../#download">Download</a>
+    <a class="gh" href="https://github.com/bhowerton/splashdown">GitHub</a>
+  </nav>
+</header>
+
+<main>
+  <!-- Shown when the link carries an invite (after its #). -->
+  <section class="hero" id="invited" hidden>
+    <h1>Your team's <span>words.</span></h1>
+    <p class="lede">You've been invited to use your team's list of names, terms and corrections, so Splashdown spells them the way your team does.</p>
+    <p class="lede"><strong id="where"></strong></p>
+    <div class="cta">
+      <a class="btn primary" id="open" href="#">Open in Splashdown</a>
+      <button class="btn" id="copy" type="button">Copy this link</button>
+    </div>
+    <p class="fine" id="how">Splashdown says what the list has and asks before using it. The list is a file in that shared folder: this link only says where it is, and the folder has to be shared with you and synced to this computer.</p>
+    <p class="fine" id="windows" hidden>On Windows, copy this link, then in Splashdown choose Settings → Words &amp; language → Your team's words → Join with an invite link…</p>
+    <p class="fine">Don't have Splashdown yet? <a href="../#download">Download it</a>, then open this link again.</p>
+  </section>
+
+  <!-- Shown when someone comes here without an invite. -->
+  <section class="hero" id="plain">
+    <h1>Your team's <span>words.</span></h1>
+    <p class="lede">One list of names, terms and corrections for a whole team's dictation, kept in a folder you already share. No server and no accounts.</p>
+    <div class="cta">
+      <a class="btn primary" href="https://github.com/bhowerton/splashdown/blob/main/docs/TEAMS.md">How it works</a>
+    </div>
+    <p class="fine">To start one: Settings → Words &amp; language → Your team's words → Start a team list… in Splashdown, then paste the invite link it copies to your team.</p>
+  </section>
+</main>
+
+<script>
+// An invite is the two parts after the #: which sync service the list is
+// in, and the file's path inside it. A browser never sends that part of a
+// link to the site; this page only hands it to the app on this computer.
+(function () {
+  var parts = {};
+  location.hash.replace(/^#/, "").split("&").forEach(function (pair) {
+    var at = pair.indexOf("=");
+    if (at < 1) return;
+    try {
+      parts[pair.slice(0, at)] = decodeURIComponent(pair.slice(at + 1));
+    } catch (e) { /* a broken escape: not an invite */ }
+  });
+  var service = (parts["in"] || "").trim();
+  var file = parts.file || "";
+  var pieces = file.split("/");
+  var plain = pieces.every(function (p) {
+    return p && p !== "." && p !== ".." && !/[\\:\u0000-\u001f]/.test(p);
+  });
+  if (!/^[\p{L}\p{N} ]+$/u.test(service) || !plain || file.length > 500) return;
+
+  document.getElementById("where").textContent = [service].concat(pieces).join(" › ");
+  document.getElementById("open").href =
+    "splashdown://team-words?in=" + encodeURIComponent(service) + "&file=" + encodeURIComponent(file);
+  document.getElementById("copy").addEventListener("click", function () {
+    var button = this;
+    navigator.clipboard.writeText(location.href).then(function () {
+      button.textContent = "Copied";
+    });
+  });
+  if (/Win/.test(navigator.platform || navigator.userAgent)) {
+    // The Windows app can't be handed a link yet: it takes one pasted.
+    document.getElementById("open").hidden = true;
+    document.getElementById("windows").hidden = false;
+  }
+  document.getElementById("invited").hidden = false;
+  document.getElementById("plain").hidden = true;
+})();
+</script>
+</body>
+</html>

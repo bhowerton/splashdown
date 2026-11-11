@@ -192,6 +192,7 @@ Settings → Actions → When something happens. A hook runs after a meeting, a 
 
 - **A dictation is never lost.** If the speech service or the AI fails, or Splashdown closes mid-way, the recording is kept and **Retry** (menu bar → Last dictation) turns it into text. A cloud provider that's down is stood in for by a model on your computer.
 - **History** (off by default; optionally with recordings, so you can transcribe again later), **Insights** (words, speed, time saved, streaks), and the **dictation pill**: a small pill at the bottom of your screen to click instead of holding a key: a microphone beside a short sound wave, which moves with your voice while it listens. Setup shows it once; drag it anywhere, or turn it off.
+- **For teams:** one list of names and corrections in a folder you all share gives everyone the same spellings; start it in Settings and send the invite link, and a teammate joins with a click. An organization can set local-only mode, history, the shared vocabulary and updates on the computers it manages (a configuration profile on macOS, Group Policy on Windows). No server and no accounts: [Splashdown for teams](docs/TEAMS.md).
 - **Warns when the microphone hears nothing**, and keeps what you said if it's unplugged mid-sentence.
 - **Updates** are checked daily and installed only when you choose. Or have them install by themselves: a new version then goes in two days after it comes out, at a moment when Splashdown is idle, and the menu bar says what it updated to.
 - **A setup guide that has you try it.** The first run shows what Splashdown does, gets speech to text ready in about a minute (the AI follows in the background, and is optional), then has you try the main things one at a time: dictate, dictate in one of your own apps, change selected text, hear it read back, and do things. Each ticks off when it works, and any can be skipped.
@@ -342,6 +343,7 @@ cargo run --release -p splashdown-cli -- eval cleanup --ai openrouter
 
 - [Privacy](docs/PRIVACY.md): what leaves your computer, what stays, and how to delete it
 - [Troubleshooting](docs/TROUBLESHOOTING.md): the common fixes
+- [Splashdown for teams](docs/TEAMS.md): a shared vocabulary, and settings an organization can set
 - [Changelog](CHANGELOG.md): what changed in each release
 - [Voice input for coding agents](docs/AGENTS.md): `splashdown-mcp` for Claude Code, Cursor and others
 - [Contributing](CONTRIBUTING.md): building, checks, releases and conventions

@@ -5,6 +5,9 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 ## Unreleased
 
 - **The dictation pill is shorter and says what it is.** The pill that stays on screen for clicking instead of holding a key showed five dots, which didn't say what it was for, and stood taller than it needed to. It now shows a microphone beside a short sound wave and is about a quarter shorter. Both turn orange under the pointer, and the wave moves with your voice while it listens.
+- **A vocabulary your team shares.** One list of names, terms and corrections for a whole team, kept as a file in a folder you already share (Dropbox, Google Drive, OneDrive, iCloud Drive or Box). In Settings → Words & language → Your team's words, Start a team list… makes the file and copies an invite link; a teammate clicks the link, sees what the list has, and joins with one click. Its words are used along with your own, yours first, and stay in the file: when someone adds a name, everyone has it within half a minute. The first 300 words and 300 corrections are used. No server and no accounts. On Windows the link is pasted into Settings (Join with an invite link…), since the Windows app can't be handed links yet. See [Splashdown for teams](docs/TEAMS.md).
+- **Organizations can set some settings.** On computers an organization manages, a configuration profile (macOS) or Group Policy (Windows) can turn on local-only mode, turn history off, choose the shared vocabulary, and decide how updates arrive. Settings shows each as "Set by your organization". Splashdown still has no server and no accounts. New and not yet tried with a real management tool; see [Splashdown for teams](docs/TEAMS.md).
+- **Google Drive is found when it keeps your files on the Mac.** With Google Drive set to mirror files, My Drive is a folder in your home folder, and Splashdown didn't see it, so Settings → Notes offered no Google Drive. It does now.
 
 ## 0.12.1 — 2026-11-10
 

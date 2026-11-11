@@ -330,6 +330,15 @@
         <div class="row"><span class="lbl">Bring your words from another dictation app<small>A dictionary or snippets export, or a word list (text or CSV, with “misspelling,correction” lines for corrections). Words, corrections and snippets are added; nothing already here changes.</small></span>
           <button class="btn" id="words-import">Import…</button>
           <input type="file" id="words-import-file" accept=".json,.csv,.txt,.tsv" hidden></div>
+        <div class="row column" id="shared-words-row"><span class="lbl">Your team's words<small>One list of names, terms and corrections for your whole team, kept in a folder you all share (Dropbox, Google Drive, OneDrive, iCloud Drive or Box). They're used along with yours and stay in that file, so when someone adds a name, everyone has it.</small><small id="shared-words-status" hidden></small></span>
+          <span class="nt-places">
+            <button type="button" class="btn" id="shared-words-invite" hidden>Copy invite link</button>
+            <button type="button" class="btn" id="shared-words-edit" hidden>Edit the list</button>
+            <button type="button" class="btn" id="shared-words-start">Start a team list…</button>
+            <button type="button" class="btn" id="shared-words-join">Join with an invite link…</button>
+            <button type="button" class="btn" id="shared-words-choose">Choose a file…</button>
+            <button type="button" class="link" id="shared-words-stop" hidden>Stop using it</button>
+          </span></div>
       </div>
       <div class="group">
         <div class="gh">Your writing style</div>

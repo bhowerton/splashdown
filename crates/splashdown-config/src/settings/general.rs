@@ -19,6 +19,10 @@ pub struct GeneralSettings {
     pub learned_words: Vec<String>,
     /// Learned words the user removed: never learned again.
     pub forgotten_words: Vec<String>,
+    /// A file of names, terms and corrections that a team keeps in a
+    /// folder they all have (see `crate::shared`). Its words are used
+    /// along with the user's own, and never saved among them.
+    pub shared_vocabulary: Option<String>,
     /// How speech recognition wrote vocabulary words before the user
     /// corrected them ("TRUX" = ["trucks"]), a hint for the AI pass.
     pub misheard: std::collections::BTreeMap<String, Vec<String>>,

@@ -49,7 +49,131 @@ const DEFAULT_SOUND_VOLUME = 0.12;
 const MEANING_NOTE = $("nt-meaning-note").textContent;
 let meaningShown = false;
 
+/** The invite link for the list in use, if a teammate's computer could
+ *  follow one. */
+let sharedInvite = null;
+
+/** "Your team's words": the file in use and what it gave, or why it
+ *  isn't being used, and the buttons that fit. */
+async function renderSharedWords(status) {
+  try {
+    status ??= await invoke("shared_words_status");
+  } catch {
+    return;
+  }
+  const note = $("shared-words-status");
+  const count = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  const using = !!status.file;
+  sharedInvite = status.invite ?? null;
+  note.hidden = !using;
+  note.classList.toggle("warn-text", !!status.problem);
+  if (using) {
+    const name = status.file.split(/[\\/]/).pop();
+    note.title = status.file;
+    note.textContent = status.problem
+      ? `${name} isn't being used: ${status.problem}.`
+      : `${name}: ${count(status.words, "word")} and ${count(status.corrections, "correction")} in use.` +
+        (status.left_out ? ` ${count(status.left_out, "line")} left out (a repeat, longer than a name or term, or past the first 300).` : "") +
+        (sharedInvite ? "" : " It isn't in a synced folder Splashdown knows, so there's no invite link: teammates choose the file themselves.");
+  }
+  $("shared-words-invite").hidden = !sharedInvite;
+  $("shared-words-edit").hidden = !using;
+  $("shared-words-start").hidden = using;
+  $("shared-words-join").hidden = using;
+  $("shared-words-choose").textContent = using ? "Choose another…" : "Choose a file…";
+  $("shared-words-stop").hidden = !using;
+}
+
+/** Puts the invite link on the clipboard; whether it did. */
+async function copySharedInvite() {
+  if (!sharedInvite) return false;
+  try {
+    await navigator.clipboard.writeText(sharedInvite);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function setSharedWords(file) {
+  try {
+    const status = await invoke("shared_words_set", { file });
+    renderSharedWords(status);
+    toast(file ? `Using ${status.words + status.corrections} of your team's words and corrections` : "No longer using your team's words");
+  } catch (e) {
+    toast(String(e), true);
+  }
+}
+
+$("shared-words-choose").addEventListener("click", async () => {
+  let picked;
+  try {
+    picked = await invoke("shared_words_pick");
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
+  if (picked) setSharedWords(picked);
+});
+$("shared-words-stop").addEventListener("click", () => setSharedWords(null));
+
+// Starts a list in a folder the team shares, and copies the link that
+// lets the others join.
+$("shared-words-start").addEventListener("click", async () => {
+  let folder;
+  try {
+    folder = await invoke("shared_words_pick_folder");
+  } catch (e) {
+    toast(String(e), true);
+    return;
+  }
+  if (!folder) return;
+  const mine = state.settings.general.vocabulary.length + state.settings.replacements.length;
+  const withMine =
+    mine > 0 &&
+    (await askConfirm("Start it with your own words?", {
+      action: "Add my words",
+      cancel: "Start empty",
+      danger: false,
+      detail: "Your names, terms and corrections become the team's first entries, for everyone who joins to see and use. They stay in your own vocabulary too.",
+    }));
+  try {
+    const started = await invoke("shared_words_start", { folder, withMine });
+    await renderSharedWords(started.status);
+    const copied = await copySharedInvite();
+    toast(
+      (started.existed ? "That folder already had a team list: using it." : "Team list started.") +
+        (copied ? " The invite link is copied: paste it to your team." : ""),
+    );
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
+
+$("shared-words-invite").addEventListener("click", async () => {
+  toast((await copySharedInvite()) ? "Invite link copied: paste it to your team" : "Couldn't copy the link", !sharedInvite);
+});
+
+$("shared-words-edit").addEventListener("click", () => call("shared_words_edit"));
+
+$("shared-words-join").addEventListener("click", async () => {
+  const link = await askText("Join your team's words", {
+    detail: "Paste the invite link a teammate sent you.",
+    placeholder: "https://splashdown.app/team/#…",
+    action: "Join",
+  });
+  if (!link) return;
+  try {
+    const status = await invoke("shared_words_join", { link });
+    renderSharedWords(status);
+    toast(`Using ${status.words + status.corrections} of your team's words and corrections`);
+  } catch (e) {
+    toast(String(e), true);
+  }
+});
+
 function renderGeneral() {
+  renderSharedWords();
   const s = state.settings;
   renderMicrophones();
   if (!capture) {

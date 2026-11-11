@@ -69,6 +69,36 @@ function render() {
   fitPlatform(state.platform);
   $("about-config").textContent = state.config_path;
   renderUpdate();
+  renderManaged();
+}
+
+/** What the organization set (state.managed, see managed.rs): each is
+ *  shown as theirs under its name, and can't be changed here. Last in
+ *  render(), so nothing after it turns a control back on. */
+function renderManaged() {
+  const m = state.managed ?? {};
+  const theirs = [
+    [m.local_only, ["pv-local"]],
+    [m.no_history, ["hist-keep", "hist-audio"]],
+    [!!m.updates, ["gen-updates"]],
+    [!!m.shared_vocabulary, ["shared-words-choose", "shared-words-stop", "shared-words-start", "shared-words-join"]],
+  ];
+  for (const [on, ids] of theirs) {
+    for (const id of ids) {
+      const el = $(id);
+      if (on) el.disabled = true;
+      const label = el.closest(".row")?.querySelector(".lbl");
+      let note = label?.querySelector(".managed-note");
+      if (on && label && !note) {
+        note = document.createElement("small");
+        note.className = "managed-note";
+        note.textContent = "Set by your organization.";
+        label.append(note);
+      } else if (!on) {
+        note?.remove();
+      }
+    }
+  }
 }
 
 /** Settings → About → Updates, from state.update (see updates.rs). */

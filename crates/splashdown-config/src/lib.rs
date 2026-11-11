@@ -1,9 +1,11 @@
 //! Configuration file, secrets and on-disk locations.
 
 pub mod import;
+pub mod managed;
 mod presets;
 mod secrets;
 mod settings;
+pub mod shared;
 mod transforms;
 
 pub use presets::{

@@ -56,6 +56,11 @@ pub fn on_run_event(app: &tauri::AppHandle, event: &tauri::RunEvent) {
         return;
     };
     for url in urls {
+        // An invite to a team's words: asks before anything changes.
+        if crate::shared_words::is_invite_link(&url) {
+            crate::shared_words::open_invite(app, &url);
+            continue;
+        }
         if let Some(path) = note_link(&url) {
             crate::notes::open_to(app, Some(&format!("note:{path}")));
             continue;
@@ -100,7 +105,7 @@ pub fn encode(text: &str) -> String {
 
 /// Undoes [`encode`] (and `+` for a space, as forms write it). A broken
 /// escape is kept as it is.
-fn decode(text: &str) -> String {
+pub fn decode(text: &str) -> String {
     let bytes = text.as_bytes();
     let hex = |b: u8| char::from(b).to_digit(16).map(|d| d as u8);
     let mut out = Vec::with_capacity(bytes.len());
