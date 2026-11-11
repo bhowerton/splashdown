@@ -1,7 +1,7 @@
-//! The mini bar: a small pill of five dots that stays on screen, for
-//! starting and finishing dictation with the mouse. The dots turn orange
-//! under the pointer, become the sound's level while it listens, and
-//! sweep while it works.
+//! The mini bar: a small pill with a microphone and a short sound wave
+//! that stays on screen, for starting and finishing dictation with the
+//! mouse. Both turn orange under the pointer; the wave becomes the sound's
+//! level while it listens, and a row of dots that sweeps while it works.
 //!
 //! Unlike the overlay it takes clicks, but it must never take focus, or the
 //! text would have nowhere to go. Three things make sure of that:
@@ -21,27 +21,35 @@ use objc2::runtime::AnyObject;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSAccessibility, NSAccessibilityButtonRole, NSBackingStoreType, NSBox, NSBoxType, NSColor,
-    NSEvent, NSEventModifierFlags, NSMenu, NSMenuItem, NSPanel, NSScreen, NSStatusWindowLevel,
-    NSTitlePosition, NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindowCollectionBehavior,
-    NSWindowStyleMask,
+    NSEvent, NSEventModifierFlags, NSImage, NSImageScaling, NSImageView, NSMenu, NSMenuItem,
+    NSPanel, NSScreen, NSStatusWindowLevel, NSTitlePosition, NSTrackingArea, NSTrackingAreaOptions,
+    NSView, NSWindowCollectionBehavior, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
 
 use crate::{MiniBarEvent, MiniBarHandler, MiniBarPosition, MiniBarState, PlatformError, Result};
 
 /// The pill.
-const WIDTH: f64 = 48.0;
-const HEIGHT: f64 = 22.0;
-/// Its dots: how many, how wide, and the space between them.
-const DOTS: usize = 5;
-const DOT: f64 = 4.0;
-const GAP: f64 = 4.0;
-/// A dot as a bar of the sound's level, while it listens.
-const BAR_W: f64 = 3.0;
-const BAR_MIN_H: f64 = 4.0;
-const BAR_MAX_H: f64 = 14.0;
+const WIDTH: f64 = 50.0;
+const HEIGHT: f64 = 16.0;
+/// The microphone's frame (the symbol is drawn a little inside it), and
+/// the space between it and the wave.
+const MIC_W: f64 = 9.0;
+const MIC_H: f64 = 12.0;
+const SPACE: f64 = 3.0;
+/// The wave's bars: how many, how wide, and the space between them.
+const BARS: usize = 5;
+const BAR_W: f64 = 2.0;
+const GAP: f64 = 2.0;
+/// How tall each bar is at rest: the shape of a sound wave.
+const REST: [f64; BARS] = [4.0, 8.0, 5.0, 7.0, 3.0];
+/// A bar as the sound's level, while it listens.
+const BAR_MIN_H: f64 = 3.0;
+const BAR_MAX_H: f64 = 11.0;
 /// How much of the level each bar shows: tallest in the middle.
-const ENVELOPE: [f64; DOTS] = [0.55, 0.8, 1.0, 0.8, 0.55];
+const ENVELOPE: [f64; BARS] = [0.55, 0.8, 1.0, 0.8, 0.55];
+/// A bar as a dot of the sweep, while it works.
+const DOT_H: f64 = 3.0;
 /// Seconds between the steps of the sweep that shows it's working.
 const SWEEP: f64 = 0.11;
 /// The mouse must move this far before a press counts as a drag.
@@ -49,10 +57,12 @@ const DRAG_SLOP: f64 = 3.0;
 /// Default place: the bottom middle of the screen, this far above the Dock.
 const BOTTOM_MARGIN: f64 = 10.0;
 
-/// What's drawn: the pill and its dots.
+/// What's drawn: the pill, its microphone and the bars of its wave.
 struct Parts {
     background: Retained<NSBox>,
-    dots: Vec<Retained<NSBox>>,
+    /// `None` if the system has no such symbol: then it's the wave alone.
+    mic: Option<Retained<NSImageView>>,
+    bars: Vec<Retained<NSBox>>,
 }
 
 struct Ivars {
@@ -96,7 +106,7 @@ define_class!(
             false
         }
 
-        /// Every click inside lands here, not on the pill or a dot.
+        /// Every click inside lands here, not on the pill or a part of it.
         #[unsafe(method_id(hitTest:))]
         fn hit_test(&self, point: NSPoint) -> Option<Retained<NSView>> {
             // SAFETY: calls NSView's own hitTest: with its own argument.
@@ -245,7 +255,7 @@ impl BarView {
         };
     }
 
-    /// Draws the pill and its dots for the state it's in.
+    /// Draws the pill, its microphone and its wave for the state it's in.
     fn redraw(&self) {
         let Some(parts) = self.ivars().parts.get() else {
             return;
@@ -266,18 +276,28 @@ impl BarView {
             parts.background.setBorderColor(&white(0.18));
         }
 
+        let hover = self.ivars().hover.get();
+        if let Some(mic) = &parts.mic {
+            let tint = match state {
+                MiniBarState::Recording => orange.clone(),
+                MiniBarState::Idle if hover => orange.clone(),
+                MiniBarState::NotReady => white(0.3),
+                MiniBarState::Idle | MiniBarState::Working => white(0.85),
+            };
+            mic.setContentTintColor(Some(&tint));
+        }
+
         let levels = *self.ivars().levels.borrow();
         // The sweep goes to the last dot and back.
-        let step = self.ivars().step.get() % (2 * DOTS - 2);
-        let lit = if step < DOTS {
+        let step = self.ivars().step.get() % (2 * BARS - 2);
+        let lit = if step < BARS {
             step
         } else {
-            2 * DOTS - 2 - step
+            2 * BARS - 2 - step
         };
-        let x0 = (WIDTH - (DOTS as f64 * DOT + (DOTS - 1) as f64 * GAP)) / 2.0;
-        for (i, dot) in parts.dots.iter().enumerate() {
-            let from_middle = i.abs_diff(DOTS / 2);
-            let (w, h, fill) = match state {
+        for (i, bar) in parts.bars.iter().enumerate() {
+            let from_middle = i.abs_diff(BARS / 2);
+            let (h, fill) = match state {
                 MiniBarState::Recording => {
                     // Speech RMS is roughly 0.01–0.2; a square-root curve
                     // makes quiet speech visible without loud speech pinning
@@ -285,7 +305,7 @@ impl BarView {
                     let level = f64::from(levels[2 - from_middle]);
                     let norm = (level * 25.0).sqrt().min(1.0) * ENVELOPE[i];
                     let h = (BAR_MIN_H + norm * (BAR_MAX_H - BAR_MIN_H)).round();
-                    (BAR_W, h, orange.clone())
+                    (h, orange.clone())
                 }
                 MiniBarState::Working => {
                     let alpha = match i.abs_diff(lit) {
@@ -293,24 +313,50 @@ impl BarView {
                         1 => 0.55,
                         _ => 0.28,
                     };
-                    (DOT, DOT, white(alpha))
+                    (DOT_H, white(alpha))
                 }
-                MiniBarState::NotReady => (DOT, DOT, white(0.25)),
-                MiniBarState::Idle if self.ivars().hover.get() => (DOT, DOT, orange.clone()),
-                MiniBarState::Idle => (DOT, DOT, white(0.6)),
+                MiniBarState::NotReady => (REST[i], white(0.25)),
+                MiniBarState::Idle if hover => (REST[i], orange.clone()),
+                MiniBarState::Idle => (REST[i], white(0.7)),
             };
-            let center = x0 + i as f64 * (DOT + GAP) + DOT / 2.0;
-            dot.setFrame(NSRect::new(
-                NSPoint::new(center - w / 2.0, (HEIGHT - h) / 2.0),
-                NSSize::new(w, h),
+            bar.setFrame(NSRect::new(
+                NSPoint::new(bars_x() + i as f64 * (BAR_W + GAP), (HEIGHT - h) / 2.0),
+                NSSize::new(BAR_W, h),
             ));
-            dot.setCornerRadius(w / 2.0);
-            dot.setFillColor(&fill);
+            bar.setCornerRadius(BAR_W / 2.0);
+            bar.setFillColor(&fill);
         }
     }
 }
 
-/// A plain filled box, for the pill and each dot.
+/// Where the microphone starts: it and the wave sit in the pill's middle.
+fn mic_x() -> f64 {
+    let wave = BARS as f64 * BAR_W + (BARS - 1) as f64 * GAP;
+    (WIDTH - (MIC_W + SPACE + wave)) / 2.0
+}
+
+/// Where the first bar of the wave starts.
+fn bars_x() -> f64 {
+    mic_x() + MIC_W + SPACE
+}
+
+/// The microphone: the system's own symbol, tinted as the state asks.
+fn mic_view(mtm: MainThreadMarker) -> Option<Retained<NSImageView>> {
+    let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+        &NSString::from_str("mic.fill"),
+        None,
+    )?;
+    let frame = NSRect::new(
+        NSPoint::new(mic_x(), (HEIGHT - MIC_H) / 2.0),
+        NSSize::new(MIC_W, MIC_H),
+    );
+    let view = NSImageView::initWithFrame(NSImageView::alloc(mtm), frame);
+    view.setImage(Some(&image));
+    view.setImageScaling(NSImageScaling::ScaleProportionallyUpOrDown);
+    Some(view)
+}
+
+/// A plain filled box, for the pill and each bar.
 fn filled_box(mtm: MainThreadMarker, frame: NSRect) -> Retained<NSBox> {
     let b = NSBox::initWithFrame(NSBox::alloc(mtm), frame);
     b.setBoxType(NSBoxType::Custom);
@@ -382,14 +428,22 @@ impl MiniBar {
         let background = filled_box(mtm, NSRect::new(NSPoint::ZERO, NSSize::new(WIDTH, HEIGHT)));
         background.setCornerRadius(HEIGHT / 2.0);
         view.addSubview(&background);
-        let dots: Vec<Retained<NSBox>> = (0..DOTS)
+        let mic = mic_view(mtm);
+        if let Some(mic) = &mic {
+            view.addSubview(mic);
+        }
+        let bars: Vec<Retained<NSBox>> = (0..BARS)
             .map(|_| {
-                let dot = filled_box(mtm, NSRect::ZERO);
-                view.addSubview(&dot);
-                dot
+                let bar = filled_box(mtm, NSRect::ZERO);
+                view.addSubview(&bar);
+                bar
             })
             .collect();
-        let _ = view.ivars().parts.set(Parts { background, dots });
+        let _ = view.ivars().parts.set(Parts {
+            background,
+            mic,
+            bars,
+        });
 
         // The pointer coming and going, whichever app is in front.
         // SAFETY: the area is owned by the view it reports to, which
@@ -444,7 +498,7 @@ impl MiniBar {
         let ivars = self.view.ivars();
         if ivars.state.replace(state) != state {
             *ivars.levels.borrow_mut() = [0.0; 3];
-            ivars.step.set(DOTS / 2);
+            ivars.step.set(BARS / 2);
         }
         self.view.redraw();
         if state == MiniBarState::Working {

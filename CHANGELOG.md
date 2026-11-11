@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **The dictation pill is shorter and says what it is.** The pill that stays on screen for clicking instead of holding a key showed five dots, which didn't say what it was for, and stood taller than it needed to. It now shows a microphone beside a short sound wave and is about a quarter shorter. Both turn orange under the pointer, and the wave moves with your voice while it listens.
+
 ## 0.12.1 — 2026-11-10
 
 - **Updates can install by themselves.** Settings → General → Updates now has three choices: tell me when there's one (as before, and still what you get unless you change it), install them by themselves, or don't check. Installing by itself waits until a version has been out for two days, and for a moment when Splashdown has been idle for ten minutes with nothing recording, no file being transcribed, no model downloading and none of its windows open. It then restarts, and the menu bar and Settings → About say what it updated to for a day, with a link to what changed. The setup guide offers it.

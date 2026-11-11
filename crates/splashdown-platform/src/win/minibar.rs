@@ -1,7 +1,8 @@
-//! The mini bar: a small pill of five dots, a topmost tool window that
-//! stays on screen, for starting and finishing dictation with the mouse.
-//! The dots turn orange under the pointer, become the sound's level while
-//! it listens, and sweep while it works.
+//! The mini bar: a small pill with a microphone and a short sound wave, a
+//! topmost tool window that stays on screen, for starting and finishing
+//! dictation with the mouse. Both turn orange under the pointer; the wave
+//! becomes the sound's level while it listens, and a row of dots that
+//! sweeps while it works.
 //!
 //! Unlike the overlay it takes clicks, but it never activates: it's created
 //! with `WS_EX_NOACTIVATE` and answers `WM_MOUSEACTIVATE` with
@@ -19,11 +20,11 @@ use std::rc::Rc;
 
 use windows::Win32::Foundation::{COLORREF, HWND, LPARAM, LRESULT, POINT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::{
-    BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreateRoundRectRgn,
-    CreateSolidBrush, DeleteDC, DeleteObject, Ellipse, EndPaint, FillRect, GetMonitorInfoW,
-    GetStockObject, HDC, HGDIOBJ, InvalidateRect, MONITOR_DEFAULTTONEAREST, MONITOR_DEFAULTTONULL,
-    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, NULL_PEN, PAINTSTRUCT, RoundRect,
-    SRCCOPY, SelectObject, SetWindowRgn, UpdateWindow,
+    Arc, BeginPaint, BitBlt, CreateCompatibleBitmap, CreateCompatibleDC, CreatePen,
+    CreateRoundRectRgn, CreateSolidBrush, DeleteDC, DeleteObject, EndPaint, FillRect,
+    GetMonitorInfoW, GetStockObject, HDC, HGDIOBJ, InvalidateRect, MONITOR_DEFAULTTONEAREST,
+    MONITOR_DEFAULTTONULL, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint, NULL_PEN,
+    PAINTSTRUCT, PS_SOLID, RoundRect, SRCCOPY, SelectObject, SetWindowRgn, UpdateWindow,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
@@ -45,18 +46,25 @@ use crate::{MiniBarEvent, MiniBarHandler, MiniBarPosition, MiniBarState, Platfor
 
 // Sizes in device-independent pixels (scaled by the monitor's DPI).
 /// The pill.
-const WIDTH: f64 = 48.0;
-const HEIGHT: f64 = 22.0;
-/// Its dots: how many, how wide, and the space between them.
-const DOTS: usize = 5;
-const DOT: f64 = 4.0;
-const GAP: f64 = 4.0;
-/// A dot as a bar of the sound's level, while it listens.
-const BAR_W: f64 = 3.0;
-const BAR_MIN_H: f64 = 4.0;
-const BAR_MAX_H: f64 = 14.0;
+const WIDTH: f64 = 50.0;
+const HEIGHT: f64 = 16.0;
+/// The microphone, and the space between it and the wave.
+const MIC_W: f64 = 7.0;
+const MIC_H: f64 = 10.0;
+const SPACE: f64 = 5.0;
+/// The wave's bars: how many, how wide, and the space between them.
+const BARS: usize = 5;
+const BAR_W: f64 = 2.0;
+const GAP: f64 = 2.0;
+/// How tall each bar is at rest: the shape of a sound wave.
+const REST: [f64; BARS] = [4.0, 8.0, 5.0, 7.0, 3.0];
+/// A bar as the sound's level, while it listens.
+const BAR_MIN_H: f64 = 3.0;
+const BAR_MAX_H: f64 = 11.0;
 /// How much of the level each bar shows: tallest in the middle.
-const ENVELOPE: [f64; DOTS] = [0.55, 0.8, 1.0, 0.8, 0.55];
+const ENVELOPE: [f64; BARS] = [0.55, 0.8, 1.0, 0.8, 0.55];
+/// A bar as a dot of the sweep, while it works.
+const DOT_H: f64 = 3.0;
 /// The orange line around it while it listens.
 const RING: f64 = 1.5;
 /// The mouse must move this far before a press counts as a drag.
@@ -73,7 +81,7 @@ const WM_MOUSELEAVE: u32 = 0x02A3;
 const SPIN_TIMER: usize = 1;
 const SPIN_MS: u32 = 110;
 /// The sweep goes to the last dot and back.
-const SWEEP_STEPS: usize = 2 * DOTS - 2;
+const SWEEP_STEPS: usize = 2 * BARS - 2;
 
 #[derive(Clone, Copy)]
 struct Rgb(u8, u8, u8);
@@ -164,38 +172,37 @@ impl Model {
                 fill(mem, BACKGROUND, &rect);
             }
 
-            let lit = if self.step < DOTS {
+            let lit = if self.step < BARS {
                 self.step
             } else {
                 SWEEP_STEPS - self.step
             };
-            let dots_width = DOTS as f64 * DOT + (DOTS - 1) as f64 * GAP;
-            let x0 = (WIDTH - dots_width) / 2.0;
+            let wave = BARS as f64 * BAR_W + (BARS - 1) as f64 * GAP;
+            let mic_x = (WIDTH - (MIC_W + SPACE + wave)) / 2.0;
+            let quiet = |share: f64| BACKGROUND.mix(TEXT, share);
+            self.draw_mic(
+                mem,
+                mic_x,
+                (HEIGHT - MIC_H) / 2.0,
+                match self.state {
+                    MiniBarState::Recording => ORANGE,
+                    MiniBarState::Idle if self.hover => ORANGE,
+                    MiniBarState::NotReady => quiet(0.3),
+                    MiniBarState::Idle | MiniBarState::Working => quiet(0.85),
+                },
+            );
+
+            let x0 = mic_x + MIC_W + SPACE;
             let cy = f64::from(h) / 2.0;
             for (i, share) in ENVELOPE.iter().enumerate() {
-                let cx = (x0 + i as f64 * (DOT + GAP) + DOT / 2.0) * self.scale;
-                let dot = |color: Rgb| fill_ellipse(mem, color, cx, cy, DOT * self.scale / 2.0);
-                match self.state {
+                let (height, color) = match self.state {
                     MiniBarState::Recording => {
                         // Speech RMS is roughly 0.01–0.2; a square-root
                         // curve makes quiet speech visible without loud
                         // speech pinning the bars (as the overlay's does).
-                        let level = f64::from(self.levels[2 - i.abs_diff(DOTS / 2)]);
+                        let level = f64::from(self.levels[2 - i.abs_diff(BARS / 2)]);
                         let norm = (level * 25.0).sqrt().min(1.0) * share;
-                        let half_h =
-                            (BAR_MIN_H + norm * (BAR_MAX_H - BAR_MIN_H)) * self.scale / 2.0;
-                        let half_w = BAR_W * self.scale / 2.0;
-                        fill_round(
-                            mem,
-                            ORANGE,
-                            RECT {
-                                left: (cx - half_w).round() as i32,
-                                top: (cy - half_h).round() as i32,
-                                right: (cx + half_w).round() as i32,
-                                bottom: (cy + half_h).round() as i32,
-                            },
-                            self.px(BAR_W),
-                        );
+                        (BAR_MIN_H + norm * (BAR_MAX_H - BAR_MIN_H), ORANGE)
                     }
                     MiniBarState::Working => {
                         let bright = match i.abs_diff(lit) {
@@ -203,12 +210,25 @@ impl Model {
                             1 => 0.55,
                             _ => 0.28,
                         };
-                        dot(BACKGROUND.mix(TEXT, bright));
+                        (DOT_H, quiet(bright))
                     }
-                    MiniBarState::NotReady => dot(BACKGROUND.mix(TEXT, 0.25)),
-                    MiniBarState::Idle if self.hover => dot(ORANGE),
-                    MiniBarState::Idle => dot(BACKGROUND.mix(TEXT, 0.6)),
-                }
+                    MiniBarState::NotReady => (REST[i], quiet(0.25)),
+                    MiniBarState::Idle if self.hover => (REST[i], ORANGE),
+                    MiniBarState::Idle => (REST[i], quiet(0.7)),
+                };
+                let left = self.px(x0 + i as f64 * (BAR_W + GAP));
+                let half_h = height * self.scale / 2.0;
+                fill_round(
+                    mem,
+                    color,
+                    RECT {
+                        left,
+                        top: (cy - half_h).round() as i32,
+                        right: left + self.px(BAR_W).max(1),
+                        bottom: (cy + half_h).round() as i32,
+                    },
+                    self.px(BAR_W),
+                );
             }
 
             let _ = BitBlt(dc, 0, 0, w, h, Some(mem), 0, 0, SRCCOPY);
@@ -216,6 +236,42 @@ impl Model {
             SelectObject(mem, old_bitmap);
             let _ = DeleteObject(bitmap.into());
             let _ = DeleteDC(mem);
+        }
+    }
+
+    /// Draws the microphone with its top left corner at (`x`, `y`), in
+    /// device-independent pixels: a capsule for its head, the cup that
+    /// holds it, a stem and a foot.
+    ///
+    /// # Safety
+    ///
+    /// `dc` must be a valid device context with the null pen selected.
+    unsafe fn draw_mic(&self, dc: HDC, x: f64, y: f64, color: Rgb) {
+        let at = |dx: f64, dy: f64| (self.px(x + dx), self.px(y + dy));
+        let rect = |(left, top): (i32, i32), (right, bottom): (i32, i32)| RECT {
+            left,
+            top,
+            right: right.max(left + 1),
+            bottom: bottom.max(top + 1),
+        };
+        // SAFETY: the caller guarantees `dc`; the pen is selected out and
+        // deleted before returning.
+        unsafe {
+            let head = rect(at(2.0, 0.0), at(5.0, 6.0));
+            fill_round(dc, color, head, head.right - head.left);
+            fill(dc, color, &rect(at(3.0, 7.5), at(4.0, 9.0)));
+            fill(dc, color, &rect(at(2.0, 9.0), at(5.0, 10.0)));
+
+            // The cup: the lower half of a circle around the head. Arcs run
+            // counterclockwise, so from its left end round to its right.
+            let (left, top) = at(0.5, 1.5);
+            let (right, bottom) = at(6.5, 7.5);
+            let middle = (top + bottom) / 2;
+            let pen = CreatePen(PS_SOLID, self.px(1.0).max(1), color.colorref());
+            let old = SelectObject(dc, pen.into());
+            let _ = Arc(dc, left, top, right, bottom, left, middle, right, middle);
+            SelectObject(dc, old);
+            let _ = DeleteObject(pen.into());
         }
     }
 }
@@ -255,29 +311,6 @@ unsafe fn fill_round(dc: HDC, color: Rgb, rect: RECT, round: i32) {
             rect.bottom + 1,
             round,
             round,
-        );
-        SelectObject(dc, old);
-        let _ = DeleteObject(brush.into());
-    }
-}
-
-/// Fills a circle with the null pen selected (no outline).
-///
-/// # Safety
-///
-/// `dc` must be a valid device context.
-unsafe fn fill_ellipse(dc: HDC, color: Rgb, cx: f64, cy: f64, r: f64) {
-    // SAFETY: the caller guarantees `dc`; the brush is selected out and
-    // deleted before returning.
-    unsafe {
-        let brush = CreateSolidBrush(color.colorref());
-        let old = SelectObject(dc, brush.into());
-        let _ = Ellipse(
-            dc,
-            (cx - r).round() as i32,
-            (cy - r).round() as i32,
-            (cx + r).round() as i32 + 1,
-            (cy + r).round() as i32 + 1,
         );
         SelectObject(dc, old);
         let _ = DeleteObject(brush.into());
@@ -577,7 +610,7 @@ impl MiniBar {
 
         let mut model = Model {
             state: MiniBarState::Idle,
-            step: DOTS / 2,
+            step: BARS / 2,
             hover: false,
             levels: [0.0; 3],
             scale: 1.0,
@@ -651,7 +684,7 @@ impl MiniBar {
         update(|m| {
             if m.state != state {
                 m.levels = [0.0; 3];
-                m.step = DOTS / 2;
+                m.step = BARS / 2;
             }
             m.state = state;
         });

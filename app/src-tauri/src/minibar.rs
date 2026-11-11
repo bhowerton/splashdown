@@ -131,7 +131,7 @@ pub fn working(on: bool) {
     on_main(move |m| m.working = on);
 }
 
-/// The live microphone level (0–1), for the bar's dots. Any thread.
+/// The live microphone level (0–1), for the bar's wave. Any thread.
 pub fn level(level: f32) {
     if !LISTENING.load(Ordering::Relaxed) {
         return;
