@@ -119,6 +119,8 @@ impl Managed {
 mod plists {
     use std::path::{Path, PathBuf};
 
+    // Only reading the lists needs it; the tests elsewhere use `files` alone.
+    #[cfg(target_os = "macos")]
     use super::Value;
 
     /// The app's managed preferences in `root`: the computer's, then the

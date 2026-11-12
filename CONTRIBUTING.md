@@ -64,10 +64,10 @@ The last one checks that every dependency's license allows MIT/Apache-2.0 distri
 
 `cargo deny check advisories` checks the dependencies against the RustSec advisory database. It runs on its own (`.github/workflows/advisories.yml`: weekly, and when `Cargo.lock` changes), so a new advisory doesn't fail an unrelated change. The advisories accepted, each with why, are listed in `deny.toml`.
 
-From a Mac you can also check that the shared crates still build for Windows (transcribe.cpp can't be cross-compiled, hence the flags):
+From a Mac you can also check that the shared crates still build for Windows, tests included (transcribe.cpp can't be cross-compiled, hence the flags):
 
 ```sh
-cargo clippy --target x86_64-pc-windows-msvc --no-default-features \
+cargo clippy --target x86_64-pc-windows-msvc --no-default-features --all-targets \
   -p splashdown-core -p splashdown-audio -p splashdown-providers -p splashdown-platform -p splashdown-apple-shim -p splashdown-config \
   -p splashdown-control -p splashdown-mcp -- -D warnings
 ```

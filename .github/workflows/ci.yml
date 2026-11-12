@@ -91,6 +91,10 @@ jobs:
         shell: pwsh
         run: scripts/win-cpu-floor.ps1
       - name: Clippy
+        # In bash on Windows too: PowerShell, the default there, carries on
+        # after a command fails and reports only the last one's result, so
+        # a failure of the first of these two went unnoticed.
+        shell: bash
         run: |
           cargo clippy --workspace --all-targets --locked -- -D warnings
           # The remote control alone, as the app ships it.
