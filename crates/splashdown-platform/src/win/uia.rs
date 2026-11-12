@@ -567,10 +567,12 @@ pub(crate) fn takes_text(focus: &FocusElement) -> Option<bool> {
     }
 }
 
-/// Whether pasting over the selection would change it. `Some(false)` only
-/// when UI Automation says the text is read-only: the selection's own
+/// Whether pasting over the selection would change it: `Some(false)` when
+/// UI Automation says the text is read-only (the selection's own
 /// read-only attribute where the field has a text pattern with a
-/// selection, else its value pattern. Anything it doesn't say is `None`.
+/// selection, else its value pattern), otherwise `None`. "Not read-only"
+/// isn't taken as a yes: it's the attribute's default, and some providers
+/// give it for text that can't be changed, so the caller pastes and checks.
 pub(crate) fn can_replace_selection(focus: &FocusElement) -> Option<bool> {
     let el = usable(focus)?;
     let read_only = match text_pattern(focus).and_then(|p| selection_read_only(&p)) {
@@ -584,7 +586,7 @@ pub(crate) fn can_replace_selection(focus: &FocusElement) -> Option<bool> {
         .ok()?
         .as_bool(),
     };
-    Some(!read_only)
+    read_only.then_some(false)
 }
 
 /// The first selected range's read-only attribute, when it's a plain yes

@@ -33,16 +33,22 @@ impl Controller {
             label: label.into(),
         });
 
+        // A question or a draft may be about a terminal's selection, set
+        // aside for them; a dictation there isn't.
+        let reported = match &active.set_aside {
+            Some(set_aside) if active.ask || active.compose => set_aside.clone(),
+            _ => active.selection.clone(),
+        };
         // A note capture or a draft is what was said: text selected in the
         // app isn't something to change.
-        let mut selection = match &active.selection {
+        let mut selection = match &reported {
             Selection::Text(s) if !active.capture && !active.draft => Some(s.clone()),
             _ => None,
         };
         // The app didn't report its selection: try copying it. Only after a
         // hold (the dictation key is up again), so our Cmd+C isn't combined
         // with a held modifier.
-        if active.selection == Selection::Unknown
+        if reported == Selection::Unknown
             && !active.capture
             && !active.draft
             && !active.hands_free

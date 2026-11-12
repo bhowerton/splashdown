@@ -297,11 +297,9 @@ pub async fn ask_insert(text: String, app: AppHandle) -> Result<(), String> {
     .await
     .map_err(|e| e.to_string())?;
     if let Err(e) = pasted {
-        tracing::warn!("ask insert failed: {e}");
+        tracing::warn!("ask insert didn't go in: {e:?}");
         open(&app);
-        return Err(format!(
-            "Couldn't paste into {name}. It's on the clipboard."
-        ));
+        return Err(e.message(&name));
     }
     Ok(())
 }

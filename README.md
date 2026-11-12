@@ -87,7 +87,7 @@ Splashdown is local-first: a fresh install uses speech and AI models that run on
 - **Your own actions.** Give a link, a script or program, or keys to press a name, and say it: "deploy staging", "next slide", "open issue ENG-42" (whatever you say after the name can go into the link or the script). Splashdown shows exactly what will run and asks first, until you choose Always allow.
 - **Hooks** do something when something happens, without being asked each time: [see below](#hooks-when-something-happens).
 - **"What can I say?"** Say it (or "help") for a window with everything you can say or press, with your own keys and actions. Also in the menu bar under Help.
-- **Rewrite a selection.** Select text, hold the key, say what to change. A plain replacement ("change every Tuesday to Thursday") is made exactly, word for word, and nothing else in the text moves. In text you can't edit (a message you received, a web page) the result opens in the Ask panel instead, to copy, insert or read aloud.
+- **Rewrite a selection.** Select text, hold the key, say what to change. A plain replacement ("change every Tuesday to Thursday") is made exactly, word for word, and nothing else in the text moves. In text you can't edit (a message you received, a web page) the result opens in the Ask panel instead, to copy, insert or read aloud. In a terminal, highlighted text is left alone and what you say is typed at the prompt.
 - **Undo the AI.** **⌃⌥Z** right after it's typed swaps in exactly what you said; **⌃⌥V** pastes your last raw words.
 
 ### A style for every app

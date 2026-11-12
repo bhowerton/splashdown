@@ -250,6 +250,15 @@ impl Controller {
             return self.refuse("Can't dictate into password fields");
         }
         let selection = focus.as_ref().map_or(Selection::Unknown, Focus::selection);
+        // A terminal keeps its selection highlighted while the user types at
+        // the prompt: dictating there isn't an instruction for it, so it's
+        // set aside (and never copied) for the keys that ask about it.
+        let (selection, set_aside) = match &focus {
+            Some(f) if splashdown_platform::is_terminal(&f.app.id) => {
+                (Selection::Empty, Some(selection))
+            }
+            _ => (selection, None),
+        };
         let near_cursor = self.engine.as_ref().is_ok_and(|e| e.overlay_near_cursor);
         self.ui.anchor(
             focus
@@ -332,6 +341,7 @@ impl Controller {
             preview_busy: false,
             focus,
             selection,
+            set_aside,
             level,
             microphone,
             content: None,

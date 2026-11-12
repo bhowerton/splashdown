@@ -26,6 +26,7 @@ mod hooks;
 mod insights;
 #[cfg(target_os = "macos")]
 mod intents;
+mod landing;
 mod learning;
 mod meeting;
 mod minibar;

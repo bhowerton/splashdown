@@ -186,29 +186,27 @@ pub(super) fn send(app: &AppHandle, text: &str) -> Result<(), String> {
         let _ = window.hide();
     }
     if let Err(e) = paste_into(pid, text) {
-        tracing::warn!("notes send failed: {e}");
+        tracing::warn!("notes send didn't go in: {e:?}");
         let _ = splashdown_platform::copy_to_clipboard(text);
         if let Some(window) = app.get_webview_window(WINDOW) {
             let _ = window.show();
             let _ = window.set_focus();
         }
-        return Err(format!(
-            "Couldn't paste into {name}. It's on the clipboard."
-        ));
+        return Err(e.message(&name));
     }
     Ok(())
 }
 
-/// Brings the app `pid` to the front and pastes `text` there. Blocks for
-/// up to a couple of seconds.
-pub(crate) fn paste_into(pid: i32, text: &str) -> Result<(), String> {
+/// Brings the app `pid` to the front and pastes `text` where it has
+/// focus, unless that can't take it, then checks it went in where that
+/// isn't known (`landing::paste_here`). Blocks for up to a few seconds.
+pub(crate) fn paste_into(pid: i32, text: &str) -> Result<(), crate::landing::Unpasted> {
     splashdown_platform::activate_app(pid)
         .map_err(|e| e.to_string())
         .and_then(|()| wait_for_front(pid))
-        .and_then(|()| {
-            std::thread::sleep(SETTLE);
-            splashdown_platform::insert_text(text, InsertMethod::Paste).map_err(|e| e.to_string())
-        })
+        .map_err(crate::landing::Unpasted::Failed)?;
+    std::thread::sleep(SETTLE);
+    crate::landing::paste_here(text)
 }
 
 pub(super) fn wait_for_front(pid: i32) -> Result<(), String> {

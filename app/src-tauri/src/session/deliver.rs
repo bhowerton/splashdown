@@ -63,7 +63,8 @@ impl Controller {
         // On disk until its text is in, so a failure (or the app closing)
         // doesn't lose it.
         // Not a transform: its selection isn't kept, so it couldn't be retried.
-        if let Some(j) = job.as_ref().filter(|j| j.mode != Mode::Transform) {
+        let kept = job.as_ref().is_some_and(|j| j.mode != Mode::Transform);
+        if let Some(j) = job.as_ref().filter(|_| kept) {
             let speech = j.prefix.as_ref().map_or(&j.speech, |p| &p.whole);
             crate::rescue::start(
                 speech,
@@ -118,7 +119,7 @@ impl Controller {
         // Taking it also hands Return back to apps, however this ended.
         let send = self.lock().take_send();
         match (&outcome, self.pipeline_error.take()) {
-            (None, Some(error)) => {
+            (None, Some(error)) if kept => {
                 crate::rescue::failed(&error);
                 crate::tray::show_retry(true);
                 self.notice(
@@ -129,6 +130,9 @@ impl Controller {
                     ),
                 );
             }
+            // Nothing was kept to retry (a rewrite of a selection): the
+            // error alone, already shown by `run_pipeline`.
+            (None, Some(_)) => {}
             // The words went in as heard (or an instruction was dropped):
             // kept, so Retry can run the AI on them once it's back.
             (Some((outcome, _)), _)
@@ -184,23 +188,37 @@ impl Controller {
         if let Some((mut outcome, took)) = outcome {
             crate::spend::record_outcome(&outcome);
             self.pending_audio = recording;
-            // A new version of the selection goes where `Replace` says. One
-            // that can't be pasted over shows in the Ask panel; words
-            // replaced exactly are pasted, and checked for.
+            // A new version of the selection goes where `Replace` says,
+            // words replaced exactly too: one that can't be pasted over
+            // shows in the Ask panel.
             let rewrite = (outcome.mode == Mode::Transform).then(|| Rewrite {
                 replace: active.focus.as_ref().map_or(Replace::Show, replace_target),
                 // Read from the app, or else copied while preparing the job.
                 copied: !matches!(active.selection, Selection::Text(_)),
                 selection: selected,
             });
-            if let Some(rewrite) = rewrite
-                .as_ref()
-                .filter(|r| r.replace == Replace::Show && outcome.replaced.is_none())
+            if let Some(rewrite) = &rewrite
+                && !outcome.text.trim().is_empty()
             {
-                rewrite.log(Went::Shown);
-                self.show_rewrite(&active, &outcome, took, rewrite);
-                self.check_budget();
-                return;
+                // Nothing new to put anywhere: not pasted, not shown.
+                if let Some(why) = nothing_new(
+                    outcome.fallback.as_ref(),
+                    &outcome.text,
+                    rewrite.selection.as_deref(),
+                ) {
+                    self.record(&outcome, active.focus.as_ref(), &active.preset, took);
+                    rewrite.log(Went::Unchanged);
+                    self.notice(Tone::Info, &why);
+                    self.check_budget();
+                    return;
+                }
+                if rewrite.replace == Replace::Show {
+                    rewrite.log(Went::Shown);
+                    self.record(&outcome, active.focus.as_ref(), &active.preset, took);
+                    self.show_rewritten(&active, &outcome, rewrite, send);
+                    self.check_budget();
+                    return;
+                }
             }
             let typer = typer.filter(StreamTyper::started);
             let unchanged = self.change_by_hooks(&active, &mut outcome);
@@ -212,33 +230,17 @@ impl Controller {
         }
     }
 
-    /// A rewrite of selected text that can't be replaced where it is (a
-    /// message received, a page): recorded as usual, and shown in the Ask
-    /// panel rather than pasted where it would go nowhere.
-    fn show_rewrite(
+    /// A rewrite of selected text, already recorded, that can't be
+    /// replaced where it is (a message received, a page), or was pasted
+    /// and not seen to land: shown in the Ask panel. With a send asked
+    /// for, the overlay says it wasn't sent.
+    fn show_rewritten(
         &mut self,
         active: &Active,
         outcome: &Outcome,
-        took: Duration,
         rewrite: &Rewrite,
+        send: bool,
     ) {
-        if outcome.text.trim().is_empty() {
-            return self.notice(Tone::Info, "Didn't catch that");
-        }
-        self.record(outcome, active.focus.as_ref(), &active.preset, took);
-        self.show_rewritten(active, outcome, rewrite);
-    }
-
-    /// The Ask panel part of `show_rewrite`, for a rewrite already recorded
-    /// (also one pasted that wasn't seen to land).
-    fn show_rewritten(&mut self, active: &Active, outcome: &Outcome, rewrite: &Rewrite) {
-        // The text is the selection as it was: nothing new to show.
-        if let Some(Fallback::Guard(reason)) = &outcome.fallback {
-            return self.notice(
-                Tone::Warning,
-                &format!("Left as it was ({})", reason.describe()),
-            );
-        }
         crate::did::note(crate::did::REWROTE, &outcome.text);
         self.show_written(
             active.focus.as_ref(),
@@ -247,6 +249,9 @@ impl Controller {
             &outcome.raw,
             outcome.text.clone(),
         );
+        if send {
+            self.notice(Tone::Info, "Not sent · it's in the Ask panel");
+        }
     }
 
     /// The user's hooks that change this preset's dictations, run before
@@ -519,7 +524,7 @@ impl Controller {
         // the Ask panel, the user's clipboard left alone.
         if lost && let Some(rewrite) = &rewrite {
             rewrite.log(Went::CheckFailedShown);
-            return self.show_rewritten(&active, &outcome, rewrite);
+            return self.show_rewritten(&active, &outcome, rewrite, send);
         }
         if no_field || lost {
             if let Some(rewrite) = &rewrite {
@@ -558,7 +563,7 @@ impl Controller {
             // that says otherwise): shown in the Ask panel instead, and the
             // clipboard is left alone.
             if went == Went::CheckFailedShown {
-                return self.show_rewritten(&active, &outcome, rewrite);
+                return self.show_rewritten(&active, &outcome, rewrite, send);
             }
         }
         let unconfirmed = check && landed != Some(true);
@@ -821,20 +826,20 @@ impl Controller {
     }
 }
 
-/// How long to wait for a paste to show in a field's text.
-pub(super) const PASTE_CHECK: Duration = Duration::from_millis(800);
-
-/// Whether the field's text moved on from `before` within `PASTE_CHECK`.
-pub(super) fn field_changed(focus: &Focus, before: &str) -> bool {
-    let until = Instant::now() + PASTE_CHECK;
-    loop {
-        if focus.field_text().is_some_and(|now| now != before) {
-            return true;
+/// Why a new version of the selection has nothing new to put anywhere:
+/// the guard kept the selection as it was, or the result is the selection
+/// itself. `None` when it's a change.
+pub(super) fn nothing_new(
+    fallback: Option<&Fallback>,
+    text: &str,
+    selection: Option<&str>,
+) -> Option<String> {
+    match fallback {
+        Some(Fallback::Guard(reason)) => Some(format!("Left as it was ({})", reason.describe())),
+        _ if selection.is_some_and(|s| s.trim() == text.trim()) => {
+            Some("Nothing to change".to_string())
         }
-        if Instant::now() >= until {
-            return false;
-        }
-        std::thread::sleep(Duration::from_millis(40));
+        _ => None,
     }
 }
 
@@ -976,11 +981,23 @@ mod tests {
         // Over a selection: only a field known to be changeable isn't.
         assert!(!checks_landing(Some(true), Some(Replace::Paste)));
         assert!(checks_landing(Some(true), Some(Replace::PasteAndCheck)));
-        // Words replaced exactly in text that can't be changed: pasted,
-        // then checked, so a paste that went nowhere is shown instead
-        // (`went`), not "Inserted".
-        assert!(checks_landing(Some(true), Some(Replace::Show)));
-        assert!(checks_landing(None, Some(Replace::Show)));
-        assert!(!checks_landing(Some(false), Some(Replace::Show)));
+        // A rewrite the rule shows in the Ask panel, words replaced
+        // exactly too, never gets here.
+    }
+
+    #[test]
+    fn a_rewrite_with_nothing_new_isn_t_pasted() {
+        use splashdown_core::guard::GuardReason;
+        let guard = Fallback::Guard(GuardReason::LengthOutOfRange);
+        assert_eq!(
+            nothing_new(Some(&guard), "Hello there", Some("Hello there")).as_deref(),
+            Some("Left as it was (AI changed the length too much)")
+        );
+        assert_eq!(
+            nothing_new(None, "Hello there.\n", Some(" Hello there.")).as_deref(),
+            Some("Nothing to change")
+        );
+        assert_eq!(nothing_new(None, "Hi there.", Some("hello there")), None);
+        assert_eq!(nothing_new(None, "Hi there.", None), None);
     }
 }

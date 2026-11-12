@@ -66,10 +66,11 @@ use crate::ui::Ui;
 
 use self::assist::*;
 use self::corrections::*;
-use self::edits::{Replace, Rewrite, Went, replace_target, went};
+use self::edits::{Rewrite, Went, went};
 use self::job::*;
 use self::recording::*;
 use self::spoken::*;
+use crate::landing::{Replace, field_changed, replace_target};
 
 /// How often the overlay waveform refreshes.
 const LEVEL_TICK: Duration = Duration::from_millis(50);
@@ -433,6 +434,11 @@ struct Active {
     preview_busy: bool,
     focus: Option<Focus>,
     selection: Selection,
+    /// A terminal's selection, set aside: it stays highlighted while the
+    /// user types at the prompt, so it isn't what a dictation is about.
+    /// Only the keys that ask about the selection (Ask, Compose,
+    /// translate) use it. `selection` is `Empty` then.
+    set_aside: Option<Selection>,
     level: Level,
     /// The microphone in use, by name.
     microphone: Option<String>,

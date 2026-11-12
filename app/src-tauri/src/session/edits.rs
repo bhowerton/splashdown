@@ -230,7 +230,7 @@ impl Controller {
         }
         let landed = match (how, &before) {
             (Replace::Paste, _) => None,
-            (_, Some(before)) => Some(super::deliver::field_changed(focus, before)),
+            (_, Some(before)) => Some(field_changed(focus, before)),
             (_, None) => None,
         };
         let went = went(how, before.is_some(), landed);
@@ -395,7 +395,12 @@ impl Controller {
         let Some(active) = &self.active else {
             return;
         };
-        let selected = matches!(&active.selection, Selection::Text(t) if !t.trim().is_empty());
+        // A terminal's selection, set aside from the dictation, counts here.
+        let selection = active
+            .set_aside
+            .clone()
+            .unwrap_or_else(|| active.selection.clone());
+        let selected = matches!(&selection, Selection::Text(t) if !t.trim().is_empty());
         let Some(language) = self.translate_language() else {
             // No language picked: a dictation carries on as it was; with a
             // selection there's nothing else to do.
@@ -410,7 +415,7 @@ impl Controller {
                 return;
             };
             self.last_capture = None;
-            match (active.focus, active.selection) {
+            match (active.focus, selection) {
                 (Some(focus), Selection::Text(text)) => {
                     self.translate_selection(&focus, &language, text, false)
                 }
@@ -686,35 +691,6 @@ impl Controller {
     }
 }
 
-/// Where a new version of selected text goes. Every rewrite of a
-/// selection (a spoken instruction, a transform's shortcut, translating)
-/// goes by this one rule (`replace_rule`).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Replace {
-    /// Pasted over it: the field takes text and says it can be changed.
-    Paste,
-    /// Pasted over it, then the field is checked for the change: it takes
-    /// text but doesn't say whether this text can be changed.
-    PasteAndCheck,
-    /// Shown in the Ask panel: pasted, it would go nowhere (a message
-    /// received, a web page, a document opened to read).
-    Show,
-}
-
-/// The rule for `Replace`, from what the focused element says: whether it
-/// takes typed text (`Focus::takes_text`) and whether its selection can be
-/// changed (`Focus::can_replace_selection`). Only a field known to take
-/// text gets a paste, and only one known to be changeable gets it without
-/// a check. A checked paste that isn't seen to change the field is shown
-/// in the Ask panel after all (`went`).
-pub(super) fn replace_rule(takes_text: Option<bool>, can_replace: Option<bool>) -> Replace {
-    match (takes_text, can_replace) {
-        (Some(true), Some(true)) => Replace::Paste,
-        (Some(true), None) => Replace::PasteAndCheck,
-        _ => Replace::Show,
-    }
-}
-
 /// A spoken instruction's new version of the selection on its way: where
 /// it goes, what was selected, and whether that was copied from the app
 /// rather than read.
@@ -748,6 +724,9 @@ pub(super) enum Went {
     CheckFailedShown,
     /// Left on the clipboard (focus moved, no field, the paste failed).
     Copied,
+    /// Nothing new (the guard kept it, or it came back the same): not
+    /// pasted or shown.
+    Unchanged,
 }
 
 /// How a paste over the selection went (`how` wasn't `Show`): whether the
@@ -779,6 +758,7 @@ pub(super) fn log_rewrite(chars: usize, copied: bool, went: Went) {
             Went::Shown => "shown in the Ask panel",
             Went::CheckFailedShown => "pasted, not seen to change, so shown in the Ask panel",
             Went::Copied => "left on the clipboard",
+            Went::Unchanged => "nothing new, left as it was",
         }
     );
 }
@@ -792,16 +772,6 @@ fn selected_text(focus: &Focus) -> (Option<String>, bool) {
         Selection::Empty => (None, false),
     };
     (text.filter(|s| !s.trim().is_empty()), copied)
-}
-
-/// `replace_rule` for the selection in `focus`.
-pub(super) fn replace_target(focus: &Focus) -> Replace {
-    let takes_text = focus.takes_text();
-    // Not asked where it wouldn't change the answer.
-    let can_replace = (takes_text == Some(true))
-        .then(|| focus.can_replace_selection())
-        .flatten();
-    replace_rule(takes_text, can_replace)
 }
 
 /// The language after `now` among `targets` (the ones ticked under
@@ -876,21 +846,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_selection_is_only_pasted_over_where_it_can_change() {
-        // A field that says it can be changed: pasted, no waiting.
-        assert_eq!(replace_rule(Some(true), Some(true)), Replace::Paste);
-        // A field that doesn't say: pasted, and checked for.
-        assert_eq!(replace_rule(Some(true), None), Replace::PasteAndCheck);
-        // A text view that says none of its text can be set (a terminal).
-        assert_eq!(replace_rule(Some(true), Some(false)), Replace::Show);
-        // Not known to take text at all (a web page, an app that says
-        // nothing): a paste would go nowhere to be seen.
-        assert_eq!(replace_rule(None, None), Replace::Show);
-        assert_eq!(replace_rule(None, Some(true)), Replace::Show);
-        assert_eq!(replace_rule(Some(false), None), Replace::Show);
-    }
-
-    #[test]
     fn a_checked_paste_that_doesn_t_land_is_shown() {
         // Known to be changeable: not checked, nothing waits.
         assert_eq!(went(Replace::Paste, false, None), Went::Pasted);
@@ -903,11 +858,6 @@ mod tests {
         // dropped the paste. Shown, not "Inserted".
         assert_eq!(
             went(Replace::PasteAndCheck, true, Some(false)),
-            Went::CheckFailedShown
-        );
-        // Words replaced exactly over text that can't be changed: the same.
-        assert_eq!(
-            went(Replace::Show, true, Some(false)),
             Went::CheckFailedShown
         );
         // Nothing to compare with: left on the clipboard too.
