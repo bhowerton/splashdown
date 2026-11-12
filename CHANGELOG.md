@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.13.2 — 2026-11-12
 
 - **Mac: no permission prompt before setup has explained it.** The first time Splashdown started, macOS asked to let it control the computer straight away, before the setup guide had said a word about why. Splashdown now waits: the prompt appears only when you click the button on the guide's Accessibility screen (or in Settings → Permissions), and the dictation key starts working a moment after you turn the switch on.
 - **Mac: no iCloud Drive prompt out of nowhere.** A few seconds after it first started, Splashdown looked in iCloud Drive for notes said on an iPhone, whether or not you'd ever set that up, and macOS asked about it with no explanation. Notes from your iPhone are now a switch in Settings → Notes, off on a new install; the row says that macOS will ask about iCloud Drive when you turn it on, and why, and tells you if macOS has refused. If you'd finished setup before this version, it stays on and your notes keep arriving.
