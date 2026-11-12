@@ -230,6 +230,82 @@ id = "numbers-time-money"
 transcript = "the call is at two thirty and the fee is forty five dollars"
 expect = ["2:30", "$45"]
 
+[[case]]
+id = "numbers-time-pm"
+transcript = "can we move the standup to three thirty pm"
+expect = ["3:30"]
+
+[[case]]
+id = "numbers-money-cents"
+transcript = "the parking was twelve dollars and fifty cents"
+expect = ["$12.50"]
+
+[[case]]
+id = "numbers-date"
+transcript = "the lease ends on march fifteenth"
+expect = ["March 15"]
+
+[[case]]
+id = "numbers-phone"
+transcript = "you can reach her at five five five two zero one four"
+expect = ["555-2014"]
+
+[[case]]
+id = "numbers-percent"
+transcript = "sales are up twenty percent since the spring"
+expect = ["20%"]
+
+[[case]]
+id = "numbers-count-over-ten"
+transcript = "we need to order thirty chairs for the workshop"
+expect = ["30 chairs"]
+
+[[case]]
+id = "numbers-small-count-words"
+transcript = "there are two of us coming and we will bring three salads"
+expect = ["two of us", "three salads"]
+reject_text = ["2 of us", "3 salads"]
+
+[[case]]
+id = "numbers-figure-one-of-these-days"
+transcript = "one of these days I am going to fix the garden gate"
+expect = ["One of these days"]
+reject_text = ["1 of these"]
+
+[[case]]
+id = "numbers-figure-million-thanks"
+transcript = "thanks a million for covering my shift"
+expect = ["a million"]
+reject_text = ["1,000,000", "1 million"]
+
+# A dash is how a model joins two clauses; people typing use a comma or a period.
+[[case]]
+id = "dash-aside"
+transcript = "the new office is great but the commute is long and I am not sure it is worth it"
+reject_text = ["\u2014", "\u2013"]
+
+[[case]]
+id = "dash-afterthought"
+transcript = "I booked the table for friday night actually I booked it for saturday because friday was full"
+reject_text = ["\u2014", "\u2013"]
+
+[[case]]
+id = "dash-list-intro"
+transcript = "we need three things for the trip a tent a stove and a lot of snacks"
+reject_text = ["\u2014", "\u2013"]
+
+[[case]]
+id = "dash-hyphen-compound-kept"
+transcript = "this is a well known problem in the back end"
+expect = ["well-known"]
+reject_text = ["\u2014", "\u2013"]
+
+[[case]]
+id = "dash-dictated"
+transcript = "the file is named after both of them Ana dash Marco"
+expect = ["Ana", "Marco"]
+reject = ["dash"]
+
 # ---------------------------------------------------------------- dictate + instruct
 
 [[case]]

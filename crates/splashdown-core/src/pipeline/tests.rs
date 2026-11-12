@@ -86,6 +86,27 @@ fn dictate_cleans_up() {
 }
 
 #[test]
+fn dictation_loses_dashes_nobody_said() {
+    let (p, _) = pipeline(
+        &["it is great but the commute is long"],
+        Some(Ok("It is great \u{2014} but the commute is long.")),
+    );
+    let out = block_on(p.run(audio_job(Mode::Dictate, false))).unwrap();
+    assert_eq!(out.text, "It is great, but the commute is long.");
+    // Said out loud: kept.
+    let (p, _) = pipeline(&["Ana dash Marco"], Some(Ok("Ana \u{2014} Marco")));
+    let out = block_on(p.run(audio_job(Mode::Dictate, false))).unwrap();
+    assert_eq!(out.text, "Ana \u{2014} Marco");
+    // An instruction may ask for one: not touched.
+    let (p, _) = pipeline(
+        &["running late", "add a dash"],
+        Some(Ok("Running late \u{2014} sorry.")),
+    );
+    let out = block_on(p.run(audio_job(Mode::DictateInstruct, true))).unwrap();
+    assert_eq!(out.text, "Running late \u{2014} sorry.");
+}
+
+#[test]
 fn raw_skips_model() {
     let (p, llm) = pipeline(&["um hello"], Some(Ok("Hello.")));
     let out = block_on(p.run(audio_job(Mode::Raw, false))).unwrap();

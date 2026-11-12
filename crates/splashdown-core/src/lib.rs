@@ -12,6 +12,7 @@ pub mod command;
 pub mod compose;
 pub mod computer;
 pub mod conversation;
+pub mod dashes;
 pub mod fallback;
 pub mod files;
 pub mod gesture;

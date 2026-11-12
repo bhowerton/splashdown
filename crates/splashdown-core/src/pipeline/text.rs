@@ -194,6 +194,13 @@ impl Pipeline {
             }
             _ => output,
         };
+        // An em or en dash nobody dictated reads as machine-written; plain
+        // dictation only, since the other tasks may be asked for one.
+        let output = if task.mode() == Mode::Dictate {
+            crate::dashes::remove_unspoken(&job.content, &output)
+        } else {
+            output
+        };
         let verdict = match translated.and_then(|m| guard::check_translation(m, &output)) {
             Some(reason) => Verdict::UseRaw(reason),
             None => guard::check(task.mode(), &source, &output),
