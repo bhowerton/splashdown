@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## 0.13.0 — 2026-11-11
+## 0.13.1 — 2026-11-11
 
 - **Windows: the app no longer stops at launch on most PCs.** The speech library inside the Windows app was built for the processor of whichever machine built the release. 0.12.1 was built on one with AVX-512, so on a PC without it (most of them) the app stopped with "illegal instruction" as soon as it started. It's now built for what nearly every PC since 2013 has (AVX2), and on an older processor Splashdown does without on-device speech and says so, where it would have crashed.
 - **Setup asks nothing.** The setup guide used to open with a choice between running on your computer and using an API key, and downloaded nothing until you answered. Now one button starts it: Splashdown downloads what it needs and then works on this computer, without the internet. An API key is still there, behind a small link. If there's only room for speech, it takes speech and says so; on a computer too slow to tidy your words up, it types them as you say them and tells you, where it used to suggest a cloud service.
