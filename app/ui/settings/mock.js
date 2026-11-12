@@ -23,7 +23,7 @@ async function mockInvoke(cmd, args) {
         agents_read: false, agents_write: false, agents_meetings: null, agents_history: false, shortcuts_read: null,
         meeting_folder: null, meeting_summary: null, keep_meeting_audio: false, stop_when_quiet: null,
         meeting_pill: null, offer_on_calls: null, ask_uses_notes: null, meeting_reminded: false, keep_on_top: false,
-        meeting_calendar: false, offer_on_calendar: false, meeting_speakers: false, remember_speakers: false, ask_by_meaning: false,
+        meeting_calendar: false, offer_on_calendar: false, meeting_speakers: false, remember_speakers: false, ask_by_meaning: false, from_phone: false,
         watched: [{ path: "/Users/alex/Movies/Zoom", into: "Meetings", subtitles: false }],
       },
       actions: { enabled: true, off: ["run_shortcut"], search_engine: "google", confirm_events: false, trusted_shortcuts: ["Log water"] },
@@ -161,7 +161,8 @@ async function mockInvoke(cmd, args) {
         local: { service: "this computer", account: null, folder: "/Users/alex/Documents/Splashdown Notes", label: "Documents › Splashdown Notes" },
       };
     case "notes_phone":
-      return { icloud: true, used: false };
+    case "notes_phone_look":
+      return { icloud: true, used: false, refused: false };
     case "voices_list":
       return [{ name: "Priya", meetings: 4 }, { name: "Sam", meetings: 1 }];
     case "voices_forget":

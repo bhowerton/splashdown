@@ -50,6 +50,23 @@ pub(super) fn store(state: &AppState) -> Result<(Arc<Store>, Option<String>), St
     store_for(state.settings().notes.folder)
 }
 
+/// The store for `folder` as `store_for`, but only when there are notes
+/// to find: the folder (or the fallback one) is already there. Doesn't
+/// make the folder, so something that only reads notes, such as a
+/// question asked with the ask key, never brings up the Documents prompt.
+pub(crate) fn existing_store_for(folder: Option<PathBuf>) -> Option<Arc<Store>> {
+    let wanted = folder.clone().or_else(default_folder)?;
+    let ready = current_slot()
+        .locked()
+        .as_ref()
+        .is_some_and(|c| c.wanted == wanted);
+    let there = ready || wanted.is_dir() || fallback_folder().is_ok_and(|f| f.is_dir());
+    if !there {
+        return None;
+    }
+    store_for(folder).ok().map(|(store, _)| store)
+}
+
 /// The store for `folder` (unset: the default), as `store`.
 pub(crate) fn store_for(folder: Option<PathBuf>) -> Result<(Arc<Store>, Option<String>), String> {
     let wanted = folder

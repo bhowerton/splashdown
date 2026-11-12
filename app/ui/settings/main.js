@@ -204,6 +204,7 @@ function collect() {
   s.notes.meeting_speakers = $("mt-speakers").checked;
   s.notes.remember_speakers = $("mt-remember").checked;
   s.notes.ask_by_meaning = $("nt-meaning").checked;
+  s.notes.from_phone = $("nt-phone").checked;
   // The default (on for Windows, off for macOS) is saved as unset.
   const pillDefault = state.platform === "windows";
   s.notes.meeting_pill = $("mt-pill").checked === pillDefault ? null : $("mt-pill").checked;

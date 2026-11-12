@@ -178,6 +178,7 @@ fn main() {
             notes::notes_set_folder,
             notes::notes_cloud_places,
             notes::phone::notes_phone,
+            notes::phone::notes_phone_look,
             notes::phone::notes_phone_page,
             notes::notes_send,
             notes::notes_transforms,
@@ -296,7 +297,8 @@ fn main() {
             if let Ok(paths) = engine::paths() {
                 splashdown_providers::factory::use_speech_detector(&paths.models_dir);
             }
-            let settings = engine::load_settings();
+            let mut settings = engine::load_settings();
+            notes::phone::settle(&mut settings);
             if settings.actions.enabled {
                 voice_actions::warm_up();
             }

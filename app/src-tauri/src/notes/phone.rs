@@ -5,9 +5,13 @@
 //!
 //! The shortcut can only save quietly to iCloud Drive, so that's where
 //! notes wait, whichever folder or sync service the notes are kept in.
+//!
+//! Only while Settings → Notes → From your iPhone is on: looking in iCloud
+//! Drive makes macOS ask, so it starts with the user's own click.
 
 use chrono::{DateTime, Local, NaiveDateTime, TimeZone};
 use std::collections::HashSet;
+use std::sync::Condvar;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use super::*;
@@ -25,6 +29,33 @@ const SHORTCUTS_CONTAINER: &str = "iCloud~is~workflow~my~workflows";
 
 /// Whether a note from the iPhone has been added since the app started.
 static ARRIVED: AtomicBool = AtomicBool::new(false);
+/// Whether macOS refused the last look in the folder.
+static REFUSED: AtomicBool = AtomicBool::new(false);
+/// Wakes the watcher for a look now rather than at its next turn.
+static WAKE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
+
+/// Settles whether notes from the iPhone are taken, once, at launch
+/// (`NotesSettings::settle_from_phone`), and saves it to the settings file.
+/// A file that can't be read isn't saved over: start-up deals with it.
+pub fn settle(settings: &mut splashdown_config::Settings) {
+    if !settings.notes.settle_from_phone(settings.general.onboarded) {
+        return;
+    }
+    let on = settings.notes.from_phone;
+    let Ok(paths) = crate::engine::paths() else {
+        return;
+    };
+    let file = paths.config_file();
+    let saved = splashdown_config::Settings::load(&file)
+        .map_err(|e| e.to_string())
+        .and_then(|mut saved| {
+            saved.notes.from_phone = on;
+            saved.save(&file)
+        });
+    if let Err(e) = saved {
+        tracing::warn!("couldn't save whether notes come from the iPhone: {e}");
+    }
+}
 
 /// Where the shortcut's files can arrive on this computer, whether or not
 /// they exist yet: the Shortcuts app's folder in iCloud Drive.
@@ -101,7 +132,7 @@ fn waiting(
     asked: &mut HashSet<PathBuf>,
 ) -> Vec<(PathBuf, DateTime<Local>)> {
     let mut found = Vec::new();
-    for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+    for entry in list(folder).into_iter().flatten().flatten() {
         let path = entry.path();
         let name = entry.file_name().to_string_lossy().into_owned();
         if let Some(real) = name
@@ -128,6 +159,38 @@ fn waiting(
     }
     found.sort_by(|a, b| a.1.cmp(&b.1).then_with(|| a.0.cmp(&b.0)));
     found
+}
+
+/// What's in `folder`, remembering whether macOS refused to say (as
+/// opposed to the folder not being there yet).
+fn list(folder: &Path) -> Option<std::fs::ReadDir> {
+    match std::fs::read_dir(folder) {
+        Ok(entries) => {
+            REFUSED.store(false, Ordering::Relaxed);
+            Some(entries)
+        }
+        Err(e) => {
+            let refused = e.kind() == std::io::ErrorKind::PermissionDenied;
+            REFUSED.store(refused, Ordering::Relaxed);
+            if refused {
+                tracing::warn!("not allowed to look for notes from the iPhone: {e}");
+            }
+            None
+        }
+    }
+}
+
+/// Waits for the next look: `EVERY`, or sooner when woken.
+fn wait() {
+    let (woken, wake) = &WAKE;
+    let mut woken = woken.locked();
+    if !*woken {
+        woken = wake
+            .wait_timeout(woken, EVERY)
+            .map(|(guard, _)| guard)
+            .unwrap_or_else(|e| e.into_inner().0);
+    }
+    *woken = false;
 }
 
 /// Asks iCloud to download a file it's only keeping a placeholder for.
@@ -185,11 +248,16 @@ pub fn watch_phone(app: &AppHandle) {
             // never added twice while the app runs.
             let mut taken = HashSet::new();
             loop {
-                std::thread::sleep(EVERY);
+                wait();
                 let Some(state) = app.try_state::<AppState>() else {
                     continue;
                 };
                 let settings = state.settings().notes;
+                // Off: iCloud Drive isn't touched at all.
+                if !settings.from_phone() {
+                    REFUSED.store(false, Ordering::Relaxed);
+                    continue;
+                }
                 let now = std::time::SystemTime::now();
                 let mut added = 0;
                 for folder in folders() {
@@ -228,21 +296,43 @@ pub fn watch_phone(app: &AppHandle) {
     }
 }
 
-/// Settings: whether this computer has iCloud Drive, and whether a note
-/// from the iPhone has come since the app started.
+/// Settings: whether this computer has iCloud Drive, whether a note from
+/// the iPhone has come since the app started, and whether macOS refused
+/// the last look for them.
 #[derive(Debug, Serialize)]
 pub struct Phone {
     icloud: bool,
     used: bool,
+    refused: bool,
 }
 
+/// Only looks whether iCloud Drive's folder is there, which macOS doesn't
+/// ask about; nothing in it is read.
 #[tauri::command]
 pub fn notes_phone() -> Phone {
     let home = directories::BaseDirs::new().map(|b| b.home_dir().to_path_buf());
     Phone {
         icloud: home.is_some_and(|h| icloud_roots(&h).iter().any(|r| r.is_dir())),
         used: ARRIVED.load(Ordering::Relaxed),
+        refused: REFUSED.load(Ordering::Relaxed),
     }
+}
+
+/// Settings → From your iPhone was just turned on: looks in the folder now,
+/// so macOS asks right after the click, and wakes the watcher. Waits for
+/// the answer, off the main thread.
+#[tauri::command]
+pub async fn notes_phone_look() -> Phone {
+    let _ = tauri::async_runtime::spawn_blocking(|| {
+        for folder in folders() {
+            let _ = list(&folder);
+        }
+    })
+    .await;
+    let (woken, wake) = &WAKE;
+    *woken.locked() = true;
+    wake.notify_one();
+    notes_phone()
 }
 
 /// Settings → Get the shortcut: the page with it and how to set it up.

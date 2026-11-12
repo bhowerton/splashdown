@@ -182,9 +182,10 @@ pub fn import_words(text: String, mut settings: Settings) -> Result<WordsImport,
 
 /// Replaces the settings with an exported file's and applies them, the same
 /// way as saving in Settings. Whether this computer's setup guide was
-/// finished stays as it is: permissions are per computer. Nothing in the
-/// file runs without asking: a file can come from anyone, so its hooks,
-/// actions and Shortcuts each ask before their first run here.
+/// finished, and whether notes from the iPhone are taken, stay as they are:
+/// permissions are per computer. Nothing in the file runs without asking:
+/// a file can come from anyone, so its hooks, actions and Shortcuts each
+/// ask before their first run here.
 #[tauri::command]
 pub async fn import_settings(
     text: String,
@@ -192,7 +193,11 @@ pub async fn import_settings(
     app: AppHandle,
 ) -> Result<Saved, String> {
     let mut settings = parse(&text)?;
-    let here = state.settings().general;
+    let current = state.settings();
+    // Reading iCloud Drive for the iPhone's notes is this computer's to
+    // turn on: macOS asks when it starts.
+    settings.notes.from_phone = current.notes.from_phone;
+    let here = current.general;
     settings.general.onboarded = here.onboarded;
     settings.general.setup_step = here.setup_step;
     settings.general.setup_choice = here.setup_choice;

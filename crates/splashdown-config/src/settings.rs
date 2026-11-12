@@ -638,6 +638,26 @@ mod tests {
     }
 
     #[test]
+    fn notes_from_the_phone_are_on_only_for_who_had_them() {
+        // Set up before this choice existed: on, and saved once.
+        let mut before: NotesSettings = toml::from_str("keep_audio = true").unwrap();
+        assert!(before.settle_from_phone(true));
+        assert!(before.from_phone());
+        assert!(!before.settle_from_phone(true));
+        // A new install: off, and finishing setup later doesn't turn it on.
+        let mut new = NotesSettings::default();
+        assert!(!new.from_phone());
+        assert!(new.settle_from_phone(false));
+        assert!(!new.from_phone());
+        assert!(!new.settle_from_phone(true));
+        assert!(!new.from_phone());
+        // A choice made stays.
+        let mut chosen: NotesSettings = toml::from_str("from_phone = false").unwrap();
+        assert!(!chosen.settle_from_phone(true));
+        assert!(!chosen.from_phone());
+    }
+
+    #[test]
     fn update_checks_are_on_unless_turned_off() {
         let mut g = GeneralSettings::default();
         assert!(g.check_for_updates());

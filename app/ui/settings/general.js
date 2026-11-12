@@ -226,6 +226,7 @@ function renderGeneral() {
   $("mt-remember").checked = !!notes.remember_speakers;
   renderVoices();
   $("nt-meaning").checked = !!notes.ask_by_meaning;
+  $("nt-phone").checked = notes.from_phone === true;
   if (notes.ask_by_meaning) showMeaningProgress();
   // EventKit is the Mac's; there's no calendar to read on Windows yet.
   $("mt-calendar-row").hidden = state.platform !== "macos";
@@ -961,23 +962,33 @@ async function renderNotesPlace() {
 // What "From your iPhone" says, before what's known about this computer.
 const PHONE_NOTE = $("nt-phone-note").textContent;
 
-/** "From your iPhone", with whether this computer can get the notes. */
-async function renderPhone() {
-  let phone;
-  try {
-    phone = await invoke("notes_phone");
-  } catch {
-    return;
+/** "From your iPhone", with whether this computer can get the notes:
+ *  `phone` is what notes_phone said, asked for when not given. */
+async function renderPhone(phone) {
+  if (!phone) {
+    try {
+      phone = await invoke("notes_phone");
+    } catch {
+      return;
+    }
   }
+  const on = $("nt-phone").checked;
+  const mac = state.platform !== "windows";
   const note = $("nt-phone-note");
   note.textContent = PHONE_NOTE;
-  note.classList.toggle("warn-text", !phone.icloud);
+  const refused = on && mac && phone.refused;
+  note.parentElement.classList.toggle("warn-text", !phone.icloud || refused);
   if (!phone.icloud) {
-    note.textContent += state.platform === "windows"
-      ? " This computer doesn't have iCloud Drive yet: install iCloud for Windows from the Microsoft Store and turn on iCloud Drive."
-      : " iCloud Drive is off on this Mac: turn it on in System Settings → your name → iCloud.";
-  } else if (phone.used) {
+    note.textContent += mac
+      ? " iCloud Drive is off on this Mac: turn it on in System Settings → your name → iCloud."
+      : " This computer doesn't have iCloud Drive yet: install iCloud for Windows from the Microsoft Store and turn on iCloud Drive.";
+  } else if (refused) {
+    note.textContent += " macOS hasn't let Splashdown use iCloud Drive, so notes can't arrive: allow it in System Settings → Privacy & Security → Files and Folders → Splashdown → iCloud Drive.";
+  } else if (on && phone.used) {
     note.textContent += " Your iPhone's notes are arriving here.";
+  }
+  if (!on && mac) {
+    note.textContent += " When you turn this on, macOS asks to let Splashdown use iCloud Drive: that's where your iPhone's notes wait for this computer.";
   }
 }
 
@@ -1027,6 +1038,13 @@ $("nt-folder-choose").addEventListener("click", async () => {
 });
 
 $("nt-phone-get").addEventListener("click", () => call("notes_phone_page"));
+// Turned on: look in iCloud Drive now, so macOS asks right after the
+// click, and say if it was refused.
+$("nt-phone").addEventListener("change", async (e) => {
+  if (!e.target.checked) return;
+  const phone = await invoke("notes_phone_look").catch(() => null);
+  if (phone) renderPhone(phone);
+});
 
 $("nt-watch-add").addEventListener("click", async () => {
   let path;

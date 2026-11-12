@@ -79,6 +79,10 @@ pub struct NotesSettings {
     /// Ask finds notes by what they mean too, not only by their words,
     /// with the downloaded embedding model.
     pub ask_by_meaning: bool,
+    /// Take notes said on an iPhone (the Splashdown Note shortcut) from
+    /// iCloud Drive. Unset means not decided yet: settled once at launch
+    /// (`settle_from_phone`) and saved.
+    pub from_phone: Option<bool>,
     /// Folders whose new audio and video files are transcribed into notes
     /// while Splashdown runs.
     #[serde(skip_serializing_if = "Vec::is_empty")]
@@ -142,6 +146,24 @@ impl NotesSettings {
 
     pub fn offer_on_calls(&self) -> bool {
         self.offer_on_calls.unwrap_or(true)
+    }
+
+    /// Whether notes from the iPhone are looked for. Off until settled or
+    /// turned on: looking reads iCloud Drive, which macOS asks about.
+    pub fn from_phone(&self) -> bool {
+        self.from_phone.unwrap_or(false)
+    }
+
+    /// Decides `from_phone` when it's unset, once, at launch: on for
+    /// someone who finished setup before this choice existed (macOS has
+    /// asked them already, and their notes keep arriving), off for a new
+    /// install. Returns whether it changed, so it can be saved.
+    pub fn settle_from_phone(&mut self, onboarded: bool) -> bool {
+        if self.from_phone.is_some() {
+            return false;
+        }
+        self.from_phone = Some(onboarded);
+        true
     }
 
     pub fn ask_uses_notes(&self) -> bool {

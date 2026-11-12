@@ -20,7 +20,8 @@ pub fn excerpts_for(
     if !settings.ask_uses_notes() {
         return Vec::new();
     }
-    let Ok((store, _)) = store_for(settings.folder.clone()) else {
+    // No notes folder yet: no notes to find, and none is made for it.
+    let Some(store) = existing_store_for(settings.folder.clone()) else {
         return Vec::new();
     };
     matching(
