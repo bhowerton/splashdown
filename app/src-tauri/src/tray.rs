@@ -525,8 +525,7 @@ const SHOW_TAB: &str = "show-tab";
 pub fn open_settings_tab(app: &AppHandle, tab: &str) {
     if let Some(window) = app.get_webview_window(SETTINGS_WINDOW) {
         let _ = app.emit_to(SETTINGS_WINDOW, SHOW_TAB, tab);
-        let _ = window.show();
-        let _ = window.set_focus();
+        crate::front::bring_to_front(app, &window);
         return;
     }
     open_window(
@@ -684,8 +683,7 @@ fn open_window(
     resizable: bool,
 ) {
     if let Some(window) = app.get_webview_window(label) {
-        let _ = window.show();
-        let _ = window.set_focus();
+        crate::front::bring_to_front(app, &window);
         return;
     }
     let result = WebviewWindowBuilder::new(app, label, WebviewUrl::App(page.into()))
@@ -696,7 +694,8 @@ fn open_window(
         .center()
         .focused(true)
         .build();
-    if let Err(err) = result {
-        tracing::error!("failed to open {label} window: {err}");
+    match result {
+        Ok(window) => crate::front::bring_to_front(app, &window),
+        Err(err) => tracing::error!("failed to open {label} window: {err}"),
     }
 }

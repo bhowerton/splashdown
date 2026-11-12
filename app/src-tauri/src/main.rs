@@ -19,6 +19,7 @@ mod engine;
 mod errors;
 mod export;
 mod feedback;
+mod front;
 mod help;
 mod history;
 mod hooks;

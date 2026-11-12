@@ -115,8 +115,7 @@ pub fn open_to(app: &AppHandle, then: Option<&str>) {
     remember_front_app();
     read_for_meaning(app);
     if let Some(window) = app.get_webview_window(WINDOW) {
-        let _ = window.show();
-        let _ = window.set_focus();
+        crate::front::bring_to_front(app, &window);
         let _ = app.emit_to(WINDOW, SHOWN, target_name());
         if let Some(then) = then {
             let _ = app.emit_to(WINDOW, THEN, then);
@@ -148,6 +147,7 @@ pub fn open_to(app: &AppHandle, then: Option<&str>) {
         Ok(window) => {
             // Closing only hides it, so the page (and anything not yet
             // saved) stays.
+            crate::front::bring_to_front(app, &window);
             let handle = window.clone();
             let app = app.clone();
             window.on_window_event(move |event| match event {

@@ -31,6 +31,19 @@ pub fn alert(title: &str, text: &str, buttons: &[&str]) -> Option<usize> {
     usize::try_from(answer).ok().filter(|&i| i < buttons.len())
 }
 
+/// Makes this app the active one, so a window it shows next comes to the
+/// front instead of opening behind the app that was. Main thread only (does
+/// nothing elsewhere). A menu bar app is never active until it asks.
+pub fn activate_self() {
+    let Some(mtm) = MainThreadMarker::new() else {
+        return;
+    };
+    // The replacement call is cooperative on macOS 14 and may be refused
+    // while another app is in front; this one still works.
+    #[allow(deprecated)]
+    NSApplication::sharedApplication(mtm).activateIgnoringOtherApps(true);
+}
+
 /// True if an app other than this one is running from the bundle at `path`.
 pub fn app_running_at(path: &Path) -> bool {
     let own = std::process::id();

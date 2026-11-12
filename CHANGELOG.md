@@ -5,6 +5,7 @@ What changed in each release of Splashdown. Downloads are on the [releases page]
 ## Unreleased
 
 - **Mac: no permission prompt before setup has explained it.** The first time Splashdown started, macOS asked to let it control the computer straight away, before the setup guide had said a word about why. Splashdown now waits: the prompt appears only when you click the button on the guide's Accessibility screen (or in Settings → Permissions), and the dictation key starts working a moment after you turn the switch on.
+- **Mac: Settings opens in front.** Choosing Settings from the menu bar icon sometimes opened the window behind other apps' windows, as if nothing had happened. Settings, the setup guide, What you can say and the notes window now always come to the front, and a minimised one comes back up.
 
 ## 0.13.1 — 2026-11-11
 

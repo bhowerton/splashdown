@@ -362,8 +362,7 @@ fn current(app: &AppHandle) -> Sheet {
 pub fn open(app: &AppHandle) {
     if let Some(window) = app.get_webview_window(WINDOW) {
         let _ = app.emit_to(WINDOW, CHANGED, current(app));
-        let _ = window.show();
-        let _ = window.set_focus();
+        crate::front::bring_to_front(app, &window);
         return;
     }
     let result = WebviewWindowBuilder::new(app, WINDOW, WebviewUrl::App("help.html".into()))
@@ -386,6 +385,7 @@ pub fn open(app: &AppHandle) {
                     let _ = handle.hide();
                 }
             });
+            crate::front::bring_to_front(app, &window);
         }
         Err(e) => tracing::warn!("couldn't open What you can say: {e}"),
     }

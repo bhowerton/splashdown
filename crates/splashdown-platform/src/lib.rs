@@ -53,10 +53,15 @@ mod players;
 pub use launch::{InstalledApp, installed_apps, open_app};
 
 /// A native alert, and whether an app is open from a given bundle: for
-/// offering to move the app to the Applications folder at start-up.
+/// offering to move the app to the Applications folder at start-up. And
+/// making this app the active one, so a window it opens comes to the front.
 #[cfg(target_os = "macos")]
-pub use imp::{alert, app_running_at};
+pub use imp::{activate_self, alert, app_running_at};
 pub use machine::{free_disk_bytes, memory_bytes, system_language};
+
+/// Makes this app the active one (macOS only; elsewhere nothing to do).
+#[cfg(not(target_os = "macos"))]
+pub fn activate_self() {}
 
 /// Reading text aloud with Windows' own voices (on macOS it's the Apple
 /// shim's).
