@@ -131,6 +131,28 @@ impl Focus {
         imp::can_replace_selection(&self.inner)
     }
 
+    /// Whether plain dictation into this field, which says it takes text,
+    /// should be checked for going in: a read-only text view (a message
+    /// received, a document opened to read) has the role of an editable
+    /// one, and typing there goes nowhere. Never for a terminal, which
+    /// says its text can't be set and still takes typing. On a Mac, unless
+    /// the field says its selection can be set: a messaging app's typing
+    /// box and its received messages both leave that unsaid, and the check
+    /// passes at once in the typing box. On Windows only where UI
+    /// Automation says the text is read-only, since it says nothing for
+    /// most fields that do take typing.
+    pub fn typing_may_not_land(&self) -> bool {
+        if crate::is_terminal(&self.app.id) {
+            return false;
+        }
+        let can_replace = imp::can_replace_selection(&self.inner);
+        if cfg!(target_os = "macos") {
+            can_replace != Some(true)
+        } else {
+            can_replace == Some(false)
+        }
+    }
+
     /// The text around the field in its window, besides the field's own:
     /// usually the conversation being answered (an email thread, a chat).
     /// Read from the nearest container holding at least `min_chars`, and

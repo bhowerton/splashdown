@@ -89,6 +89,14 @@ impl Controller {
             })
             .unwrap_or_default()
             .words;
+        // Plain dictation into a field: whether to check it goes in, and
+        // the field's text before anything is typed (typing as it's written
+        // starts while the AI is still writing).
+        let snapshot = job
+            .as_ref()
+            .filter(|j| j.mode != Mode::Transform && !active.capture && !active.draft)
+            .and(active.focus.as_ref())
+            .map(Snapshot::take);
         let mut typer = job
             .as_ref()
             .and_then(|_| self.stream_typer(&active, files.clone()));
@@ -222,7 +230,7 @@ impl Controller {
             }
             let typer = typer.filter(StreamTyper::started);
             let unchanged = self.change_by_hooks(&active, &mut outcome);
-            self.deliver(active, outcome, took, send, spoke, typer, rewrite);
+            self.deliver(active, outcome, took, send, spoke, typer, rewrite, snapshot);
             if let Some(why) = unchanged {
                 self.notice(Tone::Warning, &format!("Inserted as said · {why}"));
             }
@@ -369,7 +377,9 @@ impl Controller {
 
     /// Inserts the result into the field it was dictated into, records it,
     /// and presses Return if asked. `rewrite` says where a new version of
-    /// the selection goes (for a transform).
+    /// the selection goes (for a transform); `snapshot`, for plain
+    /// dictation, whether to check it went in and the field's text from
+    /// before it was typed.
     #[allow(clippy::too_many_arguments)]
     pub(super) fn deliver(
         &mut self,
@@ -380,6 +390,7 @@ impl Controller {
         spoke: Duration,
         mut typer: Option<StreamTyper>,
         rewrite: Option<Rewrite>,
+        snapshot: Option<Snapshot>,
     ) {
         let still_focused = active.focus.as_ref().is_none_or(Focus::is_current);
         let target_pid = active.focus.as_ref().map(|f| f.app.pid);
@@ -478,15 +489,25 @@ impl Controller {
         // selection, whether its text can be changed. Where its text can be
         // read, that's what shows whether this went in.
         let replace = rewrite.as_ref().map(|r| r.replace);
-        let check = checks_landing(takes_text, replace);
-        let held = check
-            .then(|| {
-                active
-                    .focus
-                    .as_ref()
-                    .and_then(|f| f.field_text().map(|t| (f, t)))
-            })
-            .flatten();
+        // Where nothing says the field takes text (or, over a selection,
+        // that it can be changed), a field whose text can't be read leaves
+        // it unconfirmed; elsewhere an unread field counts as taking it.
+        let unread_unconfirmed = checks_landing(takes_text, replace, false);
+        let (check, held) = match snapshot {
+            Some(snapshot) => (snapshot.check, active.focus.as_ref().zip(snapshot.before)),
+            None => {
+                let check = unread_unconfirmed;
+                let held = check
+                    .then(|| {
+                        active
+                            .focus
+                            .as_ref()
+                            .and_then(|f| f.field_text().map(|t| (f, t)))
+                    })
+                    .flatten();
+                (check, held)
+            }
+        };
         let mut lost = false;
         let mut inserted = match &mut typer {
             Some(typer) => match active.focus.as_ref() {
@@ -566,7 +587,23 @@ impl Controller {
                 return self.show_rewritten(&active, &outcome, rewrite, send);
             }
         }
-        let unconfirmed = check && landed != Some(true);
+        let unconfirmed = match landing(check, landed, unread_unconfirmed) {
+            Landing::Seen => false,
+            Landing::Unconfirmed => true,
+            // Plain dictation that went nowhere (a read-only text view):
+            // on the clipboard, not sent, and not something undo or
+            // "change that" can act on.
+            Landing::Missed => {
+                tracing::info!("dictation into {app_id} wasn't seen to go in: copied instead");
+                let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
+                let note = if send { " (not sent)" } else { "" };
+                self.notice(
+                    Tone::Warning,
+                    &format!("Didn't go in there — copied to clipboard{note}"),
+                );
+                return;
+            }
+        };
         if unconfirmed {
             let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
         }
@@ -845,15 +882,69 @@ pub(super) fn nothing_new(
 
 /// Whether to read the field before inserting and check it changed
 /// after: when nothing says it takes text, or, for a new version of the
-/// selection (`replace`), nothing says its text can be changed. Not where
+/// selection (`replace`), nothing says its text can be changed, or, for
+/// plain dictation into a field that says it takes text, the field may
+/// still not take it (`doubtful`, `Focus::typing_may_not_land`). Not where
 /// it clearly takes no text (that's copied instead), nor where it's known
 /// to take this, so nothing waits there.
-pub(super) fn checks_landing(takes_text: Option<bool>, replace: Option<Replace>) -> bool {
+pub(super) fn checks_landing(
+    takes_text: Option<bool>,
+    replace: Option<Replace>,
+    doubtful: bool,
+) -> bool {
     let known = match replace {
         Some(replace) => replace == Replace::Paste,
-        None => takes_text == Some(true),
+        None => takes_text == Some(true) && !doubtful,
     };
     !known && takes_text != Some(false)
+}
+
+/// Plain dictation's check, taken before anything is typed: whether to
+/// check it goes in (`checks_landing`), and the field's text then, if it
+/// can be read.
+pub(super) struct Snapshot {
+    check: bool,
+    before: Option<String>,
+}
+
+impl Snapshot {
+    pub(super) fn take(focus: &Focus) -> Self {
+        let takes_text = focus.takes_text();
+        // Only asked where the field says it takes text: elsewhere it
+        // wouldn't change the answer.
+        let doubtful = takes_text == Some(true) && focus.typing_may_not_land();
+        let check = checks_landing(takes_text, None, doubtful);
+        Self {
+            check,
+            before: check.then(|| focus.field_text()).flatten(),
+        }
+    }
+}
+
+/// Whether text that was inserted went in, as far as can be told.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Landing {
+    /// Seen to change the field, or not checked (known to take it, or as
+    /// before where its text can't be read).
+    Seen,
+    /// Nothing says it went in: on the clipboard too, "Couldn't check".
+    Unconfirmed,
+    /// The field's text was read before and didn't change: it went
+    /// nowhere.
+    Missed,
+}
+
+/// `Landing` from whether it was `checked`, what the check saw (`landed`:
+/// `None` when the field's text couldn't be read before), and whether an
+/// unread field leaves it unconfirmed (`unread_unconfirmed`: where nothing
+/// says the field takes text, as before).
+pub(super) fn landing(checked: bool, landed: Option<bool>, unread_unconfirmed: bool) -> Landing {
+    match (checked, landed) {
+        (true, Some(false)) => Landing::Missed,
+        (true, Some(true)) => Landing::Seen,
+        _ if unread_unconfirmed => Landing::Unconfirmed,
+        _ => Landing::Seen,
+    }
 }
 
 /// `status` (an "Inserted · …" message, or what was done, like "Changed
@@ -974,15 +1065,39 @@ mod tests {
     #[test]
     fn only_an_insertion_that_may_not_land_is_checked() {
         // Dictation: by whether the field takes text, as before.
-        assert!(!checks_landing(Some(true), None));
-        assert!(checks_landing(None, None));
+        assert!(!checks_landing(Some(true), None, false));
+        assert!(checks_landing(None, None, false));
+        // A field that may still not take it (a read-only text view).
+        assert!(checks_landing(Some(true), None, true));
         // No text box: copied instead, nothing to wait for.
-        assert!(!checks_landing(Some(false), None));
+        assert!(!checks_landing(Some(false), None, false));
+        assert!(!checks_landing(Some(false), None, true));
         // Over a selection: only a field known to be changeable isn't.
-        assert!(!checks_landing(Some(true), Some(Replace::Paste)));
-        assert!(checks_landing(Some(true), Some(Replace::PasteAndCheck)));
+        assert!(!checks_landing(Some(true), Some(Replace::Paste), false));
+        assert!(checks_landing(
+            Some(true),
+            Some(Replace::PasteAndCheck),
+            false
+        ));
         // A rewrite the rule shows in the Ask panel, words replaced
         // exactly too, never gets here.
+    }
+
+    #[test]
+    fn dictation_that_didn_t_change_a_readable_field_missed() {
+        // Read before, seen to change.
+        assert_eq!(landing(true, Some(true), false), Landing::Seen);
+        assert_eq!(landing(true, Some(true), true), Landing::Seen);
+        // Read before, unchanged: it went nowhere, whatever was said of
+        // the field (and Return isn't pressed).
+        assert_eq!(landing(true, Some(false), false), Landing::Missed);
+        assert_eq!(landing(true, Some(false), true), Landing::Missed);
+        // Couldn't be read: as before. Unconfirmed where nothing says the
+        // field takes text, "Inserted" where it says so.
+        assert_eq!(landing(true, None, true), Landing::Unconfirmed);
+        assert_eq!(landing(true, None, false), Landing::Seen);
+        // Not checked: a field known to take it.
+        assert_eq!(landing(false, None, false), Landing::Seen);
     }
 
     #[test]
