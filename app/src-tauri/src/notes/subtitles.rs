@@ -91,7 +91,7 @@ pub(crate) fn text_for(
     rel: &str,
     format: subtitles::Format,
 ) -> Result<String, String> {
-    let (store, _) = store_for(folder)?;
+    let store = existing_store_for(folder).ok_or_else(|| format!("There's no note at {rel}."))?;
     let (cues, _) = cues(&store, rel)?;
     Ok(format.render(&cues))
 }

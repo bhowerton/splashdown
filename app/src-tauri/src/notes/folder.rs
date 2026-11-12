@@ -72,6 +72,8 @@ pub(crate) fn store_for(folder: Option<PathBuf>) -> Result<(Arc<Store>, Option<S
     let wanted = folder
         .or_else(default_folder)
         .ok_or("Couldn't find your Documents folder.")?;
+    // Before the lock: this can wait for the user.
+    super::explain::before_making(&wanted);
     let mut slot = current_slot().locked();
     // The same store each time (it remembers which notes need a version
     // kept), trying the chosen folder again now and then while it can't

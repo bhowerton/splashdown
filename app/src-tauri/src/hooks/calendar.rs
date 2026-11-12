@@ -341,7 +341,10 @@ fn gathered(
     hook: &Hook,
     event: &Event,
 ) -> Result<Option<(Happened, usize)>, String> {
-    let (store, _) = crate::notes::store_for(settings.notes.folder.clone())?;
+    // No notes folder yet: no earlier notes, and none is made for it.
+    let Some(store) = crate::notes::existing_store_for(settings.notes.folder.clone()) else {
+        return Ok(None);
+    };
     // Only notes made before the hook's time: not this meeting's own,
     // started early.
     let before = event.starts - chrono::Duration::minutes(i64::from(hook.minutes_before()));

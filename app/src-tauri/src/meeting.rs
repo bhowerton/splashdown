@@ -195,7 +195,8 @@ pub fn start_recording(app: &AppHandle, source: Source) -> Result<String, String
 /// summarizes all of it again at the end.
 pub fn carry_on(app: &AppHandle, rel: &str) -> Result<String, String> {
     let folder = app.state::<AppState>().settings().notes.folder;
-    let (store, _) = crate::notes::store_for(folder)?;
+    let store = crate::notes::existing_store_for(folder)
+        .ok_or_else(|| format!("There's no note at {rel}."))?;
     let note = store.read(rel).map_err(|e| e.to_string())?;
     let source = match note.source.as_str() {
         "meeting" => Source::Meeting,

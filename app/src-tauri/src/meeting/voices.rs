@@ -201,7 +201,9 @@ pub fn notes_speaker_named(
     if !settings.notes.remember_speakers {
         return Ok(());
     }
-    let (store, _) = crate::notes::store_for(settings.notes.folder.clone())?;
+    let Some(store) = crate::notes::existing_store_for(settings.notes.folder.clone()) else {
+        return Ok(());
+    };
     let Some(id) = store.id(&path) else {
         return Ok(());
     };

@@ -10,6 +10,7 @@
 //! | `store.rs` | Reading and writing note files, versions, the trash |
 //! | `markdown.rs` | Front matter, tags, sections and titles, as text |
 //! | `folder.rs` | Which folder, and moving notes to another |
+//! | `explain.rs` | Saying why, before macOS asks about Documents |
 //! | `window.rs` | The window, and pasting back into the app in front |
 //! | `capture.rs` | A dictation into a note (the note letter) |
 //! | `search.rs` | Finding notes for Ask, with excerpts |
@@ -21,6 +22,7 @@
 
 pub(crate) mod agents;
 mod capture;
+pub mod explain;
 pub mod files;
 mod folder;
 mod link_helper;
@@ -475,15 +477,18 @@ pub fn notes_set_folder(
     state: State<'_, AppState>,
 ) -> Result<View, String> {
     let folder = PathBuf::from(folder);
+    // Back to the default folder in Documents, never made before.
+    explain::before_making(&folder);
     Store::new(folder.clone())
         .ensure()
         .map_err(|e| format!("Can't use {}: {e}", label(&folder)))?;
-    if move_notes_too {
-        let (old, _) = store(&state)?;
-        if old.root() != folder {
-            let moved = move_notes(&old, &folder)?;
-            tracing::info!("moved {moved} notes to the new folder");
-        }
+    // No old folder yet: nothing to move, and it isn't made for that.
+    if move_notes_too
+        && let Some(old) = existing_store_for(state.settings().notes.folder)
+        && old.root() != folder
+    {
+        let moved = move_notes(&old, &folder)?;
+        tracing::info!("moved {moved} notes to the new folder");
     }
     let kept = (Some(&folder) != default_folder().as_ref()).then_some(folder);
     state.update(&app, |s| s.notes.folder = kept)?;
@@ -603,9 +608,15 @@ async fn prepare_ask(
         .await
         .map_err(|e| e.to_string())??
         .ok_or("Asking needs an AI model: choose one in Settings → AI Models.")?;
-    let (store, _) = store(state)?;
-    let (notes, sources): (Vec<_>, Vec<_>) = match path {
-        Some(path) => {
+    // A shortcut only reads: with no notes folder yet, it finds none
+    // rather than making one.
+    let store = match asker {
+        Asker::Notes => Some(store(state)?.0),
+        Asker::Shortcuts => existing_store_for(state.settings().notes.folder),
+    };
+    let (notes, sources): (Vec<_>, Vec<_>) = match (path, store) {
+        (Some(path), store) => {
+            let store = store.ok_or_else(|| format!("There's no note at {path}."))?;
             let note = store.read(path).map_err(|e| e.to_string())?;
             let title = markdown::title_of(&note.body);
             let excerpt = splashdown_core::ask::NoteExcerpt {
@@ -619,7 +630,8 @@ async fn prepare_ask(
             };
             (vec![excerpt], vec![source])
         }
-        None => {
+        (None, None) => (Vec::new(), Vec::new()),
+        (None, Some(store)) => {
             // Finding notes by meaning can take a moment.
             let by_meaning = state.settings().notes.ask_by_meaning;
             let asked = question.to_string();
@@ -821,7 +833,8 @@ fn read_for_meaning(app: &AppHandle) {
     if !settings.ask_by_meaning || !meaning::available() {
         return;
     }
-    if let Ok((store, _)) = store_for(settings.folder) {
+    // Only notes already there: reading them never makes the folder.
+    if let Some(store) = existing_store_for(settings.folder) {
         meaning::update_soon(store);
     }
 }
@@ -832,7 +845,9 @@ fn read_for_meaning(app: &AppHandle) {
 pub async fn notes_meaning_progress(app: AppHandle) -> Result<(usize, usize), String> {
     read_for_meaning(&app);
     let state = app.state::<AppState>();
-    let (store, _) = store(&state)?;
+    let Some(store) = existing_store_for(state.settings().notes.folder) else {
+        return Ok((0, 0));
+    };
     tauri::async_runtime::spawn_blocking(move || meaning::progress(store.root(), &store.list()))
         .await
         .map_err(|e| e.to_string())

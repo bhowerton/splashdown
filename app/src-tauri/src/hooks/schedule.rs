@@ -227,7 +227,10 @@ fn gathered(
     due: DateTime<Local>,
 ) -> Result<Option<(Happened, usize)>, String> {
     let since = since(schedule, due);
-    let (store, _) = crate::notes::store_for(settings.notes.folder.clone())?;
+    // No notes folder yet: nothing to gather, and none is made for it.
+    let Some(store) = crate::notes::existing_store_for(settings.notes.folder.clone()) else {
+        return Ok(None);
+    };
     // Not the note its own results go in: last week's review isn't this
     // week's news.
     let own = match &hook.run {

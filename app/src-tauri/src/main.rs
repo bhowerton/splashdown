@@ -281,6 +281,8 @@ fn main() {
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
             #[cfg(target_os = "macos")]
             migrate_login_item(app.handle());
+            // Before anything that might make the notes folder.
+            notes::explain::init(app.handle());
 
             let history = Arc::new(History::open(
                 engine::paths()

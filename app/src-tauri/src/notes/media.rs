@@ -40,8 +40,8 @@ fn respond(app: &AppHandle, request: &Request<Vec<u8>>) -> Result<Response<Vec<u
         return Err(StatusCode::FORBIDDEN);
     }
     let state = app.state::<AppState>();
-    let (store, _) =
-        super::store_for(state.settings().notes.folder).map_err(|_| StatusCode::NOT_FOUND)?;
+    let store =
+        super::existing_store_for(state.settings().notes.folder).ok_or(StatusCode::NOT_FOUND)?;
     // Inside Attachments/ once links are followed, too.
     let attachments = store
         .root()

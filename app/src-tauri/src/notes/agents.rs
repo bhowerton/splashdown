@@ -71,9 +71,7 @@ pub fn agent_list(
         return Err(AGENTS_OFF.into());
     }
     let filter = Filter::parse(filter, settings, Local::now())?;
-    let (store, _) = store_for(settings.folder.clone())?;
-    let mut notes: Vec<Summary> = store
-        .list()
+    let mut notes: Vec<Summary> = every_note(settings)
         .into_iter()
         .filter(|n| visible(settings, n) && filter.admits(n))
         .collect();
@@ -113,8 +111,7 @@ pub(crate) fn notes_at(settings: &NotesSettings, paths: &[String]) -> Result<Vec
     if !settings.agents_read {
         return Err(AGENTS_OFF.into());
     }
-    let (store, _) = store_for(settings.folder.clone())?;
-    let notes = store.list();
+    let notes = every_note(settings);
     Ok(paths
         .iter()
         .filter_map(|p| notes.iter().find(|n| &n.path == p))
@@ -126,7 +123,7 @@ pub(crate) fn notes_at(settings: &NotesSettings, paths: &[String]) -> Result<Vec
 /// The title of the note at `path`, from its first heading.
 #[cfg(target_os = "macos")]
 pub(crate) fn title_at(settings: &NotesSettings, path: &str) -> Option<String> {
-    let (store, _) = store_for(settings.folder.clone()).ok()?;
+    let store = existing_store_for(settings.folder.clone())?;
     let note = store.read(path).ok()?;
     Some(markdown::title_of(&note.body)).filter(|t| !t.is_empty())
 }
@@ -144,11 +141,9 @@ pub fn agent_search(
         return Err(AGENTS_OFF.into());
     }
     let filter = Filter::parse(filter, settings, Local::now())?;
-    let (store, _) = store_for(settings.folder.clone())?;
     let needle = query.trim().to_lowercase();
     let limit = limit.unwrap_or(10).clamp(1, SEARCH_LIMIT);
-    let mut hits: Vec<(bool, Summary)> = store
-        .list()
+    let mut hits: Vec<(bool, Summary)> = every_note(settings)
         .into_iter()
         .filter(|n| visible(settings, n) && filter.admits(n))
         .filter_map(|n| {
@@ -186,7 +181,7 @@ pub fn agent_read(settings: &NotesSettings, path: &str, part: &ReadPart) -> Resu
     if !settings.agents_read {
         return Err(AGENTS_OFF.into());
     }
-    let (store, _) = store_for(settings.folder.clone())?;
+    let store = existing_store_for(settings.folder.clone()).ok_or_else(|| no_note_at(path))?;
     let summary = reachable(settings, &store, path)?;
     let note = store
         .read(path)
@@ -272,7 +267,7 @@ pub fn agent_append(
         return Err("There's no text to add.".into());
     }
     if let Some(to) = to {
-        let (store, _) = store_for(settings.folder.clone())?;
+        let store = existing_store_for(settings.folder.clone()).ok_or_else(|| no_note_at(to))?;
         reachable(settings, &store, to)?;
     }
     let captured = capture(settings, to, text, None)?;
@@ -409,15 +404,23 @@ fn visible(settings: &NotesSettings, n: &Summary) -> bool {
 }
 
 /// The note at `path` if agents may reach it, or why not.
+/// Every note, for reading: none when there's no notes folder yet, which
+/// isn't made for it.
+fn every_note(settings: &NotesSettings) -> Vec<Summary> {
+    existing_store_for(settings.folder.clone()).map_or_else(Vec::new, |store| store.list())
+}
+
+fn no_note_at(path: &str) -> String {
+    format!("There's no note at {path}. Paths come from list_notes or search_notes.")
+}
+
 fn reachable(settings: &NotesSettings, store: &Store, path: &str) -> Result<Summary, String> {
     let wanted = path.trim().trim_start_matches('/');
     let note = store
         .list()
         .into_iter()
         .find(|n| n.path == wanted)
-        .ok_or_else(|| {
-            format!("There's no note at {path}. Paths come from list_notes or search_notes.")
-        })?;
+        .ok_or_else(|| no_note_at(path))?;
     if note.hidden_from_agents {
         return Err(HIDDEN.into());
     }

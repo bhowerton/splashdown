@@ -409,7 +409,7 @@ fn read_all(
 
 /// A note's path inside the notes folder, made absolute.
 fn note_file(state: &AppState, path: &str) -> Option<PathBuf> {
-    let (store, _) = crate::notes::store_for(state.settings().notes.folder).ok()?;
+    let store = crate::notes::existing_store_for(state.settings().notes.folder)?;
     Some(store.root().join(path))
 }
 

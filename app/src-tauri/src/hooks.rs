@@ -191,7 +191,8 @@ impl Happened {
 
     /// The note at `rel` in the notes folder, finished.
     fn note(settings: &Settings, event: HookEvent, rel: &str) -> Result<Self, String> {
-        let (store, _) = crate::notes::store_for(settings.notes.folder.clone())?;
+        let store = crate::notes::existing_store_for(settings.notes.folder.clone())
+            .ok_or_else(|| format!("there's no note at {rel}"))?;
         let note = store.read(rel).map_err(|e| e.to_string())?;
         let summary =
             crate::notes::markdown::section(&note.body, "Summary").filter(|s| !s.trim().is_empty());
