@@ -35,7 +35,7 @@ jobs:
         run: |
           cp app/src-tauri/icons/source/icon.svg site/assets/
           cp docs/assets/demo.svg docs/assets/actions.svg docs/assets/sources.svg docs/assets/sources-tall.svg site/assets/
-          cp docs/assets/translate.svg docs/assets/speakers.svg docs/assets/folder.svg docs/assets/hooks.svg docs/assets/carry-on.svg site/assets/
+          cp docs/assets/translate.svg docs/assets/speakers.svg docs/assets/folder.svg docs/assets/hooks.svg docs/assets/carry-on.svg docs/assets/install-mac.svg site/assets/
           cp docs/assets/readme/*.png site/assets/
       - uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5.0.0
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3.0.1

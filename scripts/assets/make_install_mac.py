@@ -1,0 +1,148 @@
+# Generates docs/assets/install-mac.svg, the animation for the download page's
+# second step on a Mac: in the disk image's window, the Splashdown icon is
+# dragged onto the Applications folder. A generic window and folder, drawn
+# here, not a copy of anyone's artwork. One 5.6 s loop; times are percentages.
+# With reduced motion it shows the end state: copied, with its caption.
+#
+#   python3 scripts/assets/make_install_mac.py docs/assets/install-mac.svg
+import sys
+
+out = sys.argv[1]
+W, H = 800, 400
+LOOP = 5.6
+INK, MUTED = "#111827", "#6B7280"
+ORANGE, AMBER = "#F2551F", "#FF9A3D"
+
+# Where things sit: the icon on the left, the folder on the right.
+IX, FX, CY = 230, 570, 170
+DX = FX - IX
+
+
+def icon(scale=1.0):
+    """The app icon: a night-blue tile with an orange parachute."""
+    return (f'<g transform="scale({scale})">'
+            '<rect x="-46" y="-46" width="92" height="92" rx="21" fill="url(#tile)"/>'
+            '<path d="M-26 -2 Q0 -42 26 -2 Z" fill="#fff"/>'
+            '<path d="M-26 -2 Q-18 -28 -8 -26 L-5 -2 Z M5 -2 L8 -26 Q18 -28 26 -2 Z" fill="#F2551F"/>'
+            '<path d="M-26 -2 L-6 22 M26 -2 L6 22 M-5 -2 L-2 22 M5 -2 L2 22" stroke="#E5E7EB" stroke-width="1.4" fill="none"/>'
+            '<path d="M-8 22 H8 L11 34 Q0 38 -11 34 Z" fill="#D1D5DB"/>'
+            '</g>')
+
+
+def folder():
+    return ('<g transform="translate(-52 -40)">'
+            '<path d="M0 10 Q0 0 10 0 H34 Q40 0 44 6 L48 12 H94 Q104 12 104 22 V70 Q104 80 94 80 H10 Q0 80 0 70 Z" fill="#3E86D6"/>'
+            '<path d="M0 28 Q0 20 10 20 H94 Q104 20 104 28 V70 Q104 80 94 80 H10 Q0 80 0 70 Z" fill="#6AAEF2"/>'
+            '</g>')
+
+
+def arrow():
+    """A plain arrow pointer; its tip is the origin."""
+    return ('<path d="M0 0 L0 24 L6.5 18.5 L11 28 L15.5 26 L11 16.5 L19 16.5 Z" fill="#fff" stroke="#111827" '
+            'stroke-width="1.6" stroke-linejoin="round"/>')
+
+
+css = f"""
+.l{{animation-duration:{LOOP}s;animation-iteration-count:infinite;animation-timing-function:ease-in-out}}
+@keyframes ptr{{
+  0%{{transform:translate(690px,330px);opacity:0}}
+  6%{{transform:translate(640px,320px);opacity:1}}
+  22%{{transform:translate({IX + 14}px,{CY + 18}px)}}
+  30%{{transform:translate({IX + 14}px,{CY + 18}px)}}
+  62%{{transform:translate({FX + 14}px,{CY + 18}px)}}
+  70%{{transform:translate({FX + 14}px,{CY + 18}px);opacity:1}}
+  84%{{transform:translate(660px,330px);opacity:1}}
+  90%,100%{{transform:translate(690px,336px);opacity:0}}
+}}
+@keyframes drag{{
+  0%,29%{{transform:translate(0,0);opacity:0}}
+  30%{{transform:translate(0,0);opacity:1}}
+  62%{{transform:translate({DX}px,0);opacity:1}}
+  66%,100%{{transform:translate({DX}px,0) scale(.5);opacity:0}}
+}}
+@keyframes bump{{
+  0%,60%{{transform:scale(1)}}
+  66%{{transform:scale(1.07)}}
+  74%,100%{{transform:scale(1)}}
+}}
+@keyframes inside{{
+  0%,65%{{opacity:0;transform:scale(.6)}}
+  72%,92%{{opacity:1;transform:scale(1)}}
+  98%,100%{{opacity:0;transform:scale(.6)}}
+}}
+@keyframes say1{{0%,56%{{opacity:1}}60%,96%{{opacity:0}}99%,100%{{opacity:1}}}}
+@keyframes say2{{0%,60%{{opacity:0}}66%,92%{{opacity:1}}97%,100%{{opacity:0}}}}
+@keyframes twinkle{{0%,100%{{opacity:.9}}50%{{opacity:.35}}}}
+.ptr{{animation-name:ptr}}
+.drag{{animation-name:drag}}
+.bump{{transform-box:fill-box;transform-origin:center;animation-name:bump}}
+.inside{{transform-box:fill-box;transform-origin:center;animation-name:inside}}
+.say1{{animation-name:say1}}.say2{{animation-name:say2}}
+.drag,.inside,.say2{{opacity:0}}
+.ptr{{opacity:0}}
+.star{{animation:twinkle 3s ease-in-out infinite}}
+.star:nth-of-type(2n){{animation-delay:-1.4s}}.star:nth-of-type(3n){{animation-delay:-2.1s}}
+
+/* Without motion: the end state, Splashdown copied into Applications. */
+@media (prefers-reduced-motion:reduce){{
+  *{{animation:none!important}}
+  .ptr,.drag,.say1{{opacity:0}}
+  .inside,.say2{{opacity:1;transform:none}}
+}}
+"""
+
+STARS = "".join(
+    f'<circle class="star" cx="{x}" cy="{y}" r="{r}" fill="#fff"/>'
+    for x, y, r in [(40, 40, 1.8), (760, 56, 2), (30, 330, 1.6), (770, 300, 1.8), (400, 16, 1.5)])
+
+LABEL = f'text-anchor="middle" font-size="15" font-weight="600" fill="{INK}"'
+CAP = 'x="400" y="362" text-anchor="middle" font-size="20" font-style="italic" fill="#E6ECFF"'
+
+svg = f'''<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{H}" viewBox="0 0 {W} {H}" role="img" aria-labelledby="t d">
+<title id="t">Dragging Splashdown into Applications</title>
+<desc id="d">A window shows the Splashdown icon on the left and the Applications folder on the right. A pointer picks up the Splashdown icon, drags it across onto the Applications folder and lets go. Splashdown is now in Applications.</desc>
+<style>{css}</style>
+<defs>
+  <linearGradient id="sky" x1="0" y1="0" x2="0" y2="{H}" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0A1440"/><stop offset=".65" stop-color="#16337A"/><stop offset="1" stop-color="#2F64B8"/>
+  </linearGradient>
+  <linearGradient id="tile" x1="0" y1="-46" x2="0" y2="46" gradientUnits="userSpaceOnUse">
+    <stop offset="0" stop-color="#0A1440"/><stop offset="1" stop-color="#2F64B8"/>
+  </linearGradient>
+  <filter id="shadow" x="-20%" y="-30%" width="140%" height="180%">
+    <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000" flood-opacity=".35"/>
+  </filter>
+  <clipPath id="card"><rect width="{W}" height="{H}" rx="28"/></clipPath>
+</defs>
+<g clip-path="url(#card)" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+  <rect width="{W}" height="{H}" fill="url(#sky)"/>
+  {STARS}
+
+  <!-- The disk image's window. -->
+  <g filter="url(#shadow)"><rect x="60" y="30" width="680" height="290" rx="14" fill="#fff"/></g>
+  <rect x="60" y="30" width="680" height="36" rx="14" fill="#EEF1F6"/>
+  <rect x="60" y="50" width="680" height="16" fill="#EEF1F6"/>
+  <circle cx="82" cy="48" r="6" fill="#FF5F57"/><circle cx="101" cy="48" r="6" fill="#FEBC2E"/><circle cx="120" cy="48" r="6" fill="#28C840"/>
+  <text x="400" y="53" text-anchor="middle" font-size="14" fill="{MUTED}">Splashdown</text>
+
+  <!-- Splashdown on the left, Applications on the right. -->
+  <g transform="translate({IX} {CY})">{icon()}</g>
+  <text x="{IX}" y="{CY + 78}" {LABEL}>Splashdown</text>
+
+  <g transform="translate({FX} {CY + 4})"><g class="l bump">{folder()}</g></g>
+  <g transform="translate({FX} {CY + 4})"><g class="l inside"><g transform="translate(0 -6)">{icon(0.5)}</g>
+    <circle cx="40" cy="30" r="15" fill="#22C55E" stroke="#fff" stroke-width="3"/>
+    <path d="M32 30 L38 36 L48 24" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/></g></g>
+  <text x="{FX}" y="{CY + 78}" {LABEL}>Applications</text>
+
+  <!-- The icon being carried across, and the pointer carrying it. -->
+  <g transform="translate({IX} {CY})"><g class="l drag" filter="url(#shadow)">{icon()}</g></g>
+  <g class="l ptr">{arrow()}</g>
+
+  <text class="l say1" {CAP}>Drag Splashdown onto Applications</text>
+  <text class="l say2" {CAP}>Done. Splashdown is now in Applications.</text>
+</g>
+</svg>
+'''
+open(out, "w").write(svg)
+print(len(svg), "bytes")

@@ -177,6 +177,35 @@ footer .nocookies { opacity: 0.7; }
   .btn { width: 100%; text-align: center; }
 }
 
+/* The download pages (mac, windows): numbered steps in big plain words,
+   each with a picture. */
+.steps ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 40px; }
+.step { display: grid; grid-template-columns: 64px 1fr; gap: 6px 22px; align-items: start; }
+.step .num {
+  width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 30px; font-weight: 750; color: #fff;
+  background: linear-gradient(180deg, var(--orange-light), var(--orange));
+  box-shadow: 0 6px 18px rgba(242, 85, 31, 0.35);
+}
+.step h3 { margin: 4px 0 6px; font-size: 26px; line-height: 1.2; letter-spacing: -0.01em; }
+.step p { margin: 0; font-size: 19px; color: var(--muted); }
+.step p b { color: var(--ink); }
+.step .pic { grid-column: 2; margin-top: 16px; }
+.step .pic svg, .step .pic img { display: block; width: 100%; max-width: 560px; height: auto; border-radius: 14px; }
+.step .pic .shadowed { box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35); }
+.retry { color: var(--ink); border-bottom: 1px solid rgba(255, 154, 61, 0.55); }
+.retry:hover { text-decoration: none; border-bottom-color: var(--orange-light); }
+.where .pic { margin: 18px 0 0; }
+.where .pic svg { display: block; width: 100%; max-width: 560px; height: auto; border-radius: 12px; }
+.faq .more { text-align: center; margin: 28px 0 0; font-size: 16px; color: var(--muted); }
+.faq .brew { text-align: center; margin: 22px 0 0; }
+@media (max-width: 640px) {
+  .step { grid-template-columns: 46px 1fr; gap: 4px 14px; }
+  .step .num { width: 44px; height: 44px; font-size: 24px; }
+  .step h3 { font-size: 22px; margin-top: 2px; }
+  .step p { font-size: 17px; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
 }
