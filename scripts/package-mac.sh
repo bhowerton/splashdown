@@ -131,6 +131,12 @@ CONFIGS=(--config app/src-tauri/tauri.release.conf.json)
 CONFIGS+=(--config '{"bundle":{"resources":{"../../target/appintents/Metadata.appintents/":"Metadata.appintents/"}}}')
 [ "$UPDATER" = 1 ] || CONFIGS+=(--config '{"bundle":{"createUpdaterArtifacts":false}}')
 
+# The disk image's window (its background picture, which says to drag the
+# app to Applications, and where the icons sit) is laid out by Finder from
+# a script. When CI=true, as on GitHub's runners, the bundler skips that
+# script and the window comes out bare; this keeps it. Set it to false if
+# a build machine can't drive Finder.
+export TAURI_BUNDLER_DMG_IGNORE_CI=${TAURI_BUNDLER_DMG_IGNORE_CI:-true}
 cargo tauri build --target universal-apple-darwin --bundles app,dmg "${CONFIGS[@]}"
 
 BUNDLE=target/universal-apple-darwin/release/bundle

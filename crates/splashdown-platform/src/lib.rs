@@ -51,6 +51,11 @@ mod machine;
 mod players;
 
 pub use launch::{InstalledApp, installed_apps, open_app};
+
+/// A native alert, and whether an app is open from a given bundle: for
+/// offering to move the app to the Applications folder at start-up.
+#[cfg(target_os = "macos")]
+pub use imp::{alert, app_running_at};
 pub use machine::{free_disk_bytes, memory_bytes, system_language};
 
 /// Reading text aloud with Windows' own voices (on macOS it's the Apple

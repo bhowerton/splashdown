@@ -123,6 +123,9 @@ pub struct GeneralSettings {
     /// The natural voices were offered (and downloaded, or not) the first
     /// time something was read without them.
     pub natural_voice_offered: bool,
+    /// macOS: the user said not to offer again to move the app to the
+    /// Applications folder when it's opened from Downloads or the Desktop.
+    pub move_offer_declined: bool,
     /// Languages to translate into (Right Option + T, ⌃⌥T), by English
     /// name ("Spanish"), as the menu bar lists them. Up to
     /// `MOST_TRANSLATE_TARGETS`.

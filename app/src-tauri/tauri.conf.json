@@ -33,6 +33,7 @@
       "hardenedRuntime": true,
       "entitlements": "Entitlements.plist",
       "dmg": {
+        "background": "dmg/background.tiff",
         "appPosition": {
           "x": 180,
           "y": 170

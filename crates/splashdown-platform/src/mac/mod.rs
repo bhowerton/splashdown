@@ -1,6 +1,7 @@
 //! macOS backend: CGEventTap hotkeys, Accessibility (AX) for focus and
 //! selection, CGEvent / pasteboard insertion, non-activating NSPanel overlay.
 
+mod alert;
 mod apps;
 mod ax;
 mod clipboard;
@@ -14,6 +15,7 @@ mod output;
 mod overlay;
 mod sound;
 
+pub use alert::{alert, app_running_at};
 pub(crate) use apps::{activate_app, app_display, frontmost_app};
 pub(crate) use ax::{
     FocusElement, capture_focus, caret_rect, cursor_offset, element_at, field_text, is_chromium,

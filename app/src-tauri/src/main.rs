@@ -29,6 +29,8 @@ mod learning;
 mod meeting;
 mod minibar;
 mod models;
+#[cfg(target_os = "macos")]
+mod move_to_applications;
 mod my_actions;
 mod notes;
 mod pill;
@@ -258,6 +260,15 @@ fn main() {
             calls::call_offer_answer,
         ])
         .setup(|app| {
+            // Run from the disk image, Downloads or the Desktop: first,
+            // offer to move to the Applications folder. Before the setup
+            // guide, any permission prompt or the login item, which all
+            // belong to where the app is.
+            #[cfg(target_os = "macos")]
+            if move_to_applications::offer() {
+                app.handle().exit(0);
+                return Ok(());
+            }
             // Menu bar app: no Dock icon, no app menu.
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
