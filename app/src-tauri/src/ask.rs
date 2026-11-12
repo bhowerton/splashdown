@@ -3,6 +3,8 @@
 //! The answer streams in; Insert pastes it into the app the question was
 //! asked from, Copy puts it on the clipboard. A question typed into the
 //! panel, or asked again while it's open, follows on from the ones before.
+//! It also shows what was asked of selected text that can't be changed
+//! where it is (`show`).
 
 use splashdown_core::sync::Locked;
 use std::sync::{Arc, Mutex, OnceLock};
@@ -184,6 +186,45 @@ pub fn ask(app: &AppHandle, mut q: Question) {
         }
         changed(&app);
     });
+}
+
+/// A result that's already written, for the panel to show as the answer
+/// to what was asked.
+pub struct Written {
+    /// What was asked for, as it was said.
+    pub asked: String,
+    pub text: String,
+    /// What a typed follow-up may be answered from.
+    pub context: AskContext,
+    /// For a typed follow-up; without one, there's none.
+    pub model: Option<Arc<dyn TextModel>>,
+    /// The app it was asked from (pid and name), for Insert.
+    pub target: Option<(i32, String)>,
+}
+
+/// Shows the panel with `w` as a finished answer: a new version of text
+/// that couldn't be replaced where it was selected (a message received, a
+/// page). Copy, Insert and Read aloud work on it as on any answer, and a
+/// typed follow-up carries on from it.
+pub fn show(app: &AppHandle, w: Written) {
+    {
+        let mut panel = panel();
+        // An earlier answer still streaming in stops showing.
+        panel.asked += 1;
+        panel.shown = Shown {
+            question: w.asked,
+            answer: w.text.trim().to_string(),
+            done: true,
+            app: w.target.as_ref().map(|(_, name)| name.clone()),
+            ..Shown::default()
+        };
+        panel.target = w.target;
+        panel.context = Some(w.context);
+        panel.model = w.model;
+    }
+    crate::reading::stop();
+    open(app);
+    changed(app);
 }
 
 fn changed(app: &AppHandle) {

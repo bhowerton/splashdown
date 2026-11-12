@@ -166,6 +166,25 @@ impl AxElement {
         )
     }
 
+    /// Whether the app lets an attribute be set; `Err` carries the AXError.
+    fn is_settable(&self, name: &str) -> Result<bool, i32> {
+        let name = CFString::new(name);
+        let mut settable: u8 = 0;
+        // SAFETY: `self` is a live AXUIElementRef, `name` a live CFString,
+        // and `settable` a valid out-pointer for one Boolean.
+        let err = unsafe {
+            ffi::AXUIElementIsAttributeSettable(
+                self.raw(),
+                name.as_concrete_TypeRef(),
+                &mut settable,
+            )
+        };
+        if err != AX_SUCCESS {
+            return Err(err);
+        }
+        Ok(settable != 0)
+    }
+
     fn string_attribute(&self, name: &str) -> Result<String, i32> {
         let v = self.attribute(name)?;
         v.downcast::<CFString>().map(|s| s.to_string()).ok_or(-1)
@@ -443,6 +462,25 @@ pub(crate) fn takes_text(focus: &FocusElement) -> Option<bool> {
         r if NOT_TEXT.contains(&r) => Some(false),
         _ => None,
     }
+}
+
+/// Whether the selection can be replaced by pasting over it. A text view
+/// showing a message received, or a document opened to read, has the role
+/// of an editable one; what tells them apart is whether the app lets its
+/// text be set. `Some(true)` only when it lets the selected text be set
+/// (a settable value alone isn't trusted, see `focus::replaceable`);
+/// `Some(false)` when it says no to both the selection and the whole
+/// value; otherwise `None`, which the caller checks by pasting.
+pub(crate) fn can_replace_selection(focus: &FocusElement) -> Option<bool> {
+    let el = focus.element.as_ref()?;
+    // Inside an editable part of a web page (Safari and Chromium say so).
+    if el.attribute("AXEditableAncestor").is_ok() {
+        return Some(true);
+    }
+    crate::focus::replaceable(
+        el.is_settable("AXSelectedText").ok(),
+        el.is_settable("AXValue").ok(),
+    )
 }
 
 /// Whether the focused element has nothing a text view has: no value, no

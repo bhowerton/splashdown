@@ -33,6 +33,10 @@ pub(crate) fn takes_text(_el: &FocusElement) -> Option<bool> {
     None
 }
 
+pub(crate) fn can_replace_selection(_el: &FocusElement) -> Option<bool> {
+    None
+}
+
 pub(crate) fn is_secure_field(_el: &FocusElement) -> bool {
     false
 }

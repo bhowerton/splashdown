@@ -18,9 +18,10 @@ mod sound;
 pub use alert::{activate_self, alert, app_running_at};
 pub(crate) use apps::{activate_app, app_display, frontmost_app};
 pub(crate) use ax::{
-    FocusElement, capture_focus, caret_rect, cursor_offset, element_at, field_text, is_chromium,
-    is_current, is_secure_field, nothing_like_text, permissions, request_accessibility,
-    request_microphone, secure_input_active, select_range, selection, surrounding_text, takes_text,
+    FocusElement, can_replace_selection, capture_focus, caret_rect, cursor_offset, element_at,
+    field_text, is_chromium, is_current, is_secure_field, nothing_like_text, permissions,
+    request_accessibility, request_microphone, secure_input_active, select_range, selection,
+    surrounding_text, takes_text,
 };
 pub(crate) use clipboard::{
     clipboard_text, copy_selection, copy_to_clipboard, paste_text, press, refresh_shortcut_keys,

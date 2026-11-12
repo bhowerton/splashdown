@@ -67,9 +67,9 @@ pub(crate) use shell::shell_open;
 pub(crate) use sound::{play_sound, reduce_motion};
 #[cfg(windows)]
 pub(crate) use uia::{
-    FocusElement, capture_focus, caret_rect, cursor_offset, field_text, is_chromium, is_current,
-    is_secure_field, permissions, request_accessibility, request_microphone, secure_input_active,
-    select_range, selection, surrounding_text, takes_text,
+    FocusElement, can_replace_selection, capture_focus, caret_rect, cursor_offset, field_text,
+    is_chromium, is_current, is_secure_field, permissions, request_accessibility,
+    request_microphone, secure_input_active, select_range, selection, surrounding_text, takes_text,
 };
 
 #[cfg(windows)]

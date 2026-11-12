@@ -184,14 +184,69 @@ impl Controller {
         if let Some((mut outcome, took)) = outcome {
             crate::spend::record_outcome(&outcome);
             self.pending_audio = recording;
+            // A new version of the selection goes where `Replace` says. One
+            // that can't be pasted over shows in the Ask panel; words
+            // replaced exactly are pasted, and checked for.
+            let rewrite = (outcome.mode == Mode::Transform).then(|| Rewrite {
+                replace: active.focus.as_ref().map_or(Replace::Show, replace_target),
+                // Read from the app, or else copied while preparing the job.
+                copied: !matches!(active.selection, Selection::Text(_)),
+                selection: selected,
+            });
+            if let Some(rewrite) = rewrite
+                .as_ref()
+                .filter(|r| r.replace == Replace::Show && outcome.replaced.is_none())
+            {
+                rewrite.log(Went::Shown);
+                self.show_rewrite(&active, &outcome, took, rewrite);
+                self.check_budget();
+                return;
+            }
             let typer = typer.filter(StreamTyper::started);
             let unchanged = self.change_by_hooks(&active, &mut outcome);
-            self.deliver(active, outcome, took, send, spoke, typer);
+            self.deliver(active, outcome, took, send, spoke, typer, rewrite);
             if let Some(why) = unchanged {
                 self.notice(Tone::Warning, &format!("Inserted as said · {why}"));
             }
             self.check_budget();
         }
+    }
+
+    /// A rewrite of selected text that can't be replaced where it is (a
+    /// message received, a page): recorded as usual, and shown in the Ask
+    /// panel rather than pasted where it would go nowhere.
+    fn show_rewrite(
+        &mut self,
+        active: &Active,
+        outcome: &Outcome,
+        took: Duration,
+        rewrite: &Rewrite,
+    ) {
+        if outcome.text.trim().is_empty() {
+            return self.notice(Tone::Info, "Didn't catch that");
+        }
+        self.record(outcome, active.focus.as_ref(), &active.preset, took);
+        self.show_rewritten(active, outcome, rewrite);
+    }
+
+    /// The Ask panel part of `show_rewrite`, for a rewrite already recorded
+    /// (also one pasted that wasn't seen to land).
+    fn show_rewritten(&mut self, active: &Active, outcome: &Outcome, rewrite: &Rewrite) {
+        // The text is the selection as it was: nothing new to show.
+        if let Some(Fallback::Guard(reason)) = &outcome.fallback {
+            return self.notice(
+                Tone::Warning,
+                &format!("Left as it was ({})", reason.describe()),
+            );
+        }
+        crate::did::note(crate::did::REWROTE, &outcome.text);
+        self.show_written(
+            active.focus.as_ref(),
+            &active.preset,
+            rewrite.selection.clone(),
+            &outcome.raw,
+            outcome.text.clone(),
+        );
     }
 
     /// The user's hooks that change this preset's dictations, run before
@@ -308,7 +363,9 @@ impl Controller {
     }
 
     /// Inserts the result into the field it was dictated into, records it,
-    /// and presses Return if asked.
+    /// and presses Return if asked. `rewrite` says where a new version of
+    /// the selection goes (for a transform).
+    #[allow(clippy::too_many_arguments)]
     pub(super) fn deliver(
         &mut self,
         active: Active,
@@ -317,6 +374,7 @@ impl Controller {
         send: bool,
         spoke: Duration,
         mut typer: Option<StreamTyper>,
+        rewrite: Option<Rewrite>,
     ) {
         let still_focused = active.focus.as_ref().is_none_or(Focus::is_current);
         let target_pid = active.focus.as_ref().map(|f| f.app.pid);
@@ -350,6 +408,9 @@ impl Controller {
         // failed): what's in the field can't be finished from.
         let broken = typer.as_ref().is_some_and(StreamTyper::stopped);
         if !still_focused || broken {
+            if let Some(rewrite) = &rewrite {
+                rewrite.log(Went::Copied);
+            }
             tracing::info!("focus moved away from {app_id} before inserting: copied instead");
             let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
             let note = if send { " (not sent)" } else { "" };
@@ -395,7 +456,7 @@ impl Controller {
         };
         // Chrome now and then ignores a ⌘V: check the field changed, and
         // paste once more if it didn't.
-        let check = (method == InsertMethod::Paste && splashdown_platform::is_chromium(app_id))
+        let chromium = (method == InsertMethod::Paste && splashdown_platform::is_chromium(app_id))
             .then(|| {
                 active
                     .focus
@@ -408,10 +469,12 @@ impl Controller {
         let takes_text = active.focus.as_ref().and_then(Focus::takes_text);
         let no_field = takes_text == Some(false);
         // Nothing says whether what has focus takes text (an app that
-        // reports nothing, a part of one it has no name for). Where its
-        // text can be read, that's what shows whether this went in.
-        let held = takes_text
-            .is_none()
+        // reports nothing, a part of one it has no name for), or, over a
+        // selection, whether its text can be changed. Where its text can be
+        // read, that's what shows whether this went in.
+        let replace = rewrite.as_ref().map(|r| r.replace);
+        let check = checks_landing(takes_text, replace);
+        let held = check
             .then(|| {
                 active
                     .focus
@@ -428,7 +491,7 @@ impl Controller {
             None => splashdown_platform::insert_text(&text, method),
         };
         if inserted.is_ok()
-            && let Some((focus, before)) = &check
+            && let Some((focus, before)) = &chromium
             && !field_changed(focus, before)
         {
             tracing::info!("paste into {app_id} didn't show up; pasting again");
@@ -443,13 +506,25 @@ impl Controller {
             }
         }
         if let Err(e) = inserted {
+            if let Some(rewrite) = &rewrite {
+                rewrite.log(Went::Copied);
+            }
             tracing::warn!("insert into {app_id} failed: {e}");
             let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
             self.notice(Tone::Warning, "Couldn't type it — copied to clipboard");
             return;
         }
 
+        // A new version of the selection whose paste wasn't seen: shown in
+        // the Ask panel, the user's clipboard left alone.
+        if lost && let Some(rewrite) = &rewrite {
+            rewrite.log(Went::CheckFailedShown);
+            return self.show_rewritten(&active, &outcome, rewrite);
+        }
         if no_field || lost {
+            if let Some(rewrite) = &rewrite {
+                rewrite.log(Went::Copied);
+            }
             tracing::info!(
                 "{} in {app_id}: copied instead",
                 if no_field {
@@ -470,11 +545,23 @@ impl Controller {
 
         // It may have gone nowhere, and a paste puts the clipboard back as
         // it was: unless the field is seen to change, the text stays on the
-        // clipboard and the overlay says so, not "Inserted".
-        let unconfirmed = takes_text.is_none()
-            && !held
-                .as_ref()
-                .is_some_and(|(focus, before)| field_changed(focus, before));
+        // clipboard and the overlay says so, not "Inserted". Meanwhile the
+        // overlay still says it's working; a paste that lands ends the wait
+        // at once.
+        let landed = held
+            .as_ref()
+            .map(|(focus, before)| field_changed(focus, before));
+        if let Some(rewrite) = &rewrite {
+            let went = went(rewrite.replace, held.is_some(), landed);
+            rewrite.log(went);
+            // Over text that turned out not to change (a read-only view
+            // that says otherwise): shown in the Ask panel instead, and the
+            // clipboard is left alone.
+            if went == Went::CheckFailedShown {
+                return self.show_rewritten(&active, &outcome, rewrite);
+            }
+        }
+        let unconfirmed = check && landed != Some(true);
         if unconfirmed {
             let _ = splashdown_platform::copy_to_clipboard(&outcome.text);
         }
@@ -751,11 +838,28 @@ pub(super) fn field_changed(focus: &Focus, before: &str) -> bool {
     }
 }
 
-/// `status` (an "Inserted · …" message) for text that was sent to an app
-/// with nothing to confirm a field took it. It doesn't say the text went
-/// in, since it may not have: only that it's on the clipboard as well.
+/// Whether to read the field before inserting and check it changed
+/// after: when nothing says it takes text, or, for a new version of the
+/// selection (`replace`), nothing says its text can be changed. Not where
+/// it clearly takes no text (that's copied instead), nor where it's known
+/// to take this, so nothing waits there.
+pub(super) fn checks_landing(takes_text: Option<bool>, replace: Option<Replace>) -> bool {
+    let known = match replace {
+        Some(replace) => replace == Replace::Paste,
+        None => takes_text == Some(true),
+    };
+    !known && takes_text != Some(false)
+}
+
+/// `status` (an "Inserted · …" message, or what was done, like "Changed
+/// 2 · …") for text that was sent to an app with nothing to confirm a
+/// field took it. It doesn't say the text went in, since it may not have:
+/// only that it's on the clipboard as well.
 pub(super) fn unconfirmed_status(status: &str) -> String {
-    let rest = status.strip_prefix("Inserted").unwrap_or(status);
+    let rest = match status.strip_prefix("Inserted") {
+        Some(rest) => rest.to_string(),
+        None => format!(" · {status}"),
+    };
     format!("Couldn't check it went in{rest} · it's on the clipboard too")
 }
 
@@ -855,5 +959,28 @@ mod tests {
             unconfirmed_status(&inserted_status(took, true, None, None, false)),
             "Couldn't check it went in · 1.2 s · sent · it's on the clipboard too"
         );
+        // Not an "Inserted" message: kept whole.
+        assert_eq!(
+            unconfirmed_status("Changed 2 · tuesday → thursday"),
+            "Couldn't check it went in · Changed 2 · tuesday → thursday · it's on the clipboard too"
+        );
+    }
+
+    #[test]
+    fn only_an_insertion_that_may_not_land_is_checked() {
+        // Dictation: by whether the field takes text, as before.
+        assert!(!checks_landing(Some(true), None));
+        assert!(checks_landing(None, None));
+        // No text box: copied instead, nothing to wait for.
+        assert!(!checks_landing(Some(false), None));
+        // Over a selection: only a field known to be changeable isn't.
+        assert!(!checks_landing(Some(true), Some(Replace::Paste)));
+        assert!(checks_landing(Some(true), Some(Replace::PasteAndCheck)));
+        // Words replaced exactly in text that can't be changed: pasted,
+        // then checked, so a paste that went nowhere is shown instead
+        // (`went`), not "Inserted".
+        assert!(checks_landing(Some(true), Some(Replace::Show)));
+        assert!(checks_landing(None, Some(Replace::Show)));
+        assert!(!checks_landing(Some(false), Some(Replace::Show)));
     }
 }

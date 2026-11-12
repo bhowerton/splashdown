@@ -66,6 +66,7 @@ use crate::ui::Ui;
 
 use self::assist::*;
 use self::corrections::*;
+use self::edits::{Replace, Rewrite, Went, replace_target, went};
 use self::job::*;
 use self::recording::*;
 use self::spoken::*;

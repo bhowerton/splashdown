@@ -1,6 +1,7 @@
 //! Changing what was already done: redo with another preset, rewrite
 //! selected text with a transform or translate it, retry a failed
-//! recording, and undo.
+//! recording, and undo. Where selected text can't be changed (`Replace`),
+//! its new version is shown in the Ask panel instead.
 
 use super::*;
 
@@ -155,12 +156,7 @@ impl Controller {
         if focus.is_secure_field() {
             return self.notice(Tone::Warning, "Can't change text in password fields");
         }
-        let mut selected = match focus.selection() {
-            Selection::Text(s) => Some(s),
-            Selection::Unknown => splashdown_platform::copy_selection(),
-            Selection::Empty => None,
-        }
-        .filter(|s| !s.trim().is_empty());
+        let (mut selected, mut copied) = selected_text(&focus);
         if selected.is_none() {
             let recent = self
                 .last_insert
@@ -171,6 +167,7 @@ impl Controller {
                 && focus.select(&text, start, end)
             {
                 selected = Some(self.last_text.clone());
+                copied = false;
             }
         }
         let Some(text) = selected else {
@@ -192,22 +189,110 @@ impl Controller {
         if let Some(why) = out.unchanged {
             return self.notice(Tone::Info, &format!("{name}: {why}"));
         }
-        self.replace_selection(&focus, out.text, &name);
+        match replace_target(&focus) {
+            Replace::Show => {
+                log_rewrite(text.chars().count(), copied, Went::Shown);
+                let preset = self.match_preset(Some(&focus));
+                self.show_written(Some(&focus), &preset, Some(text), &name, out.text);
+            }
+            how => self.replace_selection(&focus, out.text, &name, how, text, copied),
+        }
     }
 
-    /// Pastes `text` over the selection in `focus`, unless focus moved on
-    /// meanwhile (then it's left on the clipboard).
-    fn replace_selection(&mut self, focus: &Focus, text: String, name: &str) {
+    /// Pastes `text` over `selected`, the selection in `focus`, unless
+    /// focus moved on meanwhile (then it's left on the clipboard). Unless
+    /// the field is known to take it, it's checked for (the overlay keeps
+    /// saying it's working meanwhile): not seen to change, it's shown in
+    /// the Ask panel; where the field's text can't be read to tell, it's
+    /// left on the clipboard too and the overlay doesn't claim it went in.
+    fn replace_selection(
+        &mut self,
+        focus: &Focus,
+        text: String,
+        name: &str,
+        how: Replace,
+        selected: String,
+        copied: bool,
+    ) {
+        let chars = selected.chars().count();
         if !focus.is_current() {
+            log_rewrite(chars, copied, Went::Copied);
             let _ = splashdown_platform::copy_to_clipboard(&text);
             return self.notice(Tone::Warning, "Focus changed — copied to clipboard");
         }
+        let before = (how != Replace::Paste)
+            .then(|| focus.field_text())
+            .flatten();
         let result = splashdown_platform::insert_text(&text, InsertMethod::Paste);
-        if result.is_ok() {
-            self.last_insert = Some((focus.app.pid, Instant::now()));
-            self.last_text = text;
+        if result.is_err() {
+            log_rewrite(chars, copied, Went::Copied);
+            return self.finish_command(result, name);
         }
-        self.finish_command(result, name);
+        let landed = match (how, &before) {
+            (Replace::Paste, _) => None,
+            (_, Some(before)) => Some(super::deliver::field_changed(focus, before)),
+            (_, None) => None,
+        };
+        let went = went(how, before.is_some(), landed);
+        log_rewrite(chars, copied, went);
+        match went {
+            Went::CheckFailedShown => {
+                let preset = self.match_preset(Some(focus));
+                self.show_written(Some(focus), &preset, Some(selected), name, text);
+            }
+            Went::Unchecked => {
+                let _ = splashdown_platform::copy_to_clipboard(&text);
+                self.last_insert = Some((focus.app.pid, Instant::now()));
+                self.last_text = text;
+                self.done(&super::deliver::unconfirmed_status(name));
+            }
+            _ => {
+                self.last_insert = Some((focus.app.pid, Instant::now()));
+                self.last_text = text;
+                self.finish_command(result, name);
+            }
+        }
+    }
+
+    /// `text`, a new version of selected text that can't be replaced where
+    /// it is, shown in the Ask panel under `asked` (what was asked for).
+    /// Copy and Insert there work on it; a follow-up typed there carries
+    /// on from it, with the selection.
+    pub(super) fn show_written(
+        &mut self,
+        focus: Option<&Focus>,
+        preset: &Preset,
+        selection: Option<String>,
+        asked: &str,
+        text: String,
+    ) {
+        let Ok(engine) = &self.engine else {
+            let _ = splashdown_platform::copy_to_clipboard(&text);
+            return self.notice(
+                Tone::Warning,
+                "Can't change that text here — copied to clipboard",
+            );
+        };
+        let context = splashdown_core::ask::AskContext {
+            selection,
+            app_name: focus
+                .filter(|_| engine.share_app_name)
+                .map(|f| f.app.name.clone()),
+            user_name: engine.context.user_name.clone(),
+            today: splashdown_core::prompt::today(chrono::Local::now().date_naive()),
+            ..Default::default()
+        };
+        crate::ask::show(
+            self.ui.app(),
+            crate::ask::Written {
+                asked: asked.to_string(),
+                text,
+                context,
+                model: engine.pipeline_for(preset).answer_model(),
+                target: focus.map(|f| (f.app.pid, f.app.name.clone())),
+            },
+        );
+        self.ui.hide();
     }
 
     /// ⌃⌥T: the selection, translated into the language picked in the menu
@@ -238,16 +323,11 @@ impl Controller {
         if focus.is_secure_field() {
             return self.notice(Tone::Warning, "Can't translate in password fields");
         }
-        let selected = match focus.selection() {
-            Selection::Text(s) => Some(s),
-            Selection::Unknown => splashdown_platform::copy_selection(),
-            Selection::Empty => None,
-        }
-        .filter(|s| !s.trim().is_empty());
+        let (selected, copied) = selected_text(&focus);
         let Some(text) = selected else {
             return self.dictate_translated(&language);
         };
-        self.translate_selection(&focus, &language, text);
+        self.translate_selection(&focus, &language, text, copied);
     }
 
     /// The language picked under Translate into. With none chosen yet,
@@ -332,7 +412,7 @@ impl Controller {
             self.last_capture = None;
             match (active.focus, active.selection) {
                 (Some(focus), Selection::Text(text)) => {
-                    self.translate_selection(&focus, &language, text)
+                    self.translate_selection(&focus, &language, text, false)
                 }
                 _ => self.notice(Tone::Info, "Select the text to translate"),
             }
@@ -381,15 +461,17 @@ impl Controller {
         active
     }
 
-    /// `text`, selected in `focus`, translated: replaced where it can be
-    /// changed, otherwise shown in the Ask panel.
-    fn translate_selection(&mut self, focus: &Focus, language: &str, text: String) {
+    /// `text`, selected in `focus` (`copied` from it rather than read),
+    /// translated: replaced where it can be changed, otherwise shown in the
+    /// Ask panel.
+    fn translate_selection(&mut self, focus: &Focus, language: &str, text: String, copied: bool) {
         if focus.is_secure_field() {
             return self.notice(Tone::Warning, "Can't translate in password fields");
         }
-        // Only replaced where it's known to be editable: elsewhere a paste
-        // would vanish.
-        if focus.takes_text() != Some(true) {
+        // Only replaced where it can be: elsewhere a paste would vanish.
+        let how = replace_target(focus);
+        if how == Replace::Show {
+            log_rewrite(text.chars().count(), copied, Went::Shown);
             return self.show_translation(focus, language, text);
         }
         let name = format!("Translated into {language}");
@@ -404,7 +486,7 @@ impl Controller {
         if let Some(why) = out.unchanged {
             return self.notice(Tone::Info, &format!("Translate: {why}"));
         }
-        self.replace_selection(focus, out.text, &name);
+        self.replace_selection(focus, out.text, &name, how, text, copied);
     }
 
     /// ⌃⌥T with nothing selected: a hands-free dictation with the preset
@@ -604,6 +686,124 @@ impl Controller {
     }
 }
 
+/// Where a new version of selected text goes. Every rewrite of a
+/// selection (a spoken instruction, a transform's shortcut, translating)
+/// goes by this one rule (`replace_rule`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Replace {
+    /// Pasted over it: the field takes text and says it can be changed.
+    Paste,
+    /// Pasted over it, then the field is checked for the change: it takes
+    /// text but doesn't say whether this text can be changed.
+    PasteAndCheck,
+    /// Shown in the Ask panel: pasted, it would go nowhere (a message
+    /// received, a web page, a document opened to read).
+    Show,
+}
+
+/// The rule for `Replace`, from what the focused element says: whether it
+/// takes typed text (`Focus::takes_text`) and whether its selection can be
+/// changed (`Focus::can_replace_selection`). Only a field known to take
+/// text gets a paste, and only one known to be changeable gets it without
+/// a check. A checked paste that isn't seen to change the field is shown
+/// in the Ask panel after all (`went`).
+pub(super) fn replace_rule(takes_text: Option<bool>, can_replace: Option<bool>) -> Replace {
+    match (takes_text, can_replace) {
+        (Some(true), Some(true)) => Replace::Paste,
+        (Some(true), None) => Replace::PasteAndCheck,
+        _ => Replace::Show,
+    }
+}
+
+/// A spoken instruction's new version of the selection on its way: where
+/// it goes, what was selected, and whether that was copied from the app
+/// rather than read.
+pub(super) struct Rewrite {
+    pub(super) replace: Replace,
+    pub(super) selection: Option<String>,
+    pub(super) copied: bool,
+}
+
+impl Rewrite {
+    pub(super) fn log(&self, went: Went) {
+        let chars = self.selection.as_ref().map_or(0, |s| s.chars().count());
+        log_rewrite(chars, self.copied, went);
+    }
+}
+
+/// How a new version of selected text went, for the log.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum Went {
+    /// Pasted over it, where the field says it can be changed.
+    Pasted,
+    /// Pasted over it, and the field was seen to change.
+    PastedAndChecked,
+    /// Pasted over it, but the field's text couldn't be read to check: also
+    /// left on the clipboard.
+    Unchecked,
+    /// Shown in the Ask panel without pasting.
+    Shown,
+    /// Pasted over it, the field wasn't seen to change, so shown in the Ask
+    /// panel.
+    CheckFailedShown,
+    /// Left on the clipboard (focus moved, no field, the paste failed).
+    Copied,
+}
+
+/// How a paste over the selection went (`how` wasn't `Show`): whether the
+/// field's text could be read before it, and whether it was then seen to
+/// change (`None` when it wasn't checked).
+pub(super) fn went(how: Replace, readable: bool, landed: Option<bool>) -> Went {
+    match (how, readable, landed) {
+        (Replace::Paste, ..) => Went::Pasted,
+        (_, true, Some(true)) => Went::PastedAndChecked,
+        (_, true, Some(false)) => Went::CheckFailedShown,
+        _ => Went::Unchecked,
+    }
+}
+
+/// One line per rewrite of a selection, saying how it went: lengths and
+/// mechanics only, never the text.
+pub(super) fn log_rewrite(chars: usize, copied: bool, went: Went) {
+    tracing::info!(
+        "selection rewrite: {chars} characters, {}; {}",
+        if copied {
+            "copied from the app"
+        } else {
+            "read from the app"
+        },
+        match went {
+            Went::Pasted => "pasted",
+            Went::PastedAndChecked => "pasted and checked",
+            Went::Unchecked => "pasted, couldn't check (left on the clipboard)",
+            Went::Shown => "shown in the Ask panel",
+            Went::CheckFailedShown => "pasted, not seen to change, so shown in the Ask panel",
+            Went::Copied => "left on the clipboard",
+        }
+    );
+}
+
+/// The selected text in `focus`, read from the app or else copied (then
+/// `true`), if there's any besides spaces.
+fn selected_text(focus: &Focus) -> (Option<String>, bool) {
+    let (text, copied) = match focus.selection() {
+        Selection::Text(s) => (Some(s), false),
+        Selection::Unknown => (splashdown_platform::copy_selection(), true),
+        Selection::Empty => (None, false),
+    };
+    (text.filter(|s| !s.trim().is_empty()), copied)
+}
+
+/// `replace_rule` for the selection in `focus`.
+pub(super) fn replace_target(focus: &Focus) -> Replace {
+    let takes_text = focus.takes_text();
+    // Not asked where it wouldn't change the answer.
+    let can_replace = (takes_text == Some(true))
+        .then(|| focus.can_replace_selection())
+        .flatten();
+    replace_rule(takes_text, can_replace)
+}
+
 /// The language after `now` among `targets` (the ones ticked under
 /// Translate into), back to the first after the last; the first if `now`
 /// isn't one of them. `None` when there's nothing else to switch to.
@@ -674,6 +874,45 @@ pub(super) fn translating(mut preset: Preset, language: &str) -> Preset {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_selection_is_only_pasted_over_where_it_can_change() {
+        // A field that says it can be changed: pasted, no waiting.
+        assert_eq!(replace_rule(Some(true), Some(true)), Replace::Paste);
+        // A field that doesn't say: pasted, and checked for.
+        assert_eq!(replace_rule(Some(true), None), Replace::PasteAndCheck);
+        // A text view that says none of its text can be set (a terminal).
+        assert_eq!(replace_rule(Some(true), Some(false)), Replace::Show);
+        // Not known to take text at all (a web page, an app that says
+        // nothing): a paste would go nowhere to be seen.
+        assert_eq!(replace_rule(None, None), Replace::Show);
+        assert_eq!(replace_rule(None, Some(true)), Replace::Show);
+        assert_eq!(replace_rule(Some(false), None), Replace::Show);
+    }
+
+    #[test]
+    fn a_checked_paste_that_doesn_t_land_is_shown() {
+        // Known to be changeable: not checked, nothing waits.
+        assert_eq!(went(Replace::Paste, false, None), Went::Pasted);
+        // Read before, seen to change.
+        assert_eq!(
+            went(Replace::PasteAndCheck, true, Some(true)),
+            Went::PastedAndChecked
+        );
+        // Read before, not seen to change: a read-only text view that
+        // dropped the paste. Shown, not "Inserted".
+        assert_eq!(
+            went(Replace::PasteAndCheck, true, Some(false)),
+            Went::CheckFailedShown
+        );
+        // Words replaced exactly over text that can't be changed: the same.
+        assert_eq!(
+            went(Replace::Show, true, Some(false)),
+            Went::CheckFailedShown
+        );
+        // Nothing to compare with: left on the clipboard too.
+        assert_eq!(went(Replace::PasteAndCheck, false, None), Went::Unchecked);
+    }
 
     #[test]
     fn the_translate_key_again_moves_to_the_next_language() {

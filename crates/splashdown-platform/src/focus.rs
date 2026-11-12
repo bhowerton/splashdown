@@ -121,6 +121,16 @@ impl Focus {
         known
     }
 
+    /// Whether pasting over the selection would change it: `Some(false)`
+    /// when the system says its text can't be changed (a message received,
+    /// a page or document opened to read, whose text view looks like an
+    /// editable one), `None` when it doesn't say. Not the same question as
+    /// `takes_text`, which plain dictation goes by: a terminal takes typed
+    /// text without letting its text be set.
+    pub fn can_replace_selection(&self) -> Option<bool> {
+        imp::can_replace_selection(&self.inner)
+    }
+
     /// The text around the field in its window, besides the field's own:
     /// usually the conversation being answered (an email thread, a chat).
     /// Read from the nearest container holding at least `min_chars`, and
@@ -161,6 +171,21 @@ impl Focus {
         let text = self.field_text()?;
         let cursor = imp::cursor_offset(&self.inner);
         window_around(&text, cursor, before, after)
+    }
+}
+
+/// What the system's answers to "can this be set?" for the selected text
+/// and for the whole value (`None` where it didn't answer) say about
+/// pasting over the selection. Only the selection's own answer is taken as
+/// a yes: some apps say a read-only text view's value can be set, and say
+/// the same of their real typing box, so a settable value proves nothing.
+/// No only when both were asked and both said no.
+#[cfg_attr(not(target_os = "macos"), allow(dead_code))]
+pub(crate) fn replaceable(selected: Option<bool>, value: Option<bool>) -> Option<bool> {
+    match (selected, value) {
+        (Some(true), _) => Some(true),
+        (Some(false), Some(false)) => Some(false),
+        _ => None,
     }
 }
 

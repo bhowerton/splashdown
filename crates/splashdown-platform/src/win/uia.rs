@@ -3,23 +3,24 @@
 //! answers for Windows. The Windows twin of `mac/ax.rs` (apps are in
 //! `apps.rs`, the microphone in `mic.rs`).
 
-use windows::Win32::Foundation::{HWND, POINT};
+use windows::Win32::Foundation::{HWND, POINT, VARIANT_FALSE};
 use windows::Win32::Graphics::Gdi::ClientToScreen;
 use windows::Win32::System::Com::{
     CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
 };
 use windows::Win32::System::Ole::{SafeArrayAccessData, SafeArrayDestroy, SafeArrayUnaccessData};
+use windows::Win32::System::Variant::{VT_BOOL, VariantClear};
 use windows::Win32::UI::Accessibility::{
     CUIAutomation, IUIAutomation, IUIAutomation2, IUIAutomationElement, IUIAutomationTextPattern,
     IUIAutomationTextPattern2, IUIAutomationTextRange, IUIAutomationTreeWalker,
     IUIAutomationValuePattern, TextPatternRangeEndpoint_End, TextPatternRangeEndpoint_Start,
     TextUnit_Character, UIA_ButtonControlTypeId, UIA_CheckBoxControlTypeId,
     UIA_DocumentControlTypeId, UIA_EditControlTypeId, UIA_HyperlinkControlTypeId,
-    UIA_ImageControlTypeId, UIA_ListControlTypeId, UIA_ListItemControlTypeId,
-    UIA_MenuBarControlTypeId, UIA_MenuControlTypeId, UIA_MenuItemControlTypeId,
-    UIA_RadioButtonControlTypeId, UIA_ScrollBarControlTypeId, UIA_SliderControlTypeId,
-    UIA_TabItemControlTypeId, UIA_TextControlTypeId, UIA_TextPattern2Id, UIA_TextPatternId,
-    UIA_ToolBarControlTypeId, UIA_TreeItemControlTypeId, UIA_ValuePatternId,
+    UIA_ImageControlTypeId, UIA_IsReadOnlyAttributeId, UIA_ListControlTypeId,
+    UIA_ListItemControlTypeId, UIA_MenuBarControlTypeId, UIA_MenuControlTypeId,
+    UIA_MenuItemControlTypeId, UIA_RadioButtonControlTypeId, UIA_ScrollBarControlTypeId,
+    UIA_SliderControlTypeId, UIA_TabItemControlTypeId, UIA_TextControlTypeId, UIA_TextPattern2Id,
+    UIA_TextPatternId, UIA_ToolBarControlTypeId, UIA_TreeItemControlTypeId, UIA_ValuePatternId,
     UIA_WindowControlTypeId,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -563,6 +564,47 @@ pub(crate) fn takes_text(focus: &FocusElement) -> Option<bool> {
         Some(false)
     } else {
         None
+    }
+}
+
+/// Whether pasting over the selection would change it. `Some(false)` only
+/// when UI Automation says the text is read-only: the selection's own
+/// read-only attribute where the field has a text pattern with a
+/// selection, else its value pattern. Anything it doesn't say is `None`.
+pub(crate) fn can_replace_selection(focus: &FocusElement) -> Option<bool> {
+    let el = usable(focus)?;
+    let read_only = match text_pattern(focus).and_then(|p| selection_read_only(&p)) {
+        Some(read_only) => read_only,
+        // SAFETY: pattern and property reads on a live element, on an MTA
+        // thread.
+        None => unsafe {
+            el.GetCurrentPatternAs::<IUIAutomationValuePattern>(UIA_ValuePatternId)
+                .and_then(|p| p.CurrentIsReadOnly())
+        }
+        .ok()?
+        .as_bool(),
+    };
+    Some(!read_only)
+}
+
+/// The first selected range's read-only attribute, when it's a plain yes
+/// or no (not "mixed" or "not supported", which come back as objects).
+fn selection_read_only(pattern: &IUIAutomationTextPattern) -> Option<bool> {
+    // SAFETY: calls on a live pattern and the ranges it returns; index 0 is
+    // checked against the array's length first. The variant is ours: its
+    // fields are read only as the type it says it holds, and it's cleared
+    // after, which releases whatever it held.
+    unsafe {
+        let ranges = pattern.GetSelection().ok()?;
+        if ranges.Length().ok()? < 1 {
+            return None;
+        }
+        let range = ranges.GetElement(0).ok()?;
+        let mut value = range.GetAttributeValue(UIA_IsReadOnlyAttributeId).ok()?;
+        let inner = &value.Anonymous.Anonymous;
+        let read_only = (inner.vt == VT_BOOL).then(|| inner.Anonymous.boolVal != VARIANT_FALSE);
+        let _ = VariantClear(&mut value);
+        read_only
     }
 }
 

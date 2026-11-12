@@ -87,7 +87,7 @@ Splashdown is local-first: a fresh install uses speech and AI models that run on
 - **Your own actions.** Give a link, a script or program, or keys to press a name, and say it: "deploy staging", "next slide", "open issue ENG-42" (whatever you say after the name can go into the link or the script). Splashdown shows exactly what will run and asks first, until you choose Always allow.
 - **Hooks** do something when something happens, without being asked each time: [see below](#hooks-when-something-happens).
 - **"What can I say?"** Say it (or "help") for a window with everything you can say or press, with your own keys and actions. Also in the menu bar under Help.
-- **Rewrite a selection.** Select text, hold the key, say what to change. A plain replacement ("change every Tuesday to Thursday") is made exactly, word for word, and nothing else in the text moves.
+- **Rewrite a selection.** Select text, hold the key, say what to change. A plain replacement ("change every Tuesday to Thursday") is made exactly, word for word, and nothing else in the text moves. In text you can't edit (a message you received, a web page) the result opens in the Ask panel instead, to copy, insert or read aloud.
 - **Undo the AI.** **⌃⌥Z** right after it's typed swaps in exactly what you said; **⌃⌥V** pastes your last raw words.
 
 ### A style for every app
@@ -125,7 +125,7 @@ Splashdown is local-first: a fresh install uses speech and AI models that run on
 
 - **Dictate in another language.** Hold the dictation key, tap **T** and speak: it comes out in the language ticked in the menu bar under Translate into. Tap **T** again for the next of your languages. The first time, pick one from a short list; choose up to five in Settings → Words & language.
 - **Reply in their language.** Turn it on in Settings → Words & language, and in email and chat a conversation that's clearly in another language gets your dictation in that language, with no key to press: the bar says "→ German (their language)" while you speak. It reads only the messages (not the app's labels or a quoted thread), and does nothing when the conversation is mixed or too short to tell.
-- **Translate what you select.** Select text in any app, hold the dictation key and tap T. In your own text it's replaced by the translation; in text you can't edit (a web page, an email you received) the translation opens in the Ask panel, where Read aloud reads it in that language. ⌃⌥T does the same without holding a key.
+- **Translate what you select.** Select text in any app, hold the dictation key and tap T. In your own text it's replaced by the translation; in text you can't edit (a web page, an email you received) the translation opens in the Ask panel, where Read aloud reads it in that language. Saying "translate this to English" over text you can't edit does the same. ⌃⌥T does the same without holding a key.
 - **A preset can always translate** (Settings → Presets → Translate into), and "translate that to Spanish" works as a spoken command.
 
 ### Hear it read back

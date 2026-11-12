@@ -47,6 +47,12 @@ unsafe extern "C" {
         attribute: CFStringRef,
         value: CFTypeRef,
     ) -> AXError;
+    /// `settable` is a C `Boolean` (one byte).
+    pub fn AXUIElementIsAttributeSettable(
+        element: AXUIElementRef,
+        attribute: CFStringRef,
+        settable: *mut u8,
+    ) -> AXError;
     pub fn AXUIElementGetPid(element: AXUIElementRef, pid: *mut i32) -> AXError;
     pub fn AXUIElementCopyElementAtPosition(
         application: AXUIElementRef,

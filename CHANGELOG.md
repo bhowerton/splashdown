@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Asking something of text you can't edit shows the answer.** Select a message you received, hold the dictation key and say "translate this to English": the translation was pasted over text that can't be changed, so it went nowhere, and the bar still said "Inserted". Splashdown now asks the app whether the selected text can be changed. Where it can't (a page, a document opened to read, a terminal's output), the result opens in the Ask panel, to copy, insert or read aloud. Where the app doesn't say, or can't be trusted to (a message received looks the same as the box you type in), the result is pasted and then checked for: if the text isn't seen to change, the result opens in the Ask panel a moment later instead of the bar saying "Inserted". The translate key and a transform's shortcut go by the same rule.
+
 ## 0.13.2 — 2026-11-12
 
 - **Mac: no permission prompt before setup has explained it.** The first time Splashdown started, macOS asked to let it control the computer straight away, before the setup guide had said a word about why. Splashdown now waits: the prompt appears only when you click the button on the guide's Accessibility screen (or in Settings → Permissions), and the dictation key starts working a moment after you turn the switch on.

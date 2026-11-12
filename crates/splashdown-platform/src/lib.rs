@@ -539,6 +539,21 @@ mod tests {
     }
 
     #[test]
+    fn only_a_settable_selection_says_it_can_be_replaced() {
+        // (selected text, whole value)
+        assert_eq!(focus::replaceable(Some(true), Some(false)), Some(true));
+        assert_eq!(focus::replaceable(Some(true), None), Some(true));
+        assert_eq!(focus::replaceable(Some(false), Some(false)), Some(false));
+        // A settable value alone isn't trusted: some apps say so of text
+        // that can't be changed.
+        assert_eq!(focus::replaceable(Some(false), Some(true)), None);
+        assert_eq!(focus::replaceable(None, Some(true)), None);
+        // Unanswered (a failed call, an attribute the element lacks).
+        assert_eq!(focus::replaceable(Some(false), None), None);
+        assert_eq!(focus::replaceable(None, None), None);
+    }
+
+    #[test]
     fn terminals_by_bundle_id_or_executable() {
         assert!(is_terminal("com.apple.Terminal"));
         assert!(is_terminal("WINDOWSTERMINAL.EXE"));

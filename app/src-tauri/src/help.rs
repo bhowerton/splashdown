@@ -120,7 +120,10 @@ pub fn sheet(settings: &Settings) -> Sheet {
         },
         Section {
             title: "Selected text".into(),
-            how: format!("Select text, then hold {dictation} and say what to do with it."),
+            how: format!(
+                "Select text, then hold {dictation} and say what to do with it. Where it can't be \
+                 changed, the result shows in the Ask panel."
+            ),
             items: vec![say(
                 "Rewrite it",
                 &[
