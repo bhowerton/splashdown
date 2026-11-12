@@ -2,9 +2,10 @@ name: Release
 
 # Pushing a version tag (v0.2.0) builds the signed, notarized Mac DMG and the
 # Windows installer and makes a *draft* GitHub release with both, plus the
-# updater files. Each build runs clippy and the tests first, in the release
-# profile, so the release build reuses what they compiled: there's no need
-# to wait for CI on main before tagging. Publishing the draft is a person's job: installed copies
+# updater files. Clippy and the tests (checks.yml) run beside the builds, in
+# the release profile: they start at once, without waiting for approval, and
+# the draft is made only if they pass. There's no need to wait for CI on main
+# before tagging. Publishing the draft is a person's job: installed copies
 # only see a published release, so nothing reaches them by accident.
 #
 # Run it by hand (Actions → Release → Run workflow) to get the same builds
@@ -48,6 +49,15 @@ jobs:
           echo "tag $tag, Cargo.toml $cargo_version, tauri.conf.json $tauri_version"
           [ "$tag" = "$cargo_version" ] && [ "$tag" = "$tauri_version" ]
 
+  checks:
+    # Clippy and the tests (checks.yml). No environment, so it starts at
+    # once instead of waiting for approval; `publish` needs it, so a failure
+    # here means no draft release.
+    needs: version
+    # Manual runs skip `version`; tag runs need it to have passed.
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.version.result == 'success') }}
+    uses: ./.github/workflows/checks.yml
+
   mac:
     needs: version
     # Manual runs skip `version`; tag runs need it to have passed.
@@ -65,7 +75,6 @@ jobs:
         with:
           toolchain: stable
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-          components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Saved on main by release-cache.yml: a tag can only use caches
@@ -94,12 +103,6 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         # Usually already there, from the cache.
         run: command -v cargo-tauri >/dev/null || cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked --pkg-fmt zip
-      - name: Clippy
-        # Release profile and the release's Apple Silicon target, so the
-        # build below reuses what this and the tests compile.
-        run: cargo clippy --release --workspace --all-targets --locked --target aarch64-apple-darwin -- -D warnings
-      - name: Test
-        run: cargo test --release --workspace --locked --target aarch64-apple-darwin
       - name: Import the Developer ID certificate
         env:
           APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
@@ -149,7 +152,6 @@ jobs:
       - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
         with:
           toolchain: stable
-          components: clippy
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
           # Saved on main by release-cache.yml, which builds the same way
@@ -175,12 +177,6 @@ jobs:
           if (-not (Get-Command cargo-tauri -ErrorAction SilentlyContinue)) {
             cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked
           }
-      - name: Clippy
-        # Release profile, so the build below reuses what this and the
-        # tests compile.
-        run: cargo clippy --release --workspace --all-targets --locked -- -D warnings
-      - name: Test
-        run: cargo test --release --workspace --locked
       - name: Install the Artifact Signing tool
         # It has no prebuilt binary, so it's compiled (4–5 minutes) unless
         # the cache brought it.
@@ -246,7 +242,9 @@ jobs:
           if-no-files-found: error
 
   publish:
-    needs: [mac, windows]
+    # `checks` too: a failed need skips this job (there's no always() in
+    # the condition), so lint or a test failing means no draft.
+    needs: [mac, windows, checks]
     if: startsWith(github.ref, 'refs/tags/v') && vars.CI_RELEASES == 'true'
     runs-on: ubuntu-latest
     permissions:

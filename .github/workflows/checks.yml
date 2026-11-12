@@ -1,0 +1,108 @@
+name: Checks
+
+# Clippy and the tests, in the release profile, on macOS and Windows. Called
+# by release.yml (beside the builds, so a failure stops the draft release)
+# and by ci.yml (the full build on pull requests).
+#
+# It reads the caches release-cache.yml saves on main and saves none of its
+# own. Saving one of its own would take space from the release caches in the
+# repository's 10 GB, and a release whose cache was pushed out takes twice as
+# long.
+
+on:
+  workflow_call:
+
+# Read-only: no step here needs to write to the repository, and none needs
+# a secret.
+permissions:
+  contents: read
+
+# A called workflow doesn't get its caller's env, and environment variables
+# are part of the cache key: the same as release.yml and release-cache.yml,
+# or the caches they save wouldn't be found.
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  checks:
+    name: checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        # The Apple shim needs the macOS 26 SDK (Xcode 26), so the Mac job
+        # runs on the macOS 26 image. The app itself supports macOS 12+.
+        include:
+          - os: macos-26
+            cache: mac-release
+            # The release's Apple Silicon target, so what is compiled here
+            # is what the cache holds.
+            target: --target aarch64-apple-darwin
+          - os: windows-latest
+            cache: windows-release
+            target: ""
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+      - name: Select Xcode 26
+        if: runner.os == 'macOS'
+        run: |
+          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
+          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
+          xcodebuild -version
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          toolchain: stable
+          # No `targets`: aarch64-apple-darwin is the host on the Mac
+          # runner, so it's already installed.
+          components: clippy
+      - name: Read the Mac release cache
+        if: runner.os == 'macOS'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          # Saved on main by release-cache.yml. Only read: that job keeps
+          # it up to date.
+          shared-key: ${{ matrix.cache }}
+          save-if: false
+      - name: Read the Windows release cache
+        if: runner.os == 'Windows'
+        uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: ${{ matrix.cache }}
+          # The fast local-model helper builds outside target\ (a short
+          # path; see scripts/package-win.ps1). Passed as release.yml does,
+          # so the settings match what saved the cache.
+          cache-directories: ${{ runner.temp }}\llm
+          save-if: false
+      - name: Fetch sherpa-onnx's libraries again
+        if: runner.os == 'macOS'
+        # sherpa-onnx-sys's build script downloads its libraries into
+        # target/. The cache keeps that folder but not the files in it, and
+        # the script, finding the folder, wouldn't download them again.
+        run: |
+          [ -d target ] || exit 0
+          find target -type d \( -name sherpa-onnx-prebuilt -o -name 'sherpa-onnx-sys-*' \) -prune -exec rm -rf {} +
+      - name: Build the speech library for a named processor, not this machine's
+        if: runner.os == 'Windows'
+        # Otherwise it's tuned to whichever machine builds it, and a build
+        # restored from the cache stops with "illegal instruction" on a
+        # machine with an older processor. The same setting as the
+        # installer's (scripts/win-cpu-floor.ps1).
+        shell: pwsh
+        run: scripts/win-cpu-floor.ps1
+      - name: Clippy
+        # In bash on Windows too: PowerShell, the default there, carries on
+        # after a command fails and reports only the last one's result, so
+        # a failure of the first of these two went unnoticed.
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          cargo clippy --release --workspace --all-targets --locked $TARGET -- -D warnings
+          # The remote control alone, as the app ships it.
+          cargo clippy --release -p splashdown-cli --no-default-features --all-targets --locked $TARGET -- -D warnings
+      - name: Test
+        # Also builds the app, so there's no separate build step.
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo test --release --workspace --locked $TARGET

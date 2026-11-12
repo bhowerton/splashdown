@@ -50,7 +50,7 @@ That also rewrites `app/ui/vendor/editor.LICENSES.txt`, the licenses of what's i
 
 ## Checks every change must pass
 
-CI runs these (clippy and the tests on both macOS and Windows); please run them before opening a pull request:
+CI runs these (clippy and the tests on both macOS and Windows, in the release profile); please run them before opening a pull request:
 
 ```sh
 cargo fmt --all --check
@@ -91,12 +91,12 @@ This builds a universal (Apple Silicon + Intel) app with the hardened runtime an
 Releases are built by GitHub Actions (`.github/workflows/release.yml`), so they don't depend on anyone's Mac:
 
 1. Bump `version` in `Cargo.toml` (workspace) and `app/src-tauri/tauri.conf.json`, and commit with a message starting "Release " ("Release 0.2.0"). Push it and a matching tag together, without waiting for anything in between: `git tag -a v0.2.0 -m "Splashdown 0.2.0" && git push origin main v0.2.0`. The workflow stops if the tag and the two versions disagree.
-2. Approve the run when GitHub asks (the "release" environment). On each platform it runs clippy and the tests, then builds the notarized Mac DMG or the signed Windows installer from the same release build, so nothing is compiled twice. It merges their `latest.json` files into one and creates a **draft** release with everything attached (about 15 minutes).
+2. Approve the run when GitHub asks (the "release" environment). Clippy and the tests (`checks.yml`) run beside the builds and start at once; only the builds wait for approval. If they fail, no draft is made. The workflow builds the notarized Mac DMG and the signed Windows installer, merges their `latest.json` files into one and creates a **draft** release with everything attached (about 15 minutes).
 3. Read the draft: optionally edit the notes, and replace the placeholder `notes` in `latest.json` (Settings → About shows it). Then **Publish**. It must be a full release, not a pre-release: installed copies read `releases/latest/download/latest.json` (on launch and once a day, unless turned off), and the README's download links point at `releases/latest/download/Splashdown-mac.dmg` and `Splashdown-windows-x64-setup.exe`. Nothing installs until the user clicks.
 
 Running the workflow by hand (Actions → Release → Run workflow) makes the same builds as downloadable artifacts, without a release. For an unsigned Windows test installer, run CI by hand (Actions → CI → Run workflow) with "Also build an unsigned Windows test installer" ticked.
 
-**What runs when.** A push to `main` only checks formatting and licenses (seconds). Pull requests, and CI run by hand, get the full build: clippy and the tests on macOS and Windows. Releases run the same checks inside their own builds. `release-cache.yml` keeps the release builds' caches warm when dependencies change, and weekly; it skips a release's version bump, since the cache from before it still holds every dependency. Locally, `NOTARIZE=1 scripts/package-mac.sh` and `scripts\package-win.ps1` make the same files in `…/bundle/release/`.
+**What runs when.** A push to `main` only checks formatting and licenses (seconds). Pull requests, and CI run by hand, get the full build: clippy and the tests on macOS and Windows. Releases run the same checks beside their builds, and the full build on pull requests reads the release caches and saves none of its own. `release-cache.yml` keeps the release builds' caches warm when dependencies change, and weekly; it skips a release's version bump, since the cache from before it still holds every dependency. Locally, `NOTARIZE=1 scripts/package-mac.sh` and `scripts\package-win.ps1` make the same files in `…/bundle/release/`.
 
 **Actions and tools are pinned.** Every action in `.github/workflows/` is used by its commit, with the version in a comment (`actions/checkout@fbc6f39… # v5.1.0`), and the tools the release installs (the Tauri CLI, the signing tool, Microsoft's signing client with its SHA-512) by exact version: a tag can be moved to other code, and these jobs hold the signing keys. To update one, look up the new version's commit (`gh api repos/OWNER/REPO/commits/TAG --jq .sha`), change it in every workflow that uses it, and run CI and the release workflow by hand before the next tag. Each workflow's token is read-only except the job that drafts the release.
 

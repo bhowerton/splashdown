@@ -2,9 +2,10 @@ name: Release cache
 
 # Release builds run on version tags, and a tag can only use build caches
 # saved on main. This keeps one warm for each release job: the same
-# release-profile builds, clippy and tests as release.yml (unsigned), so a
-# release compiles only Splashdown's own crates. On Windows it also caches
-# the Tauri CLI and the signing tool, which takes minutes to compile.
+# release-profile builds, clippy and tests as checks.yml and the release
+# builds (unsigned), so a release compiles only Splashdown's own crates. On
+# Windows it also caches the Tauri CLI and the signing tool, which takes
+# minutes to compile.
 #
 # It runs when dependencies change, not on a release's version bump: that
 # changes Cargo.lock too, but the release can't use what it would save, and
@@ -16,6 +17,9 @@ on:
     paths:
       - "Cargo.lock"
       - ".cargo/config.toml"
+      # What changes how dependencies compile.
+      - "scripts/win-cpu-floor.ps1"
+      - ".github/workflows/checks.yml"
       - ".github/workflows/release-cache.yml"
   schedule:
     # Weekly, so a new stable Rust (part of the cache key) is picked up.
@@ -72,9 +76,12 @@ jobs:
           # token that's rate limited, and it waits, then compiles instead.
           GITHUB_TOKEN: ${{ github.token }}
         run: cargo binstall tauri-cli --version "2.12.4" --no-confirm --locked --pkg-fmt zip
-      - name: Clippy and tests, as the release runs them
+      - name: Clippy and tests, as the release's checks run them
+        # The same clippy lines as checks.yml, so everything they need is
+        # in the cache.
         run: |
           cargo clippy --release --workspace --all-targets --locked --target aarch64-apple-darwin -- -D warnings
+          cargo clippy --release -p splashdown-cli --no-default-features --all-targets --locked --target aarch64-apple-darwin -- -D warnings
           cargo test --release --workspace --locked --target aarch64-apple-darwin --no-run
       - name: Build both architectures
         run: |
@@ -120,9 +127,19 @@ jobs:
           vulkan_version: 1.4.363.1
           install_runtime: false
           cache: true
-      - name: Clippy and tests, as the release runs them
+      - name: Build the speech library for a named processor, not this machine's
+        # Before anything compiles it, so the cached library is the one the
+        # checks and the installer both use (scripts/win-cpu-floor.ps1).
+        shell: pwsh
+        run: scripts/win-cpu-floor.ps1
+      - name: Clippy and tests, as the release's checks run them
+        # The same clippy lines as checks.yml. In bash, as there: PowerShell
+        # carries on after a command fails and reports only the last one's
+        # result.
+        shell: bash
         run: |
           cargo clippy --release --workspace --all-targets --locked -- -D warnings
+          cargo clippy --release -p splashdown-cli --no-default-features --all-targets --locked -- -D warnings
           cargo test --release --workspace --locked --no-run
       - name: Build the installer (unsigned)
         shell: pwsh

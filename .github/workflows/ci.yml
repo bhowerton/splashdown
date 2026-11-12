@@ -1,10 +1,12 @@
 name: CI
 
 # Every push gets the quick checks (formatting, licenses), which need no
-# build. The full build (clippy and the tests on macOS and Windows) runs on
-# pull requests, and on main by hand (Actions → CI → Run workflow). A
-# release runs the same clippy and tests inside its own release builds
-# (release.yml), so nothing ships unchecked and nothing is built twice.
+# build. The full build runs on pull requests, and on main by hand (Actions →
+# CI → Run workflow): the release's own checks (checks.yml), clippy and the
+# tests in the release profile on macOS and Windows. They read the release
+# caches (release-cache.yml) and save no cache of their own, which would
+# crowd those out of the repository's 10 GB. A release runs the same checks
+# beside its builds (release.yml), so nothing ships unchecked.
 
 on:
   push:
@@ -51,57 +53,8 @@ jobs:
           command: check licenses
 
   build:
-    name: build (${{ matrix.os }})
     if: github.event_name != 'push'
-    strategy:
-      fail-fast: false
-      matrix:
-        # The Apple shim needs the macOS 26 SDK (Xcode 26), so the Mac job
-        # runs on the macOS 26 image. The app itself supports macOS 12+.
-        os: [macos-26, windows-latest]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-      - name: Select Xcode 26
-        if: runner.os == 'macOS'
-        run: |
-          xcode=$(ls -d /Applications/Xcode_26*.app 2>/dev/null | sort -V | tail -1)
-          if [ -n "$xcode" ]; then sudo xcode-select -s "$xcode"; fi
-          xcodebuild -version
-          xcrun --show-sdk-version
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
-        with:
-          toolchain: stable
-          components: clippy
-      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
-      - name: Fetch sherpa-onnx's libraries again
-        if: runner.os == 'macOS'
-        # sherpa-onnx-sys's build script downloads its libraries into
-        # target/. The cache keeps that folder but not the files in it, and
-        # the script, finding the folder, wouldn't download them again.
-        run: |
-          [ -d target ] || exit 0
-          find target -type d \( -name sherpa-onnx-prebuilt -o -name 'sherpa-onnx-sys-*' \) -prune -exec rm -rf {} +
-      - name: Build the speech library for a named processor, not this machine's
-        if: runner.os == 'Windows'
-        # Otherwise it's tuned to whichever machine builds it, and a build
-        # restored from the cache stops with "illegal instruction" on a
-        # machine with an older processor. The same setting as the
-        # installer's (scripts/win-cpu-floor.ps1).
-        shell: pwsh
-        run: scripts/win-cpu-floor.ps1
-      - name: Clippy
-        # In bash on Windows too: PowerShell, the default there, carries on
-        # after a command fails and reports only the last one's result, so
-        # a failure of the first of these two went unnoticed.
-        shell: bash
-        run: |
-          cargo clippy --workspace --all-targets --locked -- -D warnings
-          # The remote control alone, as the app ships it.
-          cargo clippy -p splashdown-cli --no-default-features --all-targets --locked -- -D warnings
-      - name: Test
-        # Also builds the app, so there's no separate build step.
-        run: cargo test --workspace --locked
+    uses: ./.github/workflows/checks.yml
 
   windows-installer:
     # A test installer, for trying the latest code on Windows without the
