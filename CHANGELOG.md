@@ -2,6 +2,10 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
+## Unreleased
+
+- **Mac: no permission prompt before setup has explained it.** The first time Splashdown started, macOS asked to let it control the computer straight away, before the setup guide had said a word about why. Splashdown now waits: the prompt appears only when you click the button on the guide's Accessibility screen (or in Settings → Permissions), and the dictation key starts working a moment after you turn the switch on.
+
 ## 0.13.1 — 2026-11-11
 
 - **Windows: the app no longer stops at launch on most PCs.** The speech library inside the Windows app was built for the processor of whichever machine built the release. 0.12.1 was built on one with AVX-512, so on a PC without it (most of them) the app stopped with "illegal instruction" as soon as it started. It's now built for what nearly every PC since 2013 has (AVX2), and on an older processor Splashdown does without on-device speech and says so, where it would have crashed.

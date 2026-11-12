@@ -58,6 +58,13 @@ unsafe impl Send for SendRunLoop {}
 
 impl KeyListener {
     pub(crate) fn start(handler: KeyHandler) -> Result<Self> {
+        // Making an active key tap without Accessibility makes macOS show
+        // its permission prompt. That prompt belongs to the setup guide's
+        // button, not to the app starting, so don't try without it.
+        // SAFETY: takes no arguments and has no preconditions.
+        if !unsafe { ffi::AXIsProcessTrusted() } {
+            return Err(PlatformError::Permission("Accessibility"));
+        }
         let (tx, rx) = mpsc::channel();
         let thread = std::thread::Builder::new()
             .name("splashdown-keys".into())
