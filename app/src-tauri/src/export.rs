@@ -192,7 +192,10 @@ pub async fn import_settings(
     app: AppHandle,
 ) -> Result<Saved, String> {
     let mut settings = parse(&text)?;
-    settings.general.onboarded = state.settings().general.onboarded;
+    let here = state.settings().general;
+    settings.general.onboarded = here.onboarded;
+    settings.general.setup_step = here.setup_step;
+    settings.general.setup_choice = here.setup_choice;
     settings.forget_trust();
     crate::commands::save_settings(settings, state, app).await
 }

@@ -43,6 +43,12 @@ pub struct GeneralSettings {
     pub keep_audio: Option<bool>,
     /// The first-run setup guide has been completed.
     pub onboarded: bool,
+    /// Where the setup guide was left, so closing it part-way and opening
+    /// it again carries on there: the screen ("microphone"), and how the
+    /// person chose to set up ("local", or the service their key is for).
+    /// Cleared when the guide is finished.
+    pub setup_step: Option<String>,
+    pub setup_choice: Option<String>,
     /// Learn names and terms corrected right after a dictation into the
     /// vocabulary. Unset means on.
     pub learn_vocabulary: Option<bool>,

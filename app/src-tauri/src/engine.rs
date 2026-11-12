@@ -256,6 +256,11 @@ pub fn budget_reached(settings: &Settings) -> bool {
         == crate::spend::BudgetState::Reached
 }
 
+/// Why dictation can't start before the setup guide has downloaded speech
+/// to text, in words for the menu bar and Settings. (The command line keeps
+/// its own wording, with the command that downloads it.)
+pub const SPEECH_MISSING: &str = "what Splashdown needs to understand speech isn't downloaded yet";
+
 /// Builds providers for `settings`. Loading a local Whisper model takes a
 /// second or two, so call this off the UI thread.
 pub fn build(settings: &Settings) -> Result<Engine, String> {
@@ -266,6 +271,11 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
     let speech = settings
         .resolve_speech_with(&secrets, on_device)
         .map_err(|e| e.to_string())?;
+    if speech.provider == SpeechProvider::WhisperLocal
+        && SpeechModel::from_id(&speech.model).is_some_and(|m| !m.is_downloaded(&paths.models_dir))
+    {
+        return Err(SPEECH_MISSING.into());
+    }
     let stt = splashdown_providers::factory::speech(&speech, &secrets, &paths.models_dir)
         .map_err(|e| e.to_string())?;
     // The live preview uses the speech model the user chose, when it runs on

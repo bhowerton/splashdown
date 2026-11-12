@@ -9,132 +9,126 @@
 </head>
 <body class="ob-body">
 <main class="ob">
-  <div class="steps" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
-  <p class="step-of" id="step-of"></p>
-  <div class="getting-ready" id="getting-ready" role="status" aria-live="polite" hidden>
-    <span class="gr-text" id="gr-text"></span>
-    <span class="progress wide" id="gr-progress"><i id="gr-bar"></i></span>
-    <button class="btn primary" id="gr-retry" hidden>Try again</button>
-  </div>
+  <div class="steps" id="steps" aria-hidden="true"></div>
 
-  <!-- 1 · Welcome -->
-  <section class="ob-step" data-step="1">
-    <div class="hero">
+  <!-- Welcome: what it is, the promise, what happens next. One button. -->
+  <section class="ob-step" data-screen="welcome">
+    <div class="center">
       <img class="demo" src="img/demo.svg" alt="Holding the dictation key and saying “um, so can we meet Tuesday… actually Thursday at 3” types “Can we meet Thursday at 3?” into an email.">
-      <h1>Talk instead of type.</h1>
-      <p class="sub">Hold <kbd class="keycap dict-key">Right Option</kbd> wherever you can type, say it, and let go.</p>
-      <ul class="points">
-        <li><b>In every app</b><span>email, chat, documents, the browser</span></li>
-        <li><b>Free and private</b><span>runs on your computer</span></li>
-        <li><b>Optional AI</b><span>removes the “um”s, rewrites, answers and reads back</span></li>
-      </ul>
+      <h1 class="big">Talk instead of type.</h1>
+      <p class="lead">Hold <kbd class="keycap dict-key">Right Option</kbd> in any app, say it, and let go. Your words are typed for you.</p>
+      <p class="promise"><b>Everything runs on this computer.</b> Nothing you say leaves it.</p>
+      <p class="next-up" id="welcome-next"></p>
+      <div class="space-box" id="space-box" role="alert" hidden>
+        <p id="space-text"></p>
+        <button class="btn" id="space-again">Check again</button>
+      </div>
+      <button class="btn primary go" id="welcome-go">Get started</button>
+      <button class="link quiet" id="welcome-key">I have an API key</button>
     </div>
   </section>
 
-  <!-- 2 · Get ready -->
-  <section class="ob-step" data-step="2" hidden>
-    <h1>How should Splashdown work?</h1>
-    <p class="sub">You can change this anytime in Settings → AI Models.</p>
-    <div class="choices" role="radiogroup" aria-label="How Splashdown works">
-      <button class="card choice" data-choice="local" role="radio">
-        <b>Free and private</b>
-        <p>Runs completely on your computer. Nothing you say leaves it. No account, no cost.</p>
-        <span class="badges"><span class="badge ok">Recommended</span><span class="badge muted" id="local-size"></span></span>
-      </button>
-      <button class="card choice" data-choice="key" role="radio">
-        <b>With your API key</b>
-        <p>The fastest and most accurate, for a few cents a day: OpenRouter, OpenAI or Anthropic.</p>
-        <span class="badges"><span class="badge acc">Cloud</span></span>
-      </button>
+  <!-- Behind "I have an API key": for people who want a cloud service. -->
+  <section class="ob-step" data-screen="key" hidden>
+    <h1>Use your API key</h1>
+    <p class="sub">The fastest and most accurate, for a few cents a day. You can change this anytime in Settings → AI Models.</p>
+    <div class="seg" id="key-provider" role="radiogroup" aria-label="Who your key is from">
+      <button data-provider="openrouter" role="radio">OpenRouter</button>
+      <button data-provider="openai" role="radio">OpenAI</button>
+      <button data-provider="anthropic" role="radio">Anthropic</button>
     </div>
-    <label class="ai-opt" id="ai-opt"><input type="checkbox" id="ai-on" checked><span id="ai-opt-text"></span></label>
-    <p class="space-warning" id="space-warning" role="alert" hidden></p>
-    <div class="key-area" id="key-area" hidden>
-      <div class="seg" id="key-provider" role="radiogroup" aria-label="Who your key is from">
-        <button data-provider="openrouter" role="radio">OpenRouter</button>
-        <button data-provider="openai" role="radio">OpenAI</button>
-        <button data-provider="anthropic" role="radio">Anthropic</button>
-      </div>
-      <div class="choice-detail" id="choice-detail"></div>
-      <p class="key-note" id="key-note"></p>
+    <div class="choice-detail" id="choice-detail"></div>
+    <p class="key-note" id="key-note"></p>
+    <div class="row-end">
+      <span class="foot-note" id="key-wait">Paste your key to continue</span>
+      <button class="btn primary go" id="key-go" disabled>Continue</button>
     </div>
   </section>
 
-  <!-- 3 · Permissions -->
-  <section class="ob-step" data-step="3" hidden>
-    <h1 id="perm-title">Two quick permissions</h1>
-    <p class="sub">Each one checks itself off as soon as you allow it.</p>
-    <div class="group">
-      <div class="row perm" id="ax-row">
-        <span class="step-dot" id="ax-step">1</span>
-        <span class="lbl">Accessibility
-          <small>Lets Splashdown notice when you hold <span class="dict-key">Right Option</span>, and type into the app you're in.</small>
-          <small class="howto" id="ax-howto" hidden>In System Settings, switch on <b>Splashdown</b>.</small>
-        </span>
-        <span class="state" id="ax-state"></span>
+  <!-- Microphone: one button for the system's prompt. -->
+  <section class="ob-step" data-screen="microphone" hidden>
+    <div class="center">
+      <div class="glyph" aria-hidden="true">
+        <svg viewBox="0 0 48 48" width="48" height="48"><rect x="17" y="6" width="14" height="24" rx="7" fill="currentColor"/><path d="M11 23a13 13 0 0 0 26 0M24 36v6M17 42h14" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
       </div>
-      <div class="row perm">
-        <span class="step-dot" id="mic-step">2</span>
-        <span class="lbl">Microphone
-          <small>Only used while you hold <span class="dict-key">Right Option</span>.</small>
-          <small class="howto" id="mic-howto" hidden>Switch on <b>Splashdown</b> under Microphone in System Settings.</small>
-        </span>
-        <span class="state" id="mic-state"></span>
+      <h1>Let Splashdown hear you</h1>
+      <p class="lead" id="mic-why">It listens only while you hold <span class="dict-key">Right Option</span>.</p>
+      <button class="btn primary go" id="mic-go">Allow the microphone</button>
+      <p class="done-line" id="mic-ok" role="status" hidden>✓ Allowed</p>
+      <div class="help-box" id="mic-denied" role="alert" hidden>
+        <p id="mic-denied-text"></p>
+        <button class="btn primary" id="mic-open">Open System Settings</button>
       </div>
     </div>
   </section>
 
-  <!-- 4 · Try it: the main things, one at a time, each skippable -->
-  <section class="ob-step" data-step="4" hidden>
-    <h1 id="try-h1">Try it</h1>
-    <!-- Until the downloads and the speed check are done: nothing to try yet. -->
-    <div class="wait" id="wait" hidden>
-      <svg class="wait-art" viewBox="0 0 320 190" role="img" aria-label="A capsule drifting down under a parachute toward the sea">
-        <defs>
-          <linearGradient id="w-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0A1440"/><stop offset=".7" stop-color="#16337A"/><stop offset="1" stop-color="#2F64B8"/></linearGradient>
-          <clipPath id="w-card"><rect width="320" height="190" rx="18"/></clipPath>
-        </defs>
-        <g clip-path="url(#w-card)">
-          <rect width="320" height="190" fill="url(#w-sky)"/>
-          <circle cx="40" cy="30" r="1.6" fill="#fff" class="w-star"/><circle cx="270" cy="50" r="2" fill="#fff" class="w-star"/>
-          <circle cx="80" cy="95" r="1.3" fill="#fff" class="w-star"/><circle cx="250" cy="120" r="1.4" fill="#fff" class="w-star"/>
-          <g id="w-chute"><g class="w-sway">
-            <path d="M120 58 Q160 6 200 58 Z" fill="#fff"/>
-            <path d="M120 58 Q133 18 147 22 L153 58 Z M167 58 L173 22 Q187 18 200 58 Z" fill="#F2551F"/>
-            <path d="M120 58 L152 98 M200 58 L168 98 M147 58 L156 98 M173 58 L164 98" stroke="#E5E7EB" stroke-width="1.2" fill="none"/>
-            <path d="M146 98 H174 L180 124 Q160 132 140 124 Z" fill="#D1D5DB"/>
-            <circle cx="160" cy="110" r="5" fill="#16337A" stroke="#fff" stroke-width="1.5"/>
-          </g></g>
-          <g class="w-sea">
-            <path d="M-40 168 Q-20 160 0 168 T40 168 T80 168 T120 168 T160 168 T200 168 T240 168 T280 168 T320 168 T360 168 V190 H-40 Z" fill="#0F6FA8"/>
-          </g>
-        </g>
-      </svg>
-      <p class="wait-title" id="wait-title">Getting Splashdown ready</p>
-      <p class="wait-sub" id="wait-sub"></p>
-      <span class="progress wait-progress" id="wait-progress"><i id="wait-bar"></i></span>
-      <p class="wait-amount" id="wait-amount"></p>
-      <button class="btn primary" id="wait-retry" hidden>Try again</button>
-    </div>
-
-    <!-- The built-in model is too slow here: a better way, or keep it. -->
-    <div class="slow" id="slow" hidden>
-      <p class="slow-title">This computer is slow for the built-in model</p>
-      <p class="slow-text" id="slow-text"></p>
-      <div class="slow-choice">
-        <b>Use a cloud service <span class="badge ok">Recommended</span></b>
-        <p>With an OpenRouter key, the AI's cleanup takes about a second, for a few cents a day even with heavy use. Your voice is still understood on this computer. Get a key at <b>openrouter.ai/keys</b>, then paste it here.</p>
-        <div class="slow-key"><input id="slow-key" type="password" placeholder="Paste your OpenRouter key…" autocomplete="off" aria-label="OpenRouter API key"><button class="btn primary" id="slow-key-save">Use this key</button></div>
+  <!-- Accessibility (macOS only): a picture of the switch to turn on. -->
+  <section class="ob-step" data-screen="accessibility" hidden>
+    <div class="center">
+      <h1>Let Splashdown type for you</h1>
+      <p class="lead">Switch on Splashdown in System Settings, so it can notice when you hold <span class="dict-key">Right Option</span> and type your words where you are.</p>
+      <div class="fig"><img data-pic="setup-accessibility" src="img/setup-accessibility.svg" alt="System Settings, Privacy and Security, Accessibility: the switch beside Splashdown being turned on." width="560" height="240"></div>
+      <button class="btn primary go" id="ax-go">Open System Settings</button>
+      <p class="wait-line" id="ax-wait" role="status" hidden><span class="spinner" aria-hidden="true"></span>Waiting for the switch. This page moves on by itself.</p>
+      <p class="done-line" id="ax-ok" role="status" hidden>✓ Allowed</p>
+      <div class="help-box calm" id="ax-help" hidden>
+        <p><b>Still waiting?</b></p>
+        <ul>
+          <li>Find <b>Splashdown</b> in the list and click the switch beside it, so it turns blue.</li>
+          <li>Your Mac may ask for your password or Touch ID. That's normal.</li>
+          <li>Not in the list? Click <b>+</b> under the list, choose <b>Splashdown</b> in Applications, then switch it on.</li>
+          <li>Already on? Switch it off and on again.</li>
+        </ul>
       </div>
-      <div class="slow-other">
-        <button class="btn" id="slow-off">Turn the AI off</button>
-        <span>Your words are typed as you say them, at once, with the “um”s left in.</span>
-      </div>
-      <button class="link" id="slow-keep">Keep the built-in model anyway</button>
     </div>
+  </section>
 
-    <div id="try-area">
-    <p class="speed-note" id="speed-note" hidden></p>
+  <!-- Getting ready: only while speech to text is still downloading. -->
+  <section class="ob-step" data-screen="ready" hidden>
+    <div class="center">
+      <h1 id="ready-title">Getting ready</h1>
+      <p class="lead" id="ready-sub">Downloading what Splashdown needs to understand you. This page moves on by itself.</p>
+      <img class="demo small" src="img/demo.svg" alt="How dictation works: holding the dictation key and saying “um, so can we meet Tuesday… actually Thursday at 3” types “Can we meet Thursday at 3?” into an email.">
+      <span class="progress ready-progress" id="ready-progress"><i id="ready-bar"></i></span>
+      <p class="ready-amount" id="ready-amount" role="status" aria-live="polite"></p>
+      <button class="btn primary" id="ready-retry" hidden>Try again</button>
+    </div>
+  </section>
+
+  <!-- Say hello: one try, with two live signs. -->
+  <section class="ob-step" data-screen="hello" hidden>
+    <h1>Say hello</h1>
+    <p class="sub hello-how" id="hello-how"></p>
+    <div class="fig key-fig" id="key-fig"><img id="key-img" data-pic="setup-key-mac" src="img/setup-key-mac.svg" alt="A Mac keyboard with the Right Option key, just right of the space bar, highlighted." width="560" height="240"></div>
+    <textarea id="practice" class="practice" rows="2" aria-label="Practice box" placeholder="Your words appear here"></textarea>
+    <div class="signs" aria-label="Live signs">
+      <span class="sign" id="sign-key"><i class="dot" aria-hidden="true"></i><span id="sign-key-text">Key</span></span>
+      <span class="sign" id="sign-mic"><span class="meter" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span id="sign-mic-text">Microphone</span></span>
+      <span class="hello-status" id="hello-status" role="status" aria-live="polite"></span>
+    </div>
+    <div class="help-box calm" id="hello-help" role="status" hidden>
+      <p id="hello-help-text"></p>
+      <button class="link" id="hello-skip">Skip this for now</button>
+    </div>
+  </section>
+
+  <!-- Where it lives: Splashdown has no window. -->
+  <section class="ob-step" data-screen="home" hidden>
+    <div class="center">
+      <h1 id="home-title">Splashdown lives in the menu bar</h1>
+      <p class="lead" id="home-sub"></p>
+      <div class="fig"><img id="home-img" data-pic="setup-menubar-mac" src="img/setup-menubar-mac.svg" alt="The top right of a Mac screen: Splashdown's icon, five small bars, in the menu bar near the clock." width="560" height="240"></div>
+      <p class="pointing" id="home-pointing" hidden>Look for the blue arrow at the top of your screen.</p>
+      <button class="btn" id="home-taskbar" hidden>Open taskbar settings</button>
+      <p class="pill-line" id="home-pill"></p>
+      <button class="btn primary go" id="home-done">Done</button>
+      <button class="link quiet" id="home-tour">Show me what else it can do</button>
+    </div>
+  </section>
+
+  <!-- The optional tour, after finishing: the other things to try. -->
+  <section class="ob-step" data-screen="tour" hidden>
+    <h1>What else it can do</h1>
     <ol class="try-list" id="try-list" aria-label="Things to try"></ol>
     <div class="try-card" id="try-card">
       <div class="try-head"><b id="try-title"></b><span class="try-count" id="try-count"></span></div>
@@ -145,40 +139,20 @@
         <div class="ask-buttons"><button class="btn primary" data-actions="yes">Yes, turn it on</button><button class="btn" data-actions="no">Not now</button></div>
       </div>
     </div>
-    <textarea id="practice" class="practice" rows="4" aria-label="Practice box" placeholder="Your words will appear here"></textarea>
+    <textarea id="tour-box" class="practice" rows="3" aria-label="Practice box" placeholder="Your words appear here"></textarea>
     <div class="try-foot">
       <div class="practice-status" id="practice-status" role="status" aria-live="polite"></div>
       <button class="link" id="try-skip">Skip this one</button>
     </div>
     <div class="tips" id="try-finished" hidden></div>
-    </div>
+    <div class="row-end"><button class="btn primary" id="tour-close">Close</button></div>
   </section>
 
-  <!-- 5 · Done -->
-  <section class="ob-step" data-step="5" hidden>
-    <h1>You're ready</h1>
-    <ul class="ready">
-      <li><kbd class="keycap dict-key">Right Option</kbd><span><b>Hold it in any app</b> to talk instead of type.</span></li>
-      <li><span aria-hidden="true"><span class="tray-ic"><i></i><i></i><i></i><i></i><i></i></span></span><span id="done-home"><b>Splashdown is in the menu bar</b>, at the top of your screen.</span></li>
-      <li><span aria-hidden="true"><span class="help-ic">✎</span></span><span id="done-notes"></span></li>
-      <li><span aria-hidden="true"><span class="help-ic">?</span></span><span id="done-help"></span></li>
-    </ul>
-    <p class="done-still" id="done-still" hidden></p>
-    <div class="actions-ask" id="done-actions" hidden>
-      <p class="ask-q">Want Splashdown to do things for you, not just type?</p>
-      <p class="ask-what">“Open Spotify”, “remind me at 5 to stretch”, “pause the music”.</p>
-      <div class="ask-buttons"><button class="btn primary" data-actions="yes">Yes, turn it on</button><button class="btn" data-actions="no">Not now</button></div>
-    </div>
-    <p class="actions-on" id="done-actions-on" hidden></p>
-    <label class="row login"><span class="lbl">Keep a small pill on screen<small id="mini-bar-what">Click it to dictate when you'd rather not hold a key, and again to finish. It's at the bottom of your screen now, and can be dragged anywhere.</small></span><input type="checkbox" class="switch" id="mini-bar"></label>
-    <label class="row login"><span class="lbl">Start Splashdown when I log in</span><input type="checkbox" class="switch" id="login" checked></label>
-    <label class="row login"><span class="lbl">Keep Splashdown up to date by itself<small>A new version installs when Splashdown is idle, two days after it comes out. Off, it tells you and waits for your click.</small></span><input type="checkbox" class="switch" id="auto-update"></label>
-  </section>
+  <!-- One quiet sentence when something was decided for them. -->
+  <p class="setup-note" id="setup-note" role="status" hidden><span id="setup-note-text"></span> <button class="link" id="setup-note-act" hidden></button></p>
 
   <footer class="ob-foot">
-    <button class="btn" id="back">Back</button>
-    <span class="foot-note" id="foot-note"></span>
-    <button class="btn primary" id="next">Get started</button>
+    <button class="link quiet" id="back">Back</button>
   </footer>
 </main>
 <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>

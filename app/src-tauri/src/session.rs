@@ -87,7 +87,7 @@ const MISSED_RELEASE: Duration = Duration::from_millis(500);
 const RELEASE_CHECK: Duration = Duration::from_millis(100);
 /// Microphone level (RMS) above which we count it as speech, for the
 /// silence auto-stop. Quiet rooms sit well below this.
-const SPEECH_LEVEL: f32 = 0.01;
+pub(crate) const SPEECH_LEVEL: f32 = 0.01;
 /// Below this the microphone is sending (near) digital silence: muted, or
 /// not the microphone the user is speaking into. Even a quiet room is
 /// louder.
@@ -160,6 +160,8 @@ enum Msg {
     Redo(Redo),
     /// Use this preset for every dictation (`None`: choose by app).
     PinPreset(Option<String>),
+    /// The setup guide was finished: the menu's first line says so.
+    SetupFinished,
     /// From the control channel; see `session/control.rs`.
     Control(Request, control::Reply),
     /// A preset's own shortcut: start a dictation with it, or finish one.
@@ -275,6 +277,12 @@ impl Handle {
 
     pub fn pin_preset(&self, preset_id: Option<String>) {
         let _ = self.tx.send(Msg::PinPreset(preset_id));
+    }
+
+    /// The setup guide was finished: "Finish setting up…" and its status
+    /// line make way (unless speech to text still isn't downloaded).
+    pub fn setup_finished(&self) {
+        let _ = self.tx.send(Msg::SetupFinished);
     }
 
     /// "Undo AI edit" (⌃⌥Z or the menu bar).
@@ -644,6 +652,10 @@ impl Controller {
                     self.pinned_preset = p;
                     self.refresh_tray();
                 }
+                Ok(Msg::SetupFinished) => {
+                    self.show_setup_needed();
+                    self.update_status();
+                }
                 Ok(Msg::Redo(r)) => {
                     let result = self.redo(&r);
                     let _ = r.reply.send(result);
@@ -748,8 +760,12 @@ impl Controller {
                 self.update_status();
             }
             Err(e) => {
-                self.ui
-                    .status("Needs Accessibility permission — open Settings");
+                self.show_setup_needed();
+                self.ui.status(if self.onboarded() {
+                    "Needs Accessibility permission — open Settings"
+                } else {
+                    "Not set up yet: choose Finish setting up above"
+                });
                 // Retried every couple of seconds; only log once. Settings
                 // asks for the permission (it opens by itself at launch).
                 if !self.logged_listener_error {
@@ -780,10 +796,28 @@ impl Controller {
         if self.listener.is_none() {
             return;
         }
+        self.show_setup_needed();
         self.ui.status(&match &self.engine {
             Ok(_) => format!("Ready · hold {} to dictate", self.keys.dictation.label()),
+            // Plain words that lead to the guide, which downloads it.
+            Err(e) if e == crate::engine::SPEECH_MISSING || !self.onboarded() => {
+                "Not set up yet: choose Finish setting up above".to_string()
+            }
             Err(e) => format!("Not set up: {e}"),
         });
+    }
+
+    /// The setup guide was finished (unknown counts as finished, so
+    /// nothing is offered by mistake while the app starts).
+    fn onboarded(&self) -> bool {
+        self.ui.settings().is_none_or(|s| s.general.onboarded)
+    }
+
+    /// "Finish setting up…" at the top of the menu while the guide isn't
+    /// finished, or speech to text was never downloaded.
+    fn show_setup_needed(&self) {
+        let missing = matches!(&self.engine, Err(e) if e == crate::engine::SPEECH_MISSING);
+        self.ui.show_finish_setup(missing || !self.onboarded());
     }
 
     /// Applies settings that were waiting, unless a recording is in

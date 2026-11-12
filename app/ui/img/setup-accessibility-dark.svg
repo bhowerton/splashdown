@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="240" viewBox="0 0 560 240" role="img"><title>Turning on the Splashdown switch in a settings list</title><defs>
+<linearGradient id="sky" x1="0" y1="100" x2="0" y2="760" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0A1440"/><stop offset=".6" stop-color="#16337A"/><stop offset="1" stop-color="#2F64B8"/></linearGradient>
+<linearGradient id="sea" x1="0" y1="730" x2="0" y2="924" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#0F6FA8"/><stop offset="1" stop-color="#06305C"/></linearGradient>
+<linearGradient id="org" x1="0" y1="190" x2="0" y2="450" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#FF9A3D"/><stop offset="1" stop-color="#F2551F"/></linearGradient>
+<path id="plate" d="M390 100H634C866 100 924 158 924 390V634C924 866 866 924 634 924H390C158 924 100 866 100 634V390C100 158 158 100 390 100Z"/>
+<clipPath id="pc"><use href="#plate"/></clipPath>
+<path id="canopy" d="M232 440C232 250 360 186 512 186C664 186 792 250 792 440Q756 462 702 440Q640 466 578 440Q512 470 446 440Q384 466 322 440Q268 462 232 440Z"/>
+<clipPath id="cc"><use href="#canopy"/></clipPath>
+<symbol id="app" viewBox="100 100 824 824">
+<use href="#plate" fill="url(#sky)"/>
+<g clip-path="url(#pc)">
+<g stroke="#fff" stroke-opacity=".8" stroke-width="14" stroke-linecap="round"><path d="M240 446L480 578"/><path d="M784 446L544 578"/></g>
+<g clip-path="url(#cc)"><rect x="220" y="180" width="584" height="300" fill="#fff"/>
+<path d="M512 186Q232 186 232 470H330Q340 230 512 186Z" fill="url(#org)"/><path d="M512 186Q452 230 446 470H578Q572 230 512 186Z" fill="url(#org)"/><path d="M512 186Q792 186 792 470H694Q684 230 512 186Z" fill="url(#org)"/></g>
+<g transform="translate(512 742) scale(1.2) translate(-512 -742)"><rect x="486" y="584" width="52" height="26" rx="8" fill="#9FB0C9"/><path d="M470 606H554Q564 606 568 616L620 728Q512 760 404 728L456 616Q460 606 470 606Z" fill="#F1F5FB"/><circle cx="512" cy="640" r="24" fill="#16337A"/></g>
+<path d="M100 742Q190 726 280 742T460 742T640 742T820 742T1000 742V940H100Z" fill="url(#sea)"/>
+<g stroke="#fff" stroke-width="26" stroke-linecap="round" fill="none"><path d="M370 738Q334 690 296 680"/><path d="M654 738Q690 690 728 680"/></g>
+<path d="M366 748Q512 782 658 748Q646 766 512 776Q378 766 366 748Z" fill="#fff"/>
+</g></symbol>
+<symbol id="glyph" viewBox="0 0 36 36"><mask id="gm" maskUnits="userSpaceOnUse" x="0" y="0" width="36" height="36"><rect width="36" height="36" fill="#fff"/><g stroke="#000" stroke-width="1.4" stroke-linecap="round" fill="none"><path d="M16 3.2Q13.2 6 13 14"/><path d="M20 3.2Q22.8 6 23 14"/></g></mask>
+<g fill="currentColor"><path mask="url(#gm)" d="M3 12.5C3 5.5 9.8 1.5 18 1.5C26.2 1.5 33 5.5 33 12.5Q28 15 23 12.5Q18 15 13 12.5Q8 15 3 12.5Z"/><path d="M15.4 20.6H20.6L24.4 27.4Q18 29 11.6 27.4Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/></g>
+<g stroke="currentColor" stroke-width="1.8" stroke-linecap="round" fill="none"><path d="M4 13.6L15.2 20.8"/><path d="M32 13.6L20.8 20.8"/><path d="M4 32.2Q7.5 29.4 11 32.2T18 32.2T25 32.2T32 32.2" stroke-width="2.2"/></g></symbol>
+<symbol id="ptr" viewBox="-2 -2 18 24" overflow="visible"><path d="M0 0V17L4.4 13.2L7.2 19.8L10 18.6L7.2 12.2H12.8Z" fill="#fff" stroke="#14151A" stroke-width="1.5" stroke-linejoin="round"/></symbol>
+<filter id="sh" x="-20%" y="-20%" width="140%" height="150%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000" flood-opacity=".22"/></filter>
+</defs><style>:root{--panel:#2B2C32;--screen:#25272F;--bar:#1B1C21;--line:#4A4C56;--text:#ECECEF;--grey:#555864;--grey2:#42444E;
+--track:#5E616D;--accent:#3C8BFF;--soft:#1F3A6B;--key:#3A3C45;--keyside:#202127;--body:#2C2E36;--hover:#3A3C46;--sh:.5}
+@media (prefers-reduced-motion:reduce){*{animation:none!important}}
+text{font-family:system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;fill:var(--text)}
+.panel{fill:var(--panel);stroke:var(--line);stroke-width:1.5}
+.screen{fill:var(--screen);stroke:var(--line);stroke-width:2}
+.bar{fill:var(--bar)}
+.hair{stroke:var(--line);stroke-width:1.5;fill:none}
+.g1{fill:var(--grey)}.g2{fill:var(--grey2)}
+.ink{stroke:var(--text);fill:none;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.inkf{fill:var(--text)}
+.acc{fill:var(--accent)}.accs{fill:var(--accent);stroke:none}
+.accline{stroke:var(--accent);fill:none}
+.body{fill:var(--body);stroke:var(--line);stroke-width:1.5}
+.key{fill:var(--key);stroke:var(--line);stroke-width:1.5}
+.side{fill:var(--keyside)}
+.tk{fill:var(--soft);stroke:var(--accent);stroke-width:2.5}
+.soft{fill:var(--soft)}
+.wh{fill:#fff}
+
+@keyframes a1{0%,45%{fill:var(--track)} 49%,100%{fill:var(--accent)}}.a1{animation:a1 5.6s ease-in-out 0s infinite}
+@keyframes a2{0%,45%{transform:translateX(0)} 49%,100%{transform:translateX(22px)}}.a2{animation:a2 5.6s ease-in-out 0s infinite}
+@keyframes a3{0%,46%{transform:scale(.4);opacity:0} 47%{transform:scale(.4);opacity:.7} 60%{transform:scale(1);opacity:0} 61%,100%{transform:scale(1);opacity:0}}.a3{animation:a3 5.6s ease-out 0s infinite}
+@keyframes a4{0%{transform:translate(420px,214px);opacity:0} 6%{transform:translate(420px,214px);opacity:1} 38%,45%{transform:translate(444px,105px) scale(1);opacity:1} 47%{transform:translate(444px,105px) scale(.82);opacity:1} 52%,86%{transform:translate(444px,105px) scale(1);opacity:1} 92%,100%{transform:translate(430px,222px);opacity:0}}.a4{animation:a4 5.6s ease-in-out 0s infinite}</style><g filter="url(#sh)"><rect class="panel" x="70" y="14" width="420" height="212" rx="16"/></g><g opacity=".55"><rect class="g1" x="92" y="38" width="32" height="32" rx="8"/><rect class="g2" x="136" y="48" width="118" height="12" rx="6"/></g><g opacity=".55"><rect style="fill:var(--track)" x="416" y="39" width="52" height="30" rx="15"/><circle class="wh" cx="431" cy="54" r="11.5"/></g><rect class="soft" x="78" y="76" width="404" height="46" rx="11"/><use href="#app" x="92" y="86" width="32" height="32"/><text x="136" y="108.5" font-size="19" font-weight="700">Splashdown</text><rect class="a1" x="416" y="87" width="52" height="30" rx="15" style="fill:var(--accent)"/><circle class="wh a2" cx="431" cy="102" r="11.5" style="transform:translateX(22px)"/><g opacity=".55"><rect class="g1" x="92" y="134" width="32" height="32" rx="8"/><rect class="g2" x="136" y="144" width="96" height="12" rx="6"/></g><g opacity=".55"><rect style="fill:var(--track)" x="416" y="135" width="52" height="30" rx="15"/><circle class="wh" cx="431" cy="150" r="11.5"/></g><g opacity=".55"><rect class="g1" x="92" y="182" width="32" height="32" rx="8"/><rect class="g2" x="136" y="192" width="134" height="12" rx="6"/></g><g opacity=".55"><rect style="fill:var(--track)" x="416" y="183" width="52" height="30" rx="15"/><circle class="wh" cx="431" cy="198" r="11.5"/></g><circle class="accline a3" cx="442" cy="102" r="24" stroke-width="3" style="opacity:0;transform-box:fill-box;transform-origin:center"/><g class="a4" style="opacity:0"><use href="#ptr" width="18" height="24" transform="scale(1.15)" overflow="visible"/></g></svg>

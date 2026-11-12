@@ -116,6 +116,8 @@ pub struct TrayMenu {
     /// "Update to vX.Y.Z…", in the menu (under the status) only while an
     /// update is available.
     update_ready: MenuItem<Wry>,
+    /// "Finish setting up…", at the very top while setup isn't finished.
+    finish_setup: MenuItem<Wry>,
 }
 
 /// Where "Update to vX.Y.Z…" goes: right under the status.
@@ -128,6 +130,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
     let languages = Submenu::with_id(app, "languages", "Language", true)?;
     let translate = Submenu::with_id(app, "translate", "Translate into", true)?;
     let settings = crate::engine::load_settings();
+    let onboarded = settings.general.onboarded;
     fill_translate(app, &translate, &settings)?;
     let current = settings.general.language;
     for (code, name) in LANGUAGES {
@@ -195,6 +198,13 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
         &[&what_to_say, &feedback, &check_updates],
     )?;
     let update_ready = MenuItem::with_id(app, "update-ready", "Update…", true, None::<&str>)?;
+    let finish_setup = MenuItem::with_id(
+        app,
+        "finish-setup",
+        "Finish setting up…",
+        true,
+        None::<&str>,
+    )?;
     let settings = MenuItem::with_id(app, "settings", "Settings…", true, Some("CmdOrCtrl+,"))?;
     let quit = MenuItem::with_id(app, "quit", "Quit Splashdown", true, Some("CmdOrCtrl+Q"))?;
     // Kept short: what's used every day at the top level, the rest one
@@ -249,6 +259,7 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
                 "meeting" => crate::meeting::toggle(app),
                 "help" => crate::help::open(app),
                 "settings" => open_settings(app),
+                "finish-setup" => open_onboarding(app),
                 "update" | "update-ready" => show_updates(app),
                 "feedback" => send_feedback(app),
                 "quit" if crate::meeting::is_running() => crate::meeting::quit(app),
@@ -287,14 +298,17 @@ pub fn install(app: &AppHandle, history: Arc<History>) -> tauri::Result<TrayMenu
     });
 
     builder.build(app)?;
-    Ok(TrayMenu {
+    let tray = TrayMenu {
         status,
         presets,
         languages,
         translate,
         menu,
         update_ready,
-    })
+        finish_setup,
+    };
+    tray.show_finish_setup(!onboarded);
+    Ok(tray)
 }
 
 impl TrayMenu {
@@ -370,17 +384,32 @@ impl TrayMenu {
         }
     }
 
+    /// Shows or takes away "Finish setting up…" at the top of the menu.
+    pub fn show_finish_setup(&self, on: bool) {
+        let shown = self.menu.get("finish-setup").is_some();
+        let result = match (on, shown) {
+            (true, false) => self.menu.insert(&self.finish_setup, 0),
+            (false, true) => self.menu.remove(&self.finish_setup),
+            _ => Ok(()),
+        };
+        if let Err(e) = result {
+            tracing::warn!("couldn't update the Finish setting up item: {e}");
+        }
+    }
+
     /// Shows `line` under the status ("Update to v1.2.3…" while an update
     /// is available, "Updated to v1.2.3" after one installed itself), and
     /// takes it away when there's nothing to say.
     pub fn set_update(&self, line: Option<&str>) {
         let shown = self.menu.get("update-ready").is_some();
+        // One lower while "Finish setting up…" is above the status.
+        let at = UPDATE_READY_AT + usize::from(self.menu.get("finish-setup").is_some());
         let result = match line {
             Some(line) => self.update_ready.set_text(line).and_then(|()| {
                 if shown {
                     Ok(())
                 } else {
-                    self.menu.insert(&self.update_ready, UPDATE_READY_AT)
+                    self.menu.insert(&self.update_ready, at)
                 }
             }),
             None if shown => self.menu.remove(&self.update_ready),
@@ -540,14 +569,109 @@ fn send_feedback(app: &AppHandle) {
 
 /// The first-run setup guide.
 pub fn open_onboarding(app: &AppHandle) {
+    let new = app.get_webview_window(ONBOARDING_WINDOW).is_none();
     open_window(
         app,
         ONBOARDING_WINDOW,
         "onboarding.html",
         "Welcome to Splashdown",
-        (680.0, 600.0),
+        (680.0, 640.0),
         false,
     );
+    // The arrow at the menu bar icon belongs to the guide: it goes when
+    // the guide does, however it's closed.
+    if new && let Some(window) = app.get_webview_window(ONBOARDING_WINDOW) {
+        let handle = app.clone();
+        window.on_window_event(move |event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                stop_pointing(&handle);
+            }
+        });
+    }
+}
+
+/// The small window that points at the menu bar icon.
+const POINTER_WINDOW: &str = "setup-pointer";
+/// Its size, in points: an arrow and a few words.
+const POINTER_SIZE: (f64, f64) = (210.0, 62.0);
+
+/// Shows a small window right under the menu bar icon, pointing up at it.
+/// Only on a Mac, and only where the icon's place is known and on a
+/// screen: with a crowded menu bar macOS hides icons that don't fit, and
+/// then there's nothing to point at. Returns whether it's shown.
+pub fn point_at_icon(app: &AppHandle) -> bool {
+    if !cfg!(target_os = "macos") {
+        return false;
+    }
+    let Some(tray) = app.tray_by_id(TRAY_ID) else {
+        return false;
+    };
+    let Ok(Some(rect)) = tray.rect() else {
+        return false;
+    };
+    let Some(spot) = pointer_spot(app, &rect) else {
+        tracing::debug!("the menu bar icon isn't where it can be pointed at");
+        return false;
+    };
+    if let Some(window) = app.get_webview_window(POINTER_WINDOW) {
+        let _ = window.set_position(spot);
+        let _ = window.show();
+        return true;
+    }
+    let built =
+        WebviewWindowBuilder::new(app, POINTER_WINDOW, WebviewUrl::App("pointer.html".into()))
+            .title("Splashdown is here")
+            .inner_size(POINTER_SIZE.0, POINTER_SIZE.1)
+            .position(spot.x, spot.y)
+            .resizable(false)
+            .decorations(false)
+            .always_on_top(true)
+            .visible_on_all_workspaces(true)
+            .skip_taskbar(true)
+            .focusable(false)
+            .focused(false)
+            .build();
+    match built {
+        Ok(_) => true,
+        Err(e) => {
+            tracing::warn!("couldn't point at the menu bar icon: {e}");
+            false
+        }
+    }
+}
+
+/// Takes the pointer away, if it's there.
+pub fn stop_pointing(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(POINTER_WINDOW) {
+        let _ = window.close();
+    }
+}
+
+/// Where the pointer's top left goes (logical points), centered under the
+/// icon and kept on its screen; `None` when the icon isn't in a screen's
+/// menu bar.
+fn pointer_spot(app: &AppHandle, rect: &tauri::Rect) -> Option<tauri::LogicalPosition<f64>> {
+    let monitors = app.available_monitors().ok()?;
+    // macOS reports the icon in physical pixels of its screen.
+    let probe = monitors.iter().find_map(|m| {
+        let scale = m.scale_factor();
+        let at = rect.position.to_physical::<f64>(scale);
+        let size = rect.size.to_physical::<f64>(scale);
+        let (mx, my) = (f64::from(m.position().x), f64::from(m.position().y));
+        let (mw, mh) = (f64::from(m.size().width), f64::from(m.size().height));
+        let centre = at.x + size.width / 2.0;
+        let on_screen = size.width > 0.0 && centre >= mx && centre < mx + mw;
+        // In the menu bar: at the very top of that screen.
+        let in_bar = at.y >= my - 1.0 && at.y + size.height <= my + 80.0 * scale && at.y < my + mh;
+        (on_screen && in_bar).then_some((m, at, size, scale))
+    })?;
+    let (monitor, at, size, scale) = probe;
+    let left = f64::from(monitor.position().x) / scale;
+    let width = f64::from(monitor.size().width) / scale;
+    let centre = (at.x + size.width / 2.0) / scale;
+    let x = (centre - POINTER_SIZE.0 / 2.0).clamp(left + 4.0, left + width - POINTER_SIZE.0 - 4.0);
+    let y = (at.y + size.height) / scale + 4.0;
+    Some(tauri::LogicalPosition::new(x, y))
 }
 
 /// Shows the window if it's open, otherwise creates it.

@@ -10,9 +10,17 @@
 //! no memory of its own, and as good in the eval), otherwise Qwen3 4B
 //! packed smaller.
 //!
+//! After the tidy-up model comes the natural reading voice (small), for
+//! "read this to me".
+//!
 //! Once the tidy-up model is in, it's timed on an ordinary dictation: a
 //! slow computer (no graphics chip it can use, an older processor) can
-//! take many seconds, and the guide then suggests a cloud key.
+//! take many seconds, and then tidying up is turned off by itself (words
+//! go in as they were said, at once) unless the person chose to keep it.
+//!
+//! Nobody is asked to decide anything about disk space either: with room
+//! for speech but not the rest, only speech is set up; with no room even
+//! for that, the guide says how much to free.
 
 use splashdown_core::sync::Locked;
 use std::sync::Mutex;
@@ -20,7 +28,7 @@ use std::time::Instant;
 
 use serde::Serialize;
 use splashdown_config::{AiProvider, Settings, SpeechProvider};
-use splashdown_providers::{LocalModel, SpeechModel};
+use splashdown_providers::{LocalModel, NaturalVoice, SpeechModel};
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::engine;
@@ -80,10 +88,17 @@ pub struct Plan {
     /// Apple's, already here, or not part of this setup).
     speech_mb: u32,
     ai_mb: u32,
+    /// Of which the natural reading voice (it comes with the tidy-up).
+    voice_mb: u32,
     /// Free space where the models go, in MB, if known.
     free_mb: Option<u64>,
     /// Not enough room for the downloads, with some to spare.
     too_little_space: bool,
+    /// What there's room for: "all", "speech" (speech to text but not the
+    /// rest) or "none".
+    room: &'static str,
+    /// With no room even for speech, how much to free, in MB.
+    free_up_mb: u64,
 }
 
 fn plan(speech_only: bool) -> Result<Plan, String> {
@@ -106,12 +121,18 @@ fn plan(speech_only: bool) -> Result<Plan, String> {
         Cleanup::Local(m) if !m.is_downloaded(&dir) => m.approx_mb(),
         _ => 0,
     };
-    let download_mb = speech_mb + ai_mb;
+    let voice_mb = if cleanup == Cleanup::None || NaturalVoice::is_downloaded(&dir) {
+        0
+    } else {
+        NaturalVoice::APPROX_MB
+    };
+    let download_mb = speech_mb + ai_mb + voice_mb;
     // The folder may not exist yet: ask about the nearest one that does.
     let free = dir
         .ancestors()
         .find(|d| d.exists())
         .and_then(splashdown_platform::free_disk_bytes);
+    let (room, free_up_mb) = room_for(free, speech_mb, download_mb);
     Ok(Plan {
         cleanup: match cleanup {
             Cleanup::Local(_) => "local",
@@ -122,10 +143,35 @@ fn plan(speech_only: bool) -> Result<Plan, String> {
         download_mb,
         speech_mb,
         ai_mb,
+        voice_mb,
         free_mb: free.map(|b| b / 1_000_000),
-        too_little_space: download_mb > 0
-            && free.is_some_and(|f| f < u64::from(download_mb) * 1_000_000 + SPARE),
+        too_little_space: room != "all",
+        room,
+        free_up_mb,
     })
+}
+
+/// What `free` bytes leave room for, "all", "speech" or "none", and with
+/// none, how many MB to free (always leaving `SPARE`). Unknown free space
+/// doesn't stop anything.
+fn room_for(free: Option<u64>, speech_mb: u32, all_mb: u32) -> (&'static str, u64) {
+    let need = |mb: u32| {
+        if mb == 0 {
+            0
+        } else {
+            u64::from(mb) * 1_000_000 + SPARE
+        }
+    };
+    let Some(free) = free else {
+        return ("all", 0);
+    };
+    if free >= need(all_mb) {
+        ("all", 0)
+    } else if free >= need(speech_mb) {
+        ("speech", 0)
+    } else {
+        ("none", (need(speech_mb) - free).div_ceil(1_000_000))
+    }
 }
 
 /// How setting up is going.
@@ -144,6 +190,14 @@ pub struct Status {
     speech_total: u64,
     /// Timing the tidy-up model, after its download.
     checking: bool,
+    /// Only speech was set up, as there wasn't room for the rest.
+    no_room_for_ai: bool,
+    /// Tidying up was turned off by itself, as it's too slow here.
+    slow_off: bool,
+    /// The tidy-up model this setup switched on, to switch on again if the
+    /// person keeps it although it's slow.
+    #[serde(skip)]
+    model: Option<LocalModel>,
     /// What that found: milliseconds for an ordinary dictation, and
     /// "fast", "usable" or "slow".
     local_ms: Option<u32>,
@@ -185,23 +239,20 @@ pub fn start_local_setup(speech_only: bool, app: AppHandle) -> Result<Status, St
         return Ok(now.clone());
     }
     let plan = plan(speech_only)?;
-    let cleanup = match plan.cleanup {
+    let mut cleanup = match plan.cleanup {
         "local" if plan.small => Cleanup::Local(LocalModel::Qwen3_4BCompact),
         "local" => Cleanup::Local(LocalModel::Qwen3_4B),
         "apple" => Cleanup::Apple,
         _ => Cleanup::None,
     };
-    if plan.too_little_space {
-        let need = f64::from(plan.download_mb) / 1000.0 + 1.0;
-        let free = plan.free_mb.unwrap_or(0) as f64 / 1000.0;
-        let bin = if cfg!(target_os = "macos") {
-            "Trash"
-        } else {
-            "Recycle Bin"
-        };
-        return Err(format!(
-            "Splashdown needs about {need:.1} GB of free space to get ready, and this computer has {free:.1} GB. Free up some space (empty the {bin}, or delete large files you don't need), then try again."
-        ));
+    if plan.room == "none" {
+        return Err(no_room(plan.free_up_mb));
+    }
+    // Room for speech but not the rest: speech alone, rather than a
+    // question nobody can answer well. The guide says so afterwards.
+    let no_room_for_ai = plan.room == "speech" && cleanup != Cleanup::None;
+    if no_room_for_ai {
+        cleanup = Cleanup::None;
     }
     let dir = engine::paths()?.models_dir;
     let speech = speech_model();
@@ -211,15 +262,35 @@ pub fn start_local_setup(speech_only: bool, app: AppHandle) -> Result<Status, St
         Cleanup::Local(m) => size(m.is_downloaded(&dir), m.approx_mb()),
         _ => 0,
     };
+    let voice_size = if cleanup == Cleanup::None {
+        0
+    } else {
+        size(NaturalVoice::is_downloaded(&dir), NaturalVoice::APPROX_MB)
+    };
     let start = Status {
         working: true,
-        total: speech_size + cleanup_size,
+        total: speech_size + cleanup_size + voice_size,
         speech_total: speech_size,
+        no_room_for_ai,
         ..Status::default()
     };
     *status() = Some(start.clone());
+    let sizes = Sizes {
+        speech: speech_size,
+        cleanup: cleanup_size,
+        voice: voice_size,
+    };
     tauri::async_runtime::spawn(async move {
-        if let Err(e) = run(&app, speech, cleanup, speech_size, cleanup_size).await {
+        if no_room_for_ai
+            && let Err(e) = change(&app, |s| {
+                s.ai.provider = AiProvider::Off;
+                s.ai.model = None;
+            })
+            .await
+        {
+            tracing::warn!("couldn't turn tidying up off: {e}");
+        }
+        if let Err(e) = run(&app, speech, cleanup, sizes).await {
             tracing::warn!("setting up on this computer: {e}");
             update(&app, |s| {
                 s.working = false;
@@ -230,18 +301,40 @@ pub fn start_local_setup(speech_only: bool, app: AppHandle) -> Result<Status, St
     Ok(start)
 }
 
+/// With no room even for speech to text: how much to free, in words.
+fn no_room(free_up_mb: u64) -> String {
+    let bin = if cfg!(target_os = "macos") {
+        "Trash"
+    } else {
+        "Recycle Bin"
+    };
+    let gb = (free_up_mb as f64 / 1000.0).max(0.1);
+    format!(
+        "There isn't enough free space on this computer. Free up about {gb:.1} GB (empty the {bin}, or delete large files you don't need), then check again."
+    )
+}
+
+/// What each download is expected to weigh, in bytes (0: already here or
+/// not part of this setup).
+struct Sizes {
+    speech: u64,
+    cleanup: u64,
+    voice: u64,
+}
+
 /// The downloads, one after the other: speech first, so dictation can be
-/// tried while the bigger tidy-up model is still on its way.
+/// tried while the bigger tidy-up model is still on its way, then the
+/// tidy-up model, then the reading voice.
 async fn run(
     app: &AppHandle,
     speech: SpeechModel,
     cleanup: Cleanup,
-    speech_size: u64,
-    cleanup_size: u64,
+    sizes: Sizes,
 ) -> Result<(), String> {
     // Sizes are guesses until each download says how big it is.
-    let mut speech_total = speech_size;
-    let mut cleanup_total = cleanup_size;
+    let mut speech_total = sizes.speech;
+    let mut cleanup_total = sizes.cleanup;
+    let voice_total = sizes.voice;
     let mut last = Instant::now();
     crate::models::fetch_model(app, speech.id(), |done, total| {
         speech_total = total.unwrap_or(speech_total);
@@ -249,7 +342,7 @@ async fn run(
             last = Instant::now();
             update(app, |s| {
                 s.done = done;
-                s.total = speech_total + cleanup_total;
+                s.total = speech_total + cleanup_total + voice_total;
                 s.speech_total = speech_total;
             });
         }
@@ -263,7 +356,7 @@ async fn run(
     update(app, |s| {
         s.speech_ready = true;
         s.done = speech_total;
-        s.total = speech_total + cleanup_total;
+        s.total = speech_total + cleanup_total + voice_total;
         s.speech_total = speech_total;
     });
 
@@ -275,16 +368,14 @@ async fn run(
                     last = Instant::now();
                     update(app, |s| {
                         s.done = speech_total + done;
-                        s.total = speech_total + cleanup_total;
+                        s.total = speech_total + cleanup_total + voice_total;
                     });
                 }
             })
             .await?;
-            change(app, |s| {
-                s.ai.provider = AiProvider::Local;
-                s.ai.model = (model != LocalModel::Qwen3_4B).then(|| model.id().to_string());
-            })
-            .await?;
+            change(app, |s| use_local(s, model)).await?;
+            update(app, |s| s.model = Some(model));
+            fetch_voice(app, speech_total + cleanup_total, voice_total).await;
             update(app, |s| {
                 s.done = s.total;
                 s.checking = true;
@@ -294,10 +385,24 @@ async fn run(
                 tracing::info!("the built-in model tidied up a dictation in {ms} ms");
                 remember_speed(app, ms);
             }
+            // Too slow to wait for at every dictation: off, unless the
+            // person already said to keep it. The guide says so, with a
+            // way to keep it anyway (`keep_slow_tidy_up`).
+            let slow = measured.is_some_and(|ms| speed_of(ms) == "slow");
+            let kept = app.state::<AppState>().settings().ai.slow_local_ok;
+            if slow && !kept {
+                tracing::info!("tidying up is too slow here: turned off");
+                change(app, |s| {
+                    s.ai.provider = AiProvider::Off;
+                    s.ai.model = None;
+                })
+                .await?;
+            }
             update(app, |s| {
                 s.checking = false;
                 s.local_ms = measured;
                 s.speed = measured.map(speed_of);
+                s.slow_off = slow && !kept;
             });
         }
         Cleanup::Apple => {
@@ -306,6 +411,7 @@ async fn run(
                 s.ai.model = None;
             })
             .await?;
+            fetch_voice(app, speech_total, voice_total).await;
         }
         Cleanup::None => {}
     }
@@ -315,6 +421,54 @@ async fn run(
         s.done = s.total;
         s.error = None;
     });
+    Ok(())
+}
+
+/// Switches tidying up to the built-in `model`.
+fn use_local(s: &mut Settings, model: LocalModel) {
+    s.ai.provider = AiProvider::Local;
+    s.ai.model = (model != LocalModel::Qwen3_4B).then(|| model.id().to_string());
+}
+
+/// The natural reading voice, last. It's small and only needed for
+/// reading back, so a failure is noted and setup carries on without it
+/// (Settings can fetch it later).
+async fn fetch_voice(app: &AppHandle, before: u64, size: u64) {
+    if size == 0 {
+        return;
+    }
+    let mut last = Instant::now();
+    let fetched = crate::models::fetch_model(app, NaturalVoice::ID, |done, _| {
+        if last.elapsed().as_millis() >= 250 {
+            last = Instant::now();
+            update(app, |s| s.done = before + done.min(size));
+        }
+    })
+    .await;
+    match fetched {
+        Ok(()) => {
+            if let Some(e) = app.state::<AppState>().apply().await {
+                tracing::warn!("after the reading voice arrived: {e}");
+            }
+        }
+        Err(e) => tracing::warn!("the reading voice didn't download: {e}"),
+    }
+}
+
+/// "Keep it on anyway", after tidying up was turned off for being slow:
+/// on again, and not turned off for that again.
+#[tauri::command]
+pub async fn keep_slow_tidy_up(app: AppHandle) -> Result<(), String> {
+    let model = status()
+        .as_ref()
+        .and_then(|s| s.model)
+        .ok_or("Nothing to switch back on.")?;
+    change(&app, |s| {
+        use_local(s, model);
+        s.ai.slow_local_ok = true;
+    })
+    .await?;
+    update(&app, |s| s.slow_off = false);
     Ok(())
 }
 
@@ -389,6 +543,19 @@ mod tests {
         assert_eq!(speed_of(3_400), "usable");
         assert_eq!(speed_of(5_000), "usable");
         assert_eq!(speed_of(9_400), "slow");
+    }
+
+    #[test]
+    fn short_of_space_takes_speech_alone_or_says_how_much_to_free() {
+        const MB: u64 = 1_000_000;
+        assert_eq!(room_for(None, 495, 3_063), ("all", 0), "unknown");
+        assert_eq!(room_for(Some(80_000 * MB), 495, 3_063), ("all", 0));
+        assert_eq!(room_for(Some(2_000 * MB), 495, 3_063), ("speech", 0));
+        let (room, free_up) = room_for(Some(1_000 * MB), 495, 3_063);
+        assert_eq!(room, "none");
+        // 495 MB and the spare GiB, less the 1,000 MB there is.
+        assert_eq!(free_up, 495 + SPARE.div_ceil(MB) - 1_000);
+        assert_eq!(room_for(Some(0), 0, 0), ("all", 0), "all here already");
     }
 
     #[test]

@@ -348,21 +348,83 @@ pub fn set_launch_at_login(enabled: bool, app: AppHandle) -> Result<(), String> 
     .map_err(|e| e.to_string())
 }
 
-/// Marks setup as done, applies "start at login", and closes the guide.
+/// Marks setup as done, applies "start at login", and closes the guide
+/// (unless `close` is false: the optional tour carries on in it).
 #[tauri::command]
 pub async fn finish_onboarding(
     launch_at_login: bool,
+    close: Option<bool>,
     app: AppHandle,
     state: State<'_, AppState>,
 ) -> Result<(), String> {
-    state.update(&app, |s| s.general.onboarded = true)?;
+    state.update(&app, |s| {
+        s.general.onboarded = true;
+        s.general.setup_step = None;
+        s.general.setup_choice = None;
+    })?;
+    // "Finish setting up…" goes, unless dictation still can't start for
+    // want of the speech download.
+    state.session.setup_finished();
+    crate::tray::stop_pointing(&app);
     if let Err(e) = set_launch_at_login(launch_at_login, app.clone()) {
         tracing::warn!("couldn't change launch at login: {e}");
     }
-    if let Some(w) = app.get_webview_window(crate::tray::ONBOARDING_WINDOW) {
+    if close.unwrap_or(true)
+        && let Some(w) = app.get_webview_window(crate::tray::ONBOARDING_WINDOW)
+    {
         let _ = w.close();
     }
     Ok(())
+}
+
+/// Remembers where the setup guide is (`step`) and how the person chose to
+/// set up (`choice`), so it opens there again if it's closed part-way.
+#[tauri::command]
+pub fn set_onboarding_step(
+    step: String,
+    choice: Option<String>,
+    app: AppHandle,
+    state: State<'_, AppState>,
+) -> Result<(), String> {
+    let current = state.settings().general;
+    if current.onboarded
+        || (current.setup_step.as_deref() == Some(step.as_str()) && current.setup_choice == choice)
+    {
+        return Ok(());
+    }
+    state
+        .update(&app, |s| {
+            s.general.setup_step = Some(step);
+            s.general.setup_choice = choice;
+        })
+        .map(|_| ())
+}
+
+/// The guide's last screen points at the menu bar icon for as long as it's
+/// shown (`on`), in a small window of its own. Answers whether it could:
+/// not where the icon's place can't be known (Windows, where it may be
+/// tucked away under ^, or a Mac whose menu bar has no room for it).
+/// Async: it builds a window, which deadlocks from the main thread on
+/// Windows.
+#[tauri::command]
+pub async fn point_at_tray(on: bool, app: AppHandle) -> bool {
+    if on {
+        crate::tray::point_at_icon(&app)
+    } else {
+        crate::tray::stop_pointing(&app);
+        false
+    }
+}
+
+/// Windows' taskbar settings, where "Other system tray icons" keeps
+/// Splashdown's icon by the clock.
+#[tauri::command]
+pub fn open_taskbar_settings() -> Result<(), String> {
+    if cfg!(target_os = "windows") {
+        splashdown_platform::open_url("ms-settings:taskbar").map_err(|e| e.to_string())
+    } else {
+        Err("Only on Windows.".into())
+    }
 }
 
 #[tauri::command]

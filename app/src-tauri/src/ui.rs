@@ -129,6 +129,7 @@ impl Ui {
 
     pub fn level(&self, level: f32) {
         crate::updates::active();
+        crate::did::level(level);
         crate::minibar::level(level);
         self.on_overlay(move |o| o.set_level(level));
     }
@@ -205,7 +206,13 @@ impl Ui {
         }
     }
 
+    /// Shows or hides "Finish setting up…" in the tray menu.
+    pub fn show_finish_setup(&self, on: bool) {
+        self.tray.show_finish_setup(on);
+    }
+
     pub fn tray_icon(&self, state: TrayIconState) {
+        crate::did::recording(state == TrayIconState::Recording);
         self.tray.set_icon(&self.app, state);
         crate::minibar::tray_state(state);
     }

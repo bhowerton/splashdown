@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Splashdown is here</title>
+<link rel="stylesheet" href="base.css">
+<style>
+  /* Shown by the setup guide right under the menu bar icon (210 × 62, no
+     title bar): an arrow up at the icon, and what it is. */
+  body { overflow: hidden; background: var(--accent); color: #fff; cursor: default; }
+  .pt { height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; text-align: center; }
+  .pt svg { display: block; animation: pt-nudge 1.4s ease-in-out infinite; }
+  .pt b { font-size: 14px; font-weight: 650; }
+  @keyframes pt-nudge { 0%, 100% { transform: translateY(2px); } 50% { transform: translateY(-3px); } }
+  @media (prefers-reduced-motion: reduce) { .pt svg { animation: none; } }
+</style>
+</head>
+<body>
+<main class="pt" role="status">
+  <svg width="22" height="18" viewBox="0 0 22 18" aria-hidden="true"><path d="M11 1 L20 12 H14 V17 H8 V12 H2 Z" fill="#fff"/></svg>
+  <b>Splashdown is here</b>
+</main>
+</body>
+</html>
