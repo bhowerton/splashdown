@@ -292,7 +292,13 @@ impl Controller {
             .file_tags
             .then(|| focus.as_ref().and_then(|f| f.app.document.clone()))
             .flatten()
-            .map(list_project);
+            .map(|document| {
+                let allow = self
+                    .engine
+                    .as_ref()
+                    .is_ok_and(|e| e.project_files_in_protected);
+                list_project(document, allow)
+            });
         let spoken = self.wants_their_language(focus.as_ref(), &selection, &preset);
         let screen_words = self
             .engine

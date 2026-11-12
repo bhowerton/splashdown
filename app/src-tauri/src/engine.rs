@@ -58,6 +58,8 @@ pub struct Engine {
     pub compose_reads_window: bool,
     /// Names and terms on screen join each dictation's vocabulary.
     pub screen_words: bool,
+    /// Projects in folders macOS protects may be listed (Mac only).
+    pub project_files_in_protected: bool,
     /// Dictations in email and chat come out in the conversation's
     /// language (needs `screen_words`, which reads the window).
     pub reply_in_their_language: bool,
@@ -121,6 +123,38 @@ impl Engine {
 
 pub fn paths() -> Result<Paths, String> {
     Paths::resolve().ok_or_else(|| "couldn't find the home folder".to_string())
+}
+
+/// Settles the choices that are decided once, at launch, when unset
+/// (whether notes come from the iPhone, whether projects in protected
+/// folders are listed), and saves them in one write to the settings file.
+/// A file that can't be read isn't saved over: start-up deals with it.
+pub fn settle_launch_choices(settings: &mut Settings) {
+    let phone = settings.notes.settle_from_phone(settings.general.onboarded);
+    let project = settings.general.settle_project_files_in_protected();
+    if !phone && !project {
+        return;
+    }
+    let from_phone = settings.notes.from_phone;
+    let project_files = settings.general.project_files_in_protected;
+    let Ok(paths) = paths() else {
+        return;
+    };
+    let file = paths.config_file();
+    let saved = Settings::load(&file)
+        .map_err(|e| e.to_string())
+        .and_then(|mut saved| {
+            if phone {
+                saved.notes.from_phone = from_phone;
+            }
+            if project {
+                saved.general.project_files_in_protected = project_files;
+            }
+            saved.save(&file)
+        });
+    if let Err(e) = saved {
+        tracing::warn!("couldn't save the launch choices: {e}");
+    }
 }
 
 pub fn load_settings() -> Settings {
@@ -385,6 +419,7 @@ pub fn build(settings: &Settings) -> Result<Engine, String> {
         compose_style: settings.general.compose_style(),
         learn_style: settings.general.learn_style(),
         screen_words: settings.general.screen_words(),
+        project_files_in_protected: settings.general.project_files_in_protected(),
         reply_in_their_language: settings.general.reply_in_their_language,
         share_recent: settings.general.share_recent()
             && ai_choice

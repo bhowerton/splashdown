@@ -13,7 +13,7 @@ async function mockInvoke(cmd, args) {
     settings: {
       speech: { provider: "auto", model: null },
       ai: { provider: "auto", model: null, base_url: null, fallback_models: null },
-      general: { user_name: "Alex", language: null, vocabulary: ["Tauri", "OpenRouter", "Priya"], learned_words: ["Priya"], live_preview: null, keep_history: null, check_for_updates: null },
+      general: { user_name: "Alex", language: null, vocabulary: ["Tauri", "OpenRouter", "Priya"], learned_words: ["Priya"], live_preview: null, keep_history: null, project_files_in_protected: false, check_for_updates: null },
       hotkeys: { dictation: null, instruction: null },
       presets: null,
       snippets: [{ trigger: "my address", text: "1 Infinite Loop, Cupertino" }],

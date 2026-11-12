@@ -45,9 +45,18 @@ const SKIP_DIRS: &[&str] = &[
 ];
 
 /// The project around `document`, listed (or from the cache). `None` when
-/// there's no sensible project folder, e.g. the home folder.
-pub fn for_document(document: &Path) -> Option<Arc<Project>> {
+/// there's no sensible project folder, e.g. the home folder, or, on a Mac
+/// without `allow_protected`, when it's in a folder macOS asks about:
+/// listing it (or reading the open file) would show a prompt in the middle
+/// of a dictation.
+pub fn for_document(document: &Path, allow_protected: bool) -> Option<Arc<Project>> {
     let root = root_for(document)?;
+    if cfg!(target_os = "macos")
+        && !allow_protected
+        && std::env::home_dir().is_some_and(|home| in_protected_place(&root, &home))
+    {
+        return None;
+    }
     static CACHE: OnceLock<Mutex<HashMap<PathBuf, Listed>>> = OnceLock::new();
     let cache = CACHE.get_or_init(Mutex::default);
     if let Some((at, project)) = cache.locked().get(&root)
@@ -67,6 +76,32 @@ pub fn for_document(document: &Path) -> Option<Arc<Project>> {
         .locked()
         .insert(root, (Instant::now(), project.clone()));
     Some(project)
+}
+
+/// Whether `path` is in, or is, a place macOS asks before an app may look
+/// inside: Desktop, Documents and Downloads in the home folder, iCloud
+/// Drive and other apps' iCloud folders (`Library/Mobile Documents`), sync
+/// services' folders (`Library/CloudStorage`), and anything under
+/// `/Volumes`. The startup disk can also appear as `/Volumes/<name>`, but
+/// telling it apart needs the disk, so all of `/Volumes` counts. Compares
+/// path parts, and doesn't touch the file system.
+pub fn in_protected_place(path: &Path, home: &Path) -> bool {
+    const IN_HOME: &[&[&str]] = &[
+        &["Desktop"],
+        &["Documents"],
+        &["Downloads"],
+        &["Library", "Mobile Documents"],
+        &["Library", "CloudStorage"],
+    ];
+    if path.starts_with("/Volumes") && path != Path::new("/Volumes") {
+        return true;
+    }
+    let Ok(inside) = path.strip_prefix(home) else {
+        return false;
+    };
+    IN_HOME
+        .iter()
+        .any(|place| inside.starts_with(place.iter().collect::<PathBuf>()))
 }
 
 /// The enclosing git repository, else the folder itself — but never the
@@ -237,6 +272,40 @@ mod tests {
         if let Some(home) = std::env::home_dir() {
             assert_eq!(root_for(&home), None);
         }
+    }
+
+    #[test]
+    fn protected_places_are_found_by_path_parts() {
+        let home = Path::new("/Users/someone");
+        let yes = |p: &str| in_protected_place(Path::new(p), home);
+        for place in [
+            "Desktop",
+            "Documents",
+            "Downloads",
+            "Library/Mobile Documents",
+            "Library/CloudStorage",
+        ] {
+            let place = format!("/Users/someone/{place}");
+            assert!(yes(&place), "{place}");
+            assert!(yes(&format!("{place}/proj/src")), "{place}/proj/src");
+        }
+        assert!(yes(
+            "/Users/someone/Library/Mobile Documents/com~apple~CloudDocs/x"
+        ));
+        assert!(yes("/Users/someone/Library/CloudStorage/Dropbox/x"));
+        assert!(yes("/Volumes/Some Disk/x"));
+        // Look-alikes and other places.
+        assert!(!yes("/Users/someone/Documents2"));
+        assert!(!yes("/Users/someone/Documents2/x"));
+        assert!(!yes("/Users/someone/dev/Documents/x"));
+        assert!(!yes("/Users/someone/Library/Caches/x"));
+        assert!(!yes("/Users/someone/Library"));
+        assert!(!yes("/Users/someone/dev/x"));
+        assert!(!yes("/Users/someone"));
+        assert!(!yes("/Users/other/Documents/x"));
+        assert!(!yes("/opt/Documents/x"));
+        assert!(!yes("/VolumesX/x"));
+        assert!(!yes("/Volumes"));
     }
 
     #[test]

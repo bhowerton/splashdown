@@ -243,10 +243,13 @@ pub(super) fn read_clipboard() -> Option<String> {
 }
 
 /// Lists the project around `document` on another thread.
-pub(super) fn list_project(document: std::path::PathBuf) -> mpsc::Receiver<Option<Arc<Project>>> {
+pub(super) fn list_project(
+    document: std::path::PathBuf,
+    allow_protected: bool,
+) -> mpsc::Receiver<Option<Arc<Project>>> {
     let (tx, rx) = mpsc::channel();
     std::thread::spawn(move || {
-        let _ = tx.send(project::for_document(&document));
+        let _ = tx.send(project::for_document(&document, allow_protected));
     });
     rx
 }

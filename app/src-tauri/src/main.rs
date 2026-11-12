@@ -298,7 +298,7 @@ fn main() {
                 splashdown_providers::factory::use_speech_detector(&paths.models_dir);
             }
             let mut settings = engine::load_settings();
-            notes::phone::settle(&mut settings);
+            engine::settle_launch_choices(&mut settings);
             if settings.actions.enabled {
                 voice_actions::warm_up();
             }

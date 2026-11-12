@@ -658,6 +658,27 @@ mod tests {
     }
 
     #[test]
+    fn project_files_in_protected_folders_are_on_only_for_who_had_them() {
+        // Set up before this choice existed: on, and saved once.
+        let mut before: GeneralSettings = toml::from_str("onboarded = true").unwrap();
+        assert!(before.settle_project_files_in_protected());
+        assert!(before.project_files_in_protected());
+        assert!(!before.settle_project_files_in_protected());
+        // A new install: off, and finishing setup later doesn't turn it on.
+        let mut new = GeneralSettings::default();
+        assert!(!new.project_files_in_protected());
+        assert!(new.settle_project_files_in_protected());
+        new.onboarded = true;
+        assert!(!new.settle_project_files_in_protected());
+        assert!(!new.project_files_in_protected());
+        // A choice made stays.
+        let mut chosen: GeneralSettings =
+            toml::from_str("onboarded = true\nproject_files_in_protected = false").unwrap();
+        assert!(!chosen.settle_project_files_in_protected());
+        assert!(!chosen.project_files_in_protected());
+    }
+
+    #[test]
     fn update_checks_are_on_unless_turned_off() {
         let mut g = GeneralSettings::default();
         assert!(g.check_for_updates());

@@ -34,29 +34,6 @@ static REFUSED: AtomicBool = AtomicBool::new(false);
 /// Wakes the watcher for a look now rather than at its next turn.
 static WAKE: (Mutex<bool>, Condvar) = (Mutex::new(false), Condvar::new());
 
-/// Settles whether notes from the iPhone are taken, once, at launch
-/// (`NotesSettings::settle_from_phone`), and saves it to the settings file.
-/// A file that can't be read isn't saved over: start-up deals with it.
-pub fn settle(settings: &mut splashdown_config::Settings) {
-    if !settings.notes.settle_from_phone(settings.general.onboarded) {
-        return;
-    }
-    let on = settings.notes.from_phone;
-    let Ok(paths) = crate::engine::paths() else {
-        return;
-    };
-    let file = paths.config_file();
-    let saved = splashdown_config::Settings::load(&file)
-        .map_err(|e| e.to_string())
-        .and_then(|mut saved| {
-            saved.notes.from_phone = on;
-            saved.save(&file)
-        });
-    if let Err(e) = saved {
-        tracing::warn!("couldn't save whether notes come from the iPhone: {e}");
-    }
-}
-
 /// Where the shortcut's files can arrive on this computer, whether or not
 /// they exist yet: the Shortcuts app's folder in iCloud Drive.
 fn folders() -> Vec<PathBuf> {

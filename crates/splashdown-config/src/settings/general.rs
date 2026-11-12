@@ -67,6 +67,12 @@ pub struct GeneralSettings {
     /// Names and terms in the window around the field (the email or chat
     /// on screen) join the vocabulary for each dictation. Unset means on.
     pub screen_words: Option<bool>,
+    /// On a Mac, list a project kept in a folder macOS protects (Documents,
+    /// Desktop, Downloads, iCloud Drive, sync services, external drives)
+    /// for file tags. Unset means not decided yet: settled once at launch
+    /// (`settle_project_files_in_protected`) and saved. No effect on
+    /// Windows.
+    pub project_files_in_protected: Option<bool>,
     /// Compose writes the way the user does in their own earlier messages
     /// on screen. Unset means on.
     pub compose_style: Option<bool>,
@@ -259,6 +265,24 @@ impl GeneralSettings {
 
     pub fn screen_words(&self) -> bool {
         self.screen_words.unwrap_or(true)
+    }
+
+    /// Whether projects in protected folders are listed. Off until settled
+    /// or turned on: listing them makes macOS ask.
+    pub fn project_files_in_protected(&self) -> bool {
+        self.project_files_in_protected.unwrap_or(false)
+    }
+
+    /// Decides `project_files_in_protected` when it's unset, once, at
+    /// launch: on for someone who finished setup before this choice existed
+    /// (their file tags keep working), off for a new install. Returns
+    /// whether it changed, so it can be saved.
+    pub fn settle_project_files_in_protected(&mut self) -> bool {
+        if self.project_files_in_protected.is_some() {
+            return false;
+        }
+        self.project_files_in_protected = Some(self.onboarded);
+        true
     }
 
     pub fn compose_style(&self) -> bool {

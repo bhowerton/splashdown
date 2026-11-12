@@ -560,6 +560,9 @@ function extrasGroup(p) {
   const rows = [];
   rows.push(presetRow("Press Return after", "Sends the message as soon as it's typed. Return while dictating turns it off for that once.", presetSwitch(!!p.auto_send, (on) => updatePreset(p.id, (x) => (x.auto_send = on)))));
   rows.push(presetRow("Tag files for coding agents", "A file name you say, like “chunks dot rs”, becomes an @ mention of that file (for Claude Code, Cursor and others). Uses the project of the terminal's folder or the editor's open file.", presetSwitch(!!p.file_tags, (on) => updatePreset(p.id, (x) => (x.file_tags = on)))));
+  if (p.file_tags && state.platform === "macos") {
+    rows.push(presetRow("Also in Documents, Desktop, Downloads and iCloud Drive", "Projects kept in those folders, in a sync service's folder or on an external drive are skipped unless this is on. macOS asks before Splashdown may look in them, the first time you dictate in one.", presetSwitch(state.settings.general.project_files_in_protected === true, setProjectFilesInProtected)));
+  }
   rows.push(presetRow("Use the text around the cursor", "Sends up to 1,000 characters already in the field to the AI, so it spells names right and matches the conversation. It may include other people's words.", presetSwitch(!!p.field_context, (on) => updatePreset(p.id, (x) => (x.field_context = on)), !p.ai)));
   rows.push(presetRow("Use what's on the clipboard", "Sends the text you last copied (up to 2,000 characters) to the AI, so it spells names and code right, and so you can say “summarize what I copied”.", presetSwitch(!!p.clipboard_context, (on) => updatePreset(p.id, (x) => (x.clipboard_context = on)), !p.ai)));
   const translate = presetSelect([[null, "Don't translate"], ...TRANSLATE_LANGUAGES.map((l) => [l, l])], p.translate_to, (v) => updatePreset(p.id, (x) => (x.translate_to = v)), "Translate into");
@@ -859,6 +862,13 @@ function updatePreset(id, change) {
   change(p);
   // Rules still being typed are kept (empty value), not saved as matches.
   savePresets(presets);
+}
+
+/** One setting for all presets, so it's saved with General, not a preset. */
+function setProjectFilesInProtected(on) {
+  const s = collect();
+  s.general.project_files_in_protected = on;
+  save(s);
 }
 
 function savePresets(presets) {
