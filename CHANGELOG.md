@@ -2,7 +2,7 @@
 
 What changed in each release of Splashdown. Downloads are on the [releases page](https://github.com/bhowerton/splashdown/releases).
 
-## Unreleased
+## 0.13.3 — 2026-11-12
 
 - **Asking something of text you can't edit shows the answer.** Select a message you received, hold the dictation key and say "translate this to English": the translation was pasted over text that can't be changed, so it went nowhere, and the bar still said "Inserted". A rewrite of selected text is now pasted without a check only where the app says that text can be changed. Where the app says it can't (a page, a document opened to read), the result opens in the Ask panel, to copy, insert or read aloud. Everywhere else it's pasted and then checked for: some apps describe a message you received exactly as they describe the box you type in, so if the text isn't seen to change, the result opens in the Ask panel a moment later instead. The translate key, a transform's shortcut and an exact replacement ("change every Tuesday to Thursday") all go by this rule, on Windows too. A rewrite that changes nothing says "Nothing to change" and leaves the text alone.
 - **Insert in a panel says when it didn't go in.** Insert from the Ask panel, a draft or a note pasted into whatever had focus in the other app, closed the panel, and said nothing if the text went nowhere. Insert now looks first: where nothing can take the text it asks you to click where it should go and press Insert again, and where a paste isn't seen to land it says so. Either way the panel stays and the text is on the clipboard.
