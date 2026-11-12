@@ -3,15 +3,15 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Splashdown — Your voice, for everything. Free for Mac and Windows</title>
-<meta name="description" content="Your voice, for everything: type in any app, tell your computer what to do, hear text read back, and turn anything you hear into notes. Free and open source for Mac and Windows. Hold a key, speak, and clean text appears in any app. It also writes down your meetings, videos and voice memos, tells who said what, follows up after a meeting, and answers questions from your notes. No subscription, no account, and it can run entirely on your computer.">
+<title>Splashdown: dictation that runs on your computer. Free for Mac and Windows</title>
+<meta name="description" content="Dictation that runs on your computer. Hold a key, speak, and clean text appears in any app, with speech and AI models that run on your own machine, so nothing you say leaves it. Works offline after the first download. No account, no servers, no analytics. Also writes down your meetings, videos and voice memos, and answers questions from your notes. Free and open source for Mac and Windows.">
 <link rel="canonical" href="https://splashdown.app/">
 <link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="assets/icon-180.png">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://splashdown.app/">
-<meta property="og:title" content="Splashdown — Your voice, for everything.">
-<meta property="og:description" content="Free, open-source dictation for Mac and Windows that also writes down your meetings, videos and voice memos, and answers questions from your notes. No subscription, no account.">
+<meta property="og:title" content="Splashdown: dictation that runs on your computer">
+<meta property="og:description" content="Free, open-source dictation for Mac and Windows. The speech and AI models run on your computer, so nothing you say leaves it. It also writes down your meetings, videos and voice memos. No account, no servers.">
 <meta property="og:image" content="https://splashdown.app/assets/og.png">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0A1440">
@@ -36,21 +36,45 @@
 
 <main>
   <section class="hero">
-    <h1>Your voice,<br>for <span>everything.</span></h1>
-    <p class="lede"><a href="#features">Type in any app</a>, <a href="#actions">tell your computer what to do</a>, <a href="#read">hear text read back</a>, and <a href="#notes">turn anything you hear into notes</a>.</p>
+    <h1>Your voice,<br>on <span>your computer.</span></h1>
+    <p class="lede">Hold a key, speak, and your words are typed into any app. The speech and AI models run on your computer, so what you say stays there. You can <a href="#actions">tell it what to do</a>, <a href="#read">hear text read back</a>, and <a href="#notes">turn anything you hear into notes</a>.</p>
     <ul class="proof" aria-label="In short">
-      <li>Free and open source</li>
+      <li>Runs on your computer</li>
       <li>Works offline</li>
-      <li>No account</li>
+      <li>No account, no servers</li>
+      <li>Free and open source</li>
     </ul>
     <div class="cta">
       <a class="btn primary" id="download" href="mac">Download for Mac</a>
       <a class="btn" id="other" href="windows">Download for Windows</a>
     </div>
     <p class="fine" id="fine">macOS 12+ (Apple Silicon and Intel) · Windows 10 and 11 · Signed releases</p>
+    <p class="fine">The first run downloads the models, about 3 GB. After that it works without the internet.</p>
     <p class="brew">or <code>brew install --cask bhowerton/tap/splashdown</code></p>
-    <p class="also">Hold a key, say it, let go. For Mac and Windows.</p>
     <img class="demo" src="assets/demo.svg" width="960" height="480" alt="Animation: holding Option and saying 'um, so can we meet Tuesday… actually Thursday at 3' types 'Can we meet Thursday at 3?' into an email; then tapping Shift and saying 'make it more formal' rewrites it to 'Would Thursday at 3 p.m. work for you?'">
+  </section>
+
+  <section class="features" id="local">
+    <h2>It runs on your computer.</h2>
+    <p class="section-lede">A fresh install does the work here, not on a server. You can check that, because the code is open.</p>
+    <div class="grid">
+      <article>
+        <h3>The models are on your machine</h3>
+        <p>Speech to text and the AI that tidies your words both run on your computer. Nothing you say, type or record leaves it. On recent Apple Silicon Macs it can use the models Apple builds into macOS too.</p>
+      </article>
+      <article>
+        <h3>Works offline after the first download</h3>
+        <p>The first run downloads the models, about 3 GB. Speech comes first, about half a gigabyte, and dictation works as soon as it's there. After that you can turn the internet off.</p>
+      </article>
+      <article>
+        <h3>No account, no servers, no analytics</h3>
+        <p>There is nothing to sign up for and nobody's server to send words to. By default the only connections are downloading the models and looking for a new version.</p>
+      </article>
+      <article>
+        <h3>Cloud only if you add your own key</h3>
+        <p>If you want a cloud provider, you add your own API key and pay that provider directly. Settings → Privacy shows where your words go, and one switch refuses every cloud service.</p>
+      </article>
+    </div>
   </section>
 
   <section class="features" id="features">
@@ -73,12 +97,12 @@
         <p>Presets switch on their own: casual in Messages, polished in email, exact in your terminal. Names in the chat on screen come out right, and a name you fix once is learned.</p>
       </article>
       <article>
-        <h3>On your computer or in the cloud</h3>
-        <p>Run fully offline with Apple's on-device models or the built-in local model, or use your own OpenAI, OpenRouter or Anthropic key with a spending limit.</p>
+        <h3>On your computer, unless you choose the cloud</h3>
+        <p>It starts with models on your computer: the built-in local model, or Apple's on-device models. If you'd rather, add your own OpenAI, OpenRouter or Anthropic key, with a spending limit.</p>
       </article>
       <article>
         <h3>Free and open source, for good</h3>
-        <p>No subscription, no word limits, no account. The code is on GitHub under MIT or Apache-2.0, and every release is signed.</p>
+        <p>No subscription, no word limits, no account. You can read what it does: the code is on GitHub under MIT or Apache-2.0, and every release is signed.</p>
       </article>
     </div>
     <div class="shots">
@@ -192,7 +216,7 @@
       </article>
       <article>
         <h3>Meeting notes without a bot</h3>
-        <p>Record your microphone and what the call plays, turn by turn, with your own notes beside the live transcript. Each voice on the call is told apart, and on a Mac the title comes from your calendar. A summary of decisions and action items follows, even for an hour-long meeting with the AI on your computer. Splashdown offers to record when a call starts, saying what it will do and reminding you to let people know, and a meeting that stopped too soon carries on in the same note.</p>
+        <p>Record your microphone and what the call plays, turn by turn, recorded and transcribed on your computer, with your own notes beside the live transcript. Each voice on the call is told apart, and on a Mac the title comes from your calendar. A summary of decisions and action items follows, even for an hour-long meeting with the AI on your computer. Splashdown offers to record when a call starts, saying what it will do and reminding you to let people know, and a meeting that stopped too soon carries on in the same note.</p>
       </article>
       <article>
         <h3>Ask your notes</h3>
@@ -305,19 +329,23 @@
 
   <section class="privacy" id="privacy">
     <h2>Private by default</h2>
-    <p>Splashdown has no servers, no account and no analytics. Your voice and text go only to the provider you choose, straight from your computer, or nowhere at all with on-device models. API keys stay in your system keychain, history is off unless you turn it on, and the logs never contain what you said. Reading aloud happens on your computer.</p>
+    <p>Splashdown has no servers, no account and no analytics. In the default setup your voice and text go nowhere. If you add a cloud provider's key, they go to that provider, straight from your computer, and to no one else. API keys stay in your system keychain, history is off unless you turn it on, and the logs never contain what you said. Reading aloud happens on your computer.</p>
     <p><a href="privacy">Everything that leaves your computer, and everything it keeps →</a></p>
   </section>
 
   <section class="faq" id="faq">
     <h2>Questions</h2>
     <details>
-      <summary>Is it really free?</summary>
-      <p>Yes. Splashdown is open source and costs nothing. If you use a cloud AI provider, you pay that provider directly with your own key; typical dictation costs cents a month, and you can set a monthly limit. With on-device models it costs nothing at all.</p>
+      <summary>Where do my words go?</summary>
+      <p>Nowhere, in the default setup. The speech and AI models run on your computer, so what you say, type or record stays there. Splashdown has no accounts, no servers of its own and no analytics; by default it only downloads the models and looks for app updates. If you choose a cloud provider, you add your own key and your words go to that provider, and Settings → Privacy shows exactly where. One switch there refuses every cloud service. <a href="privacy">The full list</a>.</p>
     </details>
     <details>
-      <summary>What do I need to run it fully offline?</summary>
-      <p>On an Apple Silicon Mac with macOS 26, Apple's built-in speech and language models. On any other Mac or PC, local speech-to-text (Nemotron writes as you speak) plus Splashdown's built-in local model, a free download with nothing else to install. Local-only mode then refuses every cloud provider. Text is read aloud on your computer too, in a natural voice that's a small download.</p>
+      <summary>Does it work offline?</summary>
+      <p>Yes, after the first run. That run downloads the models, about 3 GB in all. Speech comes first, about half a gigabyte, and dictation works as soon as it's there. After that it needs no internet. On an Apple Silicon Mac with macOS 26 it can use Apple's built-in models instead. Text is read aloud on your computer too, in a natural voice that's a small download. If you add a cloud provider, that part needs the internet.</p>
+    </details>
+    <details>
+      <summary>Is it really free?</summary>
+      <p>Yes. Splashdown is open source and costs nothing, and you can read the code to check what it does. With the models on your computer it costs nothing at all. If you want a cloud provider, you pay that provider directly with your own key; typical dictation costs cents a month, and you can set a monthly limit.</p>
     </details>
     <details>
       <summary>Which languages does it understand?</summary>

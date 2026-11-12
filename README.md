@@ -5,8 +5,8 @@
 <h1 align="center">Splashdown</h1>
 
 <p align="center">
-  <strong>Your voice, for everything.</strong><br>
-  Type in any app, tell your computer what to do, hear text read back, and turn anything you hear into notes. Free and open source for Mac and Windows: no subscription, no account, and it can all run on your computer.
+  <strong>Your voice, on your computer.</strong><br>
+  Hold a key, speak, and your words are typed into any app. The speech and AI models run on your computer, so nothing you say leaves it, and it works offline after the first download. Free and open source for Mac and Windows: no account, no servers, no analytics.
 </p>
 
 <p align="center">
@@ -38,6 +38,9 @@
 
 ## Why Splashdown
 
+Splashdown is local-first: a fresh install uses speech and AI models that run on your own computer, and nothing you say, type or record leaves it. Cloud services are optional, and only if you add your own key.
+
+- **It runs on your computer, by default.** The first run downloads the models (about 3 GB; speech comes first, about half a gigabyte, and dictation works as soon as it's there). After that it works without the internet. There are no accounts, no servers of ours and no analytics. On recent Apple Silicon Macs it can also use the models Apple builds into macOS. Meetings, notes and reading aloud follow the same rule.
 - **Free and open source, for good.** No subscription, no account, no word limits. Your own API key costs cents a month, and you can set a spending limit.
 - **Works everywhere you type.** Email, Slack, Messages, docs, the browser, your terminal or code editor: any text field in any app.
 - **Talks like you do, writes like you meant to.** The "um"s and do-overs disappear, and you can say "make it more formal", "turn that into a list" or "translate to Spanish", in any language.
@@ -46,7 +49,6 @@
 - **Reads to you, too.** Select text and say "read this to me", or "read me a summary of this", and it's read aloud in a natural voice that runs on your computer.
 - **Turns anything you hear into notes.** Pick any app (a webinar in your browser, a podcast, a video, a call you're only listening to) and what it says is written into a note as it plays. Record meetings without a bot joining (and have the people you've named recognized next time), transcribe voice memos, YouTube links and whole folders, save subtitles, and ask your notes questions. Notes are plain Markdown files.
 - **Follows up for you.** A brief before each meeting from your last notes about it, your to-dos as reminders and the follow-up email as a draft when it ends, a weekly review on Friday: hooks you set up once, in your own words.
-- **Private when you want it.** Run it entirely on your computer with Apple's built-in models or the included local models, so nothing leaves your machine.
 
 <p align="center">
   <img src="docs/assets/readme/presets.png" width="266" alt="Settings, Presets: Default, Email, Texting, Work chat and Code presets, with cleanup level and tone choices">
@@ -95,10 +97,10 @@
 - **Words that stick.** Names and terms in the window you're typing in (the email or chat on screen) are spelled right without adding them anywhere. A vocabulary list that learns from one correction (fix "Pria" to "Priya" once and it's learned, with a note saying so and one click to forget it), snippets with fill-ins (`{date}`, `{clipboard}`), and find-and-replace rules.
 - **Bring your words, share your presets.** Settings → Words & language → Import… brings the vocabulary, corrections and snippets from another dictation app's export, a word list or a CSV file. Share… on a preset saves it as a small file anyone can import.
 
-### On your computer or in the cloud
+### On your computer, or in the cloud if you choose
 
-- **Your own key:** OpenAI, OpenRouter or Anthropic, with a monthly spending limit. Typical use costs cents a month.
-- **Fully on your computer:** Apple's on-device speech and language models (Apple Silicon, macOS 26), or local speech-to-text (Nemotron, which writes as you speak, or Parakeet and Whisper) plus Splashdown's built-in local model, a free download with nothing else to install. Ollama and LM Studio work too.
+- **On your computer, the default:** local speech-to-text (Nemotron, which writes as you speak, or Parakeet and Whisper) plus Splashdown's built-in local model, a free download with nothing else to install. On Apple Silicon with macOS 26, Apple's on-device speech and language models work too. Ollama and LM Studio also work.
+- **Your own key, if you want one:** OpenAI, OpenRouter or Anthropic, with a monthly spending limit. You pay that provider directly; typical use costs cents a month.
 - **Quick even on an older PC.** The built-in model uses the processor's fast instructions on Windows and Intel Macs, and the graphics chip on Windows (Vulkan) where there is one. Setup times it on your computer, and if it's slow, says so and suggests a cloud key.
 - **A stand-in when the cloud fails.** If your provider is offline or out of credit, the dictation is retried on your computer, and the result says so.
 - Smaller on-device models handle cleanup well but follow instructions less reliably than cloud models, so instructions can be sent to the cloud while plain dictation stays local.
@@ -251,7 +253,7 @@ On Windows, Right Ctrl replaces Right Option, and Ctrl+Alt replaces ⌃⌥.
 brew install --cask bhowerton/tap/splashdown
 ```
 
-Builds are universal (Apple Silicon and Intel), signed with Point Dynamics' Apple Developer ID and notarized, so macOS opens them without warnings. The first launch opens a short setup guide: one click sets Splashdown up on your computer (it downloads what it needs, about 3 GB, while you carry on), then allow Accessibility and Microphone. If you have an API key, you can use that instead.
+Builds are universal (Apple Silicon and Intel), signed with Point Dynamics' Apple Developer ID and notarized, so macOS opens them without warnings. The first launch opens a short setup guide: one click sets Splashdown up on your computer (it downloads the speech and AI models, about 3 GB in all, while you carry on; speech comes first, about half a gigabyte, and dictation works as soon as it's there), then allow Accessibility and Microphone. After that it works without the internet. If you have an API key, you can use that instead.
 
 **Windows:** [download the installer](https://github.com/bhowerton/splashdown/releases/latest/download/Splashdown-windows-x64-setup.exe) and run it; no administrator rights needed. It's code-signed by Point Dynamics, LLC. A brand-new release can still get a SmartScreen notice until enough people have downloaded it: choose **More info → Run anyway**. If you installed 0.1.0, download the latest version by hand once; it updates itself from then on.
 
@@ -267,7 +269,7 @@ To remove everything it stored, including API keys, see [Deleting everything](do
 
 ## Private by default
 
-Splashdown has no servers, no account and no analytics. Your recording and text go only to the provider you chose, directly from your computer, or nowhere at all with on-device models. The only other connections are ones you can see: the daily update check (which can be turned off), model downloads you start, and feedback you choose to send. API keys live in the system keychain, history is off by default, and logs never contain what you said. Local-only mode refuses every cloud provider, even with a key saved. Reading aloud happens on your computer; a spoken summary is written by the AI you chose.
+Splashdown has no servers, no account and no analytics. In the default setup your recording and text go nowhere. If you add a cloud provider's key, they go to that provider, directly from your computer, and to no one else. The only other connections are ones you can see: the daily update check (which can be turned off), model downloads, and feedback you choose to send. API keys live in the system keychain, history is off by default, and logs never contain what you said. Local-only mode refuses every cloud provider, even with a key saved. Reading aloud happens on your computer; a spoken summary is written by the AI you chose.
 
 Settings → Privacy shows where your words go for your current settings. The full list is in [docs/PRIVACY.md](docs/PRIVACY.md).
 

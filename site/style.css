@@ -119,6 +119,8 @@ h1 span {
 h2 { font-size: clamp(28px, 4vw, 40px); letter-spacing: -0.02em; line-height: 1.15; margin: 0 0 36px; text-align: center; }
 /* A sentence under a section's title, when the title needs one. */
 .section-lede { max-width: 680px; margin: -18px auto 32px; text-align: center; font-size: 19px; color: var(--muted); }
+/* Four points on the computer section: two by two, not three and one. */
+#local .grid { max-width: 780px; }
 
 /* Features as open columns, not boxes: an orange stroke above each title
    and room between them. */
